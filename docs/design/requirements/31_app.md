@@ -289,23 +289,9 @@ Widgets:
 - Wallet Address. Buttons: Copy, create QR, View address in L1 explorer (if
   set).
 - App Embedded Wallet Activity Latest Widget, with "See all" Button. Opens
-  [Embedded Wallet Activity](#.....).
-- Withdraw. Launches [Embedded Wallet Withdraw](#......)
+  [Embedded Wallet Activity](#embedded-wallet-activity).
+- Withdraw. Launches [Embedded Wallet Withdraw](#embedded-wallet-withdraw)
 - Nav bar
-
-#### Embedded Wallet Withdraw
-
-The embedded wallet comes tx fees and funds channels. It is the default output
-address when closing channels. The Help dialogue conveys the purpose of the
-embedded wallet, and that insufficient funds will impact correct functioning (ie
-less than X amount of ada and txs will fail).
-
-- Total Ada (in embedded wallet)
-- Total Other (TBC)
-- Input slider for Withdraw amount (or amounts TBC)
-- Output Address
-- Cancel Button. On click returns to App Embedded Wallet
-- Submit Button. On click returns to App Embedded Wallet
 
 #### Embedded Wallet Activity
 
@@ -344,40 +330,134 @@ Showing:
   - Failed.
 - Tx details. Something to similar to what you see in wallets.
 
+#### Embedded Wallet Withdraw
+
+The embedded wallet comes tx fees and funds channels. It is the default output
+address when closing channels. The Help dialogue conveys the purpose of the
+embedded wallet, and that insufficient funds will impact correct functioning (ie
+less than X amount of ada and txs will fail).
+
+- Total Ada (in embedded wallet)
+- Total Other (TBC)
+- Input slider for Withdraw amount (or amounts TBC)
+- Output Address
+- Cancel Button. On click returns to App Embedded Wallet
+- Submit Button. On click returns to App Embedded Wallet
+
 #### Home
 
-Opening App when fully configured, opens to Home. Returning from settings or
-other pages defaults to returning to Home, and all such pages have "Back"
-buttons and "Title" in the same location.
+Opening App when fully configured, opens to Home page. All other pages have
+"Back" button and "Title" in the same location, as Home "Logo" and "App Name"
 
-Home is a collection of widgets.
+Home comprises of the following widgets.
 
 - Logo and App name.
-- Connection status: On-line: if off-line display alert. L1 Liaisons: if not
-  reached display alert.
+- Connection Status Widget. This indicates to the user whether there are any
+  problems accessing services, such as price feed, l1 liaisons, or channels. If
+  there are no issues, display "Connected", if there are issues with connection
+  display "Issues with connections >". On-click, display full screen modal of
+  the connection issues: which service, request made (default collapsed),
+  response given if any (default collapsed), error help if any.
 - [Channel List Widget](#channel-list-widget).
-- Latest App Activity Widget. Displays activity previews from embedded wallet,
-  and all channels.
-- [Nav bar](#nav-bars)
-
-#### Nav Bar
-
-- App Pay: On click open [Pay](#pay). Button is primary.
-- App Embedded Wallet: On click [Embedded Wallet](#embedded-wallet). Button is
-  secondary, but display as "Warning" if funds are low, or data is stale or
-  there is a problem with L1 connectivity.
-- App Settings: On click [Settings](#settings). Button is secondary.
+- [App Activity] Preview Widget. Displays activity previews from embedded
+  wallet, and all channels.
+- [Action Bar Widget](#action-bar-widget)
 
 #### Channel List Widget
 
 Display the current Channels.
 
 Horizontal scroll carousel of active channel cards, ordered by most funded.
-Default focus is most funded channel or buttons if there are none. Scroll left
-for buttons for [Channel Add](#channel-add), and
-[Channel Archived](#channel-archived). Scroll right for other channels. Channel
-Card displays: - Channel name - amount locked - amount not yet committed -
-amount pending if any - currency
+Default focus is most funded channel. Each Channel Card displays:
+
+- Channel name
+- Amount available (ie not yet spent or committed)
+- Amount locked
+- amount pending, if any
+- Currency symbol
+
+On click: go to corresponding [Channel](#channel) page.
+
+Below channel carousel are button:
+
+- Add icon: On-click [Channel Add](#channel-add)
+- Archive icon: On-click [Channel Archived](#channel-archived).
+
+#### Channel
+
+Shows status of channel, activity, and actions. User can also enter [Pay](#pay)
+from here, where only this channel will provide quote.
+
+Widgets:
+
+- Total/ Uncommitted / Pending, Currency Symbol. If currency is not ada, display
+  Policy and name each with "Copy" button, and "External Link" button to L1
+  explorer of asset.
+- Channel status: L1 stage (eg "Opened", "Closed"). Last updated, and number of
+  confirmations. Link to UTXO on L1 explorer,
+- [Channel Activity](#channel-activity) latest. On click open full list.
+- If channel stage is "Opened", then Pay button: Open [Pay](#pay). Only current
+  channel will provide quote.
+- Tx options, if channel stage is "Opened", then
+  - "Add" Button : [Add Tx](#add-tx). Only if Channel
+  - "Close" Button : [Close Tx](#close-tx)
+- Tx options, if channel stage is "Closed", then
+  - "Settle" Button : [Settle Tx](#settle-tx). Only if this is relevant
+
+#### Add Tx
+
+TODO
+
+#### Close Tx
+
+TODO
+
+#### Settle Tx
+
+TODO
+
+#### Channel Activity
+
+List of Channel Event Preview Cards. Ordered by time of event. Paginate if long.
+Export Button, on-click downloads JSONL file.
+
+Each preview card.
+
+- HTLC:
+  - Amount
+  - Destination address (truncated or shorthand).
+  - Time
+  - Resolution (and time) or otherwise status eg "Failed"
+  - Subsumed by Snapshot
+- Snapshot:
+  - Time
+  - Details
+  - TBC whether this is necessary
+- Tx:
+  - Tx type: Open, Add, Close, ...
+  - Time (if locally created, then time submitted. If only seen on-chain, then
+    time of block)
+  - Status: Pending, Confirmed, Failed.
+
+On click: The corresponding [Activity Details](#activity-details) is opened.
+
+#### HTLC Details
+
+Activity details displays long form what is available in preview.
+
+TODO
+
+#### Snapshot Details
+
+Activity details displays long form what is available in preview.
+
+TODO
+
+#### Tx Details
+
+Activity details displays long form what is available in preview.
+
+TODO
 
 #### Channel Add
 
@@ -395,6 +475,16 @@ Bottom of form has "Add" button. On click submits tx via L1 Liaison. Returns to
 [Channel List Widget](#channel-list-widget), and with new channel in focus (if
 this is not too much work). Channel Status indicates confirmation pending,
 successful, or failed.
+
+#### Action Bar Widget
+
+Action bar has three icons:
+
+- App Pay: On click open [Pay](#pay). Button is primary.
+- App Embedded Wallet: On click [Embedded Wallet](#embedded-wallet). Button is
+  secondary, but display as "Warning" if funds are low, or data is stale or
+  there is a problem with L1 connectivity.
+- App Settings: On click [Settings](#settings). Button is secondary.
 
 #### Pay
 
@@ -443,27 +533,3 @@ Full details of payment and channel are displayed. If fees are high according to
 [Settings High Fee Flag](#settings-high-fee-flag) then fee is flagged. User can
 confirm or cancel. Confirm goes to [Channel](#channel). Cancel returns to
 [Quote](#quote) with previous state.
-
-#### Channel
-
-Shows status of channel, activity, and actions. User can also enter [Pay](#pay)
-from here, where only this channel will provide quote.
-
-Widgets:
-
-- Total/ Uncommitted / Pending, Currency
-- Last updated, number of confirmations, Link to UTXO on L1 explorer,
-- [Channel Activity](#channel-activity) latest. On click open full list.
--
-
-TODO
-
-#### Channel Activity
-
-Paginate if long. Export Button, on-click downloads JSONL file.
-
-TODO
-
-#### Channel Event
-
-TODO
