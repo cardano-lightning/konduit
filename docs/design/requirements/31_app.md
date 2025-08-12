@@ -29,10 +29,11 @@ Display:
 - Buttons:
   - "Import": Opens [Import Function](#import-function)
   - "Create": Opens [Create Function](#create-function)
-- Help (?) button. On click explains why App setup is necessary.
-
+- Help (?) button. On click explains why App setup is necessary and the
+  expectations of the file imported.
 - App version.
-- Link to site: Opens new page or external browser.
+- Link to site (placeholder: "cardano-lightning.org/konduit"). Opens new page or
+  external browser.
 
 ##### Import Function
 
@@ -85,9 +86,8 @@ For each input page there is:
 The input pages include:
 
 - App Settings L1 Liaison
+- App Settings Currencies - Only Ada is supported at this time.
 - App Settings Stake
-- App Settings Currencies (TBC) - Crypto
-- App Settings High Fee Flag
 - App Settings Locale - Date time, number format, fiat.
 - App Settings XXX
 
@@ -105,7 +105,6 @@ Page contains:
 - List of settings:
   - Each setting has
     - Label
-    - Short description
     - Help icon which brings up floating help OR expands a collapsible dialogue
       box (TBC which).
     - Current value
@@ -124,46 +123,54 @@ On any App Settings X (ie subpage) page:
 - Help icon
 - Input field with previous value as default
 
-#### Settings L1 Liaisons
+List of settings (order):
 
-TODO
-
-#### Settings L1 Explorer
-
-Title: L1 Explorer
-
-Info: (Optional). If set, external links for transactions and addresses will use
-the chosen explorer.
-
-Display: "(None)" if None set (Also default), else root URL of selection.
-
-Edit: Drop down list of "cexplorer.io", "cardanoscan.io", and any others easily
-configured to work.
+- [Settings VKey](#settings-vkey)
+- [Settings Sync From](#settings-sync-from)
+- [Settings L1 Liaison](#settings-l1-liaison)
+- [Settings Currencies](#settings-currencies)
+- [Settings Stake](#settings-stake)
+- [Settings Locale](#settings-locale)
+- [Settings L1 Explorer](#settings-l1-explorer)
+- [Settings Price Feeds](#settings-price-feeds)
 
 #### Settings VKey
 
 Title: VKey
 
-Info: This key is used for all channels and embedded wallet.
+Info: This key is used for all channels and embedded wallet. The VKey is not
+editable. You can only [Settings Forget](#settings-forget).
 
 Display: Default format is Bech32, with copy Button.
 
-Edit: The VKey is not editable. User can only
-[Settings Forget](#settings-forget).
+Edit: Not available
 
-#### Settings Created At
+#### Settings Sync From
 
-Title: Created at
+Title: Sync From
 
 Info: This datetime is used to ask the L1 Liaison from when to track the
 credential. If changed to an earlier time, App will re-sync L1 state from
-scratch.
+scratch. It defaults to the time the VKey is created.
 
 Display: Datetime in condensed form with timezone, depending on
 [Settings Locale](#settings-locale).
 
-Edit: The VKey is not editable. User can only
-[Settings Forget](#settings-forget).
+Edit: Datetime selector.
+
+#### Settings L1 Liaisons
+
+Title: L1 Liaisons
+
+Info: The L1 Liaison syncs state with and submits txs to the Cardano L1. The
+endpoint must provide an API compatible with this app. Having a diverse set of
+L1 Liaisons increases confidence that the local state is accurately reflecting
+the state on the L1. For example: - `cardano-lightning.org/konduit/l1l/v0` -
+`konduit.cardanofoundation.org/l1l/v0`
+
+Display: The URLs
+
+Edit: Edit or remove an existing entry, add a new URL.
 
 #### Settings Stake
 
@@ -183,41 +190,57 @@ data.
 
 Title: Currencies
 
-Info: This version supports only Ada channels.
+Info: This version supports only Ada channels. There is no abitility to set the
+properties of Ada. In future, other currencies can be supported. A Currency can
+be set with the following properties:
 
-Display: Ada -> Ada symbol.
+- Name. UTF-8. User's choice
+- PolicyId. Hexidecimal 56 characters. Aka script hash, this is the blake2b256
+  hash of the script of the currency.
+- Name. Hexidecimal, >= 64 characters. The token name.
+- Symbol. Dropdown, or paste. Single character (Emoji support?). The symbol
+  indicating character.
+- DP. Non negative integer. The number of decimal places of the currency. For
+  example, Ada has 6 as 1 Ada is 1000000 Lovelace.
+- High Fee Flag. Two non negative numeric fields, an absolute and a percentage.
+  If set, then a fee is greater than the indicated amount will be flagged on a
+  consent form.
+
+Display: Ada fields, non editable. Add button, disabled.
 
 Edit: Disabled
-
-#### Settings High Fee Flag
-
-Title: Fee flags
-
-Info: If set > 0, then fees greater than this settings are deemed high and are
-visually indicated.
-
-Display: Absolute number, percentage (TBC).
-
-Edit: Two number selectors for absolute and percentage.
 
 #### Settings Locale
 
 Title: Locale
 
-Info: Language, date and time, currency.
+Info: Set language, date and time format, fiat currency, hi/lo colors (TBC). To
+be useful, the fiat currency must be available from the price feeds.
 
-Display: Absolute number, percentage (TBC).
+Display: Current settings.
 
-Edit: Two number selectors for absolute and percentage.
+Edit: TBC - Copy another apps locale settings. For MVP only `en_US` language is
+supported.
 
-TODO
+#### Settings L1 Explorer
+
+Title: L1 Explorer
+
+Info: (Optional). If set, external links for transactions and addresses will use
+the chosen explorer.
+
+Display: "(None)" if None set (Also default), else root URL of selection.
+
+Edit: Drop down list of "cexplorer.io", "cardanoscan.io", and any others easily
+configured to work.
 
 #### Settings Price Feeds
 
 Title: Price Feeds
 
-Info: Price Feeds source provides the current exchange rates between currencies:
-Ada, Bitcoin, Fiat _etc_.
+Info: (Optional). Price Feeds source provides the current exchange rates between
+currencies: Ada, Bitcoin, Fiat _etc_. If set, prices and costs are converted. It
+is required in order to determine high fees and display costs in fiat.
 
 Display: If not set, then "(None)", else URL
 
@@ -226,11 +249,31 @@ have one of the supported formats.
 
 #### Settings Export
 
-TODO
+Title: Export
+
+Info: Export keys and settings. The exported file can be used to setup Konduit
+on another device, or after "Forgetting" details on the this device. DANGER -
+The export contains the signing key, so keep the exported file safe.
+
+Display: Button "Export"
+
+On-click: Screen with danger notice. Button with Export icon. Launches devices
+file browser to find location to save file.
 
 #### Settings Forget
 
-TODO
+Title: Forget
+
+Info: Forget keys and settings. This resets the App. Use the "Export" to save
+the current keys and settings. This can be imported into the app in future.
+Danger: Proceeding with "Forget" will reset the app.
+
+Display: Button "Forget"
+
+Edit: Not available
+
+On-click: Screen with danger notice. Button with Forget Icon (Maybe dustbin).
+On-click, remove all data, and show launch page.
 
 #### Embedded Wallet
 
