@@ -1,4 +1,6 @@
-## Architecture
+---
+title: Architecture
+---
 
 We adopt [c4 model](https://c4model.com/abstractions) conventions.
 
@@ -8,13 +10,13 @@ Software System >> Containers >> Compontents >> Code
 
 Where `>>` can be read as "is made of multiple".
 
-### Containers
+# Containers
 
 Internal:
 
 - App
 - Node
-- User L1 Liaison
+- Cardano Connector
 
 External:
 
@@ -24,14 +26,36 @@ External:
 - BLN Invoicer
 - Mobile OS API
 
-#### Container App
+## Container App
 
-TODO
+Won't do. See wireframe
 
-#### Container Node
+## Container Node
 
-TODO
+- API:
+  - Open Info
+- API with auth:
+  - Channel status
+  - Pay
+  - Snapshot
+  - Resolve
+- Queue of pending HTLCs
+- DB of channels, cheques, and snapshots.
+- Connectors:
+  - Cardano
+  - BLN
+  - Price feeds
+- Cron:
+  - If exposure > threshold, then withdraw
+  - If HTLC not being resolved, then withdraw
 
-#### Container L1 Liaison
+## Container Cardano Connector
+
+- API:
+  - Add key
+  - Drop key
+  - Get state
+  - Submit tx
+- Interface with kupmios or equivalent
 
 TODO

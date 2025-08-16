@@ -6,7 +6,7 @@ created-at: 2025-08-01
 status: draft
 ---
 
-## Intro
+# Intro
 
 This document describes the requirements of Konduit. Konduit is only the working
 title of the project. Konduit brings the capability of Bitcoin Lightning to
@@ -15,7 +15,7 @@ Cardano users.
 This document is intended to be a resource for all stakeholders: business,
 product, dev, and user. It is a public document.
 
-### Purpose
+## Purpose
 
 Principal product purpose (PPP): Konduit shall allow ada holders to have an
 indistinguishable experience to those of BLN users with respect to merchant
@@ -31,7 +31,7 @@ consenting to a payment. The process has a UX similar to that of other payment
 solutions such as contactless in terms of UX/UI (ease of use, time to
 completion).
 
-### Scope
+## Scope
 
 The scope of the project includes all that is necessary to achieve the PPP,
 while also being safe and sufficiently ergonomic. Ergonomic, for users,
@@ -44,7 +44,7 @@ it receives in the wider ecosystem, and whether it is credited with catalysing
 other initiatives which themselves bring compelling utility to Cardano users. It
 needs to also demonstrate financial sustainability...
 
-### Jargon
+## Jargon
 
 See the [glossary](../../glossary.md) (TBC)
 
@@ -56,15 +56,16 @@ See the [glossary](../../glossary.md) (TBC)
 - OOB - Out Of Band
 - tx - Blockchain transaction
 
-### ToC
+## ToC
 
 1. Overview:
-   1. [Roles](./11_roles.md)
-   1. [Scenarios](./12_scenarios.md)
-   1. [Assumptions and dependencies](./13_assumptions.md)
+   1. [Roles](./11_roles.md#)
+   1. [Scenarios](./12_scenarios.md#)
+   1. [Assumptions and dependencies](./13_assumptions.md#)
 1. [Architecture](./20_architecture.md) TODO!
 1. Function
-   1. [App](./31_app.md) TODO!
-   1. L1 Liaison
-   1. Konduit Operator Node
-   1. Price Feed
+   1. [Kernel](./31_kernel.md#) - The kernel of integrity ie the L1 part.
+   1. [App](./32_app.md#) TODO!
+   1. [Cardano Connector](./33_cardano_connector.md#) TODO!
+   1. [Node](./34_node.md#) TODO!
+   1. [Price Feeds](./35_price_feeds.md#) TODO!

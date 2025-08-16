@@ -1,4 +1,6 @@
-### Assumptions and dependencies
+---
+title: Assumptions and dependencies
+---
 
 Konduit relies on BLN. It needs to ascertained precisely what interface is
 available for handling routing and payment channels.

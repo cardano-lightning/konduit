@@ -1,8 +1,10 @@
-### Roles
+---
+title: Roles
+---
 
 The following are the different users to which the document refers.
 
-#### (End) User
+# (End) User
 
 The end user, or "user" for short, is the principle target of the application
 and akin as to the user of a typical traditional application. In Konduit, a user
@@ -17,7 +19,7 @@ innovators or early adopters, with some understanding of crypto currencies but
 are not necessarily technical. The secondary target user is anyone using crypto
 and wants a point of purchase solution with their crypto.
 
-#### (Node) Operator
+# (Node) Operator
 
 A node operator runs (some of) the "back-end services" of Konduit, along side a
 BLN node. All Cardano based channels consist of one end user and one node
@@ -33,7 +35,7 @@ The primary target operator is either:
 They understand crypto currencies and are technically capable with respect to
 infrastructure. They can confidently plumb in docker images.
 
-#### Dev
+# Dev
 
 Konduit does not intend to be a complete, and standalone piece of software. The
 project output must also cater to developers to inspire, contribute, maintain,
@@ -44,7 +46,7 @@ They may have limited or deep experience of the mechanics and components of
 Cardano. A secondary target dev is a dev with experience in the general crypto
 ecosystem, not including Cardano.
 
-#### Marketer
+# Marketer
 
 "Marketers" is anyone wishing to understand the value of Konduit, but is neither
 a direct user of the software, nor a developer or deeply technically inclined.

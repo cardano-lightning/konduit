@@ -1,9 +1,11 @@
-### Scenarios
+---
+title: Scenarios
+---
 
 The following scenarios provide in plain language a brief outline of the context
 of users and their intentions in relation to their interactions Konduit.
 
-#### User Payment
+# User Payment
 
 This scenario is the PPP in context. User wishes to acquire goods, or services,
 using Ada. Merchant uses BLN, but need not know about Cardano or Konduit in any
@@ -26,7 +28,7 @@ The analogous scenario holds for a digital store, with a QR code presented at
 checkout. Payments need to be fast. Konduit should introduce an insignificant
 overhead to the BLN payment in terms of time and cost.
 
-#### User Wallet Setup
+# User Wallet Setup
 
 The App supports a single key, used for both an embedded wallet, and for the
 channel credentials. It seems easier/ necessary to have an embedded wallet,
@@ -38,27 +40,27 @@ rather than try to interface with an existing one.
   - "Create" new key
   - "Import" existing key
 - User can export key in a safe way, to be imported later.
-- User needs to an L1 Liaison, that ought to be distinct from the channel
+- User needs to an Cardano Connector, that ought to be distinct from the channel
   partner. However, the friction introduced by requiring this is possibly too
   high for some Users. User is able, and encouraged, to provide alternative L1
   sources.
-- Once loaded, App syncs via L1 Liaison. There is some progress indication is
-  given while this takes place, particularly for "Import".
+- Once loaded, App syncs via Cardano Connector. There is some progress
+  indication is given while this takes place, particularly for "Import".
 - User can then see current balance in wallet.
 
-#### User Settings
+# User Settings
 
 User settings include data sources, and wallet management
 
-- User can set L1 Liaison.
+- User can set Cardano Connector.
 - User can set a stake credential. App informs User stake credentials are used
   for new Channels.
 - Change theme (default to device theme).
 
-#### User Wallet Management
+# User Wallet Management
 
 - User can view embedded wallet address, current funds, and transactions
-  involving wallet (available from the L1 Liaison).
+  involving wallet (available from the Cardano Connector).
 - Status of information is shown (_eg_ "last updated 30s ago").
 - User can withdraw any amount of funds.
 - User can Export key.
@@ -67,7 +69,7 @@ User settings include data sources, and wallet management
 Any moving of funds, changing of credentials, and forgetting requires User
 confirmation.
 
-#### User Channel Open
+# User Channel Open
 
 Initial versions of the App support only a single Channel. For the sake of
 prudence, proceed assuming that later versions will support multiple channels.
@@ -84,7 +86,7 @@ Once a wallet is initialized, but prior to an existing Channel.
 - On new channel creation, show L1 status.
 - Await confirmation from partner. The current status is displayed.
 
-#### User Channel Show
+# User Channel Show
 
 - User wishes to inspect the Channels state and history.
 - User can see current Channel state.
@@ -92,11 +94,11 @@ Once a wallet is initialized, but prior to an existing Channel.
   and available data.
 - User can export data (JSON or CSV).
 
-#### User Channel Add
+# User Channel Add
 
 - User adds funds to the channel from the embedded wallet.
 
-#### User Channel Close
+# User Channel Close
 
 - User wishes to disengage a channel and recover funds.
 - Funds can be recovered to the embedded wallet (default), or an external
@@ -109,14 +111,14 @@ Once a wallet is initialized, but prior to an existing Channel.
 - In either case, the current status of proceedings is displayed.
 - The Channel data is "Achieved"
 
-#### L1 Liaison Service
+# Cardano Connector Service
 
 This is a separate service to meet user needs of L1 state and tx submission.
 Someone needs to run this. We assume Operator maintains an instance for their
 users. However, this introduce trusts of User on Operator. Operator may lie
 about the on-chain state, and put User funds at risk. User is encouraged to use
-a separate entity for their L1 Liaison. A keen User running their own Cardano
-node, and with a little technical know-how can also run this service.
+a separate entity for their Cardano Connector. A keen User running their own
+Cardano node, and with a little technical know-how can also run this service.
 
 There is graceful handling of failure, although TBC exactly what that handling
 is.
@@ -124,16 +126,16 @@ is.
 - App requests a credential is tracked (indexed) as payment address from a point
   in time (default to now).
 - The App requests an update.
-- The L1 Liaison responds if there are any relevant events since last update. If
-  last update is in history, then only chain events since update are included.
-  Else there has been a rollback since last update, and the L1 updates
+- The Cardano Connector responds if there are any relevant events since last
+  update. If last update is in history, then only chain events since update are
+  included. Else there has been a rollback since last update, and the L1 updates
   accordingly. If there are no relevant events, the response is empty.
 - Events include all transactions from payment address, and all channels with
   credentials as partner.
-- L1 Liaison provides data to User to build txs (open, add, close).
+- Cardano Connector provides data to User to build txs (open, add, close).
 - Operator (or keen User) can configure access to server via allow deny lists.
 
-#### Operator Setup
+# Operator Setup
 
 Operator has a BLN node running on a machine. Operator wishes to add Konduit
 Users.
@@ -154,7 +156,7 @@ relatively involved understanding. For example, when to close a Channel and
 whether to do so in batches. These properties need to be well presented to the
 Operator.
 
-#### Operator Show
+# Operator Show
 
 Operator has left the machine running and wants to know how its been going.
 
@@ -164,7 +166,7 @@ Operator has left the machine running and wants to know how its been going.
 - Operator can show all Channels, and specific Channel's state and history
 - Operator can show "problematic" Channels, such as "with Pending HTLC"
 
-#### Operator Manual Action
+# Operator Manual Action
 
 Operator wishes to stop serving particular Channel(s) or Close Channel.
 
@@ -173,7 +175,7 @@ Operator wishes to stop serving particular Channel(s) or Close Channel.
   forwarded to User as the error message in response to a cheque.
 - Operator closes Channels (in batch).
 
-#### Operator Restart
+# Operator Restart
 
 An Operators Machine stopped, gracefully or otherwise. The Operator wishes to
 restart the Machine.
@@ -181,7 +183,7 @@ restart the Machine.
 - There is a straight forward way to restart the Konduit node, such that syncing
   with the chains is safe yet fast.
 
-#### Operator Edit Config
+# Operator Edit Config
 
 Operator wishes to use change values in their configuration.
 
@@ -193,7 +195,7 @@ Operator wishes to use change values in their configuration.
   permissible).
 - Configuration permits suspending all new Channel connections
 
-#### Dev Audit
+# Dev Audit
 
 Dev wishes to Konduit to see what it can and cannot do.
 
@@ -204,7 +206,7 @@ Dev wishes to Konduit to see what it can and cannot do.
   be supported.
 - Project is setup in a way that invites contributions and suggestions.
 
-#### Marketer Audit
+# Marketer Audit
 
 Marketer wishes to understand the value of the project. They do not have
 technical expertise, and do not personally wish to use Konduit. They want to
