@@ -66,7 +66,7 @@ flowchart LR
     responded -->|unlock| responded
     responded -->|expire| responded
     responded -->|end| n1
-    closed -->|end| n1
+    closed -->|elapse| n1
 ```
 
 Nodes are **stages**; arrows are **steps**.
@@ -112,8 +112,9 @@ the respond, User may remove all funds not associated to a pending cheque. When
 there are no remaining cheques, the user `end`s the channel.
 
 If User `close`s and Operator fails to `respond` within the time period, they
-are deemed to have abandoned their obligation. From `closed`, User can `end` the
-channel if the close period has expired, again retrieving all remaining funds.
+are deemed to have abandoned their obligation. From `closed`, User can `elapse`
+the channel if the close period has expired, again retrieving all remaining
+funds.
 
 ## Conventions
 
@@ -252,7 +253,7 @@ verify the well formed-ness of the receipt.
 
 ## Accounting
 
-TODO: Move me.
+TODO: Move Section.
 
 A receipt is evidence of funds owed. The `owed` amount is calculated as the
 amount of the squash, plus the amount of the unlocked cheques. This is the
@@ -303,9 +304,14 @@ type ClosedParams {
 
 type PendCheque = (Amount, Timeout, Secret)
 
+type Pend {
+    total : Amount,
+    items : List<PendCheque>,
+}
+
 type RespondedParams {
   subbed : Int,
-  pending : List<PendCheque>
+  pend : Pend,
 }
 
 type Redeemer {
@@ -316,7 +322,7 @@ type Redeemer {
 
 type Step {
   StepCont(Cont)
-  StepEnd
+  StepEol(Eol)
 }
 
 type Steps = List<Step>
@@ -328,6 +334,11 @@ type Cont {
   Respond(FinalReceipt)
   Reveal(List<(Index, Secret)>)
   Expire(List<Index>)
+}
+
+type Eol {
+  End
+  Elapse
 }
 ```
 
@@ -535,7 +546,7 @@ The step context:
 
 Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 
-- add.0 : Stage in is opened : `stage_in = Opened(constants, subbed)`
+- add.0 : Stage in is opened : `stage_in = Opened(subbed)`
 - add.1 : User has signed
 - add.2 : Stage out is equal to stage in `stage_out == stage_in`
 - add.3 : Funds increased `funds_in` < `funds_out`
@@ -546,9 +557,9 @@ Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 
 Redeemer params: `receipt`
 
-- sub.0 : Stage in is opened : `stage_in = Opened(constants, subbed_in)`
+- sub.0 : Stage in is opened : `stage_in = Opened(subbed_in)`
 - sub.0 : Operator has signed
-- sub.1 : Stage out is opened : `stage_out = Opened(constants_, subbed_out)`
+- sub.1 : Stage out is opened : `stage_out = Opened(subbed_out)`
 - sub.2 : Funds decrease by `subbed = funds_in - funds_out`
 - sub.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
 - sub.4 : receipt is well formed with amount `owed`
@@ -559,46 +570,74 @@ Redeemer params: `receipt`
 Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`,
 `funds_out`
 
-- close.0 : Stage in is opened : `stage_in = Opened(constants, subbed)`
+- close.0 : Stage in is opened : `stage_in = Opened(subbed)`
 - close.0 : User has signed
-- close.0 : Stage out is closed :
-  `stage_out = Closed(constants_, subbed_, expire_at)`
+- close.0 : Stage out is closed : `stage_out = Closed(subbed_, expire_at)`
 - close.0 : Funds unchanged
 - close.2 : Expire at respects the close period :
   `expire_at >= upper_bound + close_period`
 
 ### Respond
 
-Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`,
-`funds_out`
+Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 
 Redeemer params: `final_receipt`
 
-- respond.0 : Stage in is Closed : `stage_in = Closed(constants, subbed, _)`
+- respond.0 : Stage in is closed : `stage_in = Closed(subbed, _)`
 - respond.0 : Operator has signed
-- respond.1 : Stage out is opened : `stage_out = Responded(constants, pending)`
+- respond.1 : Stage out is opened : `stage_out = Responded(pend)`
 - respond.2 : Funds decrease by `subbed = funds_in - funds_out`
 - respond.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
 - respond.4 : final receipt is well formed
-- respond.5 : receipt is well formed with amount `owed`, and pending `pending`
+- respond.5 : receipt is well formed with amount `owed`, and pending `pend`
 - respond.6 : `owed >= subbed_out`
 
 ### Reveal
 
-TODO!
+Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
+
+Redeemer params: `secrets`
+
+- respond.0 : Stage in is responded : `stage_in = Responded(pend_in)`
+- respond.0 : Operator has signed
+- respond.1 : Stage out is responded : `stage_out = Responded(pend_out)`
+- respond.2 : Funds decrease by `subbed = funds_in - funds_out`
+- respond.3 : Secrets are well formed, and total `owed`
+- respond.4 : `owed >= subbed`
+- respond.5 : `pend_out` is `pend_in` adjusted for items in `secrets` being
+  dropped, where each item has had secret revealed
 
 ### Expire
 
-TODO!
+Context : `signers`, `lower_bound`, `stage_in`, `funds_in`, `stage_out`,
+`funds_out`
+
+Redeemer params: `expired`
+
+- expire.0 : Stage in is responded : `stage_in = Responded(pend_in)`
+- expire.1 : User has signed
+- expire.2 : Stage out is responded `stage_out = Responded(pend_out)`
+- expire.3 : Each item in `expired` corresponds to pending cheque that has
+  expired : `<= lower_bound`
+- expire.4 : `pend_out` is `pend_in` adjusted for items in `expired` being
+  dropped,
+- expire.5 : Funds out (locked) is `>= pend_out.total`
 
 ### End
 
-Context : `signers`, `stage_in`
+Context : `signers`, `lower_bound`, `stage_in`
 
-- end.0 : Stage in is Settled : `stage_in = Responded()`
+- end.0 : Stage in is responded `stage_in = Responded(pend)`
 - end.1 : User has signed
+- end.2 : All pending cheques are expired : `<= lower_bound`
 
-TODO: FIXME. There are multiple terminal datum cases.
+### Elapse
+
+Context : `signers`, `lower_bound`, `stage_in`
+
+- elapse.0 : Stage in is Closed : `stage_in = Closed(_, expire_at)`
+- elapse.1 : User has signed
+- elapse.2 : Close period has expired : `expire_at <= lower_bound`.
 
 ## Auxiliary functions
 
@@ -716,7 +755,8 @@ flowchart LR
 
 ## Respond tx
 
-Operator receives the amount from the final receipt.
+Operator submits their final receipt. They claim funds owed, and leave locked
+funds associated to pending cheques.
 
 ```mermaid
 flowchart LR
@@ -731,7 +771,7 @@ flowchart LR
     o_channel["
       @validator \n
       $currency' \n
-      #Settled
+      #Responded
     "]
 
     o_operator["
@@ -745,22 +785,98 @@ flowchart LR
 
 ## Reveal tx
 
-TODO!!
-
-## Expire tx
-
-TODO!!
-
-## End tx
-
-User ends a settled channel. This unstages the channel.
+Operator reveals secrets associated to pending cheques. They take associated
+funds.
 
 ```mermaid
 flowchart LR
     i_channel["
       @validator \n
       $currency \n
-      #Settled
+      #Responded
+    "]
+
+    m["tx"]
+
+    o_channel["
+      @validator \n
+      $currency' \n
+      #Responded
+    "]
+
+    o_operator["
+      @operator \n
+      $currency'' \n
+    "]
+
+    i_channel -->|Main:Reveal| m --> o_channel
+    m --> o_operator
+```
+
+## Expire tx
+
+User submits tx pointing at the pending cheques that have expired. They take
+funds demonstrably theirs.
+
+```mermaid
+flowchart LR
+    i_channel["
+      @validator \n
+      $currency \n
+      #Responded
+    "]
+
+    m["tx"]
+
+    o_channel["
+      @validator \n
+      $currency' \n
+      #Responded
+    "]
+
+    o_user["
+      @user \n
+      $currency'' \n
+    "]
+
+    i_channel -->|Main:Reveal| m --> o_channel
+    m --> o_user
+```
+
+## End tx
+
+User ends a responded channel. All pending cheques are expired.
+
+```mermaid
+flowchart LR
+    i_channel["
+      @validator \n
+      $currency \n
+      #Responded
+    "]
+
+    m["tx"]
+
+    o_user["
+      @user \n
+      $currency \n
+    "]
+
+    i_channel -->|Main:End| m
+    m --> o_user
+```
+
+## Elapse tx
+
+User elapses a closed channel. Operator has submitted no final receipt in the
+close period.
+
+```mermaid
+flowchart LR
+    i_channel["
+      @validator \n
+      $currency \n
+      #Closed
     "]
 
     m["tx"]
@@ -819,8 +935,8 @@ flowchart LR
       #Opened
     "]
 
-    o_provider_0["
-      @provider \n
+    o_operator_0["
+      @operator \n
       $coinA'', $coinB'', $coinD''\n
     "]
 
@@ -842,35 +958,35 @@ flowchart LR
       tag : 0003
       @validator \n
       $coinD' \n
-      #Settled
+      #Responded
     "]
 
-    o_provider_1["
-      @provider \n
+    o_operator_1["
+      @operator \n
       $coinC''\n
     "]
 
 
     i_channel_0 -->|Main:steps| m --> o_channel_0
-    m --> o_provider_0
+    m --> o_operator_0
     i_channel_1 -->|Batch| m --> o_channel_1
     i_channel_2 -->|Batch| m --> o_channel_2
     i_channel_3 -->|Batch| m --> o_channel_3
-    m --> o_provider_1
+    m --> o_operator_1
 ```
 
 Note that steps ordering would be
 
 ```txt
-  steps = [Sub, Sub, Sub, Respond]
+  steps = [Sub, Sub, Sub, Reveal]
 ```
 
-This might be a typical tx of a provider. User can also submit batched channel
+This might be a typical tx of a operator. User can also submit batched channel
 steps. There is no restriction on which steps appears.
 
 ## Mutual tx
 
-If User and provider agree, they can unstage a channel on their own terms:
+If User and Opertator agree, they can unstage a channel on their own terms:
 
 ```mermaid
 flowchart LR
