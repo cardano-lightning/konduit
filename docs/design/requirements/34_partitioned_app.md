@@ -8,8 +8,8 @@ Partitioned App, partitions App in to two parts:
   creates, and manages channels.
 - P2 : Intended as a mobile. Manages L2 eg pays invoices.
 
-The partition is such that P1 has all tx building. We can assume that User has a
-web wallet, accessible via CIP30. P2 retains the PPP, scans and pays BLN
+The partition is such that P1 has all tx building. We can assume that Consumer
+has a web wallet, accessible via CIP30. P2 retains the PPP, scans and pays BLN
 invoices, but no embedded wallet is required.
 
 Most of the functionality, minus the embedded wallet is then the same. The L1

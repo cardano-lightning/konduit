@@ -17,7 +17,7 @@ bidirectional with HTLC support. Konduit is unidirectional with HTLC support.
 ### Batching
 
 Batching steps of multiple channels into single txs is first class in the
-design. It makes maintaining many channels as an operator (or a user) easier and
+design. It makes maintaining many channels as Adaptor (or Consumer) easier and
 cheaper.
 
 ### Mutual txs
@@ -71,50 +71,51 @@ flowchart LR
 
 Nodes are **stages**; arrows are **steps**.
 
-User wishes to pay Merchants via BLN. After App Setup, User can `open` a channel
-with Operator. The `open` locks User funds on the L1. These funds underwrite the
-payments Operator makes on the behalf of User on BLN.
+Consumer wishes to pay Merchants via BLN. After App Setup, Consumer can `open` a
+channel with Adaptor. The `open` locks Consumer funds on the L1. These funds
+underwrite the payments Adaptor makes on the behalf of Consumer on BLN.
 
-While the channel is open, User can make payments to BLN via Operator. This
+While the channel is open, Consumer can make payments to BLN via Adaptor. This
 happens off-chain aka the L2. The details of the exchanges and their context are
 elsewhere. The important aspects are:
 
-- When initiating a pay, User sends Operator a "Locked Cheque"
-- When resolving a pay Operator will request User "squash" cheques into a single
-  piece of data.
+- When initiating a pay, Consumer sends Adaptor a "Locked Cheque"
+- When resolving a pay Adaptor will request Consumer "squash" cheques into a
+  single piece of data.
 
-Operator constructs a "receipt" as evidence of funds owed. Operator can use this
+Adaptor constructs a "receipt" as evidence of funds owed. Adaptor can use this
 evidence in a `sub` step.
 
-As and when User desires, User can `add` additional funds to the channel.
+As and when Consumer desires, Consumer can `add` additional funds to the
+channel.
 
-When User no longer wishes to continue their engagement with Operator, they
+When Consumer no longer wishes to continue their engagement with Adaptor, they
 `close` the channel. Funds remain locked. This begins a time window,
-`close_period`, during which Operator can `respond` with their final receipt.
-Operator will stop handling new User requests when they see the channel is
-`closed`. There is no risk to Operator, so long as they watch the chain more
-frequently than once every close period.
+`close_period`, during which Adaptor can `respond` with their final receipt.
+Adaptor will stop handling new Consumer requests when they see the channel is
+`closed`. There is no risk to Adaptor, so long as they watch the chain more
+frequently than once every respond period.
 
-The Operator has evidence they are owed funds as in a `sub`. However, at the
-time of the `respond` it may yet be determined which of the pair is the rightful
+The Adaptor has evidence they are owed funds as in a `sub`. However, at the time
+of the `respond` it may yet be determined which of the pair is the rightful
 owner of the funds associated to Locked Cheques. We say these are pending Locked
 Cheques.
 
-If Operator has no pending Locked Cheques then they are able to take all funds
-owed immediately. If Operator has some pending Locked Cheques these are held
+If Adaptor has no pending Locked Cheques then they are able to take all funds
+owed immediately. If Adaptor has some pending Locked Cheques these are held
 until a point in time where either:
 
-- User demonstrates that a cheque has expired,
-- Operator unlocks the cheque with the secret.
+- Consumer demonstrates that a cheque has expired,
+- Adaptor unlocks the cheque with the secret.
 
 In either case, the participant removes the funds they are owed. Note, during
-the respond, User may remove all funds not associated to a pending cheque. When
-there are no remaining cheques, the user `end`s the channel.
+the respond, Consumer may remove all funds not associated to a pending cheque.
+When there are no remaining cheques, Consumer `end`s the channel.
 
-If User `close`s and Operator fails to `respond` within the time period, they
-are deemed to have abandoned their obligation. From `closed`, User can `elapse`
-the channel if the close period has expired, again retrieving all remaining
-funds.
+If Consumer `close`s and Adaptor fails to `respond` within the time period, they
+are deemed to have abandoned their obligation. From `closed`, Consumer can
+`elapse` the channel if the respond period has expired, again retrieving all
+remaining funds.
 
 ## Conventions
 
@@ -128,8 +129,8 @@ referring.
 Participants are identified by their key, and signatures therefrom. We use the
 prefixes:
 
-- `add` - Belongs to User
-- `sub` - Belongs to Operator
+- `add` - Belongs to Consumer
+- `sub` - Belongs to Adaptor
 
 We use the suffixes:
 
@@ -139,17 +140,18 @@ We use the suffixes:
 
 For examples:
 
-- `add_vkey` is User's verification key.
-- `sub_vkh` is Operator's verification key hash.
+- `add_vkey` is Consumer's verification key.
+- `sub_vkh` is Adaptor's verification key hash.
 
 # Datatypes
 
 ## Cheque
 
-Cheques are a vehicle via which funds are sent from User to Operator. A locked
-cheque indicates that the sender owes the receiver funds subject to conditions.
-A "hash time locked contract" cheque (HTLC) has a lock in the form of a hash. To
-be redeemable, the receiver must provide the "secret" that hashes to the lock.
+Cheques are a vehicle via which funds are sent from Consumer to Adaptor. A
+locked cheque indicates that the sender owes the receiver funds subject to
+conditions. A "hash time locked contract" cheque (HTLC) has a lock in the form
+of a hash. To be redeemable, the receiver must provide the "secret" that hashes
+to the lock.
 
 ```aiken
 type Index = Int
@@ -183,19 +185,20 @@ verified.
 Our choice of vocab is close with that of Cardano Lightning, but with some
 divergence. Konduit is simpler. For example:
 
-- There is no "normal" cheque. Instead User issues a squash.
+- There is no "normal" cheque. Instead Consumer issues a squash.
 - There are no other locks, so the data structure of the locked cheque is
   simpler.
 
 ## Squash
 
-Each pay action issues a new locked cheque on the L2. Operator can use the
-locked cheque and secret directly on the L1 without User involvement, however
-they must do so before the timeout expires.
+Each pay action issues a new locked cheque on the L2. Adaptor can use the locked
+cheque and secret directly on the L1 without Consumer involvement, however they
+must do so before the timeout expires.
 
-It is likely preferable for User to provide an alternative redemption mechanism
-that removes the time lock. The funds associated to a collection of cheques can
-be "squashed down" to a much smaller piece of data, namely a `Squash`.
+It is likely preferable for Consumer to provide an alternative redemption
+mechanism that removes the time lock. The funds associated to a collection of
+cheques can be "squashed down" to a much smaller piece of data, namely a
+`Squash`.
 
 ```aiken
 type Exclude = List<Index>
@@ -204,7 +207,7 @@ type SingedSquash = (Squash, Signature)
 ```
 
 Unlike CL we do need to "Snapshots" which are the pair of each participants
-squash, since only User is issuing cheques.
+squash, since only Consumer is issuing cheques.
 
 The verify function works analogously to that of cheques, in that the message is
 derived by concatenating the tag and cbor of the squash. A squash is well formed
@@ -220,14 +223,13 @@ well-formed-ness must be verified.
 
 ## Receipt
 
-In a `sub` Operator presents evidence of funds owed. The evidence is a
-`Receipt`.
+In a `sub` Adaptor presents evidence of funds owed. The evidence is a `Receipt`.
 
 ```aiken
 type Receipt =  (Option<SignedSquash>>, List<UnlockedCheque>)
 ```
 
-In a `respond` Operator includes also pending locked cheques:
+In a `respond` Adaptor includes also pending locked cheques:
 
 ```aiken
 type FinalReceipt =  (Option<SignedSquash>>, List<Cheque>)
@@ -238,7 +240,7 @@ increasing. This prevents the possibility of duplicates. Other accounting
 measures ensures that a cheque can be used at most once, including when part of
 a squash.
 
-The inclusion of pending locked cheques in the final receipt allows User to
+The inclusion of pending locked cheques in the final receipt allows Consumer to
 remove funds demonstrably theirs without further delay, while the owner of funds
 yet to be determined remain locked.
 
@@ -248,7 +250,7 @@ A receipt is well formed if:
 2. The cheques are strictly monotonically increasing
 3. No cheque is accounted for in the squash.
 
-Unlike the cheques or squash, a receipt is constructed by Operator. The L1 must
+Unlike the cheques or squash, a receipt is constructed by Adaptor. The L1 must
 verify the well formed-ness of the receipt.
 
 ## Accounting
@@ -261,7 +263,7 @@ cumulative amount `owed` since the channels inception. Recall that the unlocked
 cheques must not be included in the squash.
 
 The cumulative amount `subbed` from the channel is what is recorded in the
-datum. In a sub step, Operator can redeem no more than the difference between
+datum. In a sub step, Adaptor can redeem no more than the difference between
 `owed` and `subbed`. The cumulative amount `subbed` is what the continuing
 output records.
 
@@ -401,9 +403,9 @@ Through out we use the following conventions:
 
 The following statements for the associated encodings:
 
-- User has signed
+- Consumer has signed
   `extra_signatories |> list.has(constants_in.add_vkey |> hash.blake2b_224)`
-- Operator has signed
+- Adaptor has signed
   `extra_signatories |> list.has(constants_in.sub_vkey |> hash.blake2b_224)`
 
 ## Batch
@@ -547,7 +549,7 @@ The step context:
 Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 
 - add.0 : Stage in is opened : `stage_in = Opened(subbed)`
-- add.1 : User has signed
+- add.1 : Consumer has signed
 - add.2 : Stage out is equal to stage in `stage_out == stage_in`
 - add.3 : Funds increased `funds_in` < `funds_out`
 
@@ -558,7 +560,7 @@ Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 Redeemer params: `receipt`
 
 - sub.0 : Stage in is opened : `stage_in = Opened(subbed_in)`
-- sub.0 : Operator has signed
+- sub.0 : Adaptor has signed
 - sub.1 : Stage out is opened : `stage_out = Opened(subbed_out)`
 - sub.2 : Funds decrease by `subbed = funds_in - funds_out`
 - sub.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
@@ -571,10 +573,10 @@ Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`,
 `funds_out`
 
 - close.0 : Stage in is opened : `stage_in = Opened(subbed)`
-- close.0 : User has signed
+- close.0 : Consumer has signed
 - close.0 : Stage out is closed : `stage_out = Closed(subbed_, expire_at)`
 - close.0 : Funds unchanged
-- close.2 : Expire at respects the close period :
+- close.2 : Expire at respects the respond period :
   `expire_at >= upper_bound + close_period`
 
 ### Respond
@@ -584,7 +586,7 @@ Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 Redeemer params: `final_receipt`
 
 - respond.0 : Stage in is closed : `stage_in = Closed(subbed, _)`
-- respond.0 : Operator has signed
+- respond.0 : Adaptor has signed
 - respond.1 : Stage out is opened : `stage_out = Responded(pend)`
 - respond.2 : Funds decrease by `subbed = funds_in - funds_out`
 - respond.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
@@ -599,7 +601,7 @@ Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 Redeemer params: `secrets`
 
 - respond.0 : Stage in is responded : `stage_in = Responded(pend_in)`
-- respond.0 : Operator has signed
+- respond.0 : Adaptor has signed
 - respond.1 : Stage out is responded : `stage_out = Responded(pend_out)`
 - respond.2 : Funds decrease by `subbed = funds_in - funds_out`
 - respond.3 : Secrets are well formed, and total `owed`
@@ -615,7 +617,7 @@ Context : `signers`, `lower_bound`, `stage_in`, `funds_in`, `stage_out`,
 Redeemer params: `expired`
 
 - expire.0 : Stage in is responded : `stage_in = Responded(pend_in)`
-- expire.1 : User has signed
+- expire.1 : Consumer has signed
 - expire.2 : Stage out is responded `stage_out = Responded(pend_out)`
 - expire.3 : Each item in `expired` corresponds to pending cheque that has
   expired : `<= lower_bound`
@@ -628,7 +630,7 @@ Redeemer params: `expired`
 Context : `signers`, `lower_bound`, `stage_in`
 
 - end.0 : Stage in is responded `stage_in = Responded(pend)`
-- end.1 : User has signed
+- end.1 : Consumer has signed
 - end.2 : All pending cheques are expired : `<= lower_bound`
 
 ### Elapse
@@ -636,8 +638,8 @@ Context : `signers`, `lower_bound`, `stage_in`
 Context : `signers`, `lower_bound`, `stage_in`
 
 - elapse.0 : Stage in is Closed : `stage_in = Closed(_, expire_at)`
-- elapse.1 : User has signed
-- elapse.2 : Close period has expired : `expire_at <= lower_bound`.
+- elapse.1 : Consumer has signed
+- elapse.2 : Respond period has expired : `expire_at <= lower_bound`.
 
 ## Auxiliary functions
 
@@ -649,14 +651,14 @@ diagrams are illustrative, and hide many details such as collateral inputs.
 
 ## Open tx
 
-User deposits fund at the channel validator address. (Recall that the stake
+Consumer deposits fund at the channel validator address. (Recall that the stake
 credential of the channel address is not constrained, but is fixed over the life
 of the instance).
 
 ```mermaid
 flowchart LR
-    i_user["
-      @user \n
+    i_consumer["
+      @consumer \n
       $currency \n
     "]
 
@@ -668,12 +670,12 @@ flowchart LR
       #Opened
     "]
 
-    i_user --> m --> o_channel
+    i_consumer --> m --> o_channel
 ```
 
 ## Add tx
 
-User deposits more funds of currency `$currency` at their channel
+Consumer deposits more funds of currency `$currency` at their channel
 
 ```mermaid
 flowchart LR
@@ -683,8 +685,8 @@ flowchart LR
       #Opened
     "]
 
-    i_user["
-      @user \n
+    i_consumer["
+      @consumer \n
       $currency' \n
     "]
 
@@ -697,12 +699,12 @@ flowchart LR
     "]
 
     i_channel -->|Main:Add| m --> o_channel
-    i_user --> m
+    i_consumer --> m
 ```
 
 ## Sub tx
 
-Operator receives the amount the receipt indicates relative to the input state.
+Adaptor receives the amount the receipt indicates relative to the input state.
 The output state is updated accordingly.
 
 ```mermaid
@@ -721,18 +723,18 @@ flowchart LR
       #Opened'
     "]
 
-    o_operator["
-      @operator \n
+    o_adaptor["
+      @adaptor \n
       $currency'' \n
     "]
 
     i_channel -->|Main:Sub| m --> o_channel
-    m --> o_operator
+    m --> o_adaptor
 ```
 
 ## Close tx
 
-User wishes to end their channel, and does a close
+Consumer wishes to end their channel, and does a close
 
 ```mermaid
 flowchart LR
@@ -755,7 +757,7 @@ flowchart LR
 
 ## Respond tx
 
-Operator submits their final receipt. They claim funds owed, and leave locked
+Adaptor submits their final receipt. They claim funds owed, and leave locked
 funds associated to pending cheques.
 
 ```mermaid
@@ -774,18 +776,18 @@ flowchart LR
       #Responded
     "]
 
-    o_operator["
-      @operator \n
+    o_adaptor["
+      @adaptor \n
       $currency'' \n
     "]
 
     i_channel -->|Main:Respond| m --> o_channel
-    m --> o_operator
+    m --> o_adaptor
 ```
 
 ## Reveal tx
 
-Operator reveals secrets associated to pending cheques. They take associated
+Adaptor reveals secrets associated to pending cheques. They take associated
 funds.
 
 ```mermaid
@@ -804,18 +806,18 @@ flowchart LR
       #Responded
     "]
 
-    o_operator["
-      @operator \n
+    o_adaptor["
+      @adaptor \n
       $currency'' \n
     "]
 
     i_channel -->|Main:Reveal| m --> o_channel
-    m --> o_operator
+    m --> o_adaptor
 ```
 
 ## Expire tx
 
-User submits tx pointing at the pending cheques that have expired. They take
+Consumer submits tx pointing at the pending cheques that have expired. They take
 funds demonstrably theirs.
 
 ```mermaid
@@ -834,18 +836,18 @@ flowchart LR
       #Responded
     "]
 
-    o_user["
-      @user \n
+    o_consumer["
+      @consumer \n
       $currency'' \n
     "]
 
     i_channel -->|Main:Reveal| m --> o_channel
-    m --> o_user
+    m --> o_consumer
 ```
 
 ## End tx
 
-User ends a responded channel. All pending cheques are expired.
+Consumer ends a responded channel. All pending cheques are expired.
 
 ```mermaid
 flowchart LR
@@ -857,19 +859,19 @@ flowchart LR
 
     m["tx"]
 
-    o_user["
-      @user \n
+    o_consumer["
+      @consumer \n
       $currency \n
     "]
 
     i_channel -->|Main:End| m
-    m --> o_user
+    m --> o_consumer
 ```
 
 ## Elapse tx
 
-User elapses a closed channel. Operator has submitted no final receipt in the
-close period.
+Consumer elapses a closed channel. Adaptor has submitted no final receipt in the
+respond period.
 
 ```mermaid
 flowchart LR
@@ -881,13 +883,13 @@ flowchart LR
 
     m["tx"]
 
-    o_user["
-      @user \n
+    o_consumer["
+      @consumer \n
       $currency \n
     "]
 
     i_channel -->|Main:End| m
-    m --> o_user
+    m --> o_consumer
 ```
 
 ## Batch tx
@@ -935,8 +937,8 @@ flowchart LR
       #Opened
     "]
 
-    o_operator_0["
-      @operator \n
+    o_adaptor_0["
+      @adaptor \n
       $coinA'', $coinB'', $coinD''\n
     "]
 
@@ -961,18 +963,18 @@ flowchart LR
       #Responded
     "]
 
-    o_operator_1["
-      @operator \n
+    o_adaptor_1["
+      @adaptor \n
       $coinC''\n
     "]
 
 
     i_channel_0 -->|Main:steps| m --> o_channel_0
-    m --> o_operator_0
+    m --> o_adaptor_0
     i_channel_1 -->|Batch| m --> o_channel_1
     i_channel_2 -->|Batch| m --> o_channel_2
     i_channel_3 -->|Batch| m --> o_channel_3
-    m --> o_operator_1
+    m --> o_adaptor_1
 ```
 
 Note that steps ordering would be
@@ -981,12 +983,12 @@ Note that steps ordering would be
   steps = [Sub, Sub, Sub, Reveal]
 ```
 
-This might be a typical tx of a operator. User can also submit batched channel
-steps. There is no restriction on which steps appears.
+This might be a typical tx of a adaptor. Consumer can also submit batched
+channel steps. There is no restriction on which steps appears.
 
 ## Mutual tx
 
-If User and Opertator agree, they can unstage a channel on their own terms:
+If Consumer and Opertator agree, they can unstage a channel on their own terms:
 
 ```mermaid
 flowchart LR
@@ -998,18 +1000,18 @@ flowchart LR
 
     m["tx"]
 
-    o_user["
-      @user \n
+    o_consumer["
+      @consumer \n
       $currency' \n
     "]
 
-    o_operator["
-      @user \n
+    o_adaptor["
+      @consumer \n
       $currency'' \n
     "]
 
     i_channel -->|Mutual| m
-    m --> o_user & o_operator
+    m --> o_consumer & o_adaptor
 ```
 
 # Comments
@@ -1043,12 +1045,12 @@ Importantly note that an ill formed channel cannot be spent with `Main`, the
 continuing output will have the correct `own_hash`. Thus, no continuing output
 can be ill formed in this way.
 
-It follows that such an input exists only when a user has spent their own
+It follows that such an input exists only when a consumer has spent their own
 funds,  
 and not those belonging to a partner. This property is in keeping with our
 guiding principles of design: On-chain code keeps users safe from others, but
-not necessarily from themselves. It is the role of off-chain code to keep users
-safe from themselves.
+not necessarily from themselves. It is the role of off-chain code to keep
+consumers safe from themselves.
 
 > ... another channel has the wrong `own_hash`?
 

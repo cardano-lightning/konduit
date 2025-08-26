@@ -3,7 +3,7 @@ title: "Konduit Requirements :: App"
 ---
 
 App is a mobile first application available via web and natively on popular OSs.
-It is the user interface of Konduit for User.
+It is the user interface of Konduit for Consumer.
 
 We adopt the following conventions for specification of App:
 
@@ -19,7 +19,7 @@ We adopt the following conventions for specification of App:
 # Launch
 
 When there is no key in App state, such as first load, App opens to App Launch
-page. This is the first thing User sees.
+page. This is the first thing Consumer sees.
 
 Display:
 
@@ -37,7 +37,7 @@ Display:
 
 ## Import Function
 
-User imports existing key and settings. Importing uses OS or browser's file
+Consumer imports existing key and settings. Importing uses OS or browser's file
 browser function to find file. The file format aligns with that which is
 exported.
 
@@ -68,7 +68,7 @@ Triggered by [Create](#create), and [Import](#import) in the case that there are
 missing fields.
 
 Setup consists of a sequence of input forms. There is a progress to indicate how
-far through the setup User is. Each form is also accessible via
+far through the setup Consumer is. Each form is also accessible via
 [Settings](#settings).
 
 For each input page there is:
@@ -195,7 +195,7 @@ Info: This version supports only Ada channels. There is no abitility to set the
 properties of Ada. In future, other currencies can be supported. A Currency can
 be set with the following properties:
 
-- Name. UTF-8. User's choice
+- Name. UTF-8. Consumer's choice
 - PolicyId. Hexidecimal 56 characters. Aka script hash, this is the blake2b256
   hash of the script of the currency.
 - Name. Hexidecimal, >= 64 characters. The token name.
@@ -385,8 +385,8 @@ Below channel carousel are button:
 
 # Channel
 
-Shows status of channel, activity, and actions. User can also enter [Pay](#pay)
-from here, where only this channel will provide quote.
+Shows status of channel, activity, and actions. Consumer can also enter
+[Pay](#pay) from here, where only this channel will provide quote.
 
 Widgets:
 
@@ -464,7 +464,7 @@ TODO
 Top button "Manual" to skip QR code. Preview of Camera view. On scan: - If
 parse-able channel partner details, then render manual form, with fields filled
 in. - Else display error "Cannot make sense of QR code". On "Back" return to QR
-scanner. On click of manual or successful scan open form view. User must set
+scanner. On click of manual or successful scan open form view. Consumer must set
 amount to fund channel. There are two numbers to provide context:
 
 - Partner's "min volume" or "min flux" (TBC)
@@ -505,7 +505,7 @@ Manual form submit button is "Get Quote" (single channel case) or "Get Quotes"
 (multi channel case) if available. Help icon makes this point clear: Will not
 get a quote from channels for which there are insufficient funds. If App Pay is
 launched from a [Channel](#channel), the quote will only be for that channel. In
-this case User can request quotes from other channels via [Quotes](#quotes).
+this case Consumer can request quotes from other channels via [Quotes](#quotes).
 
 On submit, open [Quotes](#quotes).
 
@@ -519,11 +519,11 @@ only this channel will be quoted.
 Page displays a list of Quotes vertically. The update of the quotes will load
 asynchronously. While awaiting quote, indicate awaiting. If quote request fails,
 display failure on Quote. Quote ordered from cheapest at top. If a cheaper quote
-arrives later, an animation makes clear to User a reordering has taken place.
-Channels available, but no quote requested are listed below quotes. On-click a
-quote is requested. While quote is pending display pending icon. Channels
-unavailable (insufficient funds or otherwise), are greyed out. On-click display
-reason for not available.
+arrives later, an animation makes clear to Consumer a reordering has taken
+place. Channels available, but no quote requested are listed below quotes.
+On-click a quote is requested. While quote is pending display pending icon.
+Channels unavailable (insufficient funds or otherwise), are greyed out. On-click
+display reason for not available.
 
 When quote fails, on click displays error message. When quote successful, on
 click launches [Pay Confirm](#pay-confirm).
@@ -531,6 +531,6 @@ click launches [Pay Confirm](#pay-confirm).
 # Pay Confirm
 
 Full details of payment and channel are displayed. If fees are high according to
-[Settings High Fee Flag](#settings-high-fee-flag) then fee is flagged. User can
-confirm or cancel. Confirm goes to [Channel](#channel). Cancel returns to
+[Settings High Fee Flag](#settings-high-fee-flag) then fee is flagged. Consumer
+can confirm or cancel. Confirm goes to [Channel](#channel). Cancel returns to
 [Quote](#quote) with previous state.
