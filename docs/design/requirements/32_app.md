@@ -89,7 +89,7 @@ The input pages include:
 - App Settings Currencies - Only Ada is supported at this time.
 - App Settings Stake
 - App Settings Locale - Date time, number format, fiat.
-- App Settings XXX
+- App Settings ... TBC
 
 Note that the behaviour is a little different to the displayed when accessed via
 [Settings](#settings). Pressing "Back" on these pages goes back one page:
@@ -521,11 +521,12 @@ asynchronously. While awaiting quote, indicate awaiting. If quote request fails,
 display failure on Quote. Quote ordered from cheapest at top. If a cheaper quote
 arrives later, an animation makes clear to User a reordering has taken place.
 Channels available, but no quote requested are listed below quotes. On-click a
-quote is requested. Channels unavailable (insufficient funds or otherwise), are
-greyed out.
+quote is requested. While quote is pending display pending icon. Channels
+unavailable (insufficient funds or otherwise), are greyed out. On-click display
+reason for not available.
 
-On failed quote, On click display error message. On successful quote, on click
-launches [Pay Confirm](#pay-confirm).
+When quote fails, on click displays error message. When quote successful, on
+click launches [Pay Confirm](#pay-confirm).
 
 # Pay Confirm
 
