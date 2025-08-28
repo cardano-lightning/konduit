@@ -12,47 +12,16 @@ The design of the Konduit Kernel draws heavily on previous work of
 two party payment channels, the former is unidirectional, while the latter is
 bidirectional with HTLC support. Konduit is unidirectional with HTLC support.
 
-## Motivations
+## Overview
 
-### Batching
+The Konduit kernel consists of a single validator. Any (well-formed) UTXO at the
+validator address holds the funds and on-chain data corresponding to a channel.
+And conversely any (staged) channel corresponds to a single UTXO at tip at the
+validator address.
 
-Batching steps of multiple channels into single txs is first class in the
-design. It makes maintaining many channels as Adaptor (or Consumer) easier and
-cheaper.
+## Channel life-cycle
 
-### Mutual txs
-
-Mutual txs allow partners of a channel to perform an arbitrary spend. Provide
-both consent, by signing the tx, anything goes.
-
-This is uninteresting from the perspective of validators. It is effectively a
-multisig. The additional constraint is that a mutual txs must include no other
-inputs from validator address.
-
-### Simplifications
-
-- In the initial iteration we remove the possibility of (non ada) native asset
-  channels.
-- Only `Sha2_256` locks are available (cf Cardano Lightning with support for
-  other lock types).
-- For Konduit, a "Cheque" has a hash and timeout. There is no notion of a cheque
-  without this.
-
-### HTLCs
-
-Hashed Time-Locked Contract, HTLC, is the fundamental component of what makes
-Lightning safe. In Bitcoin, the term HTLC is used not only as the general
-mechanism but also as an address, a contract to which the address corresponds,
-an output associated to an address, or a family of such things. Here we use it
-to mean the general mechanism. A warning: The implementation of HTLC looks quite
-different to that of Bitcoin.
-
-For more details, see
-[interledger](https://interledger.org/developers/get-started/).
-
-## Konduit life-cycle
-
-The life-cycle of a Kernel instance
+The life-cycle of a channel
 
 ```mermaid
 flowchart LR
@@ -73,8 +42,8 @@ flowchart LR
     n1("x")
 
     n0 -->|open| opened
-    opened -->|sub| opened
     opened --->|add| opened
+    opened -->|sub| opened
     opened -->|close| closed
     closed -->|respond| responded
     responded -->|unlock| responded
@@ -129,6 +98,44 @@ If Consumer `close`s and Adaptor fails to `respond` within the time period, they
 are deemed to have abandoned their obligation. From `closed`, Consumer can
 `elapse` the channel if the respond period has expired, again retrieving all
 remaining funds.
+
+## Motivations
+
+### Batching
+
+Batching steps of multiple channels into single txs is first class in the
+design. It makes maintaining many channels as Adaptor (or Consumer) easier and
+cheaper.
+
+### Mutual txs
+
+Mutual txs allow partners of a channel to perform an arbitrary spend. Provide
+both consent, by signing the tx, anything goes.
+
+This is uninteresting from the perspective of validators. It is effectively a
+multisig. The additional constraint is that a mutual txs must include no other
+inputs from validator address.
+
+### Simplifications
+
+- In the initial iteration we remove the possibility of (non ada) native asset
+  channels.
+- Only `Sha2_256` locks are available (cf Cardano Lightning with support for
+  other lock types).
+- For Konduit, a "Cheque" has a hash and timeout. There is no notion of a cheque
+  without this.
+
+### HTLCs
+
+Hashed Time-Locked Contract, HTLC, is the fundamental component of what makes
+Lightning safe. In Bitcoin, the term HTLC is used not only as the general
+mechanism but also as an address, a contract to which the address corresponds,
+an output associated to an address, or a family of such things. Here we use it
+to mean the general mechanism. A warning: The implementation of HTLC looks quite
+different to that of Bitcoin.
+
+For more details, see
+[interledger](https://interledger.org/developers/get-started/).
 
 ## Conventions
 
