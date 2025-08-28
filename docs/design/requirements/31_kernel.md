@@ -35,6 +35,20 @@ inputs from validator address.
   channels.
 - Only `Sha2_256` locks are available (cf Cardano Lightning with support for
   other lock types).
+- For Konduit, a "Cheque" has a hash and timeout. There is no notion of a cheque
+  without this.
+
+### HTLCs
+
+Hashed Time-Locked Contract, HTLC, is the fundamental component of what makes
+Lightning safe. In Bitcoin, the term HTLC is used not only as the general
+mechanism but also as an address, a contract to which the address corresponds,
+an output associated to an address, or a family of such things. Here we use it
+to mean the general mechanism. A warning: The implementation of HTLC looks quite
+different to that of Bitcoin.
+
+For more details, see
+[interledger](https://interledger.org/developers/get-started/).
 
 ## Konduit life-cycle
 
@@ -79,7 +93,7 @@ While the channel is open, Consumer can make payments to BLN via Adaptor. This
 happens off-chain aka the L2. The details of the exchanges and their context are
 elsewhere. The important aspects are:
 
-- When initiating a pay, Consumer sends Adaptor a "Locked Cheque"
+- When initiating a pay, Consumer sends Adaptor a "cheque"
 - When resolving a pay Adaptor will request Consumer "squash" cheques into a
   single piece of data.
 
@@ -98,15 +112,14 @@ frequently than once every respond period.
 
 The Adaptor has evidence they are owed funds as in a `sub`. However, at the time
 of the `respond` it may yet be determined which of the pair is the rightful
-owner of the funds associated to Locked Cheques. We say these are pending Locked
-Cheques.
+owner of the funds associated to cheques. We say these are pending cheques.
 
-If Adaptor has no pending Locked Cheques then they are able to take all funds
-owed immediately. If Adaptor has some pending Locked Cheques these are held
-until a point in time where either:
+If Adaptor has no pending cheques then they are able to take all funds owed
+immediately. If Adaptor has some pending cheques these are held until a point in
+time where either:
 
 - Consumer demonstrates that a cheque has expired,
-- Adaptor unlocks the cheque with the secret.
+- Adaptor unlocks the cheque by providing the secret.
 
 In either case, the participant removes the funds they are owed. Note, during
 the respond, Consumer may remove all funds not associated to a pending cheque.
@@ -143,129 +156,138 @@ For examples:
 - `add_vkey` is Consumer's verification key.
 - `sub_vkh` is Adaptor's verification key hash.
 
-# Datatypes
+# Components
 
 ## Cheque
 
-Cheques are a vehicle via which funds are sent from Consumer to Adaptor. A
-locked cheque indicates that the sender owes the receiver funds subject to
-conditions. A "hash time locked contract" cheque (HTLC) has a lock in the form
-of a hash. To be redeemable, the receiver must provide the "secret" that hashes
-to the lock.
+Cheques are a vehicle by which funds are sent from Consumer to Adaptor. Cheque
+is the key datatype by which the HTLC mechanism relies on.
+
+To be used to `sub` funds the receiver must provide the "secret" that hashes to
+the lock.
 
 ```aiken
 type Index = Int
 type Amount = Int
 type Timeout = Int // Posix Timestamp
 type Hash32 = ByteArray // 32 bytes
-type LockedCheque = (Index, Amount, Timeout, Hash32)
+type ChequeBody = (Index, Amount, Timeout, Hash32)
 type Signature = ByteArray // 64 Bytes
-type SignedLockedCheque = (LockedCheque, Signature)
-type Secret = ByteArray // 32 bytes
-type UnlockedCheque = (LockedCheque, Signature, Secret)
+type Cheque = (ChequeBody, Signature)
 
-type Cheque {
-    Locked(SignedLockedCheque)
-    Unlocked(RevealedCheque)
+type Secret = ByteArray // 32 bytes
+type Unlocked = (ChequeBody, Signature, Secret)
+
+type Mix {
+    MUnlocked(..Unlocked)
+    MPend(..Cheque)
 }
 ```
 
-The signature associated to the locked cheque is for the message constructed as
-the concatenation of the channel tag with the cbor of the locked cheque.
+The signature associated to the cheque is for the message constructed as the
+(byte array) concatenation of the channel tag with the cbor of the locked
+cheque.
 
 ```aiken
-  let message = bytearray.concat(tag, (as_bytes cheque))
+  let message = concat(tag, (serialize(cheque_body))
 ```
 
-A well formed cheque is a cheque for which the signature is correct for the
-context. It is generally understood that by "cheque" we mean "well formed
-cheque". In receiving of cheques on the L2 or L1, the signature must be
-verified.
+A well-formed cheque is a cheque for which the signature is correct for the
+context: tag and cheque body. It is generally understood that by "cheque" we
+mean "well-formed cheque". In receiving of cheques on the L2 or L1, the
+signature must be verified.
+
+The `Mix` is a mix of unlocked cheques and pending cheques. A cheque is pending
+at the time of a respond if the timeout has yet to pass but the secret is not
+yet known. (Or to be precise, there is a break down in communication that one of
+the participants is acting as if this is the case.)
 
 Our choice of vocab is close with that of Cardano Lightning, but with some
 divergence. Konduit is simpler. For example:
 
-- There is no "normal" cheque. Instead Consumer issues a squash.
+- There is no "normal" cheque. Instead Consumer issues a squash. See below.
 - There are no other locks, so the data structure of the locked cheque is
-  simpler.
+  simpler. We only support the lock present on BLN.
 
 ## Squash
 
-Each pay action issues a new locked cheque on the L2. Adaptor can use the locked
-cheque and secret directly on the L1 without Consumer involvement, however they
-must do so before the timeout expires.
+Each pay action issues a new cheque on the L2. Adaptor can use the cheque and
+secret directly on the L1 without Consumer involvement, however they must do so
+before the timeout expires.
 
 It is likely preferable for Consumer to provide an alternative redemption
 mechanism that removes the time lock. The funds associated to a collection of
-cheques can be "squashed down" to a much smaller piece of data, namely a
-`Squash`.
+cheques can be "squashed" in to a much smaller piece of data, namely a `Squash`.
 
 ```aiken
 type Exclude = List<Index>
-type Squash = (Amount, Index, Exclude)
-type SingedSquash = (Squash, Signature)
+type SquashBody = (Amount, Index, Exclude)
+type Squash = (SquashBody, Signature)
 ```
 
-Unlike CL we do need to "Snapshots" which are the pair of each participants
-squash, since only Consumer is issuing cheques.
+Unlike CL we do not need to "Snapshots", which are the pair squashes one of each
+participant, since only Consumer is issuing cheques.
 
 The verify function works analogously to that of cheques, in that the message is
-derived by concatenating the tag and cbor of the squash. A squash is well formed
-if:
+derived by concatenating the tag and cbor serialization of the squash body. A
+squash is well-formed if:
 
 1. The index `n >= 0`
 2. The exclusion list is strictly monotonically increasing with values in
    `(0, n)` (ie positive numbers strictly less than the index).
 3. The signature is valid.
 
-Otherwise the squash is ill formed. In receiving of cheques on the L2 or L1, the
-well-formed-ness must be verified.
+Otherwise the squash is ill formed. Adaptor and L1 must verify well-formed-ness
+of a squash, when received
+
+A cheque is _accounted for_ in a squash if its index `<= Index` and it does not
+appear in the `Exclude` list.
 
 ## Receipt
 
 In a `sub` Adaptor presents evidence of funds owed. The evidence is a `Receipt`.
 
 ```aiken
-type Receipt =  (Option<SignedSquash>>, List<UnlockedCheque>)
+type Receipt =  (Option<Squash>, List<Unlocked>)
 ```
 
-In a `respond` Adaptor includes also pending locked cheques:
+In a `respond` Adaptor includes also pending cheques:
 
 ```aiken
-type FinalReceipt =  (Option<SignedSquash>>, List<Cheque>)
+type MReceipt =  (Option<Squash>, List<Mix>)
 ```
 
-In either a `Receipt` or `FinalReciept` the items must be monotonically strictly
+In either a `Receipt` or `MReciept` the items must be monotonically strictly
 increasing. This prevents the possibility of duplicates. Other accounting
 measures ensures that a cheque can be used at most once, including when part of
 a squash.
 
-The inclusion of pending locked cheques in the final receipt allows Consumer to
-remove funds demonstrably theirs without further delay, while the owner of funds
-yet to be determined remain locked.
+The final receipt, `MReceipt`, contains a mix of revealed and pending cheques,
+`Mix`. This allows Adaptor to ensure pending funds (ie funds associated to
+pending cheques) remain in the L1. Consumer can remove all funds demonstrably
+theirs without further delay, while the owner of funds yet to be determined
+remain locked.
 
-A receipt is well formed if:
+A receipt is well-formed if:
 
-1. The squash and the cheques are each well formed.
+1. The squash and the cheques are each well-formed.
 2. The cheques are strictly monotonically increasing
 3. No cheque is accounted for in the squash.
 
-Unlike the cheques or squash, a receipt is constructed by Adaptor. The L1 must
-verify the well formed-ness of the receipt.
+Unlike the cheques or squash, a receipt is both constructed and submitted by
+Adaptor. The L1 must verify the well formed-ness of the receipt.
 
 ## Accounting
 
-TODO: Move Section.
-
 A receipt is evidence of funds owed. The `owed` amount is calculated as the
-amount of the squash, plus the amount of the unlocked cheques. This is the
-cumulative amount `owed` since the channels inception. Recall that the unlocked
-cheques must not be included in the squash.
+amount of the squash, plus the amount of the revealed cheques. This is the
+cumulative amount `owed` since the channels inception. Recall that the cheques
+must not be accounted for in the squash.
 
 The cumulative amount `subbed` from the channel is what is recorded in the
-datum. In a sub step, Adaptor can redeem no more than the difference between
-`owed` and `subbed`. The cumulative amount `subbed` is what the continuing
-output records.
+channel datum. In a sub step, Adaptor can redeem no more than the difference
+between `owed` and `subbed`. The new cumulative amount `subbed` is what the
+continuing output records.
 
 In the `respond`, the analogous happens with regards to the unlocked cheques in
 the final receipt. In addition, the pending locked cheques in the final receipt
@@ -282,38 +304,38 @@ type Constants {
   close_period : Int,
 }
 
-type Datum {
-  own_hash : ScriptHash,
-  constants : Constants
-  stage : Stage,
-}
+/// ScriptHash is own_hash
+
+type Datum = (ScriptHash, Constants, Stage)
+
+
+/// TBC: Flatten params to remove additional nesting.
 
 type Stage {
-  Opened(OpenParams)
-  Closed(ClosedParams)
-  Responded(RespondedParams)
-  Settled
+  Opened(..OpenParams)
+  Closed(..ClosedParams)
+  Responded(..RespondedParams)
 }
 
 type OpenedParams {
-  subbed : Int,
+  subbed : Amount,
 }
 
 type ClosedParams {
-  subbed : Int,
+  subbed : Amount,
   expire_at : Int,
 }
 
+/// Pend cheques are Cheque body but without the Index since its not needed
+
 type PendCheque = (Amount, Timeout, Secret)
 
-type Pend {
-    total : Amount,
-    items : List<PendCheque>,
-}
+/// Total amount in pending cheques, and the PendCheques
+
+type Pends =  ( Amount, List<PendCheque> )
 
 type RespondedParams {
-  subbed : Int,
-  pend : Pend,
+  pend : Pends,
 }
 
 type Redeemer {
@@ -329,12 +351,14 @@ type Step {
 
 type Steps = List<Step>
 
+/// TODO: do we flatten params
+
 type Cont {
   Add
-  Sub(Receipt)
+  Sub(..Receipt)
   Close
-  Respond(FinalReceipt)
-  Reveal(List<(Index, Secret)>)
+  Respond(..MReceipt)
+  Unlock(List<(Index, Secret)>)
   Expire(List<Index>)
 }
 
@@ -574,10 +598,10 @@ Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`,
 
 - close.0 : Stage in is opened : `stage_in = Opened(subbed)`
 - close.0 : Consumer has signed
-- close.0 : Stage out is closed : `stage_out = Closed(subbed_, expire_at)`
+- close.0 : Stage out is closed : `stage_out = Closed(subbed_, elapse_at)`
 - close.0 : Funds unchanged
 - close.2 : Expire at respects the respond period :
-  `expire_at >= upper_bound + close_period`
+  `elapse_at >= upper_bound + close_period`
 
 ### Respond
 
@@ -594,19 +618,19 @@ Redeemer params: `final_receipt`
 - respond.5 : receipt is well formed with amount `owed`, and pending `pend`
 - respond.6 : `owed >= subbed_out`
 
-### Reveal
+### Unlock
 
 Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 
 Redeemer params: `secrets`
 
-- respond.0 : Stage in is responded : `stage_in = Responded(pend_in)`
-- respond.0 : Adaptor has signed
-- respond.1 : Stage out is responded : `stage_out = Responded(pend_out)`
-- respond.2 : Funds decrease by `subbed = funds_in - funds_out`
-- respond.3 : Secrets are well formed, and total `owed`
-- respond.4 : `owed >= subbed`
-- respond.5 : `pend_out` is `pend_in` adjusted for items in `secrets` being
+- unlock.0 : Stage in is responded : `stage_in = Responded(pend_in)`
+- unlock.0 : Adaptor has signed
+- unlock.1 : Stage out is responded : `stage_out = Responded(pend_out)`
+- unlock.2 : Funds decrease by `subbed = funds_in - funds_out`
+- unlock.3 : Secrets are well formed, and total `owed`
+- unlock.4 : `owed >= subbed`
+- unlock.5 : `pend_out` is `pend_in` adjusted for items in `secrets` being
   dropped, where each item has had secret revealed
 
 ### Expire
@@ -637,9 +661,9 @@ Context : `signers`, `lower_bound`, `stage_in`
 
 Context : `signers`, `lower_bound`, `stage_in`
 
-- elapse.0 : Stage in is Closed : `stage_in = Closed(_, expire_at)`
+- elapse.0 : Stage in is Closed : `stage_in = Closed(_, elapse_at)`
 - elapse.1 : Consumer has signed
-- elapse.2 : Respond period has expired : `expire_at <= lower_bound`.
+- elapse.2 : Respond period has expired : `elapse_at <= lower_bound`.
 
 ## Auxiliary functions
 
@@ -785,7 +809,7 @@ flowchart LR
     m --> o_adaptor
 ```
 
-## Reveal tx
+## Unlock tx
 
 Adaptor reveals secrets associated to pending cheques. They take associated
 funds.
@@ -811,7 +835,7 @@ flowchart LR
       $currency'' \n
     "]
 
-    i_channel -->|Main:Reveal| m --> o_channel
+    i_channel -->|Main:Unlock| m --> o_channel
     m --> o_adaptor
 ```
 
@@ -841,7 +865,7 @@ flowchart LR
       $currency'' \n
     "]
 
-    i_channel -->|Main:Reveal| m --> o_channel
+    i_channel -->|Main:Unlock| m --> o_channel
     m --> o_consumer
 ```
 
@@ -980,7 +1004,7 @@ flowchart LR
 Note that steps ordering would be
 
 ```txt
-  steps = [Sub, Sub, Sub, Reveal]
+  steps = [Sub, Sub, Sub, Unlock]
 ```
 
 This might be a typical tx of a adaptor. Consumer can also submit batched
