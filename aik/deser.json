@@ -1,0 +1,42 @@
+{
+  "name": "konduit/wellformed.deser",
+  "parameters": [
+    {
+      "title": "d",
+      "schema": {
+        "$ref": "#/definitions/Data"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "59011e01010029800aba4aba2aba1aba0aab9fab9c4888888c966002011001800c4c9660020030028992cc004006007003801c4cc89660020030058992cc00400600d00680344cc89660020030088992cc004006013009804c4cc896600200300b8992cc00400601900c8064032264b30013012003899b8f37666e9ccc040dd4005198081ba8007330103750008660206ea40052f5c06ecc05201a8078dd7000a024300f00140346eb4004c03800a0128078c03000500a1bad001300b00280320183009001401c6eb4004c02000a0068048c0180050041bac008800c0050070a99800a49396578706563742028696e6465782c20616d6f756e742c2074696d656f75742c20696d61676529203a20742e436865717565426f6479203d2064001601",
+  "hash": "001b2c7cbeee9d2cc9d6a703a1c959e284ec365925f296d1fb3b500e",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Data": {
+      "title": "Data",
+      "description": "Any Plutus data."
+    }
+  }
+}
