@@ -1,16 +1,15 @@
+use aiken/builtin.{append_bytearray}
 use aiken/cbor
 use aiken/crypto.{
   Signature, VerificationKey, sha2_256, verify_ed25519_signature,
 }
-use aiken/primitive/bytearray
 use extra/xlist.{drop_hard, foldl3}
 use konduit/prelude.{Amount, Index, Timestamp}
 use konduit/types as t
 
 pub fn mk_verify_signature(key: VerificationKey, tag: t.Tag) {
   fn(body: Data, signature: Signature) {
-    let message = bytearray.concat(tag, cbor.serialise(body))
-    verify_ed25519_signature(key, message, signature)
+    verify_ed25519_signature(key, append_bytearray(tag, cbor.serialise(body)), signature)
   }
 }
 
