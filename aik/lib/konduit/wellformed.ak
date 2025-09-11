@@ -1,4 +1,5 @@
-use aiken/builtin.{append_bytearray, verify_ed25519_signature, sha2_256}
+use aiken/builtin.{append_bytearray, verify_ed25519_signature, sha2_256, }
+use aiken/primitive/bytearray
 use aiken/cbor
 use aiken/crypto.{
   Signature, VerificationKey, 
@@ -74,8 +75,9 @@ pub fn mk_with_unlocked(
     let (new_index, new_amount, timeout, image) = body
     expect upper_bound < timeout
     expect sha2_256(secret) == image
+    expect bytearray.length(secret) == 32
     if index < new_index {
-      return(amount + new_amount, new_index, exclude)
+      return(amount + new_amount, new_index, [])
     } else {
       return(amount + new_amount, index, drop_hard(exclude, new_index))
     }

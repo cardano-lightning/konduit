@@ -85,11 +85,11 @@ For each input page there is:
 
 The input pages include:
 
-- App Settings Cardano Connector
-- App Settings Currencies - Only Ada is supported at this time.
-- App Settings Stake
-- App Settings Locale - Date time, number format, fiat.
-- App Settings ... TBC
+- Settings Cardano Connector
+- Settings Currencies - Only Ada is supported at this time.
+- Settings Stake
+- Settings Locale - Date time, number format, fiat.
+- Settings ... TBC
 
 Note that the behaviour is a little different to the displayed when accessed via
 [Settings](#settings). Pressing "Back" on these pages goes back one page:
@@ -286,7 +286,7 @@ the embedded wallet, and that insufficient funds will impact correct functioning
 Widgets:
 
 - Total Ada (in embedded wallet)
-- Total Other (TBC)
+- Total Other Currencies (TBC)
 - Wallet Address. Buttons: Copy, create QR, View address in Cardano Explorer (if
   set).
 - App Embedded Wallet Activity Latest Widget, with "See all" Button. Opens
@@ -300,18 +300,80 @@ Cardano Connector. It is a list of Tx Previews. On click of preview, Open
 [Embedded Wallet Tx](#embedded-wallet-tx). The order defaults to most recent
 first. There is a filter for "Only confirmed".
 
-A Tx Preview consists of the following info:
+## Transaction Tag
 
-- TxId. Possibly squashed to fit inline. With Copy button and External link to
-  explorer.
-- Created at. This appears only if the transaction came from App, and so is
-  known.
+There is a best effort to establish transaction activity tags. A transaction may
+have none, one, or many tags, although under typical usage, we expect one tag
+per transaction.
+
+Transation tags are as follows:
+
+1. Funds in: (to wallet) No channel involvement and net balance increases.
+1. Funds out: (from wallet) as above but decreases
+1. Open: Funds move from wallet to new channel
+1. Add: Funds move from wallet to exisiting channel
+1. Close: No funds move, but wallet involved
+1. Expire: Funds move from channel to wallet
+1. End: Funds move from channel to wallet
+1. Elapse: Funds move from channel to wallet.
+1. Mutual: Both participants agree channel transaction. This is a special case
+   not supported in App, but may still occur.
+
+Channel tags will be associated to channels belonging to Conusmer. Any channel
+seen to be involving the wallet, but not belonging to Consumer do not result in
+a tag. A transaction with no tag may be displayed as "[None]" tagged.
+
+Note that from a [Channel](#channel) there can be transactions, which are not
+associated to the wallet. Namely, those involving Adaptor removing channel
+funds:
+
+1. Sub
+1. Respond
+1. Unlock
+
+Any tag involving a channel should display the tag and any channels owned by
+Consumer.
+
+## Transaction Status
+
 - Status. One of:
-  - Confirmed. Number of confirmations. Time of block in which it is confirmed.
+  - Confirmed
+  - Confirming. (TBC : Number of confirmations. Time of block in which it is
+    confirmed. )
   - Pending.
   - Failed.
-- Net Change to embedded wallet of asset of greatest abundant. Color coded by
-  App Settings Locale Color.
+
+## Transaction Time
+
+This is related to [Transaction Status](#transaction-status).
+
+Time is defined to be:
+
+- If confirmed then time of block
+- If confirming then time of block
+- If pending then time of submission. Known only if submitted in App, and still
+  in state.
+- If failed then the time of submission. Known as in the case of pending.
+
+Time is formatted to [Settings Locale](#settings-locale).
+
+## Transaction Preview
+
+A Tx Preview consists of the following info:
+
+- Left
+  - [Transaction Tag](#transaction-tag)
+  - Channels involved if any. (Order not specified). If long, use ellipsis.
+- Center:
+  - [Transaction Status](#transaction-status) if not confirmed (and assumed
+    settled).
+- Right:
+  - Net change to wallet ballance.
+  - [Transaction Time](#transaction-time).
+
+## Transaction Detail
+
+TODO!
 
 # Embedded Wallet Tx
 
