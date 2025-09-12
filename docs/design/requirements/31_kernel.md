@@ -58,9 +58,10 @@ Consumer wishes to pay Merchants via BLN. After App Setup, Consumer can `open` a
 channel with Adaptor. The `open` locks Consumer funds on the L1. These funds
 underwrite the payments Adaptor makes on the behalf of Consumer on BLN.
 
-While the channel is open, Consumer can make payments to BLN via Adaptor. This
-happens off-chain aka the L2. The details of the exchanges and their context are
-elsewhere. The important aspects are:
+Off-chain, Consumer sends Adaptor a "null squash" as part of their initial
+handshake. While the channel is open, Consumer can make payments to BLN via
+Adaptor. This happens off-chain aka the L2. The details of the exchanges and
+their context are elsewhere. The important aspects are:
 
 - When initiating a pay, Consumer sends Adaptor a "cheque"
 - When resolving a pay Adaptor will request Consumer "squash" cheques into a
@@ -139,6 +140,23 @@ For more details, see
 
 ## Conventions
 
+Some type aliases used, that are not Konduit specific:
+
+```aiken
+/// Index is used to enumerate a collection
+type Index = Int
+/// Amount is used for value
+type Amount = Int
+/// Timestamp is used to for posix time
+type Timestamp = Int // Posix Timestamp
+/// Hash32 is used where the value is the output of a hash function.
+/// It is 32 bytes in length
+type Hash32 = ByteArray
+/// Signature is used where the value is the output of a sign function.
+/// It is 64 bytes in length
+type Signature = ByteArray
+```
+
 Throughout the document "channel" refers to the UTXOs in which the associated
 funds of a channel (more generally speaking) are locked. This usually means the
 UTXO at tip at the implied point in time, eg when the transaction is being
@@ -174,15 +192,14 @@ To be used to `sub` funds the receiver must provide the "secret" that hashes to
 the lock.
 
 ```aiken
-type Index = Int
-type Amount = Int
-type Timeout = Int // Posix Timestamp
-type Hash32 = ByteArray // 32 bytes
+type Timeout = Timestamp
 type ChequeBody = (Index, Amount, Timeout, Hash32)
-type Signature = ByteArray // 64 Bytes
 type Cheque = (ChequeBody, Signature)
 
-type Secret = ByteArray // 32 bytes
+/// Also called the preimage
+/// It is 32 bytes in length
+
+type Secret = ByteArray
 type Unlocked = (ChequeBody, Signature, Secret)
 
 type Mix {
@@ -209,7 +226,7 @@ at the time of a respond if the timeout has yet to pass but the secret is not
 yet known. (Or to be precise, there is a break down in communication that one of
 the participants is acting as if this is the case.)
 
-Our choice of vocab is close with that of Cardano Lightning, but with some
+Our choice of vocab is close to that of Cardano Lightning, but with some
 divergence. Konduit is simpler. For example:
 
 - There is no "normal" cheque. Instead Consumer issues a squash. See below.
@@ -252,16 +269,20 @@ appear in the `Exclude` list.
 
 ## Receipt
 
+Before Adaptor routes any cheques from Consumer, they must receive the initial
+squash. This can be empty squash, with body `(0,0,[])`, declaring no value is
+actually owed.
+
 In a `sub` Adaptor presents evidence of funds owed. The evidence is a `Receipt`.
 
 ```aiken
-type Receipt =  (Option<Squash>, List<Unlocked>)
+type Receipt =  (Squash, List<Unlocked>)
 ```
 
 In a `respond` Adaptor includes also pending cheques:
 
 ```aiken
-type MReceipt =  (Option<Squash>, List<Mix>)
+type MReceipt =  (Squash, List<Mix>)
 ```
 
 In either a `Receipt` or `MReciept` the items must be monotonically strictly
@@ -389,12 +410,18 @@ Unless stated otherwise:
 
 In Cardano each UTXO at a script address spent in the transaction triggers an
 execution of the spend validator. When [batching](#batching), this is the same
-script many times. The required constraints on channels is almost embarrassingly
-parallel. "Almost" is providing cover to the subtleties introduced in the
-absence of NFT state tokens. Regardless, it is in the interests of efficiency
-not safety that all constraints are enforced on the "first", ie "main",
-execution of the script. All other "batch" executions check only that the
-validator has already executed as "main".
+script many times. The required constraints on channels is embarrassingly
+parallel. However, even with passing in the input and output indicies of each
+channel as part of the redeemer, it still results in multiple traverses over the
+same list.
+
+It is in the interests of efficiency that all constraints are enforced on the
+"first", ie "main", execution of the script. All other "batch" executions check
+only that the validator has already executed as "main".
+
+This design introduces additional "what happens if...?!" cases that require
+careful consideration. Recall that the validator is not responsible to ensure
+the safty of a users funds from themselves, only their funds from others.
 
 The validator logic is structured roughly as follows:
 
@@ -403,13 +430,12 @@ If redeemer is:
 - "Batch" then find "Main" and return
 - "Main" then
   - recur : Fold over the steps with:
-    - yield in : find the next kernel input and parse
+    - yield in : find the next validator input and parse
     - if the step is continuing:
       - yield out : find continuing output and parse
-      - cont step : verify continuing step with the channel input and continuing
-        output
+      - cont step : verify step with input, output, and additional context
     - else (step is end):
-      - end step : verify step logic with the channel
+      - end step : verify step with input
   - no more : Once steps are exhausted, there are not more kernel inputs.
 - "Mutual" then
   - Both partners signed
@@ -441,7 +467,7 @@ The following statements for the associated encodings:
 
 ## Batch
 
-In a standard tx, all but one of the script inputs is spent with `Batch`. More
+In a standard tx, all but one of the script inputs are spent with `Batch`. More
 precisely, the lexicographical first validator input in the tx inputs must have
 redeemer `Main`, and all the rest are spent with `Batch`.
 
@@ -1047,34 +1073,49 @@ flowchart LR
 
 # Comments
 
-## What if ...
+## What happens if ...
+
+### WHI: Duplicate tag
 
 > ... there are channels with the same tag?
 
 See
 [tag ADR](https://github.com/kompact-io/subbit-xyz/blob/main/docs/adrs/tag.md).
 
+### WHI: Bad own hash
+
 > ... a channel has the wrong `own_hash`?
 
+There is no validation on "opening" a channel, nor is there any mechanism
+preventing the output of an arbitrary UTXO to the script address. A bad own hash
+can occur.
+
+Adaptor must not consider channels that are ill-formed. An ill-formed channel
+can be spent with `Main` or `Batch`, potentially bypassing any verification
+steps, since it will not identify channel inputs correctly.
+
 Suppose we have a channel with incorrect `own_hash`. We say it is ill formed.
-There are three cases to consider: one for each redeemer type.
+Recall we care only that a well-formed channel cannot be put at risk by a
+channel that is ill-formed. That is, there is no way the inclusion of an
+ill-formed input could alter the verification applied to the well-formed input.
+There are multiple cases to consider: one for each redeemer type for each input.
 
-If it is spent with `Mutual`, there is no problem, but also no issue. Both
-partners consent. By the "solo" restriction, no other channel can be spent in
-this tx.
+When well-formed, ill-formed redeemers are:
 
-If it is spent with `Main`, then it finds itself by `own_oref`. However, it then
-fails since it's `own_hash` does not match that derived from its payment
-credential.
-
-If if is spent with `Batch`, then there must be another input from the indicated
-validator address. If that validator cannot be executed (cos it is not known for
-example) then the funds are stranded. If the validator can be executed then the
-funds can be released.
-
-Importantly note that an ill formed channel cannot be spent with `Main`, the
-continuing output will have the correct `own_hash`. Thus, no continuing output
-can be ill formed in this way.
+1. (Mutual, Any): This is impossible. In the logic of a mutual transaction,
+   there is the "solo" restriction. This ensures there are no other inputs with
+   matching payment credentials. Even if this was not impossible, both
+   participants of the well formed channel sign, so no funds are at risk.
+2. (Any, Mutual): As in the above case, this is impossible.
+3. (Main, Any): This is possible. However, the inclusion of the ill-formed input
+   does not impact the verification applied to the well-formed input. In
+   addition, note that a continuing output of the ill-formed input will result
+   in the correct `own_hash`, since this comes from the well-formed input.
+4. (Batch, Main): This is possible, however only if the well-formed input logic
+   identifies a different input as main. Imporantly, this cannot be the
+   ill-formed input in question, since the main `own_hash` is verified by each
+   batch input. This correct main input must be spent with `Main` redeemer since
+   `Mutual` and `Batch` will both fail. This recovers the case above.
 
 It follows that such an input exists only when a consumer has spent their own
 funds,  
@@ -1083,38 +1124,40 @@ guiding principles of design: On-chain code keeps users safe from others, but
 not necessarily from themselves. It is the role of off-chain code to keep
 consumers safe from themselves.
 
-> ... another channel has the wrong `own_hash`?
+### WHI: No main
 
-The above argument regarding an ill-formed channel allows us to restrict our
-attention to the case of a tx in which:
+What if there is a transaction with batch spends but no main. This is
+impossible. This is touched on above.
 
-- well formed channel is spent as either `Main` or `Batch`, and
-- ill formed channel is spent with `Batch`
+Any batch inputs will identify a (the) main. This input cannot be spent with
+batch since it would identify itself as main. This input can be spent with
+mutual, but only if there are no other inputs from script. In particular no
+batch inputs. Thus, as long as there is one batch input, there must be a main
+input.
 
-Regardless of the exact make-up as long as there is a `Main` spent, then the
-well formed channels will be unaffected. It remains to justify that there is a
-`Main` in the spend.
+### WHI: Many mains
 
-> ... there are `Batch` spends but no `Main`?
+This is possible, and it's not a problem. It will cause a duplication of the
+execution, and excution costs.
 
-If there is a `Mutual` input, then solo validator input constraint will fail.
+## Decisions without ADRs
 
-It remains to consider the case where there are only `Batch` inputs. One of
-these must appear first in the inputs. On that invocation either:
+### Time
 
-- It is well formed. Thus it finds itself as first validator input, and fails
-  since it matches on `own_oref`
-- It is ill formed. Every well formed `Batch` input will find this as first
-  validator input. They will then fail, since the `own_hash` value is incorrect.
+Time in Plutus not is handled in a particularly satisfactory manner. The lack of
+precision is understandable in a decentralised system. To then create a bound
+with the precision of "include" or "exclude" makes little sense. And the fact
+that you these may actually be constrained by mysterious ledger rules... Most
+unfortunate.
 
-In this case one of the `Batch` inputs will find itself b
+All transactions must include finite bounds. This makes the design easier. This
+is not necessary and potentially makes the transaction marginally more
+expensive.
 
-> ... there is more than one `Main`?
-
-This is possible, and it's not a problem.
-
-We've already established that regardless of the other inputs, a `Main` must
-appear as a first validator input. This invocation will conduct all the
-verification over all subsequent channels. Any other invocations will simply be
-re-doing some of this work. The purpose of `Batch` is to reduce the cost, by
-avoiding this repetition.
+A more eloquent design may accumulate the constraints on bounds until the end of
+the fold since some but not all steps require (finite) time bounds. A priori,
+before the folding over steps, we do not know whether or not we will encounter a
+step that needs a bound, or which bound it requires. This lazier evaluation
+could then be ommitted if not bounds, or only one bound was required. It is
+unclear whether or not this would actually be cheaper, or more then negligibly
+so.
