@@ -2,7 +2,7 @@ use aiken/crypto.{ScriptHash, Signature, VerificationKey}
 use konduit/prelude.{Amount, Bytes32, Hash32, Index, Timestamp}
 
 /// CHEQUE 
-type Secret =
+pub type Secret =
   Bytes32
 
 type Timeout =
@@ -45,10 +45,10 @@ pub type Constants {
 
 /// RECEIPT 
 pub type Receipt =
-  (Option<Squash>, List<Unlocked>)
+  (Squash, List<Unlocked>)
 
 pub type MReceipt =
-  (Option<Squash>, List<Mix>)
+  (Squash, List<Mix>)
 
 /// STAGE
 type ElapseAt =
@@ -64,7 +64,7 @@ pub type Pends =
 pub type Stage {
   Opened(Amount)
   Closed(Amount, ElapseAt)
-  Responded(Amount, Pends)
+  Responded(Amount, Amount, List<PendCheque>)
 }
 
 /// DATUM 
@@ -88,9 +88,9 @@ pub type Steps =
 
 pub type Cont {
   Add
-  Sub(Option<Squash>, List<Unlocked>)
+  Sub(Squash, List<Unlocked>)
   Close
-  Respond(Option<Squash>, List<Mix>)
+  Respond(Squash, List<Mix>)
   Unlock(List<(Index, Secret)>)
   Expire(List<Index>)
 }
