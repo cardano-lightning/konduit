@@ -291,7 +291,7 @@ Widgets:
   set).
 - App Embedded Wallet Activity Latest Widget, with "See all" Button. Opens
   [Embedded Wallet Activity](#embedded-wallet-activity).
-- Withdraw. Launches [Embedded Wallet Withdraw](#embedded-wallet-withdraw)
+- Funds out. Launches [Embedded Wallet Funds Out](#embedded-wallet-funds-out)
 
 # Embedded Wallet Activity
 
@@ -392,7 +392,7 @@ Showing:
   - Failed.
 - Tx details. Something to similar to what you see in wallets.
 
-# Embedded Wallet Withdraw
+# Embedded Wallet Funds Out
 
 The embedded wallet comes tx fees and funds channels. It is the default output
 address when closing channels. The Help dialogue conveys the purpose of the
@@ -401,7 +401,7 @@ less than X amount of ada and txs will fail).
 
 - Total Ada (in embedded wallet)
 - Total Other (TBC)
-- Input slider for Withdraw amount (or amounts TBC)
+- Input slider for funds out amount (or amounts TBC)
 - Output Address
 - Cancel Button. On click returns to App Embedded Wallet
 - Submit Button. On click returns to App Embedded Wallet
@@ -485,21 +485,14 @@ Export Button, on-click downloads JSONL file.
 
 Each preview card.
 
-- HTLC:
+- Cheque:
   - Amount
   - Destination address (truncated or shorthand).
   - Time
   - Resolution (and time) or otherwise status eg "Failed"
   - Subsumed by Snapshot
-- Snapshot:
-  - Time
-  - Details
-  - TBC whether this is necessary
 - Tx:
-  - Tx type: Open, Add, Close, ...
-  - Time (if locally created, then time submitted. If only seen on-chain, then
-    time of block)
-  - Status: Pending, Confirmed, Failed.
+  - As in Embedded Wallet, but with only tag relating to channel
 
 On click: The corresponding [Activity Details](#activity-details) is opened.
 
@@ -550,7 +543,7 @@ Action bar has three icons:
 
 # Pay
 
-The key feature of App, meeting the PPP.
+The key feature of App, satifying the PPP.
 
 Page is context aware: If entered from [Channel](#channel), then "Back" returns
 to that channel. Otherwise return to [Home](#home).
@@ -563,11 +556,24 @@ On scan:
 - If unparse-able, handle and display error. "Back" returns to QR code scanner.
 - If parse-able, go to "Manual" form with values filled.
 
-Manual form submit button is "Get Quote" (single channel case) or "Get Quotes"
-(multi channel case) if available. Help icon makes this point clear: Will not
-get a quote from channels for which there are insufficient funds. If App Pay is
-launched from a [Channel](#channel), the quote will only be for that channel. In
-this case Consumer can request quotes from other channels via [Quotes](#quotes).
+Manual form:
+
+- Text area input "Paste invoice here"
+- submit button is "Get Quote" (single channel case) or "Get Quotes" (multi
+  channel case) if available.
+
+Details on the input expected are found in
+[Bolt 11](https://github.com/lightning/bolts/blob/master/11-payment-encoding.md).
+For example
+
+```sample
+lnbc1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq9qrsgq357wnc5r2ueh7ck6q93dj32dlqnls087fxdwk8qakdyafkq3yap9us6v52vjjsrvywa6rt52cm9r9zqt8r2t7mlcwspyetp5h2tztugp9lfyql
+```
+
+Help icon makes this point clear: Will not get a quote from channels for which
+there are insufficient funds. If App Pay is launched from a [Channel](#channel),
+the quote will only be for that channel. In this case Consumer can request
+quotes from other channels via [Quotes](#quotes).
 
 On submit, open [Quotes](#quotes).
 
@@ -578,17 +584,35 @@ Triggered by [Pay](#pay).
 "Back" returns to App Pay. If App Pay was opened via [Channel](#channel), then
 only this channel will be quoted.
 
-Page displays a list of Quotes vertically. The update of the quotes will load
-asynchronously. While awaiting quote, indicate awaiting. If quote request fails,
-display failure on Quote. Quote ordered from cheapest at top. If a cheaper quote
-arrives later, an animation makes clear to Consumer a reordering has taken
-place. Channels available, but no quote requested are listed below quotes.
-On-click a quote is requested. While quote is pending display pending icon.
-Channels unavailable (insufficient funds or otherwise), are greyed out. On-click
-display reason for not available.
+Page displays:
 
-When quote fails, on click displays error message. When quote successful, on
-click launches [Pay Confirm](#pay-confirm).
+- Details of invoice:
+  - Amount requested
+  - Address, if known, else the hash of address
+  - TBC
+- List of [Quote Preview Cards](#quote-preview-card)
+
+Quotes are listed vertically. The update of the quotes will load asynchronously.
+If quote request fails, display failure on Quote. Quote ordered from cheapest at
+top. If a cheaper quote arrives later, an animation makes clear to Consumer a
+reordering has taken place. Channels available, but no quote requested are
+listed below quotes.
+
+# Quote Preview Card
+
+There is a quote per open channel.
+
+A quote card displays:
+
+- Channel name
+- Status:
+  - Quote Success: Some details of quote - fees, fee flag if triggered. On-click
+    open [Pay Confirm](#pay-confirm).
+  - Quote Pending. Indicate quote requested and response pending.
+  - Quote Fail: Error message preview. On-click see any more details.
+  - Quote Unavailable: Insufficient funds, Other Error. No on-click
+  - No Quote requested (but possible): On-click request quote - move to quote
+    pending.
 
 # Pay Confirm
 
@@ -596,3 +620,5 @@ Full details of payment and channel are displayed. If fees are high according to
 [Settings High Fee Flag](#settings-high-fee-flag) then fee is flagged. Consumer
 can confirm or cancel. Confirm goes to [Channel](#channel). Cancel returns to
 [Quote](#quote) with previous state.
+
+On confirm: Briefly animate cheque sent. Return to [Home](#home).
