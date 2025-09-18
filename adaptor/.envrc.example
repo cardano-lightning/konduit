@@ -1,0 +1,3 @@
+export KONDUIT_ADAPTOR_LN_MACAROON=/path/to/admin.macaroon
+export KONDUIT_ADAPTOR_LN_TLS_CERT=/path/to/tls.cert
+export KONDUIT_ADAPTOR_LN_BASE_URL=https://127.0.0.1:8080

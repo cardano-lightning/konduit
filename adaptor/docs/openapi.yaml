@@ -1,0 +1,86 @@
+openapi: 3.1.0
+
+servers:
+  - url: http://127.0.0.1:4444
+
+info:
+  title: HTTP API Reference
+  version: 1.0.0
+  license:
+    name: Apache-2.0
+    url: https://github.com/cardano-lightning/konduit
+
+components:
+  headers: &default-headers
+    Content-Type:
+      schema:
+        type: string
+        enum:
+          - "application/json;charset=utf-8"
+
+  schemas:
+    quote:
+      type: string
+      format: bech32
+      examples:
+        - lnbcrt1u1p5v9a9cpp5z28n9ewfmc40em7kayfxz5rhy9xdfq9dun6930h6hn4hl05u2e8sdqqcqzzsxqyz5vqsp58yuyhnwywacaj5wj99at99gkwzqg0vej87n25sc8f7yp3qya8jus9qxpqysgq8yp025nppkn3aty2g3g0qun7d8yfe03xtuscy0ns75wc5ny5uvuy36t2m46e2ns88g6deesj87reeuhqm5nzyard49p0a0ys6s8wm3gqrgssv5
+
+    quote-summary:
+      type: object
+      description: |
+        A decoded (partial) view of the payment request's information, including a quote for routing the payment from the adaptor to the destination.
+      required: [ "recipient", "routing_fee", "payment_hash", "expiry" ]
+      properties:
+        recipient:
+          type: string
+          description:
+            The hex-encoded 33-byte Lightning payment key of the recipient.
+          format: base16
+          minLength: 66
+          maxLength: 66
+          examples:
+            - 02768dd2ab5682fa1bcd1bbd9f5eb8f47291edfb2ad225b44bb10eafc33a1da80b
+
+        routing_fee:
+          type: integer
+          description: |
+            The cost of routing the payment through the Lightning network, as well as the Adaptor comission.
+          minimum: 0
+
+        payment_hash:
+          type: string
+          format: base16
+          minLength: 64
+          maxLength: 64
+          description: |
+            The hash digest (sha-256) of the image for the payment, kept secret by the recipient until they've received the payment.
+          examples:
+            - bcd1bbd2768dd2ab5682fa19f5eb8f47291ed44bb10eafc33a1da80bfb2ad225b
+
+        expiry:
+          type: string
+          format: datetime
+          description: |
+            The expiry (wall-clock) date time for the entire payment.
+
+paths:
+  /quote/{payload}:
+   get:
+     operationId: decode-quote
+     summary: Payment Request
+     description: |
+       Decode a [bech32-encoded BOLT-11 payment request](github.com/lightning/bolts/blob/14272b1bd9361750cfdb3e5d35740889a6b510b5/11-payment-encoding.md).
+     parameters:
+       - name: payload
+         in: path
+         required: true
+         schema:
+           $ref: "#/components/schemas/quote"
+     responses:
+       200:
+        description: OK
+        headers: *default-headers
+        content:
+          "application/json;charset=utf-8":
+            schema:
+              $ref: "#/components/schemas/quote-summary"
