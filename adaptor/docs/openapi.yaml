@@ -29,8 +29,14 @@ components:
       type: object
       description: |
         A decoded (partial) view of the payment request's information, including a quote for routing the payment from the adaptor to the destination.
-      required: [ "recipient", "routing_fee", "payment_hash", "expiry" ]
+      required: [ "amount", "recipient", "routing_fee", "payment_hash", "expiry" ]
       properties:
+        amount:
+          type: integer
+          description: |
+            The payment amount (i.e. the amount received by the recipient), in milli-satoshis.
+          minimum: 0
+
         recipient:
           type: string
           description:
@@ -44,7 +50,7 @@ components:
         routing_fee:
           type: integer
           description: |
-            The cost of routing the payment through the Lightning network, as well as the Adaptor comission.
+            The cost of routing the payment through the Lightning network, as well as the Adaptor comission. In milli-satoshis.
           minimum: 0
 
         payment_hash:

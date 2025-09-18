@@ -8,6 +8,7 @@
   "license": "Apache-2.0",
   "private": false,
   "dependencies": {
+    "@cardanosolutions/json-bigint": "^1.0.2",
     "@koa/router": "^14.0.0",
     "koa": "^3.0.1",
     "undici": "^7.16.0"

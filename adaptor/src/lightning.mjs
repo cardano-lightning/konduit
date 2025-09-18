@@ -28,6 +28,14 @@ export default class LightningClient {
     return this.#get(`v1/payreq/${payload}`);
   }
 
+  /**
+   * @param recipient {String} 33-byte public key (base16-encoded) of the recipient.
+   * @param amount {BigInt} Amount to send (i.e. received by the recipient), in milli-satoshis.
+   */
+  async query_route(recipient, amount) {
+    return this.#get(`v1/graph/routes/${recipient}/0?amt_msat=${amount}`);
+  }
+
   async #get(path) {
     const res = await fetch(`${this.#base_url}/${path}`, {
       dispatcher: this.#dispatcher,
