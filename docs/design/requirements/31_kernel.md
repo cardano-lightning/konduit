@@ -360,10 +360,9 @@ type PendCheque = (Amount, Timeout, Secret)
 
 /// Total amount in pending cheques, and the PendCheques
 
-type Pends =  ( Amount, List<PendCheque> )
-
 type RespondedParams {
-  pend : Pends,
+  pends_amount: Amount,
+  pends : List<PendCheque>,
 }
 
 type Redeemer {
@@ -379,15 +378,13 @@ type Step {
 
 type Steps = List<Step>
 
-/// TODO: do we flatten params
-
 type Cont {
   Add
   Sub(..Receipt)
   Close
   Respond(..MReceipt)
-  Unlock(List<(Index, Secret)>)
-  Expire(List<Index>)
+  Unlock(List<ByteArray>)
+  Expire(List<ByteArray>)
 }
 
 type Eol {
@@ -644,27 +641,41 @@ Redeemer params: `final_receipt`
 
 - respond.0 : Stage in is closed : `stage_in = Closed(subbed, _)`
 - respond.0 : Adaptor has signed
-- respond.1 : Stage out is opened : `stage_out = Responded(pend)`
+- respond.1 : Stage out is responded :
+  `stage_out = Responded(pends_amount, pends)`
 - respond.2 : Funds decrease by `subbed = funds_in - funds_out`
 - respond.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
 - respond.4 : final receipt is well formed
-- respond.5 : receipt is well formed with amount `owed`, and pending `pend`
+- respond.5 : receipt is well formed with amount `owed`, and pending
+  `(pends_amount, pends)`
 - respond.6 : `owed >= subbed_out`
 
 ### Unlock
 
 Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
 
-Redeemer params: `secrets`
+Redeemer params: `unpends`
 
-- unlock.0 : Stage in is responded : `stage_in = Responded(pend_in)`
-- unlock.0 : Adaptor has signed
-- unlock.1 : Stage out is responded : `stage_out = Responded(pend_out)`
-- unlock.2 : Funds decrease by `subbed = funds_in - funds_out`
-- unlock.3 : Secrets are well formed, and total `owed`
-- unlock.4 : `owed >= subbed`
-- unlock.5 : `pend_out` is `pend_in` adjusted for items in `secrets` being
+- unlock.0 : Stage in is responded :
+  `stage_in = Responded(pends_amount_in, pends_in)`
+- unlock.1 : Adaptor has signed
+- unlock.2 : Stage out is responded :
+  `stage_out = Responded(pends_amount_out, pends_out)`
+- unlock.3 : Funds decrease by `subbed = funds_in - funds_out`
+- unlock.4 : Secrets are well-formed, and total `owed`
+- unlock.5 : `owed >= subbed`
+- unlock.6 : `pend_out` is `pend_in` adjusted for items in `unpends` being
   dropped, where each item has had secret revealed
+
+#### Notes
+
+Secrets must be 32 bytes. We abuse the type system in order to instruct the
+validator to continue or unlock a pend cheque using a bytearray. Namely:
+
+- `[]` : Continue pend cheque
+- `<secret>` : 32 bytes unlocking current pend cheque.
+
+We allow only each party to withdraw their own funds.
 
 ### Expire
 
@@ -673,14 +684,19 @@ Context : `signers`, `lower_bound`, `stage_in`, `funds_in`, `stage_out`,
 
 Redeemer params: `expired`
 
-- expire.0 : Stage in is responded : `stage_in = Responded(pend_in)`
+- expire.0 : Stage in is responded :
+  `stage_in = Responded(pends_amount_in, pends_in)`
 - expire.1 : Consumer has signed
-- expire.2 : Stage out is responded `stage_out = Responded(pend_out)`
+- expire.2 : Stage out is responded
+  `stage_out = Responded(pends_amount_out, pends_out)`
 - expire.3 : Each item in `expired` corresponds to pending cheque that has
   expired : `<= lower_bound`
 - expire.4 : `pend_out` is `pend_in` adjusted for items in `expired` being
   dropped,
-- expire.5 : Funds out (locked) is `>= pend_out.total`
+- expire.5 : Funds out (locked) is `>= pend_ou`
+
+We use the same logic as Unlock in the use of bytestrings to indicate continue
+if empty, else expire.
 
 ### End
 

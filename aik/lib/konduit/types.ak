@@ -55,7 +55,7 @@ type ElapseAt =
   Timestamp
 
 pub type PendCheque =
-  (Amount, Timeout, Secret)
+  (Amount, Timeout, Hash32)
 
 /// Total amount in pending cheques, and the PendCheques
 pub type Pends =
@@ -64,7 +64,7 @@ pub type Pends =
 pub type Stage {
   Opened(Amount)
   Closed(Amount, ElapseAt)
-  Responded(Amount, Amount, List<PendCheque>)
+  Responded(Amount, List<PendCheque>)
 }
 
 /// DATUM 
@@ -86,13 +86,16 @@ pub type Step {
 pub type Steps =
   List<Step>
 
+pub type Unpend =
+  ByteArray
+
 pub type Cont {
   Add
   Sub(Squash, List<Unlocked>)
   Close
   Respond(Squash, List<Mix>)
-  Unlock(List<(Index, Secret)>)
-  Expire(List<Index>)
+  Unlock(List<Unpend>)
+  Expire(List<Unpend>)
 }
 
 pub type Eol {

@@ -1,42 +1,21 @@
-use aiken/collection/list.{foldl2}
-use aiken/crypto.{ScriptHash, VerificationKey, VerificationKeyHash, blake2b_224}
+use aiken/collection/list
+use aiken/crypto.{ScriptHash, VerificationKey, blake2b_224}
 use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/primitive/bytearray
 use cardano/address.{Address, Credential, Script}
 use cardano/assets.{Value}
 use cardano/transaction.{
   Datum, InlineDatum, Input, Output, OutputReference, Transaction,
 }
-use extra/xassets.{only_ada}
-use konduit/prelude.{Amount, Index, Timestamp}
-use konduit/types as t
-use konduit/wellformed.{
-  verify_expire, verify_m_receipt, verify_receipt, verify_secrets,
+use extra/xlist.{foldl5}
+use extra/xoption
+use konduit/prelude.{Timestamp}
+use konduit/steps.{
+  do_add, do_close, do_elapse, do_end, do_expire, do_respond, do_sub, do_unlock,
 }
+use konduit/types as t
 
 /// Based on https://github.com/kompact-io/subbit-xyz
-type Signers =
-  List<VerificationKeyHash>
-
-fn signed_by(vkhs: Signers, vkey: VerificationKey) {
-  vkhs |> list.has(vkey |> blake2b_224)
-}
-
-type Bound =
-  IntervalBound<Int>
-
-fn unbound(b: Bound) {
-  expect IntervalBound { bound_type: Finite(b), .. } = b
-  b
-}
-
-fn unbounds(
-  validity_range: Interval<Int>,
-  returns: fn(Timestamp, Timestamp) -> result,
-) -> result {
-  let Interval { lower_bound, upper_bound } = validity_range
-  returns(unbound(lower_bound), unbound(upper_bound))
-}
-
 /// ### Batch
 /// 
 /// In a standard tx, all but one of the script inputs is spent with `Batch`. More
@@ -81,109 +60,98 @@ pub fn main(datum: t.Datum, steps: t.Steps, tx: Transaction) {
   trace @"main.0": @"Extract `bounds`, and `extra_signatories`,"
   let Transaction { inputs, outputs, validity_range, extra_signatories, .. } =
     tx
-  let lower_bound, upper_bound <- unbounds(validity_range)
+  expect lower_bound = validity
   let (own_hash, _, _) = datum
   let with =
-    mk_with(own_hash, extra_signatories, lower_bound, upper_bound, _, _, _, _)
-  let inputs, _ <-
-    foldl2(steps, inputs, outputs, with, _)
+    mk_with(own_hash, _, _, _, _, _, _, _)
+  let inputs, _outputs, vkeys, lower_bound, upper_bound <-
+    foldl5(steps, inputs, outputs, [], None, None, with, _)
+  expect
+    vkeys
+      |> list.all(
+          fn(vkey) { extra_signatories |> list.has(vkey |> blake2b_224) },
+        )
+  expect
+    when lower_bound is {
+      None -> True
+      Some(lower_bound) -> lower_bound < unbound(validity_range.lower_bound)
+    }
+  expect
+    when upper_bound is {
+      None -> True
+      Some(upper_bound) -> upper_bound > unbound(validity_range.upper_bound)
+    }
   inputs == []
 }
 
+type WithReturn<result> =
+  fn(
+    List<Input>,
+    List<Output>,
+    List<VerificationKey>,
+    Option<Timestamp>,
+    Option<Timestamp>,
+  ) ->
+    result
+
 fn mk_with(
   own_hash: ScriptHash,
-  signers: Signers,
-  upper_bound: Timestamp,
-  lower_bound: Timestamp,
   step: t.Step,
   inputs: List<Input>,
   outputs: List<Output>,
-  return: fn(List<Input>, List<Output>) -> result,
+  vkeys: List<VerificationKey>,
+  lower_bound: Option<Timestamp>,
+  upper_bound: Option<Timestamp>,
+  return: WithReturn<result>,
 ) -> result {
-  let
-    address_in,
-    value_in,
-    constants,
-    stage_in,
-    inputs,
-  <- yield_in(own_hash, inputs)
+  let address, v_in, c, s_in, inputs <- yield_in(own_hash, inputs)
   when step is {
     t.StepCont(step) -> {
-      let
-        value_out,
-        stage_out,
-        outputs,
-      <- yield_out(address_in, constants, outputs)
-      expect
+      let v_out, s_out, outputs <- yield_out(address, c, outputs)
+      let vkey, lower_bound_, upper_bound_ <-
         when step is {
           t.Add ->
-            do_add(signers, constants, value_in, stage_in, value_out, stage_out)
+            do_add(c, v_in, s_in, v_out, s_out, _)
           t.Sub(squash, unlockeds) ->
-            do_sub(
-              signers,
-              upper_bound,
-              constants,
-              value_in,
-              stage_in,
-              value_out,
-              stage_out,
-              squash,
-              unlockeds,
-            )
+            do_sub(c, v_in, s_in, v_out, s_out, squash, unlockeds, _)
           t.Close ->
-            do_close(
-              signers,
-              upper_bound,
-              constants,
-              value_in,
-              stage_in,
-              value_out,
-              stage_out,
-            )
+            do_close(c, v_in, s_in, v_out, s_out, _)
           t.Respond(squash, mixs) ->
-            do_respond(
-              signers,
-              upper_bound,
-              constants,
-              value_in,
-              stage_in,
-              value_out,
-              stage_out,
-              squash,
-              mixs,
-            )
-          t.Unlock(secrets) ->
-            do_unlock(
-              signers,
-              upper_bound,
-              constants,
-              value_in,
-              stage_in,
-              value_out,
-              stage_out,
-              secrets,
-            )
-          t.Expire(_) ->
-            do_expire(
-              signers,
-              lower_bound,
-              constants,
-              value_in,
-              stage_in,
-              value_out,
-              stage_out,
-            )
+            do_respond(c, v_in, s_in, v_out, s_out, squash, mixs, _)
+          t.Unlock(unpend) ->
+            do_unlock(c, v_in, s_in, v_out, s_out, unpend, _)
+          t.Expire(unpend) ->
+            do_expire(c, s_in, v_out, s_out, unpend, _)
         }
-      return(inputs, outputs)
+      let lower_bound = xoption.max2(lower_bound, lower_bound_)
+      let upper_bound = xoption.min2(upper_bound, upper_bound_)
+      let vkeys = vkeys |> insert(vkey)
+      return(inputs, outputs, vkeys, lower_bound, upper_bound)
     }
     t.StepEol(step) -> {
-      expect
+      let vkey, lower_bound_, _upper_bound <-
         when step is {
-          t.End -> do_end(signers, constants, stage_in)
-          t.Elapse -> do_elapse(signers, lower_bound, constants, stage_in)
+          t.End ->
+            do_end(c, s_in, _)
+          t.Elapse ->
+            do_elapse(c, s_in, _)
         }
-      return(inputs, outputs)
+      let lower_bound = xoption.max2(lower_bound, lower_bound_)
+      let vkeys = vkeys |> insert(vkey)
+      return(inputs, outputs, vkeys, lower_bound, upper_bound)
     }
+  }
+}
+
+fn insert(xs: List<ByteArray>, y: ByteArray) {
+  when xs is {
+    [x, ..xs] ->
+      when bytearray.compare(x, y) is {
+        Less -> [x, ..insert(xs, y)]
+        Equal -> [x, ..xs]
+        Greater -> fail @"Impossible"
+      }
+    _ -> [y]
   }
 }
 
@@ -198,8 +166,8 @@ pub fn mutual(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
   let t.Constants { add_vkey, sub_vkey, .. } = constants
   let Transaction { inputs, extra_signatories, .. } = tx
   trace @"mutual.0": @"Both participants sign"
-  expect extra_signatories |> signed_by(add_vkey)
-  expect extra_signatories |> signed_by(sub_vkey)
+  expect extra_signatories |> list.has(add_vkey |> blake2b_224)
+  expect extra_signatories |> list.has(sub_vkey |> blake2b_224)
   expect Some(own_input) =
     inputs |> list.find(fn(i) { i.output_reference == own_oref })
   let own_cred = own_input.output.address.payment_credential
@@ -238,24 +206,6 @@ fn yield_in(
   }
 }
 
-/// #### Amount in
-/// 
-/// A channel supports mono-assets. See [funds](../adrs/funds.md). The channel
-/// currency is recorded in the constants. On a channel input, we are permissive
-/// about the value, ie any unanticipated native assets are ignored.
-fn amount_in(value: Value) -> Amount {
-  value |> assets.lovelace_of
-}
-
-/// #### Amount out
-/// 
-/// Continuing outputs value is handled in a stricter manner than channel inputs. The
-/// amount out function is similar to the amount in function, but checks the value
-/// contains no additional assets. This is to prevent token spamming attacks.
-fn amount_out(value: Value) -> Amount {
-  only_ada(value)
-}
-
 /// #### Yield continuing output
 /// 
 /// For any non-terminal step there is a continuing output. The checks required are
@@ -292,170 +242,13 @@ fn yield_out(
   }
 }
 
-pub fn do_add(
-  signers: Signers,
-  constants: t.Constants,
-  value_in: Value,
-  stage_in: t.Stage,
-  value_out: Value,
-  stage_out: t.Stage,
-) -> Bool {
-  let t.Constants { add_vkey, .. } = constants
-  expect t.Opened(_) = stage_in
-  expect stage_in == stage_out
-  expect signers |> signed_by(add_vkey)
-  amount_in(value_in) < amount_out(value_out)
-}
-
-pub fn do_sub(
-  signers: Signers,
-  upper_bound: Timestamp,
-  constants: t.Constants,
-  value_in: Value,
-  stage_in: t.Stage,
-  value_out: Value,
-  stage_out: t.Stage,
-  squash: t.Squash,
-  unlockeds: List<t.Unlocked>,
-) -> Bool {
-  let t.Constants { tag, add_vkey, sub_vkey, .. } = constants
-  expect t.Opened(subbed_in) = stage_in
-  expect t.Opened(subbed_out) = stage_out
-  expect subbed_out - subbed_in == amount_in(value_in) - amount_out(value_out)
-  let amount = verify_receipt(upper_bound, tag, add_vkey, squash, unlockeds)
-  expect signers |> signed_by(sub_vkey)
-  amount >= subbed_out
-}
-
-pub fn do_close(
-  signers: Signers,
-  upper_bound: Timestamp,
-  constants: t.Constants,
-  value_in: Value,
-  stage_in: t.Stage,
-  value_out: Value,
-  stage_out: t.Stage,
-) -> Bool {
-  let t.Constants { add_vkey, close_period, .. } = constants
-  expect t.Opened(subbed) = stage_in
-  expect t.Closed(subbed_, elapse_at) = stage_out
-  expect subbed == subbed_
-  expect amount_in(value_in) <= amount_out(value_out)
-  expect signers |> signed_by(add_vkey)
-  elapse_at >= upper_bound + close_period
-}
-
-pub fn do_respond(
-  signers: Signers,
-  upper_bound: Timestamp,
-  constants: t.Constants,
-  value_in: Value,
-  stage_in: t.Stage,
-  value_out: Value,
-  stage_out: t.Stage,
-  squash: t.Squash,
-  mixs: List<t.Mix>,
-) -> Bool {
-  let t.Constants { tag, add_vkey, sub_vkey, .. } = constants
-  expect t.Closed(subbed_in, _) = stage_in
-  expect t.Responded(subbed_out, pends_amount, pends) = stage_out
-  expect subbed_out - subbed_in == amount_in(value_in) - amount_out(value_out)
-  let amount =
-    verify_m_receipt(
-      upper_bound,
-      tag,
-      add_vkey,
-      squash,
-      mixs,
-      pends_amount,
-      pends,
-    )
-  expect signers |> signed_by(sub_vkey)
-  amount >= subbed_out
-}
-
-pub fn do_unlock(
-  signers: Signers,
-  upper_bound: Timestamp,
-  constants: t.Constants,
-  value_in: Value,
-  stage_in: t.Stage,
-  value_out: Value,
-  stage_out: t.Stage,
-  secrets: List<(Index, t.Secret)>,
-) -> Bool {
-// FIXME
-  let t.Constants { tag, sub_vkey, add_vkey, .. } = constants
-  expect t.Responded(subbed_in, pends_amount_in, pends_in) = stage_in
-  expect t.Responded(subbed_out, pends_amount_out, pends_out) = stage_out
-  let amount =
-    verify_secrets(
-      upper_bound,
-      tag,
-      add_vkey,
-      pends_amount_in,
-      pends_in,
-      pends_amount_out,
-      pends_out,
-      secrets,
-    )
-  expect signers |> signed_by(sub_vkey)
-  amount >= subbed_out
-}
-
-pub fn do_expire(
-  signers: Signers,
-  lower_bound: Timestamp,
-  constants: t.Constants,
-  value_in: Value,
-  stage_in: t.Stage,
-  value_out: Value,
-  stage_out: t.Stage,
-) -> Bool {
-// FIXME
-  let t.Constants { tag, add_vkey, .. } = constants
-  expect t.Responded(subbed_in, pends_amount_in, pends_in) = stage_in
-  expect t.Responded(subbed_out, pends_amount_out, pends_out) = stage_out
-  expect subbed_in == subbed_out
-  let amount =
-    verify_expire(
-      lower_bound,
-      tag,
-      add_vkey,
-      pends_amount_in,
-      pends_in,
-      pends_amount_out,
-      pends_out,
-    )
-  expect signers |> signed_by(add_vkey)
-  False
-}
-
-pub fn do_end(
-  signers: Signers,
-  constants: t.Constants,
-  stage_in: t.Stage,
-) -> Bool {
-  let t.Constants { add_vkey, .. } = constants
-  expect t.Responded(_, pends_amount, _) = stage_in
-  expect pends_amount == 0
-  signers |> signed_by(add_vkey)
-}
-
-pub fn do_elapse(
-  signers: Signers,
-  lower_bound: Timestamp,
-  constants: t.Constants,
-  stage_in: t.Stage,
-) -> Bool {
-  let t.Constants { add_vkey, .. } = constants
-  expect t.Closed(_, expire_at) = stage_in
-  expect signers |> signed_by(add_vkey)
-  expire_at <= lower_bound
-}
-
 fn coerce_datum(d: Datum) -> t.Datum {
   expect InlineDatum(data) = d
   expect d: t.Datum = data
   d
+}
+
+fn unbound(b: IntervalBound<Int>) {
+  expect IntervalBound { bound_type: Finite(b), .. } = b
+  b
 }
