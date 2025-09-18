@@ -19,13 +19,13 @@ components:
           - "application/json;charset=utf-8"
 
   schemas:
-    payment-request:
+    quote:
       type: string
       format: bech32
       examples:
         - lnbcrt1u1p5v9a9cpp5z28n9ewfmc40em7kayfxz5rhy9xdfq9dun6930h6hn4hl05u2e8sdqqcqzzsxqyz5vqsp58yuyhnwywacaj5wj99at99gkwzqg0vej87n25sc8f7yp3qya8jus9qxpqysgq8yp025nppkn3aty2g3g0qun7d8yfe03xtuscy0ns75wc5ny5uvuy36t2m46e2ns88g6deesj87reeuhqm5nzyard49p0a0ys6s8wm3gqrgssv5
 
-    payment-request-summary:
+    quote-summary:
       type: object
       description: |
         A decoded (partial) view of the payment request's information, including a quote for routing the payment from the adaptor to the destination.
@@ -64,9 +64,9 @@ components:
             The expiry (wall-clock) date time for the entire payment.
 
 paths:
-  /payment-request/{payload}:
+  /quote/{payload}:
    get:
-     operationId: decode-payment-request
+     operationId: decode-quote
      summary: Payment Request
      description: |
        Decode a [bech32-encoded BOLT-11 payment request](github.com/lightning/bolts/blob/14272b1bd9361750cfdb3e5d35740889a6b510b5/11-payment-encoding.md).
@@ -75,7 +75,7 @@ paths:
          in: path
          required: true
          schema:
-           $ref: "#/components/schemas/payment-request"
+           $ref: "#/components/schemas/quote"
      responses:
        200:
         description: OK
@@ -83,4 +83,4 @@ paths:
         content:
           "application/json;charset=utf-8":
             schema:
-              $ref: "#/components/schemas/payment-request-summary"
+              $ref: "#/components/schemas/quote-summary"

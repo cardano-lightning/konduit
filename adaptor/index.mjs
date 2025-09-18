@@ -26,7 +26,7 @@ const CONFIG = {
 };
 
 const router = new Router();
-router.get('/payment-request/:payload', get_payment_request)
+router.get('/quote/:payload', get_quote)
 
 const app = new Koa();
 app
@@ -47,19 +47,19 @@ function get_env(key) {
   return env_var;
 }
 
-async function get_payment_request(ctx) {
+async function get_quote(ctx) {
   const payload = ctx.params.payload;
 
-  const payment_request = await ln_decode_payment_request(payload);
+  const quote = await ln_decode_quote(payload);
 
   const expiry = new Date(
-    Number.parseInt(payment_request.timestamp, 10) +
-    Number.parseInt(payment_request.expiry + 10)
+    Number.parseInt(quote.timestamp, 10) +
+    Number.parseInt(quote.expiry + 10)
   );
 
   ctx.body = JSON.stringify({
-    recipient: payment_request.destination,
-    payment_hash: payment_request.payment_hash,
+    recipient: quote.destination,
+    payment_hash: quote.payment_hash,
     routing_fee: 0, // FIXME: Obtain from computing the payment route.
     expiry: expiry.toISOString(),
   });
@@ -72,7 +72,7 @@ function set_content_type(content_type) {
   }
 }
 
-function ln_decode_payment_request(payload) {
+function ln_decode_quote(payload) {
   return ln_get(`v1/payreq/${payload}`);
 }
 
