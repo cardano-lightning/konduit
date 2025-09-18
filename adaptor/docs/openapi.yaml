@@ -44,7 +44,7 @@ components:
         routing_fee:
           type: integer
           description: |
-            The cost of routing the payment through the Lightning network, as well as the Adapter comission.
+            The cost of routing the payment through the Lightning network, as well as the Adaptor comission.
           minimum: 0
 
         payment_hash:

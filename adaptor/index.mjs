@@ -16,7 +16,7 @@ const DEFAULTS = {
   LISTEN_PORT: 4444,
 };
 
-const ENV_PREFIX = "KONDUIT_ADAPTER";
+const ENV_PREFIX = "KONDUIT_ADAPTOR";
 
 const CONFIG = {
   LISTEN_PORT: Number.parseInt(get_env("LISTEN_PORT"), 10),
