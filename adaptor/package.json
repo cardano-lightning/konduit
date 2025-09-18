@@ -11,6 +11,8 @@
     "@cardanosolutions/json-bigint": "^1.0.2",
     "@koa/router": "^14.0.0",
     "koa": "^3.0.1",
+    "nanoid": "^5.1.5",
+    "pino": "^9.10.0",
     "undici": "^7.16.0"
   },
   "scripts": {

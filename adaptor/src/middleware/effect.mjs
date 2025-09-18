@@ -5,7 +5,6 @@ export function effect(ctx, next) {
     try {
       result = await run();
     } catch(e) {
-      console.error(e);
       const error = new Error(`failed to ${title}`, { cause: e });
       error.status = 500;
       return ctx.throw(error);
