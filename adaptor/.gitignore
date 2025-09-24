@@ -1,3 +1,4 @@
+.env
 .envrc
 yarn.lock
 node_modules

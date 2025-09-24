@@ -58,6 +58,8 @@
           # (builtins.trace (builtins.attrNames inputs.cardano-addresses.packages.${system}) inputs.cardano-cli.packages)
           packages = [
             inputs'.aiken.packages.aiken
+            pkgs.yarn
+            pkgs.nodePackages_latest.nodejs
           ];
         };
       };
