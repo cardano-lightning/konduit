@@ -1,40 +1,38 @@
 # Adaptor
 
-## Specifications
+## Installing
 
+```
+yarn
+```
 
-## CBOR-RPC 1.0
+## Configuring
 
-```cddl
-request = #6.49(
-  {   0: version                ; CBOR-RPC version
-  ,   1: text .size (0 .. 64)   ; Method
-  , ? 2: any                    ; Parameters
-  , ? 3: any                    ; State
-  }
-)
+Configuration happens through environment variables and a few local files:
 
-response_ok = #6.50(
-  {   0: version                ; CBOR-RPC version
-  ,   1: text .size (0 ..64)    ; Method
-  ,   2: any                    ; Result
-  , ? 3: any                    ; Mirrored-state
-  }
-)
+```bash
+# ===== REQUIRED =====
 
-response_ko = #6.51(
-  {   0: version                ; CBOR-RPC version
-  , ? 1: text .size (0 ..64)    ; Method
-  ,   2: error                  ; Error
-  , ? 3: any                    ; Mirrored-state
-  }
-)
+# Public URL to connect to the BLN node.
+KONDUIT_ADAPTOR_LN_BASE_URL = https://127.0.0.1:8080
 
-error =
-  {   0: (-32768..32767)        ; Error code
-  , ? 1: text                   ; Message
-  , ? 2: any                    ; Details
-  }
+# Admin Macaroon file to authorize connection to the BLN node.
+KONDUIT_ADAPTOR_LN_MACAROON = /path/to/admin.macaroon
 
-version = 1
+# TLS certificate (PEM format) to *securily* connect to the BLN node.
+KONDUIT_ADAPTOR_LN_TLS_CERT = /path/to/tls.cert
+
+# ===== Optional =====
+
+# TCP port to listen to for incoming client connections to the Adaptor server
+KONDUIT_ADAPTOR_LISTEN_PORT = 4444,
+
+# Fixed amount charged by the Adaptor for routing payments, in milli-satoshis
+KONDUIT_ADAPTOR_FEE = 42,
+```
+
+## Running
+
+```
+yarn start
 ```
