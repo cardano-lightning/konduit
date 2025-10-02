@@ -4,7 +4,7 @@ use konduit/spend/main
 use konduit/spend/mutual
 use konduit/types as t
 
-pub fn handle(
+pub fn do(
   datum: t.Datum,
   redeemer: t.Redeemer,
   own_oref: OutputReference,

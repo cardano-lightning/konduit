@@ -1,5 +1,5 @@
 use cardano/transaction.{OutputReference, Transaction}
-use konduit/spend.{handle}
+use konduit/spend.{do}
 use konduit/types as t
 
 validator konduit {
@@ -10,7 +10,7 @@ validator konduit {
     tx: Transaction,
   ) {
     expect Some(datum) = datum
-    handle(datum, redeemer, own_oref, tx)
+    do(datum, redeemer, own_oref, tx)
   }
 
   else(_) {
