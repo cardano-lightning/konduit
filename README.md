@@ -13,6 +13,8 @@ See the [requirements](./docs/design/requirements.md) for full details.
 ## Repo Org
 
 - [`./docs/`](./docs/) - Meeting notes, adrs, design docs
+- [`./kernel/`](./kernel/) - Konuit kernel aka on-chain code. An Aiken repo.
+- [`./rust/`](./rust/) - Tools for konduit. A rust workspace
 
 ## Contributing
 

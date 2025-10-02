@@ -1,4 +1,5 @@
 use aiken/builtin.{head_list, tail_list}
+use aiken/primitive/bytearray
 
 /// Drop element or fail 
 pub fn drop_hard(l: List<elem>, i: elem) {
@@ -10,6 +11,22 @@ pub fn drop_hard(l: List<elem>, i: elem) {
       } else {
         drop_hard(l, i)
       }
+  }
+}
+
+/// Ordered insert
+/// On a monotonically strictly increasing list, 
+/// it will not insert item if already present,
+/// else will insert into the correct place
+pub fn ordered_insert(xs: List<ByteArray>, item: ByteArray) {
+  when xs is {
+    [x, ..xs] ->
+      when bytearray.compare(x, item) is {
+        Less -> [x, ..ordered_insert(xs, item)]
+        Equal -> [x, ..xs]
+        Greater -> fail @"Impossible"
+      }
+    _ -> [item]
   }
 }
 
