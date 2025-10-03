@@ -1,11 +1,11 @@
-import Koa from "koa";
-import Router from "@koa/router";
-import { MIME_TYPES } from "./constants.mjs";
-import * as middleware from "./middleware/index.mjs";
-import * as handlers from "./handlers/index.mjs";
-import config from "./config.mjs";
-import LightningClient from "./lightning.mjs";
-import pino from "pino";
+import Koa from 'koa';
+import Router from '@koa/router';
+import { MIME_TYPES } from './constants.mjs';
+import * as middleware from './middleware/index.mjs';
+import * as handlers from './handlers/index.mjs';
+import config from './config.mjs';
+import LightningClient from './lightning.mjs';
+import pino from 'pino';
 
 const lightning_client = new LightningClient(
   config.LN_BASE_URL,
@@ -15,8 +15,9 @@ const lightning_client = new LightningClient(
 
 const logger = pino();
 
+
 const router = new Router();
-router.get("/quote/:payload", handlers.get_quote(lightning_client));
+router.get('/quote/:payload', handlers.get_quote(lightning_client))
 const routes = router.routes();
 
 const app = new Koa();

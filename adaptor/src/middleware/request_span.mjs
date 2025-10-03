@@ -1,4 +1,4 @@
-import { nanoid } from "nanoid";
+import { nanoid } from 'nanoid'
 
 export function request_span(logger) {
   return async (ctx, next) => {

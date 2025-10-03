@@ -4,7 +4,7 @@ export function effect(ctx, next) {
 
     try {
       result = await run();
-    } catch (e) {
+    } catch(e) {
       const error = new Error(`failed to ${title}`, { cause: e });
       error.status = 500;
       return ctx.throw(error);
@@ -14,4 +14,4 @@ export function effect(ctx, next) {
   };
 
   return next();
-}
+};
