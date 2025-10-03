@@ -1,6 +1,6 @@
-import * as assert from 'node:assert';
-import { HEADERS } from './constants.mjs';
-import { Agent } from 'undici';
+import * as assert from "node:assert";
+import { HEADERS } from "./constants.mjs";
+import { Agent } from "undici";
 
 export default class LightningClient {
   #base_url;
@@ -8,8 +8,14 @@ export default class LightningClient {
   #macaroon;
 
   constructor(base_url, tls_certificate, macaroon) {
-    assert.ok(typeof base_url === "string", "missing/invalid lightning base url");
-    assert.ok(tls_certificate instanceof Buffer, `missing/invalid tls_certificate`);
+    assert.ok(
+      typeof base_url === "string",
+      "missing/invalid lightning base url",
+    );
+    assert.ok(
+      tls_certificate instanceof Buffer,
+      `missing/invalid tls_certificate`,
+    );
     assert.ok(macaroon instanceof Buffer, "missing/invalid macaroon");
 
     this.#base_url = base_url;
@@ -17,8 +23,8 @@ export default class LightningClient {
     this.#dispatcher = new Agent({
       connect: {
         ca: tls_certificate,
-        keepAlive: true
-      }
+        keepAlive: true,
+      },
     });
 
     this.#macaroon = macaroon.toString("hex");

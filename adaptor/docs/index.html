@@ -1,43 +1,59 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <title>Konduit.Adaptor - API Reference</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Konduit.Adaptor: a gateway to interact with a Bitcoin Lightning node." />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta property="og:title" content="Konduit.Adaptor: API Reference" />
-  <meta property="og:description" content="Konduit.Adaptor: a gateway to interact with a Bitcoin Lightning node." />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono&family=Source+Code+Pro&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js"></script>
-  <style>
-    body { margin: 0; padding: 0; }
-    pre {
-      font-family: 'Courrier New', monospace !important;
-      white-space: pre !important;
-    }
-    pre > code {
-      border: unset !important;
-      border-radius: unset !important;
-      font-size: unset !important;
-      font-family: unset !important;
-    }
-  </style>
-</head>
-<body>
-<redoc id="redoc-container"></redoc>
-<script>
-  Redoc.init(`/openapi.yaml`, {
-    hideDownloadButton: true,
-    hideRequestPayloadSample: true,
-    simpleOneOfTypeLabel: true,
-    expandResponses: '200,201',
-    theme: {
-      logo: {
-        gutter: '2rem',
-      },
-    }
-  }, document.getElementById('redoc-container'));
-</script>
-</body>
+    <head>
+        <title>Konduit.Adaptor - API Reference</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+            name="description"
+            content="Konduit.Adaptor: a gateway to interact with a Bitcoin Lightning node."
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta property="og:title" content="Konduit.Adaptor: API Reference" />
+        <meta
+            property="og:description"
+            content="Konduit.Adaptor: a gateway to interact with a Bitcoin Lightning node."
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Roboto+Mono&family=Source+Code+Pro&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js"></script>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            pre {
+                font-family: "Courrier New", monospace !important;
+                white-space: pre !important;
+            }
+            pre > code {
+                border: unset !important;
+                border-radius: unset !important;
+                font-size: unset !important;
+                font-family: unset !important;
+            }
+        </style>
+    </head>
+    <body>
+        <redoc id="redoc-container"></redoc>
+        <script>
+            Redoc.init(
+                `/openapi.yaml`,
+                {
+                    hideDownloadButton: true,
+                    hideRequestPayloadSample: true,
+                    simpleOneOfTypeLabel: true,
+                    expandResponses: "200,201",
+                    theme: {
+                        logo: {
+                            gutter: "2rem",
+                        },
+                    },
+                },
+                document.getElementById("redoc-container"),
+            );
+        </script>
+    </body>
 </html>
