@@ -2,7 +2,26 @@
 title: "Kernel"
 ---
 
+# Overview
+
+The _kernel_ refers to the "on-chain" part: the kernel of integrity of the dapp.
+
+This document goes through:
+
+- High level design of the kernel
+- A description components in terms of datatypes and well-formed-ness
+- A description of how batching works
+- A specification of each step
+- A description of typical transactions
+
 # Design
+
+## Overview
+
+The "kernel" refers to the "on-chain" part. The Konduit kernel consists of a
+single validator. Any (well-formed) UTXO at the validator address holds the
+funds and on-chain data corresponding to a channel. And conversely any (staged)
+channel corresponds to a single UTXO at tip at the validator address.
 
 ## Influence
 
@@ -11,13 +30,6 @@ The design of the Konduit Kernel draws heavily on previous work of
 [Cardano Lightning](https://cardano-lightning.org). Both protocols are built on
 two party payment channels, the former is unidirectional, while the latter is
 bidirectional with HTLC support. Konduit is unidirectional with HTLC support.
-
-## Overview
-
-The Konduit kernel consists of a single validator. Any (well-formed) UTXO at the
-validator address holds the funds and on-chain data corresponding to a channel.
-And conversely any (staged) channel corresponds to a single UTXO at tip at the
-validator address.
 
 ## Channel life-cycle
 
@@ -110,14 +122,15 @@ cheaper.
 
 ### Mutual txs
 
-Mutual txs allow partners of a channel to perform an arbitrary spend. Provide
+Mutual txs allow partners of a channel to perform an arbitrary spend. Provided
 both consent, by signing the tx, anything goes.
 
-This is uninteresting from the perspective of validators. It is effectively a
-multisig. The additional constraint is that a mutual txs must include no other
-inputs from validator address.
+Mutual txs are uninteresting from the perspective of validators, since it is
+effectively a multisig. An additional constraint is that a mutual tx must
+include no other inputs from validator address. This simplifies the batching
+case.
 
-### Simplifications
+### Simplifications from CL
 
 - In the initial iteration we remove the possibility of (non ada) native asset
   channels.
@@ -143,18 +156,31 @@ For more details, see
 Some type aliases used, that are not Konduit specific:
 
 ```aiken
+
 /// Index is used to enumerate a collection
-type Index = Int
+pub type Index =
+  Int
+
 /// Amount is used for value
-type Amount = Int
+pub type Amount =
+  Int
+
 /// Timestamp is used to for posix time
-type Timestamp = Int // Posix Timestamp
-/// Hash32 is used where the value is the output of a hash function.
-/// It is 32 bytes in length
-type Hash32 = ByteArray
+pub type Timestamp =
+  Int
+
+// Posix Timestamp
+/// Type alias for Bytearray to indicate that this ought to be of a given length.
+pub type Bytes32 =
+  ByteArray
+
+pub type Bytes64 =
+  ByteArray
+
 /// Signature is used where the value is the output of a sign function.
 /// It is 64 bytes in length
-type Signature = ByteArray
+pub type Signature =
+  Bytes64
 ```
 
 Throughout the document "channel" refers to the UTXOs in which the associated
@@ -183,55 +209,83 @@ For examples:
 
 # Components
 
+## Signing
+
+There are two components that require signatures, namely cheques and squashes
+(see below). From the perspective signing, they are treated identically.
+
+Suppose we have four bytearrays:
+
+```
+body, signature, tag, key
+```
+
+We say that `(body, signature)` is **well-formed**, or **well-signed**, with
+respect to pair `(tag, key)` if
+
+```
+verify(key, concat(tag, (serialize(cheque_body)), signature)
+```
+
+Where `verify` is the signature verification function.
+
+A Konduit channel instance has a fixed value for `tag` and `key` for its entire
+lifecycle. Thus, in the context of channel, the "with respect to" is implicitly
+understood.
+
 ## Cheque
 
 Cheques are a vehicle by which funds are sent from Consumer to Adaptor. Cheque
-is the key datatype by which the HTLC mechanism relies on.
+is the key datatype by which the HTLC mechanism relies on. A cheque corresponds
+to a channel, and is created by Consumer and sent to Adaptor.
 
-To be used to `sub` funds the receiver must provide the "secret" that hashes to
-the lock.
+The data definition is as follows
 
 ```aiken
 type Timeout = Timestamp
-type ChequeBody = (Index, Amount, Timeout, Hash32)
+type Lock = Bytes32
+type ChequeBody = (Index, Amount, Timeout, Lock)
 type Cheque = (ChequeBody, Signature)
-
-/// Also called the preimage
-/// It is 32 bytes in length
-
-type Secret = ByteArray
-type Unlocked = (ChequeBody, Signature, Secret)
-
-type Mix {
-    MUnlocked(..Unlocked)
-    MPend(..Cheque)
-}
 ```
 
-The signature associated to the cheque is for the message constructed as the
-(byte array) concatenation of the channel tag with the cbor of the locked
-cheque.
+More precisely a cheque is associated the pair `(tag, key)`. In theory there can
+be multiple channels with the same tag and key. However, this puts only the user
+providing the funds at risk. We reiterate a warning that Consumer should not
+reuse `(tag, key)` unless they absolutely know what they are doing.
+
+We say a cheque `(body, signature)` is **well-formed** if it is well-signed.
+
+When Adaptor receives a cheque they must verify it is well-formed. Note there
+are many other reasons Adaptor may reject a cheque. For example:
+
+- Non positive index
+- Reuse of index
+- Amount not underwritten by channel
+- Insufficient time before timeout _etc_
+
+These are conditions to established by Adaptor as part of their L2.
+
+The timeout is still important on the L1. In practice this verification is
+postponed. Thus, we say a cheque is well-formed **subject** to an upper bound
+`bound` if is well-formed, and the `bound` is `<= timeout`.
+
+## Unlocked
+
+To use a cheque as proof of funds owed, the receiver must provide the "secret".
+A secret is a bytearray that hashes (sha2 256) to the lock. Moreover, it must be
+32 bytes in length
 
 ```aiken
-  let message = concat(tag, (serialize(cheque_body))
+type Secret = Bytes32
+type Unlocked = (ChequeBody, Signature, Secret)
 ```
 
-A well-formed cheque is a cheque for which the signature is correct for the
-context: tag and cheque body. It is generally understood that by "cheque" we
-mean "well-formed cheque". In receiving of cheques on the L2 or L1, the
-signature must be verified.
+We say that an unlocked `(body, sig, secret)` is **well-formed** with respect to
+the pair `(tag, vkey)`, subject to an upper bound `bound` provided that:
 
-The `Mix` is a mix of unlocked cheques and pending cheques. A cheque is pending
-at the time of a respond if the timeout has yet to pass but the secret is not
-yet known. (Or to be precise, there is a break down in communication that one of
-the participants is acting as if this is the case.)
-
-Our choice of vocab is close to that of Cardano Lightning, but with some
-divergence. Konduit is simpler. For example:
-
-- There is no "normal" cheque. Instead Consumer issues a squash. See below.
-- There are no other locks, so the data structure of the locked cheque is
-  simpler. We only support the lock present on BLN.
+- unlocked.0 : `(body, sig)` is well-signed
+- unlocked.1 : the secret hashes to the lock
+- unlocked.2 : the secret length is 32
 
 ## Squash
 
@@ -252,26 +306,28 @@ type Squash = (SquashBody, Signature)
 Unlike CL we do not need to "Snapshots", which are the pair squashes one of each
 participant, since only Consumer is issuing cheques.
 
-The verify function works analogously to that of cheques, in that the message is
-derived by concatenating the tag and cbor serialization of the squash body. A
-squash is well-formed if:
+A squash is **well-formed** if:
 
-1. The index `n >= 0`
-2. The exclusion list is strictly monotonically increasing with values in
-   `(0, n)` (ie positive numbers strictly less than the index).
-3. The signature is valid.
+- squash.0 : It is well-signed
+- squash.1 : The index `n >= 0`
+- squash.2 : The exclusion list is strictly monotonically increasing with values
+  in
+- squash.3 : `(0, n)` (ie positive numbers strictly less than the index).
 
-Otherwise the squash is ill formed. Adaptor and L1 must verify well-formed-ness
-of a squash, when received
+Otherwise the squash is ill formed. Consumer must only make well-formed squash.
+Adaptor must reject ill-formed squash. Failure of either participant to do so
+may put their funds at risk. Warning. We do not explicitly verify the
+well-formedness of squash in the kernel. Both participants have to consent to
+the use of an ill-fromed squash, so both are responsible for the consequences.
 
-A cheque is _accounted for_ in a squash if its index `<= Index` and it does not
-appear in the `Exclude` list.
+A cheque is **accounted for** in a squash if its index `<= Index` and it does
+not appear in the `Exclude` list.
 
 ## Receipt
 
 Before Adaptor routes any cheques from Consumer, they must receive the initial
 squash. This can be empty squash, with body `(0,0,[])`, declaring no value is
-actually owed.
+yet owed.
 
 In a `sub` Adaptor presents evidence of funds owed. The evidence is a `Receipt`.
 
@@ -279,95 +335,121 @@ In a `sub` Adaptor presents evidence of funds owed. The evidence is a `Receipt`.
 type Receipt =  (Squash, List<Unlocked>)
 ```
 
-In a `respond` Adaptor includes also pending cheques:
+A receipt is **well-formed** if:
 
-```aiken
-type MReceipt =  (Squash, List<Mix>)
-```
-
-In either a `Receipt` or `MReciept` the items must be monotonically strictly
-increasing. This prevents the possibility of duplicates. Other accounting
-measures ensures that a cheque can be used at most once, including when part of
-a squash.
-
-The final receipt, `MReceipt`, contains a mix of revealed and pending cheques,
-`Mix`. This allows Adaptor to ensure pending funds (ie funds associated to
-pending cheques) remain in the L1. Consumer can remove all funds demonstrably
-theirs without further delay, while the owner of funds yet to be determined
-remain locked.
-
-A receipt is well-formed if:
-
-1. The squash and the cheques are each well-formed.
-2. The cheques are strictly monotonically increasing
-3. No cheque is accounted for in the squash.
+- squash is well-signed
+- each unlocked is well-formed
+- each unlocked is unaccounted for in the squash
 
 Unlike the cheques or squash, a receipt is both constructed and submitted by
-Adaptor. The L1 must verify the well formed-ness of the receipt.
+Adaptor. The L1 must verify the well formed-ness of the receipt. We subsume the
+well-fromedness logic into accounting.
 
-## Accounting
+To account a receipt:
 
-A receipt is evidence of funds owed. The `owed` amount is calculated as the
-amount of the squash, plus the amount of the revealed cheques. This is the
-cumulative amount `owed` since the channels inception. Recall that the cheques
-must not be accounted for in the squash.
+- receipt.0 : Squash is well-signed
+- receipt.1 : Each unlocked is well-formed subject to a bound
+- receipt.2 : Each unlocked index is strictly increasing and unaccounted for
+- receipt.3 : Return total owed and least bound if any
 
 The cumulative amount `subbed` from the channel is what is recorded in the
-channel datum. In a sub step, Adaptor can redeem no more than the difference
-between `owed` and `subbed`. The new cumulative amount `subbed` is what the
-continuing output records.
+channel datum (see below). In a sub step, Adaptor can redeem no more than the
+difference between `owed` and `subbed`. The new cumulative amount `subbed` is
+what the continuing output records.
 
-In the `respond`, the analogous happens with regards to the unlocked cheques in
-the final receipt. In addition, the pending locked cheques in the final receipt
-are also recorded, and so the associated funds can be claimed by the rightful
-owner in a future tx.
+## Mixed Cheques
+
+At the instance end of life, Consumer may close while some cheques are neither
+timed out or had their secret revealed. Thus we need to accommodate yet to be
+determined evidence. Enter mixed cheque: either an unlocked or (locked) cheque.
+
+```aiken
+type MixedCheque {
+    MUnlocked(..Unlocked)
+    MCheque(..Cheque)
+}
+```
+
+The `Mix` is a mix of unlocked cheques and pending cheques.
+
+A mixed cheque is **well-formed** provided that whatever it is wrapping is
+well-formed.
+
+Our choice of vocab is close to that of Cardano Lightning, but with some
+divergence. Konduit is simpler. For example:
+
+- There is no "normal" cheque. Instead Consumer issues a squash. See below.
+- There are no other locks, so the data structure of the locked cheque is
+  simpler. We only support the lock present on BLN.
+
+## Mixed receipt
+
+A mixed receipt, as name suggests, is the equivalent to receipt but with
+`MixedCheque`s. In a `respond` Adaptor includes also cheques yet to be
+determined:
+
+```aiken
+type MReceipt =  (Squash, List<MixedCheque>)
+```
+
+The well-formedness of an MReceipt is analogous to those above.
+
+To account `MReceipt` is similar to that of `Receipt` but must also handle the
+yet to be determined cheques. Pending cheques persist in the instance on-chain
+until on of the participants can demonstrate the funds are theirs.
+
+Account for `MReceipt` as follows:
+
+- m-receipt.0 : Squash is well-signed
+- m-receipt.1 : For each mixed:
+- m-receipt.1.0 : If unlocked then is well-formed subject to bound
+- m-receipt.1.2 : If cheque then is well-formed and appears on continuing output
+- m-receipt.1.3 : Either case, Index is strictly increasing and unaccounted for
+- m-receipt.2 : There no additional pending cheques
+- m-receipt.3 : Return total owed and least bound if any
+
+## Unpending
+
+All pending cheques will eventually be resolved, either by:
+
+- Adaptor unlocking with a secret, or
+- Consumer demonstrating timeout
+
+In either case, the participant doing the step provides a `List<ByteArray>`. If
+the entry is non-empty the item is popped from the list. In the case of `unlock`
+the bytearray must be the secret.
+
+Adaptor can unlock amounts they can demonstrate they are owed, while Consumer
+can remove all funds _not_ possibly belonging to Adaptor.
 
 ## Datum and Redeemer
 
 ```aiken
 type Constants {
   tag : Tag,
-  add_vkey : VerificationKey,
+add_vkey : VerificationKey,
   sub_vkey : VerificationKey,
   close_period : Int,
 }
 
 /// ScriptHash is own_hash
-
 type Datum = (ScriptHash, Constants, Stage)
 
-
-/// TBC: Flatten params to remove additional nesting.
-
-type Stage {
-  Opened(..OpenParams)
-  Closed(..ClosedParams)
-  Responded(..RespondedParams)
-}
-
-type OpenedParams {
-  subbed : Amount,
-}
-
-type ClosedParams {
-  subbed : Amount,
-  expire_at : Int,
-}
-
 /// Pend cheques are Cheque body but without the Index since its not needed
+type Pending = (Amount, Timeout, Secret)
 
-type PendCheque = (Amount, Timeout, Secret)
-
-/// Total amount in pending cheques, and the PendCheques
-
-type Pends =  ( Amount, List<PendCheque> )
-
-type RespondedParams {
-  pend : Pends,
+/// Stage
+/// Opened ( subbed_amount )
+/// Closed ( subbed_amount, elapse_at )
+/// Responded ( locked_amount, pending )
+type Stage {
+  Opened(Amount)
+  Closed(Amount, Timestamp)
+  Responded(Amount, List<Pending>)
 }
 
 type Redeemer {
-  Batch
+  Defer
   Main(Steps)
   Mutual
 }
@@ -379,15 +461,17 @@ type Step {
 
 type Steps = List<Step>
 
-/// TODO: do we flatten params
+
+/// Unpends
+type Unpending = List<Bytearray>
 
 type Cont {
   Add
   Sub(..Receipt)
   Close
   Respond(..MReceipt)
-  Unlock(List<(Index, Secret)>)
-  Expire(List<Index>)
+  Unlock(Unpending)
+  Expire(Unpending)
 }
 
 type Eol {
@@ -398,85 +482,85 @@ type Eol {
 
 # Validator
 
-The Kernel uses a single validator, invoked only with spend purpose.
+## Overview
+
+The kernel consists of a single validator which is invoked exclusively with
+spend purpose.
+
+There are two "kinds" of permitted transaction:
+
+- Batch: The primary kind of transaction, even if only one channel is involved.
+- Mutual: The secondary kind of transaction. Both participants consent via
+  signing the transaction.
+
+Konduit channels are independent of one another. The validator logic maintaining
+channel correctness in a transaction _should_ pose an
+[embarassingly parallel](https://en.wiktionary.org/wiki/embarrassingly_parallel)
+problem.
+
+However, in Cardano each UTXO at a script address spent in the transaction
+triggers an execution of the spend validator. When [batching](#batching), this
+is the same script many times. Even with passing in the input and output
+indicies of each channel as part of the redeemer still results in multiple
+traverses over the same list.
+
+It is in the interests of efficiency that all constraints are enforced on the
+"first", ie "main", execution of the script. All other "defer" executions check
+only that the validator has already executed as "main".
+
+The validator logic is structured roughly as follows. If the redeemer is:
+
+- "Defer" then find "Main" and return
+- "Main" then
+  - Fold over steps, each time yield own input
+    - If the step is continuing:
+      - Yield continuing output
+      - Do step logic with input and continuing output
+    - Else (step is end-of-life):
+      - Do step logic with input
+  - Verify signers and validity range
+  - No more own input
+- "Mutual" then
+  - Both partners signed
+  - Unique own input
+
+Note that the Konduit business logic is almost entirely taking place in the "do
+steps" parts. "Almost entirely" since other parts are making use of Konduit data
+types, and, for example, the verify signers and validity range is relevant to
+Konduit business logic. On this observation, the validator is arranged into two
+parts:
+
+- BL specific ie the "do steps" part
+- BL agnostic ie everything else.
+
+Recall that inputs are lexicographically sorted. The declared steps in the Main
+redeemer and the transaction outputs must align with this ordering.
+
+This design introduces additional "what happens if...?!" cases that require
+careful consideration. Recall that the validator is not responsible to ensure
+the safety of a users funds from themselves, only their funds from others.
+
+## BL Agnostic
 
 Unless stated otherwise:
 
 - datums are inline
 - UTXO reference script field is empty
-- address stake credential is unconstrained
 
-## Overview
+### Redeemers
 
-In Cardano each UTXO at a script address spent in the transaction triggers an
-execution of the spend validator. When [batching](#batching), this is the same
-script many times. The required constraints on channels is embarrassingly
-parallel. However, even with passing in the input and output indicies of each
-channel as part of the redeemer, it still results in multiple traverses over the
-same list.
+#### Defer
 
-It is in the interests of efficiency that all constraints are enforced on the
-"first", ie "main", execution of the script. All other "batch" executions check
-only that the validator has already executed as "main".
-
-This design introduces additional "what happens if...?!" cases that require
-careful consideration. Recall that the validator is not responsible to ensure
-the safty of a users funds from themselves, only their funds from others.
-
-The validator logic is structured roughly as follows:
-
-If redeemer is:
-
-- "Batch" then find "Main" and return
-- "Main" then
-  - recur : Fold over the steps with:
-    - yield in : find the next validator input and parse
-    - if the step is continuing:
-      - yield out : find continuing output and parse
-      - cont step : verify step with input, output, and additional context
-    - else (step is end):
-      - end step : verify step with input
-  - no more : Once steps are exhausted, there are not more kernel inputs.
-- "Mutual" then
-  - Both partners signed
-  - solo : Own input is solo validator input
-
-Recall that inputs are lexicographically sorted. The declared steps in the Main
-redeemer and the transaction outputs must align with this ordering.
-
-## Notes and notation
-
-Through out we use the following conventions:
-
-- Field names as variable names
-- The suffices `_in` and `_out` are used for variables to indicate if they are
-  derived from an input or a continuing output. This occurs only when the two
-  need to be distinguished.
-- A trailing slash on variable `var_` is used to indicate that there is an
-  expect equals on the variable of the variable (without trailing slash) ie
-  `expect var == var_`
-- Ordering may be motivated by the order in which we have the necessary
-  variables in scope.
-
-The following statements for the associated encodings:
-
-- Consumer has signed
-  `extra_signatories |> list.has(constants_in.add_vkey |> hash.blake2b_224)`
-- Adaptor has signed
-  `extra_signatories |> list.has(constants_in.sub_vkey |> hash.blake2b_224)`
-
-## Batch
-
-In a standard tx, all but one of the script inputs are spent with `Batch`. More
+In a standard tx, all but one of the script inputs are spent with `Defer`. More
 precisely, the lexicographical first validator input in the tx inputs must have
-redeemer `Main`, and all the rest are spent with `Batch`.
+redeemer `Main`, and all the rest are spent with `Defer`.
 
-The logic when the redeemer is `Batch`:
+The logic when the redeemer is `Defer`:
 
-- batch.0 : First script input `main_input` is not own input
-- batch.1 : `main_input` datum has correct `own_hash`
+- defer.0 : First script input `main_input` is not own input
+- defer.1 : `main_input` datum has correct `own_hash`
 
-## Main
+#### Main
 
 In a standard tx, the "main" invocation does all the verification steps for all
 channels.
@@ -485,202 +569,192 @@ The logic when the redeemer is `Main(steps)`:
 
 - main.0 : Own input has correct `own_hash`
 - main.1 : Extract `bounds`, and `extra_signatories`,
-- main.2 : `recur` over `steps`, `inputs` and `outputs`
-- main.3 : No more channels
+- main.2 : Fold over `steps`. The fold aggregates: list of required signers,
+  greatest lower bound, and least upper bound
+- main.4 : All signers have signed
+- main.5 : If greatest lower bound, then this is less than tx lower bound
+- main.6 : If least upper bound, then this is greater than tx upper bound
+- main.7 : No more own inputs
 
-## Recur
+The fold consumes the steps that need to be verified. Each step verification
+requires some context, which varies subtly between them. All steps require some
+info from the channel input, and if a continuing step then the continuing
+output,
 
-The recur function exhausts the list of steps that need to be verified. Each
-step verification requires some context, which varies subtly between the
-different steps. All steps require some info from the channel input, and if a
-continuing step then the continuing output, as well as the tx signers list and
-perhaps the tx validity range. The recur function organises this.
+- fold.0 : with step, yeild own input
+- fold.1 : if step is continuing
+  - fold.1.0 : yield continuing output
+  - fold.1.1 : verify step
+- fold.3 : else
+  - fold.3 : verify step
 
-- recur.0 : yield step else return inputs
-- recur.1 : yield channel in else fail
-- recur.2 : if step is continuing
-  - recur.2.0 : yield continuing output else fail
-  - recur.2.1 : verify step
-- recur.3 : else
-  - recur.3 : verify step
-
-As code, this looks as follows:
-
-```aiken
-fn recur(own_hash, signers, bounds, steps, inputs, outputs) {
-  when steps is {
-    [step, ..steps] -> {
-      let (address_in, value_in, stage_in, inputs) = yield_in(own_hash, inputs)
-      when step is {
-        Cont(step) -> {
-          let (value_out, stage_out, outputs) = yield_out(address, currency, outputs)
-          expect do_cont(signers, bounds, step, input, cont)
-          recur(own_hash, signers, bounds, steps, inputs, outputs)
-        }
-        Eol(step) -> {
-          expect do_eol(signers, step, channel)
-          recur(own_hash, signers, bounds, steps, inputs, outputs)
-        }
-      }
-    }
-    [] -> inputs
-    }
-  }
-}
-```
-
-## Mutual
+#### Mutual
 
 A channel can be spent by mutual consent with no further verification on the
 channel itself. In such cases, it is spent with the `Mutual` redeemer. To
-prevent exploits, and by the way `Batch` and `Main` interplay, we prevent any
+prevent exploits, and by the way `Defer` and `Main` interplay, we prevent any
 other channels spent alongside a `Mutual` spend.
 
 - mutual.0 : Both participants sign
-- mutual.1 : Is solo channel input
+- mutual.1 : Unique own input
 
-## No more
+### IO
 
-FIXME :: The one liner is sufficient
+The kernel traverses inputs and outputs via "yield" functions.
 
-In the case of batch txs, there cannot be any channel spent without a
-corresponding step. In the case of mutual txs, there is only a single, solo
-channel input. Once the list of steps has been exhausted or the solo channel
-input has been found, it remains to verify there are no more channel inputs.
+#### Yield in
 
-```aiken
-fn no_more(own_hash, inputs) {
-  when inputs is {
-    [] -> True
-    [input, ..inputs] -> {
-      expect ScriptCredential(own_hash) != input.output.address.payment_credential
-      no_more(own_hash, input)
-    }
-  }
-}
-```
+The inputs of interest are those residing at the script. These are identified by
+the `input.output.address.payment_credential` being equal to the script
+credential.
 
-## Solo channel
+On each call, the next own input is found, the datum coerced and extracted, and
+the relevant fields passed back (via CPS).
 
-FIXME :: The one liner is sufficient
+- yin.0 : Split next `[input, ..rest]`, else fail
+- yin.1 : If own input (on payment credential), then
+  - yin.1.0: Coerce datum.
+  - yin.1.1: Expect equal datum own hash
+  - yin 1.2: Yield address, value, constants, stage, rest
+- yin.2 : Else, recurse with rest
 
-Solo channel input:
+#### Yield out
 
-- solo.0 : Yield input (else fail - this is impossible)
-- solo.1 : If input has payment credential matching `own_cred` then
-  - solo.1.0 : Expect input output reference is `own_oref`
-  - solo.0.1 : return No more channels
+The outputs of interest are again those residing at the script, however the
+verification is more involved.
 
-```aiken
-fn solo(own_hash, own_oref, inputs) {
-  when inputs is {
-    [input, ..inputs ] -> {
-      if ScriptCredential(own_hash) == inputs.outputs.address.payment_credential {
-        expect own_oref == inputs.output_reference
-        no_channels(own_hash, inputs)
-      }
-      solo(own_hash, own_oref, inputs)
-    }
-    [] -> fail @"impossible"
-  }
-}
-```
+An output of interest is alwasy a continuing output. It must have the same
+address, including stake part, as the corresponding input. Moreover, the
+`constants` component of the datum is also verified within the yield logic.
 
-Note that if the `own_hash` is bad, then this function fails.
+- yout.0 : Split next `[output, ..rest]`, else fail
+- yout.1 : If output has matching address, then
+  - yout.1.0: Coerce datum.
+  - yout.1.1: Expect equal datum own hash
+  - yout.1.2: Expect equal datum constants
+  - yout 1.3: Yield address, value, constants, stage, rest
+- yout.2 : Else, recurse with rest
 
-## Steps
+### Assets
+
+The current version of konduit supports only Ada.
+
+Input amounts are found "permissively", while output amounts are "strict".
+
+## Steps (aka BL Specific)
+
+The BL agnostic part provides the correct execution context for the "do step"
+logic. The "do step" context provides the following arguments:
+
+- `constants`, `c` - Channel constants
+- `stage_in`, `s_in` - the stage of the input
+- `value_in`, `v_in` - the value of the input
+- `stage_out`, `s_out` - the stage of the continuing output
+- `value_out`, `v_out` - the value of the continuing output
+- Additional arguments from the redeemer if relevant
+
+Every step "returns" (via CPS) three values:
+`verification_key, lower_bound, upper_bound`. The time bounds are optional and
+only relevant in some steps.
+
+These are aggregated over all channels in the transaction. It is then verified
+that the transaction has the necessary required signers, and the validity range
+is within the bounds required by the steps. This is handled by the BL agnostic
+part.
+
+Throughout we use the following conventions:
+
+- Field names as variable names
+- A trailing slash on variable `var_` is used to indicate that there is an
+  expect equals on the variable of the variable (without trailing slash) ie
+  `expect var == var_`
 
 Recall that the open step does not correspond to a spend of a channel. Thus it
 does not appear here.
 
-The step context:
-
-- `stage` - the stage of either from input channel or continuing output
-- `funds` - the funds of the channel equal to amount of currency in the value
-- `signers`
-- `upper_bound`
-- `lower_bound`
-
 ### Add
 
-Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
-
-- add.0 : Stage in is opened : `stage_in = Opened(subbed)`
-- add.1 : Consumer has signed
-- add.2 : Stage out is equal to stage in `stage_out == stage_in`
-- add.3 : Funds increased `funds_in` < `funds_out`
+- add.0 : Stage in is opened : `Opened(subbed)`
+- add.1 : Stage out is equal to stage in `stage_out == stage_in`
+- add.2 : Funds increased `value_in` < `value_out`
+- add.3 : Return `(add_vkey, None, None)`
 
 ### Sub
 
-Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
+Redeemer arguments: `receipt`
 
-Redeemer params: `receipt`
-
-- sub.0 : Stage in is opened : `stage_in = Opened(subbed_in)`
-- sub.0 : Adaptor has signed
-- sub.1 : Stage out is opened : `stage_out = Opened(subbed_out)`
-- sub.2 : Funds decrease by `subbed = funds_in - funds_out`
+- sub.0 : Stage in is opened : `Opened(subbed_in)`
+- sub.1 : Stage out is opened : `Opened(subbed_out)`
+- sub.2 : Funds decrease by `subbed = value_in - value_out`
 - sub.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
-- sub.4 : receipt is well formed with amount `owed`
+- sub.4 : `(owed, mbound) = account_receipt(receipt)` is well-formed.
 - sub.5 : `owed >= subbed_out`
+- sub.6 : Return `(sub_vkey, None, mbound)`
 
 ### Close
 
-Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`,
-`funds_out`
-
-- close.0 : Stage in is opened : `stage_in = Opened(subbed)`
-- close.0 : Consumer has signed
-- close.0 : Stage out is closed : `stage_out = Closed(subbed_, elapse_at)`
-- close.0 : Funds unchanged
-- close.2 : Expire at respects the respond period :
-  `elapse_at >= upper_bound + close_period`
+- close.0 : Stage in is opened : `Opened(subbed)`
+- close.1 : Stage out is closed : `Closed(subbed_, elapse_at)`
+- close.2 : Funds unchanged
+- close.3 : Return `(add_vkey, None, Some(elapse_at - close_period))`
 
 ### Respond
 
-Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
+Redeemer params: `m_receipt`
 
-Redeemer params: `final_receipt`
-
-- respond.0 : Stage in is closed : `stage_in = Closed(subbed, _)`
-- respond.0 : Adaptor has signed
-- respond.1 : Stage out is opened : `stage_out = Responded(pend)`
-- respond.2 : Funds decrease by `subbed = funds_in - funds_out`
+- respond.0 : Stage in is closed : `Closed(subbed, _)`
+- respond.1 : Stage out is responded : `Responded(p_amount, pendings)`
+- respond.2 : Funds decrease by `subbed = value_in - value_out`
 - respond.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
-- respond.4 : final receipt is well formed
-- respond.5 : receipt is well formed with amount `owed`, and pending `pend`
+- respond.4 : `(owed, mbound) = account_m(receipt, p_amount, pendings)`
 - respond.6 : `owed >= subbed_out`
+- respond.3 : Return `(sub_vkey, None, mbound)`
 
 ### Unlock
 
-Context : `signers`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
+Redeemer params: `unpends`
 
-Redeemer params: `secrets`
-
-- unlock.0 : Stage in is responded : `stage_in = Responded(pend_in)`
-- unlock.0 : Adaptor has signed
-- unlock.1 : Stage out is responded : `stage_out = Responded(pend_out)`
-- unlock.2 : Funds decrease by `subbed = funds_in - funds_out`
-- unlock.3 : Secrets are well formed, and total `owed`
-- unlock.4 : `owed >= subbed`
-- unlock.5 : `pend_out` is `pend_in` adjusted for items in `secrets` being
+- unlock.0 : Stage in is responded :
+  `stage_in = Responded(pends_amount_in, pends_in)`
+- unlock.1 : Adaptor has signed
+- unlock.2 : Stage out is responded :
+  `stage_out = Responded(pends_amount_out, pends_out)`
+- unlock.3 : Funds decrease by `subbed = value_in - value_out`
+- unlock.4 : Secrets are well-formed, and total `owed`
+- unlock.5 : `owed >= subbed`
+- unlock.6 : `pend_out` is `pend_in` adjusted for items in `unpends` being
   dropped, where each item has had secret revealed
+
+#### Notes
+
+Secrets must be 32 bytes. We abuse the type system in order to instruct the
+validator to continue or unlock a pend cheque using a bytearray. Namely:
+
+- `[]` : Continue pend cheque
+- `<secret>` : 32 bytes unlocking current pend cheque.
+
+We allow only each party to withdraw their own funds.
 
 ### Expire
 
-Context : `signers`, `lower_bound`, `stage_in`, `funds_in`, `stage_out`,
-`funds_out`
+Context : `signers`, `lower_bound`, `stage_in`, `value_in`, `stage_out`,
+`value_out`
 
 Redeemer params: `expired`
 
-- expire.0 : Stage in is responded : `stage_in = Responded(pend_in)`
+- expire.0 : Stage in is responded :
+  `stage_in = Responded(pends_amount_in, pends_in)`
 - expire.1 : Consumer has signed
-- expire.2 : Stage out is responded `stage_out = Responded(pend_out)`
+- expire.2 : Stage out is responded
+  `stage_out = Responded(pends_amount_out, pends_out)`
 - expire.3 : Each item in `expired` corresponds to pending cheque that has
   expired : `<= lower_bound`
 - expire.4 : `pend_out` is `pend_in` adjusted for items in `expired` being
   dropped,
-- expire.5 : Funds out (locked) is `>= pend_out.total`
+- expire.5 : Funds out (locked) is `>= pend_ou`
+
+We use the same logic as Unlock in the use of bytestrings to indicate continue
+if empty, else expire.
 
 ### End
 
@@ -697,8 +771,6 @@ Context : `signers`, `lower_bound`, `stage_in`
 - elapse.0 : Stage in is Closed : `stage_in = Closed(_, elapse_at)`
 - elapse.1 : Consumer has signed
 - elapse.2 : Respond period has expired : `elapse_at <= lower_bound`.
-
-## Auxiliary functions
 
 # Txs
 
@@ -1028,9 +1100,9 @@ flowchart LR
 
     i_channel_0 -->|Main:steps| m --> o_channel_0
     m --> o_adaptor_0
-    i_channel_1 -->|Batch| m --> o_channel_1
-    i_channel_2 -->|Batch| m --> o_channel_2
-    i_channel_3 -->|Batch| m --> o_channel_3
+    i_channel_1 -->|Defer| m --> o_channel_1
+    i_channel_2 -->|Defer| m --> o_channel_2
+    i_channel_3 -->|Defer| m --> o_channel_3
     m --> o_adaptor_1
 ```
 
@@ -1091,7 +1163,7 @@ preventing the output of an arbitrary UTXO to the script address. A bad own hash
 can occur.
 
 Adaptor must not consider channels that are ill-formed. An ill-formed channel
-can be spent with `Main` or `Batch`, potentially bypassing any verification
+can be spent with `Main` or `Defer`, potentially bypassing any verification
 steps, since it will not identify channel inputs correctly.
 
 Suppose we have a channel with incorrect `own_hash`. We say it is ill formed.
@@ -1111,11 +1183,11 @@ When well-formed, ill-formed redeemers are:
    does not impact the verification applied to the well-formed input. In
    addition, note that a continuing output of the ill-formed input will result
    in the correct `own_hash`, since this comes from the well-formed input.
-4. (Batch, Main): This is possible, however only if the well-formed input logic
+4. (Defer, Main): This is possible, however only if the well-formed input logic
    identifies a different input as main. Imporantly, this cannot be the
    ill-formed input in question, since the main `own_hash` is verified by each
-   batch input. This correct main input must be spent with `Main` redeemer since
-   `Mutual` and `Batch` will both fail. This recovers the case above.
+   defer input. This correct main input must be spent with `Main` redeemer since
+   `Mutual` and `Defer` will both fail. This recovers the case above.
 
 It follows that such an input exists only when a consumer has spent their own
 funds,  
@@ -1126,13 +1198,13 @@ consumers safe from themselves.
 
 ### WHI: No main
 
-What if there is a transaction with batch spends but no main. This is
+What if there is a transaction with defer spends but no main. This is
 impossible. This is touched on above.
 
-Any batch inputs will identify a (the) main. This input cannot be spent with
-batch since it would identify itself as main. This input can be spent with
+Any defer inputs will identify a (the) main. This input cannot be spent with
+defer since it would identify itself as main. This input can be spent with
 mutual, but only if there are no other inputs from script. In particular no
-batch inputs. Thus, as long as there is one batch input, there must be a main
+defer inputs. Thus, as long as there is one defer input, there must be a main
 input.
 
 ### WHI: Many mains
