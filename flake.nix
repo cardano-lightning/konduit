@@ -53,25 +53,24 @@
           treefmt.enable = true;
         };
         # NOTE: You can also use `config.pre-commit.devShell`
-        devShells.default =
-          pkgs.mkShell {
-            nativeBuildInputs = [
-              config.treefmt.build.wrapper
-            ];
-            shellHook = ''
-              ${config.pre-commit.installationScript}
-              echo 1>&2 "Welcome to the development shell!"
-            '';
-            name = "konduit-shell";
-            # Let's keep this "path discovery techinque" here for refernece:
-            # (builtins.trace (builtins.attrNames inputs.cardano-addresses.packages.${system}) inputs.cardano-cli.packages)
-            packages = [
-              inputs'.aiken.packages.aiken
-              pkgs.yarn
-              pkgs.nodePackages_latest.nodejs
-            ];
-          }
-          // self'.devShells.rust;
+        devShells.default = pkgs.mkShell {
+          nativeBuildInputs = [
+            config.treefmt.build.wrapper
+            config.devShells.rust.nativeBuildInputs
+          ];
+          shellHook = ''
+            ${config.pre-commit.installationScript}
+            echo 1>&2 "Welcome to the development shell!"
+          '';
+          name = "konduit-shell";
+          # Let's keep this "path discovery techinque" here for refernece:
+          # (builtins.trace (builtins.attrNames inputs.cardano-addresses.packages.${system}) inputs.cardano-cli.packages)
+          packages = [
+            inputs'.aiken.packages.aiken
+            pkgs.yarn
+            pkgs.nodePackages_latest.nodejs
+          ];
+        };
       };
       flake = {};
     };
