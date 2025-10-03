@@ -1,1 +1,1 @@
-export * from './quote.mjs';
+export * from "./quote.mjs";
