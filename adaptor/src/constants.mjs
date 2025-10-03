@@ -6,4 +6,3 @@ export const HEADERS = {
   CONTENT_TYPE: "Content-Type",
   GRPC_METADATA_MACAROON: "Grpc-Metadata-Macaroon",
 };
-

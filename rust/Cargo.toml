@@ -1,0 +1,21 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+description = "Konduit tools and other things"
+documentation = "https://github.com/cardano-lightning/konduit"
+version = "0.0.0"
+edition = "2024"
+repository = "https://github.com/cardano-lightning/konduit"
+homepage = "https://github.com/cardano-lightning/konduit"
+# license = "Apache-2.0" // TBC
+authors = [
+    "waalge",
+    "KtorZ <matthias.benkort@gmail.com>",
+]
+rust-version = "1.90.0"
+
+[workspace.metadata.release]
+shared-version = true
+tag-name = "v{{version}}"

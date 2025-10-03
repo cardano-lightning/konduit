@@ -9,6 +9,7 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     aiken.url = "github:aiken-lang/aiken";
+    rust-flake.url = "github:juspay/rust-flake/";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -17,6 +18,8 @@
       imports = [
         inputs.git-hooks-nix.flakeModule
         inputs.treefmt-nix.flakeModule
+        inputs.rust-flake.flakeModules.default
+        inputs.rust-flake.flakeModules.nixpkgs
       ];
       systems = ["x86_64-linux" "aarch64-darwin"];
       perSystem = {
@@ -27,6 +30,11 @@
         system,
         ...
       }: {
+        rust-project = {
+          src = ./rust;
+          cargoToml = builtins.fromTOML (builtins.readFile ./rust/Cargo.toml);
+          toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust/rust-toolchain.toml;
+        };
         treefmt = {
           projectRootFile = "flake.nix";
           flakeFormatter = true;
@@ -45,23 +53,25 @@
           treefmt.enable = true;
         };
         # NOTE: You can also use `config.pre-commit.devShell`
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = [
-            config.treefmt.build.wrapper
-          ];
-          shellHook = ''
-            ${config.pre-commit.installationScript}
-            echo 1>&2 "Welcome to the development shell!"
-          '';
-          name = "konduit-shell";
-          # Let's keep this "path discovery techinque" here for refernece:
-          # (builtins.trace (builtins.attrNames inputs.cardano-addresses.packages.${system}) inputs.cardano-cli.packages)
-          packages = [
-            inputs'.aiken.packages.aiken
-            pkgs.yarn
-            pkgs.nodePackages_latest.nodejs
-          ];
-        };
+        devShells.default =
+          pkgs.mkShell {
+            nativeBuildInputs = [
+              config.treefmt.build.wrapper
+            ];
+            shellHook = ''
+              ${config.pre-commit.installationScript}
+              echo 1>&2 "Welcome to the development shell!"
+            '';
+            name = "konduit-shell";
+            # Let's keep this "path discovery techinque" here for refernece:
+            # (builtins.trace (builtins.attrNames inputs.cardano-addresses.packages.${system}) inputs.cardano-cli.packages)
+            packages = [
+              inputs'.aiken.packages.aiken
+              pkgs.yarn
+              pkgs.nodePackages_latest.nodejs
+            ];
+          }
+          // self'.devShells.rust;
       };
       flake = {};
     };
