@@ -9,7 +9,7 @@ version = "0.0.0"
 edition = "2024"
 repository = "https://github.com/cardano-lightning/konduit"
 homepage = "https://github.com/cardano-lightning/konduit"
-# license = "Apache-2.0" // TBC
+license = "MPL-2.0"
 authors = [
     "waalge",
     "KtorZ <matthias.benkort@gmail.com>",
@@ -19,3 +19,18 @@ rust-version = "1.90.0"
 [workspace.metadata.release]
 shared-version = true
 tag-name = "v{{version}}"
+
+[workspace.dependencies]
+anyhow = "1.0.100"
+bech32 = "0.11.0"
+cryptoxide = "0.5.1"
+hex = "0.4.3"
+itertools = "0.14.0"
+minicbor = { version = "0.25.1", features = ["alloc", "derive"] }
+num = "0.4.3"
+num-bigint = "0.4.6"
+pallas-addresses = "0.33.0"
+pallas-codec = "0.33.0"
+pallas-crypto = "0.33.0"
+pallas-primitives = "0.33.0"
+uplc = "1.1.19"
