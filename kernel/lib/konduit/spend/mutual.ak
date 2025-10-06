@@ -4,11 +4,9 @@ use cardano/address.{Address}
 use cardano/transaction.{Input, Output, OutputReference, Transaction}
 use konduit/types as t
 
-/// ### Mutual
-/// 
 /// A channel can be spent by mutual consent with no further verification on the
 /// channel itself. In such cases, it is spent with the `Mutual` redeemer. To prevent
-/// exploits, and by the way `Batch` and `Main` interplay, we prevent any other
+/// exploits, and by the way `Defer` and `Main` interplay, we prevent any other
 /// channels spent alongside a `Mutual` spend.
 pub fn handle(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
   let (_, constants, _) = datum
