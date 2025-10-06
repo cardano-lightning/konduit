@@ -47,6 +47,8 @@
               };
             };
             alejandra.enable = true;
+            rustfmt.enable = true;
+            aiken.enable = true;
           };
         };
         pre-commit.settings.hooks = {

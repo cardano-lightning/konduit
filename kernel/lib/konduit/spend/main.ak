@@ -8,13 +8,13 @@ use extra/xtime
 use konduit/io.{yield_in, yield_out}
 use konduit/prelude.{Timestamp}
 use konduit/steps/add
-use konduit/steps/sub
 use konduit/steps/close
-use konduit/steps/respond
-use konduit/steps/unlock
-use konduit/steps/expire
-use konduit/steps/end
 use konduit/steps/elapse
+use konduit/steps/end
+use konduit/steps/expire
+use konduit/steps/respond
+use konduit/steps/sub
+use konduit/steps/unlock
 use konduit/types as t
 
 /// ### Main
