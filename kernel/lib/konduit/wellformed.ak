@@ -1,6 +1,4 @@
-use aiken/builtin.{
-  append_bytearray, sha2_256, verify_ed25519_signature,
-}
+use aiken/builtin.{append_bytearray, sha2_256, verify_ed25519_signature}
 use aiken/cbor
 use aiken/crypto.{Signature, VerificationKey}
 use aiken/primitive/bytearray

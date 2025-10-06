@@ -1,12 +1,12 @@
+use aiken/builtin.{head_list, sha2_256, tail_list}
 use aiken/primitive/bytearray
-use aiken/builtin.{head_list, tail_list, sha2_256}
 use cardano/assets.{Value}
 use extra/xlist.{foldl4}
-use konduit/prelude.{Timestamp, Amount}
+use extra/xoption
 use konduit/assets.{amount_in, amount_out} as k_assets
+use konduit/prelude.{Amount, Timestamp}
 use konduit/steps/common.{Return}
 use konduit/types as t
-use extra/xoption
 
 pub fn do(
   constants: t.Constants,
