@@ -2,26 +2,25 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Address, Value, cbor, pallas};
-use std::{borrow::Cow, ops::Deref};
+use crate::{Address, Value, address, cbor, pallas};
+use std::borrow::Cow;
 
 #[derive(Debug)]
-#[repr(transparent)]
-pub struct Output<'a>(Cow<'a, (Address, Value<u64>)>);
+pub struct Output<'a>(Address<'static, address::Any>, Cow<'a, Value<u64>>);
 
 // -------------------------------------------------------------------- Building
 
 impl<'a> Output<'a> {
-    pub fn new(address: Address, value: Value<u64>) -> Self {
-        Self(Cow::Owned((address, value)))
+    pub fn new(address: Address<'static, address::Any>, value: Value<u64>) -> Self {
+        Self(address, Cow::Owned(value))
     }
 
-    pub fn address(&self) -> &Address {
-        &self.0.0
+    pub fn address(&'a self) -> Address<'a, address::Any> {
+        self.0.borrow()
     }
 
     pub fn value(&self) -> &Value<u64> {
-        &self.0.1
+        &self.1
     }
 }
 
@@ -45,18 +44,17 @@ impl TryFrom<&pallas::TransactionOutput> for Output<'static> {
             pallas::TransactionOutput::PostAlonzo(modern) => Value::from(&modern.value),
         };
 
-        Ok(Output(Cow::Owned((address, value))))
+        Ok(Output(address, Cow::Owned(value)))
     }
 }
 
 // -------------------------------------------------------------- Converting (to)
 
 impl<'a> From<&Output<'a>> for pallas::TransactionOutput {
-    fn from(this: &Output<'a>) -> Self {
-        let (address, value) = this.0.deref();
+    fn from(Output(address, value): &Output<'a>) -> Self {
         pallas::TransactionOutput::PostAlonzo(pallas::PostAlonzoTransactionOutput {
             address: pallas::Bytes::from(<Vec<u8>>::from(address)),
-            value: pallas::Value::from(value),
+            value: pallas::Value::from(value.as_ref()),
             datum_option: None,
             script_ref: None,
         })

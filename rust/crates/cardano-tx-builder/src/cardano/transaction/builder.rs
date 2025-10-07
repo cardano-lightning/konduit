@@ -3,8 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    ExecutionUnits, Hash, Input, Output, ProtocolParameters, RedeemerPointer, Transaction, Value,
-    cbor, pallas,
+    Address, ExecutionUnits, Hash, Input, Output, ProtocolParameters, RedeemerPointer, Transaction,
+    Value, cbor, pallas,
 };
 use anyhow::anyhow;
 use std::collections::BTreeMap;
@@ -242,7 +242,10 @@ fn set_collateral_return(
     utxo: &BTreeMap<Input<'_>, Output<'_>>,
     params: &ProtocolParameters,
 ) -> anyhow::Result<()> {
-    let (mut total_collateral_value, opt_return_address) = tx
+    let (mut total_collateral_value, opt_return_address): (
+        Value<u64>,
+        Option<Address<'static, _>>,
+    ) = tx
         .collaterals()
         .iter()
         .map(|input| {
@@ -258,7 +261,10 @@ fn set_collateral_return(
                 // destination of the collateral change. Collaterals can't be script, so this is
                 // relatively safe as the ledger enforces that the key is known at the time the
                 // transaction is constructed.
-                Ok::<_, anyhow::Error>((total, address.or_else(|| Some(output.address().clone()))))
+                Ok::<_, anyhow::Error>((
+                    total,
+                    address.or_else(|| Some(output.address().to_owned())),
+                ))
             },
         )?;
 

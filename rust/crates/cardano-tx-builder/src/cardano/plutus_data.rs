@@ -2,14 +2,16 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::pallas;
+use crate::{cbor, pallas};
 use num::ToPrimitive;
 use num_bigint::BigInt;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PlutusData(pallas::PlutusData);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
+#[repr(transparent)]
+#[cbor(transparent)]
+pub struct PlutusData(#[n(0)] pallas::PlutusData);
 
-// ----------------------------------------------------------- PlutusData
+// -------------------------------------------------------------------- Building
 
 impl PlutusData {
     pub fn integer(i: BigInt) -> Self {

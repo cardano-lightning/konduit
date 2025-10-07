@@ -88,7 +88,10 @@ impl Transaction {
             .into_iter()
             .enumerate()
             .filter_map(|(index, input)| Some((index, utxo.get(&input)?)))
-            .filter_map(|(index, output)| Some((index, output.address().payment_script()?)))
+            .filter_map(|(index, output)| {
+                let payment_credential = output.address().as_shelley()?.payment_credential();
+                Some((index, payment_credential.as_script()?))
+            })
             .map(|(index, hash)| (RedeemerPointer::spend(index as u32), hash));
 
         let from_mint = self

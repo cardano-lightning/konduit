@@ -3,9 +3,11 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 pub mod address;
+pub mod credential;
 pub mod execution_units;
 pub mod hash;
 pub mod input;
+pub mod network_id;
 pub mod output;
 pub mod plutus_data;
 pub mod plutus_script;

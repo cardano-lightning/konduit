@@ -10,10 +10,12 @@ pub use cardano::{
     //
     // NOTE: This main function of this comment is to force the formatter to put one import per
     // line in the following import list; making diffs and extensions easier.
-    address::Address,
+    address::{self, Address},
+    credential::Credential,
     execution_units::ExecutionUnits,
     hash::Hash,
     input::Input,
+    network_id::NetworkId,
     output::Output,
     plutus_data::PlutusData,
     plutus_script::PlutusScript,
