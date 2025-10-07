@@ -1,9 +1,9 @@
-# Cardano tx builder 
+# Cardano tx builder
 
 > The bits of cardano we need for konduit. No more, no less.
 
-## Aims 
+## Aims
 
-- Provide an ergonomic interface for handling cardano data. 
+- Provide an ergonomic interface for handling cardano data.
 - Contain nothing konduit specific.
 - Downstream Konduit tools depend on this crate, and not any pallas crate.
