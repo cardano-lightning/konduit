@@ -134,14 +134,29 @@ impl Transaction {
         Ok(self)
     }
 
-    pub fn with_inputs<'a>(&mut self, inputs: impl IntoIterator<Item = Input<'a>>) -> &mut Self {
+    pub fn with_inputs<'a>(
+        &mut self,
+        inputs: impl IntoIterator<Item = (Input<'a>, Option<PlutusData>)>,
+    ) -> &mut Self {
+        let mut redeemers = BTreeMap::new();
+
         self.inner.transaction_body.inputs = pallas::Set::from(
             inputs
                 .into_iter()
                 .sorted()
-                .map(pallas::TransactionInput::from)
+                .enumerate()
+                .map(|(ix, (input, redeemer))| {
+                    if let Some(data) = redeemer {
+                        redeemers.insert(RedeemerPointer::spend(ix as u32), data);
+                    }
+
+                    pallas::TransactionInput::from(input)
+                })
                 .collect::<Vec<_>>(),
         );
+
+        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Spend), redeemers);
+
         self
     }
 
@@ -191,42 +206,14 @@ impl Transaction {
 
         self.inner.transaction_body.mint = <Option<pallas::Multiasset<_>>>::from(&value);
 
-        self.with_mint_redeemers(redeemers)
+        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Mint), redeemers);
+
+        self
     }
 
     pub fn with_fee(&mut self, fee: u64) -> &mut Self {
         self.inner.transaction_body.fee = fee;
         self
-    }
-
-    pub fn with_redeemers(
-        &mut self,
-        redeemers: impl IntoIterator<
-            Item = (
-                Box<dyn Fn(&Self) -> anyhow::Result<RedeemerPointer>>,
-                PlutusData,
-            ),
-        >,
-    ) -> anyhow::Result<&mut Self> {
-        let resolved_redeemers = redeemers
-            .into_iter()
-            .map(|(lookup, data)| {
-                let key = pallas::RedeemersKey::from(lookup(self)?);
-
-                let value = pallas::RedeemersValue {
-                    data: pallas::PlutusData::from(data),
-                    ex_units: pallas::ExUnits::from(ExecutionUnits::default()),
-                };
-
-                Ok((key, value))
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        self.inner.transaction_witness_set.redeemer =
-            pallas::NonEmptyKeyValuePairs::from_vec(resolved_redeemers)
-                .map(pallas::Redeemers::from);
-
-        Ok(self)
     }
 
     pub fn with_plutus_scripts(
@@ -281,9 +268,7 @@ impl Transaction {
 impl Transaction {
     fn with_change(&mut self, change: Value<u64>) -> anyhow::Result<()> {
         let min_change_value = Output::new(Address::default(), change.clone())
-            .value()
-            .deref()
-            .as_ref()
+            .min_acceptable_value()
             .lovelace();
 
         if change.lovelace() < min_change_value {
@@ -310,8 +295,9 @@ impl Transaction {
         Ok(())
     }
 
-    fn with_mint_redeemers(
+    fn with_redeemers(
         &mut self,
+        discard_if: impl Fn(pallas::RedeemerTag) -> bool,
         redeemers: BTreeMap<RedeemerPointer, PlutusData>,
     ) -> &mut Self {
         let redeemers = into_pallas_redeemers(redeemers);
@@ -319,10 +305,7 @@ impl Transaction {
         let new_redeemers = if let Some(existing_redeemers) =
             mem::take(&mut self.inner.transaction_witness_set.redeemer)
         {
-            let existing_redeemers = without_existing_redeemers(existing_redeemers, |tag| {
-                matches!(tag, pallas::RedeemerTag::Mint)
-            });
-
+            let existing_redeemers = without_existing_redeemers(existing_redeemers, discard_if);
             Box::new(existing_redeemers.chain(redeemers))
                 as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
         } else {

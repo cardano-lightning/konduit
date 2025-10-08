@@ -438,7 +438,8 @@ mod tests {
             input!(
                 "32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c",
                 1
-            ),
+            )
+            .0,
             output!(
                 "addr1qxjgtdjrdj05nge3v406z46yqhp7nwc744j7sju37287sfjrcq0durn7xns7whpp6mymksagz9msf08qxqfakhc85dgq9pynjj",
                 value!(
@@ -499,7 +500,8 @@ mod tests {
             input!(
                 "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
                 0
-            ),
+            )
+            .0,
             output!(
                 "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
                 value!(102049379)
@@ -512,7 +514,7 @@ mod tests {
                     input!("d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50", 0),
                 ])
                 .with_collaterals(vec![
-                    input!("d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50", 0),
+                    input!("d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50", 0).0,
                 ])
                 .with_change_strategy(ChangeStrategy::as_last_output(
                     address!(
@@ -578,7 +580,8 @@ mod tests {
             input!(
                 "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
                 1
-            ),
+            )
+            .0,
             output!(
                 "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
                 value!(47321123),
@@ -603,8 +606,11 @@ mod tests {
         assert_eq!(
             hex::encode(pay_to_script.to_cbor()),
             "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
-             2fea7b9da6e490324010181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
-             f872f57f6d3a1ffa0eb777011a000cd302021a000282b5a0f5f6"
+             2fea7b9da6e490324010182a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
+             f872f57f6d3a1ffa0eb777011a000cd302a20058390082c1729d5fd44124a6ae72b\
+             cdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7c\
+             d277d73468d3b2fca56572011a02c2aee8021a00028e39a0f5f6",
+            "pay-to-script no longer match its golden value"
         );
 
         utxo = BTreeMap::from([(
@@ -616,17 +622,25 @@ mod tests {
             let change_address = script_address.clone();
             let change_script = script.clone();
 
-            tx.with_inputs(utxo.keys().cloned())
-                .with_change_strategy(ChangeStrategy::new(move |change, outputs| {
-                    outputs.push_back(
-                        output!(change_address, change).with_plutus_script(change_script.clone()),
-                    );
-                    Ok(())
-                }))
-                .ok()
+            tx.with_inputs(vec![(
+                Input::new(pay_to_script.id(), 0),
+                Some(PlutusData::list(vec![])),
+            )])
+            .with_change_strategy(ChangeStrategy::new(move |change, outputs| {
+                outputs.push_back(
+                    output!(change_address, change).with_plutus_script(change_script.clone()),
+                );
+                Ok(())
+            }))
+            .with_plutus_scripts(vec![script.clone()])
+            .ok()
         })
         .unwrap();
 
-        assert_eq!(hex::encode(deploy_script.to_cbor()), "");
+        assert_eq!(
+            hex::encode(deploy_script.to_cbor()),
+            "",
+            "deploy-script no longer match its golden value",
+        );
     }
 }

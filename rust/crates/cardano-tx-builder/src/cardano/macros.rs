@@ -1,7 +1,17 @@
 #[macro_export]
 macro_rules! input {
     ($tx_hex:expr, $index:expr $(,)?) => {
-        $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index)
+        (
+            $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index),
+            None::<$crate::PlutusData>,
+        )
+    };
+
+    ($tx_hex:expr, $index:expr, $redeemer:expr $(,)?) => {
+        (
+            $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index),
+            Some($redeemer),
+        )
     };
 }
 
