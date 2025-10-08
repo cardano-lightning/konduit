@@ -21,6 +21,14 @@ impl<Q> Value<Q> {
     pub fn lovelace(&self) -> u64 {
         self.0
     }
+
+    pub fn assets(&self) -> &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>> {
+        &self.1
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lovelace() == 0 && self.assets().is_empty()
+    }
 }
 
 // -------------------------------------------------------------------- Building
@@ -54,11 +62,13 @@ impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
                 .or_insert(assets.clone());
         }
 
+        prune_null_values(&mut self.1);
+
         self
     }
 
     pub fn checked_sub(&mut self, rhs: &Self) -> anyhow::Result<&mut Self> {
-        self.0.checked_sub(rhs.0).ok_or_else(|| {
+        self.0 = self.0.checked_sub(rhs.0).ok_or_else(|| {
             anyhow!("insufficient lhs lovelace")
                 .context(format!("lhs = {}, rhs = {}", self.0, rhs.0))
         })?;
@@ -80,7 +90,7 @@ impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
                                     )));
                             }
                             btree_map::Entry::Occupied(mut q) => {
-                                q.get_mut().checked_sub(quantity).ok_or_else(|| {
+                                *q.get_mut() = q.get().checked_sub(quantity).ok_or_else(|| {
                                     anyhow!("insufficient lhs asset: insufficient quantity")
                                         .context(format!(
                                             "policy={:?}, asset_name={:?}",
@@ -98,6 +108,8 @@ impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
                 }
             }
         }
+
+        prune_null_values(&mut self.1);
 
         Ok(self)
     }
@@ -165,32 +177,42 @@ impl From<&pallas::Value> for Value<u64> {
             pallas_primitives::conway::Value::Coin(lovelace) => {
                 Self(*lovelace, BTreeMap::default())
             }
-            pallas_primitives::conway::Value::Multiasset(lovelace, assets) => Self(
-                *lovelace,
-                assets
-                    .iter()
-                    .map(|(policy, inner)| {
-                        (
-                            Hash::from(policy),
-                            inner
-                                .iter()
-                                .map(|(asset_name, quantity)| {
-                                    (asset_name.to_vec(), u64::from(quantity))
-                                })
-                                .collect(),
-                        )
-                    })
-                    .collect(),
-            ),
+            pallas_primitives::conway::Value::Multiasset(lovelace, assets) => {
+                Self(*lovelace, from_multiasset(assets, |q| u64::from(q)))
+            }
         }
     }
+}
+
+impl From<&pallas::Multiasset<pallas::NonZeroInt>> for Value<i64> {
+    fn from(assets: &pallas::Multiasset<pallas::NonZeroInt>) -> Self {
+        Self(0, from_multiasset(assets, |q| i64::from(q)))
+    }
+}
+
+fn from_multiasset<Q: Copy, P: Copy>(
+    assets: &pallas::Multiasset<P>,
+    from_quantity: impl Fn(&P) -> Q,
+) -> BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>> {
+    assets
+        .iter()
+        .map(|(policy, inner)| {
+            (
+                Hash::from(policy),
+                inner
+                    .iter()
+                    .map(|(asset_name, quantity)| (asset_name.to_vec(), from_quantity(quantity)))
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 // -------------------------------------------------------------- Converting (to)
 
 impl From<&Value<u64>> for pallas::Value {
     fn from(Value(lovelace, assets): &Value<u64>) -> Self {
-        from_multiasset(assets, |quantity: &u64| {
+        into_multiasset(assets, |quantity: &u64| {
             pallas::PositiveCoin::try_from(*quantity).ok()
         })
         .map(|assets| pallas::Value::Multiasset(*lovelace, assets))
@@ -200,7 +222,7 @@ impl From<&Value<u64>> for pallas::Value {
 
 impl From<&Value<i64>> for Option<pallas::Multiasset<pallas::NonZeroInt>> {
     fn from(Value(_, assets): &Value<i64>) -> Self {
-        from_multiasset(assets, |quantity: &i64| {
+        into_multiasset(assets, |quantity: &i64| {
             pallas::NonZeroInt::try_from(*quantity).ok()
         })
     }
@@ -208,7 +230,7 @@ impl From<&Value<i64>> for Option<pallas::Multiasset<pallas::NonZeroInt>> {
 
 /// Convert a multi-asset map into a Pallas' Multiasset. Returns 'None' when empty once pruned of
 /// any null quantities values.
-fn from_multiasset<Q: Copy, P: Copy>(
+fn into_multiasset<Q: Copy, P: Copy>(
     assets: &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>,
     from_quantity: impl Fn(&Q) -> Option<P>,
 ) -> Option<pallas::Multiasset<P>> {
@@ -247,5 +269,33 @@ impl<'d, C> cbor::Decode<'d, C> for Value<u64> {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         let value: pallas::Value = d.decode_with(ctx)?;
         Ok(Self::from(&value))
+    }
+}
+
+// -------------------------------------------------------------------- Internal
+
+fn prune_null_values<Q: Zero>(value: &mut BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>) {
+    let mut policies_to_remove = Vec::new();
+
+    for (policy, assets) in value.iter_mut() {
+        let mut assets_to_remove = Vec::new();
+
+        for (asset_name, quantity) in assets.iter() {
+            if quantity.is_zero() {
+                assets_to_remove.push(asset_name.clone());
+            }
+        }
+
+        for asset_name in assets_to_remove {
+            assets.remove(&asset_name);
+        }
+
+        if assets.is_empty() {
+            policies_to_remove.push(*policy)
+        }
+    }
+
+    for policy in policies_to_remove {
+        value.remove(&policy);
     }
 }

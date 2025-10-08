@@ -5,7 +5,7 @@
 #[derive(Debug)]
 pub struct ProtocolParameters {
     /// Multiplier coefficient on fee, in lovelace/bytes
-    fee_coefficient: u64,
+    fee_per_byte: u64,
 
     /// Flat/fixed fee, in lovelace
     fee_constant: u64,
@@ -29,13 +29,14 @@ pub struct ProtocolParameters {
     first_shelley_slot: u64,
 }
 
-type PlutusV3CostModel = [i64; 251];
+type PlutusV3CostModel = [i64; 297];
 
 // ------------------------------------------------------------------ Inspecting
 
 impl ProtocolParameters {
-    pub fn fee(&self) -> (u64, u64) {
-        (self.fee_coefficient, self.fee_constant)
+    /// Base transaction fee, computed from the size of a serialised transaction.
+    pub fn base_fee(&self, size: u64) -> u64 {
+        size * self.fee_per_byte + self.fee_constant
     }
 
     pub fn collateral_coefficient(&self) -> f64 {
@@ -60,7 +61,7 @@ impl ProtocolParameters {
 impl Default for ProtocolParameters {
     fn default() -> Self {
         Self {
-            fee_coefficient: 0,
+            fee_per_byte: 0,
             fee_constant: 0,
             price_mem: 0.0,
             price_cpu: 0.0,
@@ -74,7 +75,9 @@ impl Default for ProtocolParameters {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
             start_time: 0,
             first_shelley_slot: 0,
@@ -83,8 +86,8 @@ impl Default for ProtocolParameters {
 }
 
 impl ProtocolParameters {
-    pub fn with_fee_coefficient(mut self, fee_coefficient: u64) -> Self {
-        self.fee_coefficient = fee_coefficient;
+    pub fn with_fee_per_byte(mut self, fee_per_byte: u64) -> Self {
+        self.fee_per_byte = fee_per_byte;
         self
     }
 

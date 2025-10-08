@@ -36,6 +36,14 @@ impl Credential {
 
 // -------------------------------------------------------------------- Building
 
+impl Default for Credential {
+    fn default() -> Self {
+        Self::from_verification_key(Hash::from([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ]))
+    }
+}
+
 impl Credential {
     pub fn from_verification_key(hash: Hash<28>) -> Self {
         Self::from(pallas::StakeCredential::AddrKeyhash(pallas::Hash::from(

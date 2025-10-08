@@ -1,12 +1,74 @@
 #[macro_export]
 macro_rules! input {
     ($tx_hex:expr, $index:expr $(,)?) => {
-        $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index)
+        (
+            $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index),
+            None::<$crate::PlutusData>,
+        )
+    };
+
+    ($tx_hex:expr, $index:expr, $redeemer:expr $(,)?) => {
+        (
+            $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index),
+            Some($redeemer),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! address {
+    ($text:literal $(,)?) => {
+        $crate::Address::try_from($text).unwrap()
+    };
+
+    ($payment:expr $(,)?) => {
+        $crate::Address::new($crate::NetworkId::mainnet(), $payment)
+    };
+
+    ($network:expr, $payment:expr, $delegation: expr $(,)?) => {
+        $crate::Address<_, $crate::address::Any>::from(
+            $crate::Address::new($crate::NetworkId::mainnet(), $payment).with_delegation($delegation)
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! address_test {
+    ($text:literal $(,)?) => {
+        $crate::Address::try_from($text).unwrap()
+    };
+
+    ($payment:expr $(,)?) => {
+        $crate::Address::new($crate::NetworkId::testnet(), $payment)
+    };
+
+    ($network:expr, $payment:expr, $delegation: expr $(,)?) => {
+        $crate::Address<_, $crate::address::Any>::from(
+            $crate::Address::new($crate::NetworkId::testnet(), $payment).with_delegation($delegation)
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! script_credential {
+    ($hash:expr $(,)?) => {
+        $crate::Credential::from_script(<$crate::Hash<28>>::try_from($hash).unwrap())
+    };
+}
+
+#[macro_export]
+macro_rules! key_credential {
+    ($hash:expr $(,)?) => {
+        $crate::Credential::from_key(hex::decode($hash).unwrap())
     };
 }
 
 #[macro_export]
 macro_rules! output {
+    ($addr:expr $(,)?) => {
+        $crate::Output::to($crate::Address::try_from($addr).unwrap())
+    };
+
     ($addr:expr, $value:expr $(,)?) => {
         $crate::Output::new($crate::Address::try_from($addr).unwrap(), $value)
     };

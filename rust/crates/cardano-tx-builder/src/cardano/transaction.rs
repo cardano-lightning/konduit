@@ -3,29 +3,46 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    ExecutionUnits, Hash, Input, Output, PlutusData, PlutusScript, PlutusVersion,
-    ProtocolParameters, RedeemerPointer, Value, cbor, pallas,
+    Address, ChangeStrategy, ExecutionUnits, Hash, Input, Output, PlutusData, PlutusScript,
+    PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor, pallas,
 };
+use anyhow::anyhow;
 use itertools::Itertools;
-use std::{collections::BTreeMap, ops::Deref};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    fmt, mem,
+    ops::Deref,
+};
 
 mod builder;
 
-#[derive(Debug, cbor::Encode, cbor::Decode)]
-#[repr(transparent)]
-#[cbor(transparent)]
-pub struct Transaction(#[n(0)] pallas::Tx);
+pub struct Transaction {
+    inner: pallas::Tx,
+    change_strategy: ChangeStrategy,
+}
 
 // ------------------------------------------------------------------ Inspecting
 
+impl fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
 impl Transaction {
+    pub fn id(&self) -> Hash<32> {
+        let mut bytes = Vec::new();
+        let _ = cbor::encode(&self.inner.transaction_body, &mut bytes);
+        Hash::from(pallas::hash::Hasher::<256>::hash(&bytes))
+    }
+
     pub fn fee(&self) -> u64 {
-        self.0.transaction_body.fee
+        self.inner.transaction_body.fee
     }
 
     /// The declared transaction inputs, which are spent in case of successful transaction.
     pub fn inputs(&self) -> Vec<Input<'_>> {
-        self.0
+        self.inner
             .transaction_body
             .inputs
             .deref()
@@ -36,7 +53,7 @@ impl Transaction {
 
     /// The declared transaction collaterals, which are spent in case of failed transaction.
     pub fn collaterals(&self) -> Vec<Input<'_>> {
-        self.0
+        self.inner
             .transaction_body
             .collateral
             .as_ref()
@@ -44,15 +61,263 @@ impl Transaction {
             .unwrap_or_default()
     }
 
+    pub fn mint(&self) -> Value<i64> {
+        self.inner
+            .transaction_body
+            .mint
+            .as_ref()
+            .map(Value::from)
+            .unwrap_or_default()
+    }
+
     /// The declared transaction outputs, which are produced in case of successful transaction.
     pub fn outputs(&self) -> Vec<Output<'_>> {
-        self.0
+        self.inner
             .transaction_body
             .outputs
             .iter()
+            .cloned()
             .map(Output::try_from)
             .collect::<Result<_, _>>()
             .expect("transaction contains invalid outputs; should be impossible at this point.")
+    }
+}
+
+// -------------------------------------------------------------------- Building
+
+impl Default for Transaction {
+    fn default() -> Self {
+        Self {
+            change_strategy: ChangeStrategy::default(),
+            inner: pallas::Tx {
+                transaction_body: pallas::TransactionBody {
+                    auxiliary_data_hash: None,
+                    certificates: None,
+                    collateral: None,
+                    collateral_return: None,
+                    donation: None,
+                    fee: 0,
+                    inputs: pallas::Set::from(vec![]),
+                    mint: None,
+                    network_id: None,
+                    outputs: vec![],
+                    proposal_procedures: None,
+                    reference_inputs: None,
+                    required_signers: None,
+                    script_data_hash: None,
+                    total_collateral: None,
+                    treasury_value: None,
+                    ttl: None,
+                    validity_interval_start: None,
+                    voting_procedures: None,
+                    withdrawals: None,
+                },
+                transaction_witness_set: pallas::WitnessSet {
+                    bootstrap_witness: None,
+                    native_script: None,
+                    plutus_data: None,
+                    plutus_v1_script: None,
+                    plutus_v2_script: None,
+                    plutus_v3_script: None,
+                    redeemer: None,
+                    vkeywitness: None,
+                },
+                success: true,
+                auxiliary_data: pallas::Nullable::Null,
+            },
+        }
+    }
+}
+
+impl Transaction {
+    pub fn ok(&mut self) -> anyhow::Result<&mut Self> {
+        Ok(self)
+    }
+
+    pub fn with_inputs<'a>(
+        &mut self,
+        inputs: impl IntoIterator<Item = (Input<'a>, Option<PlutusData>)>,
+    ) -> &mut Self {
+        let mut redeemers = BTreeMap::new();
+
+        self.inner.transaction_body.inputs = pallas::Set::from(
+            inputs
+                .into_iter()
+                .sorted()
+                .enumerate()
+                .map(|(ix, (input, redeemer))| {
+                    if let Some(data) = redeemer {
+                        redeemers.insert(RedeemerPointer::spend(ix as u32), data);
+                    }
+
+                    pallas::TransactionInput::from(input)
+                })
+                .collect::<Vec<_>>(),
+        );
+
+        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Spend), redeemers);
+
+        self
+    }
+
+    pub fn with_collaterals<'a>(
+        &mut self,
+        collaterals: impl IntoIterator<Item = Input<'a>>,
+    ) -> &mut Self {
+        self.inner.transaction_body.collateral = pallas::NonEmptySet::from_vec(
+            collaterals
+                .into_iter()
+                .sorted()
+                .map(pallas::TransactionInput::from)
+                .collect::<Vec<_>>(),
+        );
+        self
+    }
+
+    pub fn with_outputs<'a>(&mut self, outputs: impl IntoIterator<Item = Output<'a>>) -> &mut Self {
+        self.inner.transaction_body.outputs = outputs
+            .into_iter()
+            .map(pallas::TransactionOutput::from)
+            .collect::<Vec<_>>();
+        self
+    }
+
+    pub fn with_change_strategy(&mut self, with: ChangeStrategy) -> &mut Self {
+        self.change_strategy = with;
+        self
+    }
+
+    pub fn with_mint(
+        &mut self,
+        mint: BTreeMap<(Hash<28>, PlutusData), BTreeMap<Vec<u8>, i64>>,
+    ) -> &mut Self {
+        let (redeemers, mint) = mint.into_iter().enumerate().fold(
+            (BTreeMap::new(), BTreeMap::new()),
+            |(mut redeemers, mut mint), (index, ((policy, data), assets))| {
+                mint.insert(policy, assets);
+
+                redeemers.insert(RedeemerPointer::mint(index as u32), data);
+
+                (redeemers, mint)
+            },
+        );
+
+        let value = Value::default().with_assets(mint);
+
+        self.inner.transaction_body.mint = <Option<pallas::Multiasset<_>>>::from(&value);
+
+        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Mint), redeemers);
+
+        self
+    }
+
+    pub fn with_fee(&mut self, fee: u64) -> &mut Self {
+        self.inner.transaction_body.fee = fee;
+        self
+    }
+
+    pub fn with_plutus_scripts(
+        &mut self,
+        scripts: impl IntoIterator<Item = PlutusScript>,
+    ) -> &mut Self {
+        let (v1, v2, v3) = scripts.into_iter().fold(
+            (vec![], vec![], vec![]),
+            |(mut v1, mut v2, mut v3), script| {
+                match script.version() {
+                    PlutusVersion::V1 => {
+                        if let Ok(v1_script) = <pallas::PlutusScript<1>>::try_from(script) {
+                            v1.push(v1_script)
+                        }
+                    }
+                    PlutusVersion::V2 => {
+                        if let Ok(v2_script) = <pallas::PlutusScript<2>>::try_from(script) {
+                            v2.push(v2_script)
+                        }
+                    }
+                    PlutusVersion::V3 => {
+                        if let Ok(v3_script) = <pallas::PlutusScript<3>>::try_from(script) {
+                            v3.push(v3_script)
+                        }
+                    }
+                };
+
+                (v1, v2, v3)
+            },
+        );
+
+        assert!(
+            v1.is_empty(),
+            "trying to set some Plutus V1 scripts; these aren't supported yet and may fail later down the builder.",
+        );
+
+        assert!(
+            v2.is_empty(),
+            "trying to set some Plutus V2 scripts; these aren't supported yet and may fail later down the builder.",
+        );
+
+        self.inner.transaction_witness_set.plutus_v1_script = pallas::NonEmptySet::from_vec(v1);
+        self.inner.transaction_witness_set.plutus_v2_script = pallas::NonEmptySet::from_vec(v2);
+        self.inner.transaction_witness_set.plutus_v3_script = pallas::NonEmptySet::from_vec(v3);
+
+        self
+    }
+}
+
+// -------------------------------------------------------------------- Internal
+
+impl Transaction {
+    fn with_change(&mut self, change: Value<u64>) -> anyhow::Result<()> {
+        let min_change_value = Output::new(Address::default(), change.clone())
+            .min_acceptable_value()
+            .lovelace();
+
+        if change.lovelace() < min_change_value {
+            return Err(
+                anyhow!("not enough funds to create a sufficiently large change output").context(
+                    format!(
+                        "current value={} lovelace, minimum required={}",
+                        change.lovelace(),
+                        min_change_value
+                    ),
+                ),
+            );
+        }
+
+        let mut outputs = mem::take(&mut self.inner.transaction_body.outputs)
+            .into_iter()
+            .map(Output::try_from)
+            .collect::<Result<VecDeque<_>, _>>()?;
+
+        mem::take(&mut self.change_strategy).with(change, &mut outputs)?;
+
+        self.with_outputs(outputs);
+
+        Ok(())
+    }
+
+    fn with_redeemers(
+        &mut self,
+        discard_if: impl Fn(pallas::RedeemerTag) -> bool,
+        redeemers: BTreeMap<RedeemerPointer, PlutusData>,
+    ) -> &mut Self {
+        let redeemers = into_pallas_redeemers(redeemers);
+
+        let new_redeemers = if let Some(existing_redeemers) =
+            mem::take(&mut self.inner.transaction_witness_set.redeemer)
+        {
+            let existing_redeemers = without_existing_redeemers(existing_redeemers, discard_if);
+            Box::new(existing_redeemers.chain(redeemers))
+                as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
+        } else {
+            Box::new(redeemers)
+                as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
+        };
+
+        self.inner.transaction_witness_set.redeemer =
+            pallas::NonEmptyKeyValuePairs::from_vec(new_redeemers.collect())
+                .map(pallas::Redeemers::from);
+
+        self
     }
 
     /// The list of signatories explicitly listed in the transaction body, and visible to any
@@ -65,7 +330,7 @@ impl Transaction {
     /// - 'extra_signatories' (e.g. in Aiken's stdlib: https://aiken-lang.github.io/stdlib/cardano/transaction.html#Transaction
     ///
     fn specified_signatories(&self) -> Vec<Hash<28>> {
-        self.0
+        self.inner
             .transaction_body
             .required_signers
             .as_ref()
@@ -108,7 +373,7 @@ impl Transaction {
             .map(|(index, hash)| (RedeemerPointer::spend(index as u32), hash));
 
         let from_mint = self
-            .0
+            .inner
             .transaction_body
             .mint
             .as_ref()
@@ -122,7 +387,7 @@ impl Transaction {
                     as Box<dyn Iterator<Item = (RedeemerPointer, Hash<28>)>>
             });
 
-        let body = &self.0.transaction_body;
+        let body = &self.inner.transaction_body;
 
         assert!(
             body.certificates.is_none(),
@@ -152,9 +417,9 @@ impl Transaction {
 
     /// Pre-condition: this assumes and only support Plutus V3.
     fn script_integrity_hash(&self, params: &ProtocolParameters) -> Option<Hash<32>> {
-        let redeemers = self.0.transaction_witness_set.redeemer.as_ref();
+        let redeemers = self.inner.transaction_witness_set.redeemer.as_ref();
 
-        let datums = self.0.transaction_witness_set.plutus_data.as_ref();
+        let datums = self.inner.transaction_witness_set.plutus_data.as_ref();
 
         if redeemers.is_none() && datums.is_none() {
             return None;
@@ -179,215 +444,6 @@ impl Transaction {
         .unwrap();
 
         Some(Hash::from(pallas::hash::Hasher::<256>::hash(&preimage)))
-    }
-}
-
-// -------------------------------------------------------------------- Building
-
-impl Default for Transaction {
-    fn default() -> Self {
-        Self(pallas::Tx {
-            transaction_body: pallas::TransactionBody {
-                auxiliary_data_hash: None,
-                certificates: None,
-                collateral: None,
-                collateral_return: None,
-                donation: None,
-                fee: 0,
-                inputs: pallas::Set::from(vec![]),
-                mint: None,
-                network_id: None,
-                outputs: vec![],
-                proposal_procedures: None,
-                reference_inputs: None,
-                required_signers: None,
-                script_data_hash: None,
-                total_collateral: None,
-                treasury_value: None,
-                ttl: None,
-                validity_interval_start: None,
-                voting_procedures: None,
-                withdrawals: None,
-            },
-            transaction_witness_set: pallas::WitnessSet {
-                bootstrap_witness: None,
-                native_script: None,
-                plutus_data: None,
-                plutus_v1_script: None,
-                plutus_v2_script: None,
-                plutus_v3_script: None,
-                redeemer: None,
-                vkeywitness: None,
-            },
-            success: true,
-            auxiliary_data: pallas::Nullable::Null,
-        })
-    }
-}
-
-impl Transaction {
-    pub fn ok(self) -> anyhow::Result<Self> {
-        Ok(self)
-    }
-
-    pub fn with_inputs<'a>(mut self, inputs: impl IntoIterator<Item = Input<'a>>) -> Self {
-        self.0.transaction_body.inputs = pallas::Set::from(
-            inputs
-                .into_iter()
-                .sorted()
-                .map(pallas::TransactionInput::from)
-                .collect::<Vec<_>>(),
-        );
-        self
-    }
-
-    pub fn with_collaterals<'a>(
-        mut self,
-        collaterals: impl IntoIterator<Item = Input<'a>>,
-    ) -> Self {
-        self.0.transaction_body.collateral = pallas::NonEmptySet::from_vec(
-            collaterals
-                .into_iter()
-                .sorted()
-                .map(pallas::TransactionInput::from)
-                .collect::<Vec<_>>(),
-        );
-        self
-    }
-
-    pub fn with_outputs<'a>(mut self, outputs: impl IntoIterator<Item = Output<'a>>) -> Self {
-        self.0.transaction_body.outputs = outputs
-            .into_iter()
-            .map(pallas::TransactionOutput::from)
-            .collect::<Vec<_>>();
-        self
-    }
-
-    pub fn with_mint(
-        mut self,
-        mint: BTreeMap<(Hash<28>, PlutusData), BTreeMap<Vec<u8>, i64>>,
-    ) -> Self {
-        let (redeemers, mint) = mint.into_iter().enumerate().fold(
-            (BTreeMap::new(), BTreeMap::new()),
-            |(mut redeemers, mut mint), (index, ((policy, data), assets))| {
-                mint.insert(policy, assets);
-
-                redeemers.insert(RedeemerPointer::mint(index as u32), data);
-
-                (redeemers, mint)
-            },
-        );
-
-        let value = Value::default().with_assets(mint);
-
-        self.0.transaction_body.mint = <Option<pallas::Multiasset<_>>>::from(&value);
-
-        self.with_mint_redeemers(redeemers)
-    }
-
-    pub fn with_fee(mut self, fee: u64) -> Self {
-        self.0.transaction_body.fee = fee;
-        self
-    }
-
-    pub fn with_redeemers(
-        mut self,
-        redeemers: impl IntoIterator<
-            Item = (
-                Box<dyn Fn(&Self) -> anyhow::Result<RedeemerPointer>>,
-                PlutusData,
-            ),
-        >,
-    ) -> anyhow::Result<Self> {
-        let resolved_redeemers = redeemers
-            .into_iter()
-            .map(|(lookup, data)| {
-                let key = pallas::RedeemersKey::from(lookup(&self)?);
-
-                let value = pallas::RedeemersValue {
-                    data: pallas::PlutusData::from(data),
-                    ex_units: pallas::ExUnits::from(ExecutionUnits::default()),
-                };
-
-                Ok((key, value))
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        self.0.transaction_witness_set.redeemer =
-            pallas::NonEmptyKeyValuePairs::from_vec(resolved_redeemers)
-                .map(pallas::Redeemers::from);
-
-        Ok(self)
-    }
-
-    pub fn with_plutus_scripts(mut self, scripts: impl IntoIterator<Item = PlutusScript>) -> Self {
-        let (v1, v2, v3) = scripts.into_iter().fold(
-            (vec![], vec![], vec![]),
-            |(mut v1, mut v2, mut v3), script| {
-                match script.version() {
-                    PlutusVersion::V1 => {
-                        if let Ok(v1_script) = <pallas::PlutusScript<1>>::try_from(script) {
-                            v1.push(v1_script)
-                        }
-                    }
-                    PlutusVersion::V2 => {
-                        if let Ok(v2_script) = <pallas::PlutusScript<2>>::try_from(script) {
-                            v2.push(v2_script)
-                        }
-                    }
-                    PlutusVersion::V3 => {
-                        if let Ok(v3_script) = <pallas::PlutusScript<3>>::try_from(script) {
-                            v3.push(v3_script)
-                        }
-                    }
-                };
-
-                (v1, v2, v3)
-            },
-        );
-
-        assert!(
-            v1.is_empty(),
-            "trying to set some Plutus V1 scripts; these aren't supported yet and may fail later down the builder.",
-        );
-
-        assert!(
-            v2.is_empty(),
-            "trying to set some Plutus V2 scripts; these aren't supported yet and may fail later down the builder.",
-        );
-
-        self.0.transaction_witness_set.plutus_v1_script = pallas::NonEmptySet::from_vec(v1);
-        self.0.transaction_witness_set.plutus_v2_script = pallas::NonEmptySet::from_vec(v2);
-        self.0.transaction_witness_set.plutus_v3_script = pallas::NonEmptySet::from_vec(v3);
-
-        self
-    }
-}
-
-// -------------------------------------------------------------------- Internal
-
-impl Transaction {
-    fn with_mint_redeemers(mut self, redeemers: BTreeMap<RedeemerPointer, PlutusData>) -> Self {
-        let redeemers = into_pallas_redeemers(redeemers);
-
-        let new_redeemers =
-            if let Some(existing_redeemers) = self.0.transaction_witness_set.redeemer {
-                let existing_redeemers = without_existing_redeemers(existing_redeemers, |tag| {
-                    matches!(tag, pallas::RedeemerTag::Mint)
-                });
-
-                Box::new(existing_redeemers.chain(redeemers))
-                    as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
-            } else {
-                Box::new(redeemers)
-                    as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
-            };
-
-        self.0.transaction_witness_set.redeemer =
-            pallas::NonEmptyKeyValuePairs::from_vec(new_redeemers.collect())
-                .map(pallas::Redeemers::from);
-
-        self
     }
 }
 
@@ -418,4 +474,26 @@ fn into_pallas_redeemers(
 
         (key, value)
     })
+}
+
+// -------------------------------------------------------------------- Encoding
+
+impl<C> cbor::Encode<C> for Transaction {
+    fn encode<W: cbor::encode::write::Write>(
+        &self,
+        e: &mut cbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), cbor::encode::Error<W::Error>> {
+        e.encode_with(&self.inner, ctx)?;
+        Ok(())
+    }
+}
+
+impl<'d, C> cbor::Decode<'d, C> for Transaction {
+    fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
+        Ok(Self {
+            inner: d.decode_with(ctx)?,
+            change_strategy: ChangeStrategy::default(),
+        })
+    }
 }
