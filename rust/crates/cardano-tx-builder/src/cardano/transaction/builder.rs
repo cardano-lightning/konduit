@@ -567,13 +567,13 @@ mod tests {
         );
     }
 
-    static always_succeed_address: LazyLock<Address<'static, address::Any>> = LazyLock::new(|| {
+    static ALWAYS_SUCCEED_ADDRESS: LazyLock<Address<'static, address::Any>> = LazyLock::new(|| {
         Address::from(address_test!(script_credential!(
             "bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777"
         )))
     });
 
-    static always_succeed_script: LazyLock<PlutusScript> =
+    static ALWAYS_SUCCEED_SCRIPT: LazyLock<PlutusScript> =
         LazyLock::new(|| plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69"));
 
     #[test]
@@ -595,7 +595,7 @@ mod tests {
                 "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
                 1
             )])
-            .with_outputs(vec![output!(always_succeed_script.clone())])
+            .with_outputs(vec![output!(ALWAYS_SUCCEED_ADDRESS.clone())])
             .with_change_strategy(ChangeStrategy::as_last_output(
                 address_test!(
                     "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
@@ -617,12 +617,12 @@ mod tests {
 
         utxo = BTreeMap::from([(
             Input::new(pay_to_script.id(), 0),
-            output!(always_succeed_address.clone()),
+            output!(ALWAYS_SUCCEED_ADDRESS.clone()),
         )]);
 
         let deploy_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
-            let change_address = always_succeed_address.clone();
-            let change_script = always_succeed_script.clone();
+            let change_address = ALWAYS_SUCCEED_ADDRESS.clone();
+            let change_script = ALWAYS_SUCCEED_SCRIPT.clone();
 
             tx.with_inputs(vec![(
                 Input::new(pay_to_script.id(), 0),
@@ -634,7 +634,7 @@ mod tests {
                 );
                 Ok(())
             }))
-            .with_plutus_scripts(vec![always_succeed_script.clone()])
+            .with_plutus_scripts(vec![ALWAYS_SUCCEED_SCRIPT.clone()])
             .ok()
         })
         .unwrap();
