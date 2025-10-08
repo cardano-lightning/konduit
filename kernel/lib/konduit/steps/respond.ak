@@ -1,12 +1,12 @@
 use aiken/crypto.{VerificationKey}
 use cardano/assets.{Value}
-use konduit/prelude.{Timestamp, Amount, Index, Signature}
+use extra/xlist.{foldl6}
+use extra/xoption
 use konduit/assets.{amount_in, amount_out} as k_assets
+use konduit/prelude.{Amount, Index, Signature, Timestamp}
 use konduit/steps/common.{Return, next_index}
 use konduit/types as t
 use konduit/wellformed as wf
-use extra/xoption
-use extra/xlist.{foldl6}
 
 pub fn do(
   constants: t.Constants,

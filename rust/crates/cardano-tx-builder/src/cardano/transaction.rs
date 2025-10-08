@@ -58,7 +58,13 @@ impl Transaction {
     /// The list of signatories explicitly listed in the transaction body, and visible to any
     /// underlying validator script. This is necessary a subset of the all signatories but the
     /// total set of inferred signatories may be larger due do transaction inputs.
-    pub fn specified_signatories(&self) -> Vec<Hash<28>> {
+    ///
+    /// In the wild, this may also be called:
+    ///
+    /// - 'required_signers' (e.g. in the 'official' CDDL: <https://github.com/IntersectMBO/cardano-ledger/blob/232511b0fa01cd848cd7a569d1acc322124cf9b8/eras/conway/impl/cddl-files/conway.cddl#L142>)
+    /// - 'extra_signatories' (e.g. in Aiken's stdlib: https://aiken-lang.github.io/stdlib/cardano/transaction.html#Transaction
+    ///
+    fn specified_signatories(&self) -> Vec<Hash<28>> {
         self.0
             .transaction_body
             .required_signers
@@ -67,19 +73,26 @@ impl Transaction {
             .unwrap_or_default()
     }
 
-    /// The set of scripts that must be executed and pass for the transaction to be valid.
-    /// They may come from multiple sources:
+    /// The set of scripts that must be executed and pass for the transaction to be valid. These
+    /// are specifically relevant to someone building a transaction as they each require a specific
+    /// redeemer and each have execution costs.
     ///
-    /// - inputs
-    /// - certificates
-    /// - mint
-    /// - withdrawals
-    /// - proposals
-    /// - votes
+    /// Those scripts are distinct from all scripts available in the transaction since one may
+    /// introduce scripts via reference inputs or via the witness set, even if their (valid)
+    /// execution isn't required.
+    ///
+    /// 'required_scripts' may, therefore, come from multiple sources:
+    ///
+    /// - inputs (for script-locked inputs)
+    /// - certificates (for script-based credentials)
+    /// - mint (for minting/burning policies)
+    /// - withdrawals (for script-based credentials)
+    /// - proposals (for any defined constitution guardrails)
+    /// - votes (for script-based credentials)
     ///
     /// FIXME: the function is currently partial, as certificates, withdrawals, votes and proposals
     /// aren't implemented.
-    pub fn required_scripts<'i, 'o>(
+    fn required_scripts<'i, 'o>(
         &self,
         utxo: &BTreeMap<Input<'i>, Output<'o>>,
     ) -> BTreeMap<RedeemerPointer, Hash<28>> {
@@ -88,7 +101,10 @@ impl Transaction {
             .into_iter()
             .enumerate()
             .filter_map(|(index, input)| Some((index, utxo.get(&input)?)))
-            .filter_map(|(index, output)| Some((index, output.address().payment_script()?)))
+            .filter_map(|(index, output)| {
+                let payment_credential = output.address().as_shelley()?.payment_credential();
+                Some((index, payment_credential.as_script()?))
+            })
             .map(|(index, hash)| (RedeemerPointer::spend(index as u32), hash));
 
         let from_mint = self
@@ -135,7 +151,7 @@ impl Transaction {
     }
 
     /// Pre-condition: this assumes and only support Plutus V3.
-    pub fn script_integrity_hash(&self, params: &ProtocolParameters) -> Option<Hash<32>> {
+    fn script_integrity_hash(&self, params: &ProtocolParameters) -> Option<Hash<32>> {
         let redeemers = self.0.transaction_witness_set.redeemer.as_ref();
 
         let datums = self.0.transaction_witness_set.plutus_data.as_ref();
@@ -328,6 +344,16 @@ impl Transaction {
 
                 (v1, v2, v3)
             },
+        );
+
+        assert!(
+            v1.is_empty(),
+            "trying to set some Plutus V1 scripts; these aren't supported yet and may fail later down the builder.",
+        );
+
+        assert!(
+            v2.is_empty(),
+            "trying to set some Plutus V2 scripts; these aren't supported yet and may fail later down the builder.",
         );
 
         self.0.transaction_witness_set.plutus_v1_script = pallas::NonEmptySet::from_vec(v1);

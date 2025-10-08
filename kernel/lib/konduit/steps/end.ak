@@ -1,4 +1,4 @@
-use aiken/collection/list 
+use aiken/collection/list
 use extra/xoption
 use konduit/steps/common.{Return}
 use konduit/types as t

@@ -1,12 +1,12 @@
 use aiken/builtin.{head_list, tail_list}
 use cardano/assets.{Value}
 use env
-use konduit/prelude.{Amount, Timestamp}
-use konduit/assets.{amount_out} as k_assets
-use konduit/steps/common.{Return}
-use konduit/types as t
 use extra/xlist.{foldl4}
 use extra/xoption
+use konduit/assets.{amount_out} as k_assets
+use konduit/prelude.{Amount, Timestamp}
+use konduit/steps/common.{Return}
+use konduit/types as t
 
 pub fn do(
   constants: t.Constants,

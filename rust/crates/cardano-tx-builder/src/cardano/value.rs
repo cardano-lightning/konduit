@@ -11,6 +11,8 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
+/// A multi-asset value, where 'Q' may typically be instantiated to either `u64` or `i64`
+/// depending on whether it is represent an output value, or a mint value respectively.
 pub struct Value<Q>(u64, BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>);
 
 // -------------------------------------------------------------------- Inspecting
