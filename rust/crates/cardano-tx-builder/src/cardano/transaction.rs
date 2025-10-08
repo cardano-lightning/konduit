@@ -98,6 +98,17 @@ impl Transaction {
                 .into_iter(),
         )
     }
+
+    /// View this transaction as a UTxO, mapping each output to its corresponding input reference.
+    pub fn as_resolved_inputs(&self) -> BTreeMap<Input<'_>, Output<'_>> {
+        let id = self.id();
+        self.outputs()
+            .enumerate()
+            .fold(BTreeMap::new(), |mut resolved_inputs, (ix, output)| {
+                resolved_inputs.insert(Input::new(id, ix as u64), output);
+                resolved_inputs
+            })
+    }
 }
 
 // -------------------------------------------------------------------- Building

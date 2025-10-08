@@ -448,14 +448,10 @@ mod tests {
             "deploy_script no longer matches expected bytes."
         );
 
-        let deploy_outputs = deploy_script.outputs().collect::<Vec<_>>();
-        resolved_inputs = BTreeMap::from([
-            (Input::new(deploy_script.id(), 0), deploy_outputs[0].clone()),
-            (Input::new(deploy_script.id(), 1), deploy_outputs[1].clone()),
-        ]);
-
-        let pay_to_script =
-            Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
+        let pay_to_script = Transaction::build(
+            &FIXTURE_PROTOCOL_PARAMETERS,
+            &deploy_script.as_resolved_inputs(),
+            |tx| {
                 tx.with_inputs(vec![(Input::new(deploy_script.id(), 1), None)])
                     .with_outputs(vec![Output::new(
                         ALWAYS_SUCCEED_ADDRESS.clone(),
@@ -463,8 +459,9 @@ mod tests {
                     )])
                     .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
                     .ok()
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
 
         assert_eq!(
             hex::encode(pay_to_script.to_cbor()),
@@ -476,18 +473,8 @@ mod tests {
             "pay_to_script no longer matches expected bytes."
         );
 
-        let pay_to_script_outputs = pay_to_script.outputs().collect::<Vec<_>>();
-        resolved_inputs = BTreeMap::from([
-            (Input::new(deploy_script.id(), 0), deploy_outputs[0].clone()),
-            (
-                Input::new(pay_to_script.id(), 0),
-                pay_to_script_outputs[0].clone(),
-            ),
-            (
-                Input::new(pay_to_script.id(), 1),
-                pay_to_script_outputs[1].clone(),
-            ),
-        ]);
+        resolved_inputs = pay_to_script.as_resolved_inputs();
+        resolved_inputs.append(&mut deploy_script.as_resolved_inputs());
 
         let spend_from_script =
             Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
