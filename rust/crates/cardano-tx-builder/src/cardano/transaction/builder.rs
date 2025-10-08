@@ -7,7 +7,10 @@ use crate::{
     Value, cbor, pallas,
 };
 use anyhow::anyhow;
-use std::{collections::BTreeMap, ops::Deref};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Deref,
+};
 use uplc::tx::SlotConfig;
 
 // ```cddl
@@ -72,6 +75,11 @@ impl Transaction {
             // Add the script integrity hash, so that it counts towards the transaction size.
             refresh_script_integrity_hash(&mut tx, &required_scripts, params)?;
 
+            // Explicitly fails when there's no collaterals, but that Plutus scripts were found.
+            // This informs the user of the builder that they did something wrong and forgot to set
+            // one or more collateral.
+            fail_on_missing_collateral(&required_scripts, &tx.collaterals())?;
+
             // Serialise the transaction to compute its fee.
             serialized_tx.clear();
             cbor::encode(&tx, &mut serialized_tx).unwrap();
@@ -79,7 +87,7 @@ impl Transaction {
             // Re-compute execution units for all scripts, if any.
             redeemers = evaluate_plutus_scripts(
                 &serialized_tx,
-                resolved_inputs,
+                into_uplc_inputs(&tx, resolved_inputs),
                 &required_scripts,
                 params,
             )?;
@@ -104,11 +112,11 @@ impl Transaction {
             if fee >= estimated_fee {
                 break;
             } else if attempts >= 3 {
-                return Err(anyhow!(
-                    "failed to build transaction: did not converge after three attempts."
-                )
-                .context(format!("fee = {fee}, estimated_fee = {estimated_fee}"))
-                .context(format!("transaction = {}", hex::encode(&serialized_tx))));
+                return Err(anyhow!("transaction = {}", hex::encode(&serialized_tx))
+                    .context(format!("fee = {fee}, estimated_fee = {estimated_fee}"))
+                    .context(
+                        "failed to build transaction: did not converge after three attempts.",
+                    ));
             } else {
                 fee = estimated_fee;
             }
@@ -129,11 +137,30 @@ fn total_execution_cost<'a>(
     })
 }
 
-fn into_resolved_inputs(utxo: &BTreeMap<Input<'_>, Output<'_>>) -> Vec<uplc::tx::ResolvedInput> {
-    utxo.iter()
-        .map(|(i, o)| uplc::tx::ResolvedInput {
-            input: pallas::TransactionInput::from(i.clone()),
-            output: pallas::TransactionOutput::from(o),
+fn into_uplc_inputs(
+    tx: &Transaction,
+    resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+) -> Vec<uplc::tx::ResolvedInput> {
+    // Ensures that only 'known' inputs contribute to the evaluation; in case the user
+    // added extra inputs to the provided UTxO which do not get correctly captured in
+    // the transaction; causing the evaluation to possibly wrongly succeed.
+    let known_inputs = tx
+        .inputs()
+        .into_iter()
+        .chain(tx.reference_inputs())
+        .collect::<BTreeSet<_>>();
+
+    resolved_inputs
+        .iter()
+        .filter_map(|(i, o)| {
+            if known_inputs.contains(i) {
+                Some(uplc::tx::ResolvedInput {
+                    input: pallas::TransactionInput::from((*i).clone()),
+                    output: pallas::TransactionOutput::from((*o).clone()),
+                })
+            } else {
+                None
+            }
         })
         .collect()
 }
@@ -146,9 +173,36 @@ fn refresh_script_integrity_hash(
     if let Some(hash) = tx.script_integrity_hash(params) {
         tx.inner.transaction_body.script_data_hash = Some(pallas::Hash::from(hash));
     } else if !required_scripts.is_empty() {
-        return Err(anyhow!(
-            "couldn't compute required script integrity hash: datums and redeemers are missing from the transaction."
-        ).context(format!("required_scripts = {required_scripts:?}")));
+        let mut scripts = required_scripts.iter();
+
+        let (ptr, hash) = scripts.next().unwrap(); // Safe because it's not empty
+        let mut err = anyhow!("required_scripts = {ptr:?} -> {hash}");
+        for (ptr, hash) in scripts {
+            err = err.context(format!("required_scripts = {ptr:?} -> {hash}"));
+        }
+
+        return Err(err.context("couldn't compute required script integrity hash: datums and redeemers are missing from the transaction."));
+    }
+
+    Ok(())
+}
+
+fn fail_on_missing_collateral<'a, T>(
+    redeemers: &BTreeMap<RedeemerPointer, T>,
+    collaterals: &[Input<'a>],
+) -> anyhow::Result<()> {
+    let mut ptrs = redeemers.keys();
+    if let Some(ptr) = ptrs.next()
+        && collaterals.is_empty()
+    {
+        let mut err = anyhow!("at {:?}", ptr);
+        for ptr in ptrs {
+            err = err.context(format!("at {ptr:?}"));
+        }
+
+        return Err(err.context(
+            "no collaterals set, but the transaction requires at least one phase-2 script execution.",
+        ));
     }
 
     Ok(())
@@ -341,7 +395,7 @@ fn set_collateral_return(
 
 fn evaluate_plutus_scripts(
     serialized_tx: &[u8],
-    utxo: &BTreeMap<Input<'_>, Output<'_>>,
+    resolved_inputs: Vec<uplc::tx::ResolvedInput>,
     required_scripts: &BTreeMap<RedeemerPointer, Hash<28>>,
     params: &ProtocolParameters,
 ) -> anyhow::Result<BTreeMap<RedeemerPointer, ExecutionUnits>> {
@@ -361,14 +415,14 @@ fn evaluate_plutus_scripts(
 
         return Ok(uplc::tx::eval_phase_two(
             &minted_tx,
-            into_resolved_inputs(utxo).as_slice(),
+            resolved_inputs.as_slice(),
             None,
             None,
             &SlotConfig::from(params),
             false,
             |_| (),
         )
-        .map_err(|e| anyhow!("{e}").context(format!("required scripts = {required_scripts:?}")))?
+        .map_err(|e| anyhow!("required scripts = {required_scripts:?}").context(format!("{e:?}")))?
         .into_iter()
         // FIXME: The second element in the resulting pair contains the evaluation result.
         // We shall make sure that it is passing, and if it isn't, we should fail with a
@@ -393,7 +447,7 @@ fn evaluate_plutus_scripts(
 #[cfg(test)]
 mod tests {
     use crate::{
-        Address, ChangeStrategy, Input, PlutusData, PlutusScript, PlutusVersion,
+        Address, ChangeStrategy, Input, Output, PlutusData, PlutusScript, PlutusVersion,
         ProtocolParameters, Transaction, address, address_test, cbor::ToCbor, input, mint, output,
         plutus_script, script_credential, value,
     };
@@ -467,7 +521,7 @@ mod tests {
                     output!(
                         "addr1q8lgqva8uleq9f3wjsnggh42d6y8vm9rvah380wq3x9djqwhy3954pmhklwxjz05vsx0qt4yw4a9275eldyrkp0c0hlqgxc7du",
                         value!(
-                            6787232,
+                            6687232,
                             ("279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f", "534e454b", 1376),
                             ("a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235", "484f534b59", 134468443),
                         ),
@@ -484,7 +538,7 @@ mod tests {
         // Actual minimum fee measured from constructing the serialized transaction using the
         // cardano-cli and signing it with the required keys. Somehow the cli over-estimates fee,
         // which is good, so we can assert being at least better than the cardano-cli.
-        let minimum_fee = 171793;
+        let minimum_fee = 171925;
         let cardano_cli_fee = 176369;
         let fee = result.unwrap().fee();
 
@@ -557,7 +611,7 @@ mod tests {
         // which is good, so we can assert being at least better than the cardano-cli.
         //
         // See the transaction: https://cardanoscan.io/transaction/ff3c022d38cfc18e66c45d14823c7b948de77ed3ca10d07cabecc57c1f44b707
-        let minimum_fee = 196654;
+        let minimum_fee = 194365;
         let cardano_cli_fee = 205850;
         let fee = result.unwrap().fee();
 
@@ -578,71 +632,117 @@ mod tests {
 
     #[test]
     fn full_lifecycle() {
+        let my_address: Address<'_, address::Any> = address!(
+            "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t"
+        );
+
         let mut utxo = BTreeMap::from([(
             input!(
                 "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
                 1
             )
             .0,
-            output!(
-                "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
-                value!(47321123),
-            ),
+            Output::new(my_address.clone(), value!(47321123)),
         )]);
 
-        let pay_to_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
+        let deploy_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
             tx.with_inputs(vec![input!(
                 "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
                 1
             )])
-            .with_outputs(vec![output!(ALWAYS_SUCCEED_ADDRESS.clone())])
-            .with_change_strategy(ChangeStrategy::as_last_output(
-                address_test!(
-                    "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
-                )
-            ))
-            .ok()
-        })
-        .unwrap();
-
-        assert_eq!(
-            hex::encode(pay_to_script.to_cbor()),
-            "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
-             2fea7b9da6e490324010182a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
-             f872f57f6d3a1ffa0eb777011a000cd302a20058390082c1729d5fd44124a6ae72b\
-             cdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7c\
-             d277d73468d3b2fca56572011a02c2aee8021a00028e39a0f5f6",
-            "pay-to-script no longer match its golden value"
-        );
-
-        utxo = BTreeMap::from([(
-            Input::new(pay_to_script.id(), 0),
-            output!(ALWAYS_SUCCEED_ADDRESS.clone()),
-        )]);
-
-        let deploy_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
-            let change_address = ALWAYS_SUCCEED_ADDRESS.clone();
-            let change_script = ALWAYS_SUCCEED_SCRIPT.clone();
-
-            tx.with_inputs(vec![(
-                Input::new(pay_to_script.id(), 0),
-                Some(PlutusData::list(vec![])),
-            )])
-            .with_change_strategy(ChangeStrategy::new(move |change, outputs| {
-                outputs.push_back(
-                    output!(change_address, change).with_plutus_script(change_script.clone()),
-                );
-                Ok(())
-            }))
-            .with_plutus_scripts(vec![ALWAYS_SUCCEED_SCRIPT.clone()])
+            .with_outputs(vec![
+                Output::to(my_address.clone()).with_plutus_script(ALWAYS_SUCCEED_SCRIPT.clone()),
+            ])
+            .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
             .ok()
         })
         .unwrap();
 
         assert_eq!(
             hex::encode(deploy_script.to_cbor()),
-            "",
-            "deploy-script no longer match its golden value",
+            "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
+             2fea7b9da6e490324010182a30058390082c1729d5fd44124a6ae72bcdb86b6e827\
+             aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d\
+             3b2fca56572011a001092a803d818558203525101010023259800a518a4d1365640\
+             04ae69a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c0\
+             92e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a02\
+             bee626021a00029755a0f5f6",
+            "deploy_script no longer matches expected bytes."
+        );
+
+        utxo = BTreeMap::from([
+            (
+                Input::new(deploy_script.id(), 0),
+                deploy_script.outputs()[0].clone(),
+            ),
+            (
+                Input::new(deploy_script.id(), 1),
+                deploy_script.outputs()[1].clone(),
+            ),
+        ]);
+
+        let pay_to_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
+            tx.with_inputs(vec![(Input::new(deploy_script.id(), 1), None)])
+                .with_outputs(vec![Output::new(
+                    ALWAYS_SUCCEED_ADDRESS.clone(),
+                    value!(10_000_000),
+                )])
+                .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
+                .ok()
+        })
+        .unwrap();
+
+        assert_eq!(
+            hex::encode(pay_to_script.to_cbor()),
+            "84a300d901028182582026dad69d058e6aed8dd112266c8cda84ecca7c8132b535c\
+             65697f2409d0d2e80010182a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
+             f872f57f6d3a1ffa0eb777011a00989680a20058390082c1729d5fd44124a6ae72b\
+             cdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7c\
+             d277d73468d3b2fca56572011a0223c16d021a00028e39a0f5f6",
+            "pay_to_script no longer matches expected bytes."
+        );
+
+        utxo = BTreeMap::from([
+            (
+                Input::new(deploy_script.id(), 0),
+                deploy_script.outputs()[0].clone(),
+            ),
+            (
+                Input::new(pay_to_script.id(), 0),
+                pay_to_script.outputs()[0].clone(),
+            ),
+            (
+                Input::new(pay_to_script.id(), 1),
+                pay_to_script.outputs()[1].clone(),
+            ),
+        ]);
+
+        let spend_from_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
+            tx.with_inputs(vec![(
+                Input::new(pay_to_script.id(), 0),
+                Some(PlutusData::list(vec![])),
+            )])
+            .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
+            .with_change_strategy(ChangeStrategy::as_last_output(
+                ALWAYS_SUCCEED_ADDRESS.clone(),
+            ))
+            .with_plutus_scripts(vec![ALWAYS_SUCCEED_SCRIPT.clone()])
+            .ok()
+        })
+        .unwrap();
+
+        assert_eq!(
+            hex::encode(spend_from_script.to_cbor()),
+            "84a700d901028182582004aca0496e336f36f219a1ddb8298555a1b166a988990b8\
+             427ec3ff292fc6b7a000181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
+             f872f57f6d3a1ffa0eb777011a0095f2af021a0002a3d10b5820d545623b07e425a\
+             55262585d2b5e8aaee16230fd1434e790fa4511da4bf8a4550dd901028182582004\
+             aca0496e336f36f219a1ddb8298555a1b166a988990b8427ec3ff292fc6b7a0110a\
+             20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4a\
+             f57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a021fcbb31\
+             11a0003f5baa205a18200008280821906411a0004d2f507d9010281525101010023\
+             259800a518a4d136564004ae69f5f6",
+            "spend_from_script no longer matches expected bytes."
         );
     }
 }

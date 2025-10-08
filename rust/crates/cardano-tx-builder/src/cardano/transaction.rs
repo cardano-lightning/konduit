@@ -61,6 +61,17 @@ impl Transaction {
             .unwrap_or_default()
     }
 
+    /// The declared transaction reference inputs, which are never spent but contribute to the
+    /// script context for smart-contract execution.
+    pub fn reference_inputs(&self) -> Vec<Input<'_>> {
+        self.inner
+            .transaction_body
+            .reference_inputs
+            .as_ref()
+            .map(|xs| xs.iter().map(Input::from).collect())
+            .unwrap_or_default()
+    }
+
     pub fn mint(&self) -> Value<i64> {
         self.inner
             .transaction_body
@@ -166,6 +177,20 @@ impl Transaction {
     ) -> &mut Self {
         self.inner.transaction_body.collateral = pallas::NonEmptySet::from_vec(
             collaterals
+                .into_iter()
+                .sorted()
+                .map(pallas::TransactionInput::from)
+                .collect::<Vec<_>>(),
+        );
+        self
+    }
+
+    pub fn with_reference_inputs<'a>(
+        &mut self,
+        reference_inputs: impl IntoIterator<Item = Input<'a>>,
+    ) -> &mut Self {
+        self.inner.transaction_body.reference_inputs = pallas::NonEmptySet::from_vec(
+            reference_inputs
                 .into_iter()
                 .sorted()
                 .map(pallas::TransactionInput::from)
