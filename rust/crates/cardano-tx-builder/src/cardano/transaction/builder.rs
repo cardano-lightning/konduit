@@ -56,24 +56,19 @@ impl Transaction {
 
             build(tx.with_fee(fee))?;
 
-            assert!(
-                tx.inner.transaction_body.reference_inputs.is_none(),
-                "found reference input(s) in transaction: not supported yet",
-            );
-
             let required_scripts = tx.required_scripts(resolved_inputs);
 
             // Add a change output according to the user's chosen strategy.
-            set_change(&mut tx, resolved_inputs)?;
+            tx.with_change(resolved_inputs)?;
 
             // Adjust execution units calculated in previous iteration for all redeemers.
-            set_execution_units(&mut tx, &mut redeemers)?;
+            tx.with_execution_units(&mut redeemers)?;
 
             // Compute & add total collateral + collateral return
-            set_collateral_return(&mut tx, resolved_inputs, params)?;
+            tx.with_collateral_return(resolved_inputs, params)?;
 
             // Add the script integrity hash, so that it counts towards the transaction size.
-            refresh_script_integrity_hash(&mut tx, &required_scripts, params)?;
+            tx.with_script_integrity_hash(&required_scripts, params)?;
 
             // Explicitly fails when there's no collaterals, but that Plutus scripts were found.
             // This informs the user of the builder that they did something wrong and forgot to set
@@ -124,6 +119,218 @@ impl Transaction {
 
         Ok(tx)
     }
+
+    fn with_script_integrity_hash(
+        &mut self,
+        required_scripts: &BTreeMap<RedeemerPointer, Hash<28>>,
+        params: &ProtocolParameters,
+    ) -> anyhow::Result<()> {
+        if let Some(hash) = self.script_integrity_hash(params) {
+            self.inner.transaction_body.script_data_hash = Some(pallas::Hash::from(hash));
+        } else if !required_scripts.is_empty() {
+            let mut scripts = required_scripts.iter();
+
+            let (ptr, hash) = scripts.next().unwrap(); // Safe because it's not empty
+            let mut err = anyhow!("required_scripts = {ptr:?} -> {hash}");
+            for (ptr, hash) in scripts {
+                err = err.context(format!("required_scripts = {ptr:?} -> {hash}"));
+            }
+
+            return Err(err.context("couldn't compute required script integrity hash: datums and redeemers are missing from the transaction."));
+        }
+
+        Ok(())
+    }
+
+    fn with_execution_units(
+        &mut self,
+        redeemers: &mut BTreeMap<RedeemerPointer, ExecutionUnits>,
+    ) -> anyhow::Result<()> {
+        if let Some(declared_redeemers) =
+            std::mem::take(&mut self.inner.transaction_witness_set.redeemer)
+        {
+            match declared_redeemers {
+                pallas::Redeemers::List(..) => {
+                    unreachable!("found redeemers encoded as list: impossible with this library.")
+                }
+
+                pallas::Redeemers::Map(kv) => {
+                    self.inner.transaction_witness_set.redeemer =
+                        pallas::NonEmptyKeyValuePairs::from_vec(
+                            kv.into_iter()
+                                .map(|(key, mut value)| {
+                                    let ptr = RedeemerPointer::from(key.clone());
+                                    // If we have already computed the correct execution units
+                                    // for that redeemer in a previous round, we can adjust
+                                    // them.
+                                    if let Some(ex_units) = redeemers.remove(&ptr) {
+                                        value.ex_units = pallas::ExUnits::from(ex_units);
+                                    }
+                                    (key, value)
+                                })
+                                .collect(),
+                        )
+                        .map(pallas::Redeemers::from)
+                }
+            }
+        }
+
+        // We should technically have consumed all redeemers.
+        if !redeemers.is_empty() {
+            return Err(
+                anyhow!("extraneous redeemers in transaction; not required by any script")
+                    .context(format!("extra={:?}", redeemers.keys().collect::<Vec<_>>())),
+            );
+        }
+
+        Ok(())
+    }
+
+    fn with_change(
+        &mut self,
+        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+    ) -> anyhow::Result<()> {
+        let mut change = Value::default();
+
+        // Add inputs to the change balance
+        self.inputs()
+            .iter()
+            .try_fold(&mut change, |total_input, input| {
+                let output = resolved_inputs.get(input).ok_or_else(|| {
+                    anyhow!("unknown input, not present in resolved set")
+                        .context(format!("input={input:?}"))
+                })?;
+
+                Ok::<_, anyhow::Error>(total_input.add(output.value().deref().as_ref()))
+            })?;
+
+        // Partition mint quantities between mint & burn
+        let (mint, burn) = self.mint().assets().clone().into_iter().fold(
+            (BTreeMap::new(), BTreeMap::new()),
+            |(mut mint, mut burn), (policy, assets)| {
+                let mut minted_assets = BTreeMap::new();
+                let mut burned_assets = BTreeMap::new();
+
+                for (asset_name, quantity) in assets {
+                    if quantity > 0 {
+                        minted_assets.insert(asset_name, quantity as u64);
+                    } else {
+                        burned_assets.insert(asset_name, (-quantity) as u64);
+                    }
+                }
+
+                if !minted_assets.is_empty() {
+                    mint.insert(policy, minted_assets);
+                }
+
+                if !burned_assets.is_empty() {
+                    burn.insert(policy, burned_assets);
+                }
+
+                (mint, burn)
+            },
+        );
+
+        // Add minted tokens to the change balance
+        change.add(&Value::default().with_assets(mint));
+
+        // Subtract burned tokens from the change balance
+        change
+            .checked_sub(&Value::default().with_assets(burn))
+            .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+        // Subtract all outputs from the change balance
+        self.outputs()
+            .iter()
+            .try_fold(&mut change, |total_output, output| {
+                total_output.checked_sub(output.value().deref().as_ref())
+            })
+            .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+        // Subtract the transaction fee as well
+        change
+            .checked_sub(&Value::new(self.fee()))
+            .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+        let body = &self.inner.transaction_body;
+
+        assert!(
+            body.certificates.is_none(),
+            "found certificates in transaction: not supported yet",
+        );
+
+        assert!(
+            body.withdrawals.is_none(),
+            "found withdrawals in transaction: not supported yet",
+        );
+
+        assert!(
+            body.treasury_value.is_none(),
+            "found treasury donation in transaction: not supported yet",
+        );
+
+        assert!(
+            body.proposal_procedures.is_none(),
+            "found proposals in transaction: not supported yet",
+        );
+
+        if !change.is_empty() {
+            self.with_change_output(change)?;
+        }
+
+        Ok(())
+    }
+
+    fn with_collateral_return(
+        &mut self,
+        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+        params: &ProtocolParameters,
+    ) -> anyhow::Result<()> {
+        let (mut total_collateral_value, opt_return_address): (
+            Value<u64>,
+            Option<Address<'static, _>>,
+        ) = self
+            .collaterals()
+            .iter()
+            .map(|input| {
+                resolved_inputs.get(input).ok_or_else(|| {
+                    anyhow!("unknown collateral input").context(format!("reference={input:?}"))
+                })
+            })
+            .try_fold(
+                (Value::new(0), None),
+                |(mut total, address), maybe_output| {
+                    let output = maybe_output?;
+                    total.add(output.value().deref().as_ref());
+                    // It is arbitrary, but we use the source address of the first collateral as the
+                    // destination of the collateral change. Collaterals can't be script, so this is
+                    // relatively safe as the ledger enforces that the key is known at the time the
+                    // transaction is constructed.
+                    Ok::<_, anyhow::Error>((
+                        total,
+                        address.or_else(|| Some(output.address().to_owned())),
+                    ))
+                },
+            )?;
+
+        if let Some(return_address) = opt_return_address {
+            let minimum_required_collateral =
+                (self.fee() as f64 * params.collateral_coefficient()).ceil() as u64;
+
+            total_collateral_value
+                .checked_sub(&Value::new(minimum_required_collateral))
+                .map_err(|e| e.context("insufficient collateral inputs"))?;
+
+            self.inner.transaction_body.total_collateral = Some(minimum_required_collateral);
+            self.inner.transaction_body.collateral_return = Some(pallas::TransactionOutput::from(
+                // A bit misleading but 'total_collateral_value' now refers to the total amount brought
+                // in, minus the the minimum required by the protocol, left out.
+                Output::new(return_address, total_collateral_value),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 // --------------------------------------------------------------------- Helpers
@@ -165,28 +372,6 @@ fn into_uplc_inputs(
         .collect()
 }
 
-fn refresh_script_integrity_hash(
-    tx: &mut Transaction,
-    required_scripts: &BTreeMap<RedeemerPointer, Hash<28>>,
-    params: &ProtocolParameters,
-) -> anyhow::Result<()> {
-    if let Some(hash) = tx.script_integrity_hash(params) {
-        tx.inner.transaction_body.script_data_hash = Some(pallas::Hash::from(hash));
-    } else if !required_scripts.is_empty() {
-        let mut scripts = required_scripts.iter();
-
-        let (ptr, hash) = scripts.next().unwrap(); // Safe because it's not empty
-        let mut err = anyhow!("required_scripts = {ptr:?} -> {hash}");
-        for (ptr, hash) in scripts {
-            err = err.context(format!("required_scripts = {ptr:?} -> {hash}"));
-        }
-
-        return Err(err.context("couldn't compute required script integrity hash: datums and redeemers are missing from the transaction."));
-    }
-
-    Ok(())
-}
-
 fn fail_on_missing_collateral<'a, T>(
     redeemers: &BTreeMap<RedeemerPointer, T>,
     collaterals: &[Input<'a>],
@@ -202,191 +387,6 @@ fn fail_on_missing_collateral<'a, T>(
 
         return Err(err.context(
             "no collaterals set, but the transaction requires at least one phase-2 script execution.",
-        ));
-    }
-
-    Ok(())
-}
-
-fn set_execution_units(
-    tx: &mut Transaction,
-    redeemers: &mut BTreeMap<RedeemerPointer, ExecutionUnits>,
-) -> anyhow::Result<()> {
-    if let Some(declared_redeemers) = std::mem::take(&mut tx.inner.transaction_witness_set.redeemer)
-    {
-        match declared_redeemers {
-            pallas::Redeemers::List(..) => {
-                unreachable!("found redeemers encoded as list: impossible with this library.")
-            }
-
-            pallas::Redeemers::Map(kv) => {
-                tx.inner.transaction_witness_set.redeemer = pallas::NonEmptyKeyValuePairs::from_vec(
-                    kv.into_iter()
-                        .map(|(key, mut value)| {
-                            let ptr = RedeemerPointer::from(key.clone());
-                            // If we have already computed the correct execution units
-                            // for that redeemer in a previous round, we can adjust
-                            // them.
-                            if let Some(ex_units) = redeemers.remove(&ptr) {
-                                value.ex_units = pallas::ExUnits::from(ex_units);
-                            }
-                            (key, value)
-                        })
-                        .collect(),
-                )
-                .map(pallas::Redeemers::from)
-            }
-        }
-    }
-
-    // We should technically have consumed all redeemers.
-    if !redeemers.is_empty() {
-        return Err(
-            anyhow!("extraneous redeemers in transaction; not required by any script")
-                .context(format!("extra={:?}", redeemers.keys().collect::<Vec<_>>())),
-        );
-    }
-
-    Ok(())
-}
-
-fn set_change(tx: &mut Transaction, utxo: &BTreeMap<Input<'_>, Output<'_>>) -> anyhow::Result<()> {
-    let mut change = Value::default();
-
-    // Add inputs to the change balance
-    tx.inputs()
-        .iter()
-        .try_fold(&mut change, |total_input, input| {
-            let output = utxo.get(input).ok_or_else(|| {
-                anyhow!("unknown input, not present in resolved set")
-                    .context(format!("input={input:?}"))
-            })?;
-
-            Ok::<_, anyhow::Error>(total_input.add(output.value().deref().as_ref()))
-        })?;
-
-    // Partition mint quantities between mint & burn
-    let (mint, burn) = tx.mint().assets().clone().into_iter().fold(
-        (BTreeMap::new(), BTreeMap::new()),
-        |(mut mint, mut burn), (policy, assets)| {
-            let mut minted_assets = BTreeMap::new();
-            let mut burned_assets = BTreeMap::new();
-
-            for (asset_name, quantity) in assets {
-                if quantity > 0 {
-                    minted_assets.insert(asset_name, quantity as u64);
-                } else {
-                    burned_assets.insert(asset_name, (-quantity) as u64);
-                }
-            }
-
-            if !minted_assets.is_empty() {
-                mint.insert(policy, minted_assets);
-            }
-
-            if !burned_assets.is_empty() {
-                burn.insert(policy, burned_assets);
-            }
-
-            (mint, burn)
-        },
-    );
-
-    // Add minted tokens to the change balance
-    change.add(&Value::default().with_assets(mint));
-
-    // Subtract burned tokens from the change balance
-    change
-        .checked_sub(&Value::default().with_assets(burn))
-        .map_err(|e| e.context("insufficient balance; spending more than available"))?;
-
-    // Subtract all outputs from the change balance
-    tx.outputs()
-        .iter()
-        .try_fold(&mut change, |total_output, output| {
-            total_output.checked_sub(output.value().deref().as_ref())
-        })
-        .map_err(|e| e.context("insufficient balance; spending more than available"))?;
-
-    // Subtract the transaction fee as well
-    change
-        .checked_sub(&Value::new(tx.fee()))
-        .map_err(|e| e.context("insufficient balance; spending more than available"))?;
-
-    let body = &tx.inner.transaction_body;
-
-    assert!(
-        body.certificates.is_none(),
-        "found certificates in transaction: not supported yet",
-    );
-
-    assert!(
-        body.withdrawals.is_none(),
-        "found withdrawals in transaction: not supported yet",
-    );
-
-    assert!(
-        body.treasury_value.is_none(),
-        "found treasury donation in transaction: not supported yet",
-    );
-
-    assert!(
-        body.proposal_procedures.is_none(),
-        "found proposals in transaction: not supported yet",
-    );
-
-    if !change.is_empty() {
-        tx.with_change(change)?;
-    }
-
-    Ok(())
-}
-
-fn set_collateral_return(
-    tx: &mut Transaction,
-    utxo: &BTreeMap<Input<'_>, Output<'_>>,
-    params: &ProtocolParameters,
-) -> anyhow::Result<()> {
-    let (mut total_collateral_value, opt_return_address): (
-        Value<u64>,
-        Option<Address<'static, _>>,
-    ) = tx
-        .collaterals()
-        .iter()
-        .map(|input| {
-            utxo.get(input).ok_or_else(|| {
-                anyhow!("unknown collateral input").context(format!("reference={input:?}"))
-            })
-        })
-        .try_fold(
-            (Value::new(0), None),
-            |(mut total, address), maybe_output| {
-                let output = maybe_output?;
-                total.add(output.value().deref().as_ref());
-                // It is arbitrary, but we use the source address of the first collateral as the
-                // destination of the collateral change. Collaterals can't be script, so this is
-                // relatively safe as the ledger enforces that the key is known at the time the
-                // transaction is constructed.
-                Ok::<_, anyhow::Error>((
-                    total,
-                    address.or_else(|| Some(output.address().to_owned())),
-                ))
-            },
-        )?;
-
-    if let Some(return_address) = opt_return_address {
-        let minimum_required_collateral =
-            (tx.fee() as f64 * params.collateral_coefficient()).ceil() as u64;
-
-        total_collateral_value
-            .checked_sub(&Value::new(minimum_required_collateral))
-            .map_err(|e| e.context("insufficient collateral inputs"))?;
-
-        tx.inner.transaction_body.total_collateral = Some(minimum_required_collateral);
-        tx.inner.transaction_body.collateral_return = Some(pallas::TransactionOutput::from(
-            // A bit misleading but 'total_collateral_value' now refers to the total amount brought
-            // in, minus the the minimum required by the protocol, left out.
-            Output::new(return_address, total_collateral_value),
         ));
     }
 
@@ -488,7 +488,7 @@ mod tests {
 
     #[test]
     fn single_in_single_out() {
-        let utxo = BTreeMap::from([(
+        let resolved_inputs = BTreeMap::from([(
             input!(
                 "32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c",
                 1
@@ -512,7 +512,7 @@ mod tests {
             ),
         )]);
 
-        let result = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
+        let result = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
             tx
                 .with_inputs(vec![
                     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn mint_tokens() {
-        let utxo = BTreeMap::from([(
+        let resolved_inputs = BTreeMap::from([(
             input!(
                 "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
                 0
@@ -562,7 +562,7 @@ mod tests {
             ),
         )]);
 
-        let result = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
+        let result = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
             tx
                 .with_inputs(vec![
                     input!("d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50", 0),
@@ -636,7 +636,7 @@ mod tests {
             "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t"
         );
 
-        let mut utxo = BTreeMap::from([(
+        let mut resolved_inputs = BTreeMap::from([(
             input!(
                 "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
                 1
@@ -645,18 +645,20 @@ mod tests {
             Output::new(my_address.clone(), value!(47321123)),
         )]);
 
-        let deploy_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
-            tx.with_inputs(vec![input!(
-                "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
-                1
-            )])
-            .with_outputs(vec![
-                Output::to(my_address.clone()).with_plutus_script(ALWAYS_SUCCEED_SCRIPT.clone()),
-            ])
-            .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
-            .ok()
-        })
-        .unwrap();
+        let deploy_script =
+            Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
+                tx.with_inputs(vec![input!(
+                    "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
+                    1
+                )])
+                .with_outputs(vec![
+                    Output::to(my_address.clone())
+                        .with_plutus_script(ALWAYS_SUCCEED_SCRIPT.clone()),
+                ])
+                .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
+                .ok()
+            })
+            .unwrap();
 
         assert_eq!(
             hex::encode(deploy_script.to_cbor()),
@@ -670,7 +672,7 @@ mod tests {
             "deploy_script no longer matches expected bytes."
         );
 
-        utxo = BTreeMap::from([
+        resolved_inputs = BTreeMap::from([
             (
                 Input::new(deploy_script.id(), 0),
                 deploy_script.outputs()[0].clone(),
@@ -681,16 +683,17 @@ mod tests {
             ),
         ]);
 
-        let pay_to_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
-            tx.with_inputs(vec![(Input::new(deploy_script.id(), 1), None)])
-                .with_outputs(vec![Output::new(
-                    ALWAYS_SUCCEED_ADDRESS.clone(),
-                    value!(10_000_000),
-                )])
-                .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
-                .ok()
-        })
-        .unwrap();
+        let pay_to_script =
+            Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
+                tx.with_inputs(vec![(Input::new(deploy_script.id(), 1), None)])
+                    .with_outputs(vec![Output::new(
+                        ALWAYS_SUCCEED_ADDRESS.clone(),
+                        value!(10_000_000),
+                    )])
+                    .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
+                    .ok()
+            })
+            .unwrap();
 
         assert_eq!(
             hex::encode(pay_to_script.to_cbor()),
@@ -702,7 +705,7 @@ mod tests {
             "pay_to_script no longer matches expected bytes."
         );
 
-        utxo = BTreeMap::from([
+        resolved_inputs = BTreeMap::from([
             (
                 Input::new(deploy_script.id(), 0),
                 deploy_script.outputs()[0].clone(),
@@ -717,19 +720,20 @@ mod tests {
             ),
         ]);
 
-        let spend_from_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
-            tx.with_inputs(vec![(
-                Input::new(pay_to_script.id(), 0),
-                Some(PlutusData::list(vec![])),
-            )])
-            .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
-            .with_change_strategy(ChangeStrategy::as_last_output(
-                ALWAYS_SUCCEED_ADDRESS.clone(),
-            ))
-            .with_plutus_scripts(vec![ALWAYS_SUCCEED_SCRIPT.clone()])
-            .ok()
-        })
-        .unwrap();
+        let spend_from_script =
+            Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
+                tx.with_inputs(vec![(
+                    Input::new(pay_to_script.id(), 0),
+                    Some(PlutusData::list(vec![])),
+                )])
+                .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
+                .with_change_strategy(ChangeStrategy::as_last_output(
+                    ALWAYS_SUCCEED_ADDRESS.clone(),
+                ))
+                .with_plutus_scripts(vec![ALWAYS_SUCCEED_SCRIPT.clone()])
+                .ok()
+            })
+            .unwrap();
 
         assert_eq!(
             hex::encode(spend_from_script.to_cbor()),

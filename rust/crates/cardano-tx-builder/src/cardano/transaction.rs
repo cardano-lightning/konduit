@@ -291,7 +291,7 @@ impl Transaction {
 // -------------------------------------------------------------------- Internal
 
 impl Transaction {
-    fn with_change(&mut self, change: Value<u64>) -> anyhow::Result<()> {
+    fn with_change_output(&mut self, change: Value<u64>) -> anyhow::Result<()> {
         let min_change_value = Output::new(Address::default(), change.clone())
             .min_acceptable_value()
             .lovelace();
@@ -384,13 +384,13 @@ impl Transaction {
     /// aren't implemented.
     fn required_scripts<'i, 'o>(
         &self,
-        utxo: &BTreeMap<Input<'i>, Output<'o>>,
+        resolved_inputs: &BTreeMap<Input<'i>, Output<'o>>,
     ) -> BTreeMap<RedeemerPointer, Hash<28>> {
         let from_inputs = self
             .inputs()
             .into_iter()
             .enumerate()
-            .filter_map(|(index, input)| Some((index, utxo.get(&input)?)))
+            .filter_map(|(index, input)| Some((index, resolved_inputs.get(&input)?)))
             .filter_map(|(index, output)| {
                 let payment_credential = output.address().as_shelley()?.payment_credential();
                 Some((index, payment_credential.as_script()?))
