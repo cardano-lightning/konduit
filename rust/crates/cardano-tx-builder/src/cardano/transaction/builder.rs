@@ -7,7 +7,7 @@ use crate::{
     Value, cbor, pallas,
 };
 use anyhow::anyhow;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Deref};
 use uplc::tx::SlotConfig;
 
 // ```cddl
@@ -40,7 +40,7 @@ impl Transaction {
         build: F,
     ) -> anyhow::Result<Self>
     where
-        F: Fn(Self) -> anyhow::Result<Self>,
+        F: Fn(&mut Self) -> anyhow::Result<&mut Self>,
     {
         let mut attempts: usize = 0;
         let mut fee: u64 = 0;
@@ -49,9 +49,19 @@ impl Transaction {
         let mut serialized_tx: Vec<u8> = Vec::new();
 
         loop {
-            tx = build(Transaction::default().with_fee(fee))?;
+            tx = Transaction::default();
+
+            build(tx.with_fee(fee))?;
+
+            assert!(
+                tx.inner.transaction_body.reference_inputs.is_none(),
+                "found reference input(s) in transaction: not supported yet",
+            );
 
             let required_scripts = tx.required_scripts(resolved_inputs);
+
+            // Add a change output according to the user's chosen strategy.
+            set_change(&mut tx, resolved_inputs)?;
 
             // Adjust execution units calculated in previous iteration for all redeemers.
             set_execution_units(&mut tx, &mut redeemers)?;
@@ -82,13 +92,10 @@ impl Transaction {
             // - it possibly UNDER-estimate fees for Native-script-locked inputs;
             let estimated_fee = {
                 let num_signatories = (tx.inputs().len() + tx.specified_signatories().len()) as u64;
-                let (fee_coefficient, fee_constant) = params.fee();
-                fee_constant
-                    + fee_coefficient
-                        * (serialized_tx.len() as u64
-                            + SIZE_OF_KEY_WITNESSES_OVERHEAD
-                            + SIZE_OF_KEY_WITNESS * num_signatories)
-                    + total_execution_cost(params, &redeemers)
+                let estimated_size = serialized_tx.len() as u64
+                    + SIZE_OF_KEY_WITNESSES_OVERHEAD
+                    + SIZE_OF_KEY_WITNESS * num_signatories;
+                params.base_fee(estimated_size) + total_execution_cost(params, &redeemers)
             };
 
             attempts += 1;
@@ -137,7 +144,7 @@ fn refresh_script_integrity_hash(
     params: &ProtocolParameters,
 ) -> anyhow::Result<()> {
     if let Some(hash) = tx.script_integrity_hash(params) {
-        tx.0.transaction_body.script_data_hash = Some(pallas::Hash::from(hash));
+        tx.inner.transaction_body.script_data_hash = Some(pallas::Hash::from(hash));
     } else if !required_scripts.is_empty() {
         return Err(anyhow!(
             "couldn't compute required script integrity hash: datums and redeemers are missing from the transaction."
@@ -151,14 +158,15 @@ fn set_execution_units(
     tx: &mut Transaction,
     redeemers: &mut BTreeMap<RedeemerPointer, ExecutionUnits>,
 ) -> anyhow::Result<()> {
-    if let Some(declared_redeemers) = std::mem::take(&mut tx.0.transaction_witness_set.redeemer) {
+    if let Some(declared_redeemers) = std::mem::take(&mut tx.inner.transaction_witness_set.redeemer)
+    {
         match declared_redeemers {
             pallas::Redeemers::List(..) => {
                 unreachable!("found redeemers encoded as list: impossible with this library.")
             }
 
             pallas::Redeemers::Map(kv) => {
-                tx.0.transaction_witness_set.redeemer = pallas::NonEmptyKeyValuePairs::from_vec(
+                tx.inner.transaction_witness_set.redeemer = pallas::NonEmptyKeyValuePairs::from_vec(
                     kv.into_iter()
                         .map(|(key, mut value)| {
                             let ptr = RedeemerPointer::from(key.clone());
@@ -183,6 +191,149 @@ fn set_execution_units(
             anyhow!("extraneous redeemers in transaction; not required by any script")
                 .context(format!("extra={:?}", redeemers.keys().collect::<Vec<_>>())),
         );
+    }
+
+    Ok(())
+}
+
+fn set_change(tx: &mut Transaction, utxo: &BTreeMap<Input<'_>, Output<'_>>) -> anyhow::Result<()> {
+    let mut change = Value::default();
+
+    // Add inputs to the change balance
+    tx.inputs()
+        .iter()
+        .try_fold(&mut change, |total_input, input| {
+            let output = utxo.get(input).ok_or_else(|| {
+                anyhow!("unknown input, not present in resolved set")
+                    .context(format!("input={input:?}"))
+            })?;
+
+            Ok::<_, anyhow::Error>(total_input.add(output.value().deref().as_ref()))
+        })?;
+
+    // Partition mint quantities between mint & burn
+    let (mint, burn) = tx.mint().assets().clone().into_iter().fold(
+        (BTreeMap::new(), BTreeMap::new()),
+        |(mut mint, mut burn), (policy, assets)| {
+            let mut minted_assets = BTreeMap::new();
+            let mut burned_assets = BTreeMap::new();
+
+            for (asset_name, quantity) in assets {
+                if quantity > 0 {
+                    minted_assets.insert(asset_name, quantity as u64);
+                } else {
+                    burned_assets.insert(asset_name, (-quantity) as u64);
+                }
+            }
+
+            if !minted_assets.is_empty() {
+                mint.insert(policy, minted_assets);
+            }
+
+            if !burned_assets.is_empty() {
+                burn.insert(policy, burned_assets);
+            }
+
+            (mint, burn)
+        },
+    );
+
+    // Add minted tokens to the change balance
+    change.add(&Value::default().with_assets(mint));
+
+    // Subtract burned tokens from the change balance
+    change
+        .checked_sub(&Value::default().with_assets(burn))
+        .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+    // Subtract all outputs from the change balance
+    tx.outputs()
+        .iter()
+        .try_fold(&mut change, |total_output, output| {
+            total_output.checked_sub(output.value().deref().as_ref())
+        })
+        .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+    // Subtract the transaction fee as well
+    change
+        .checked_sub(&Value::new(tx.fee()))
+        .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+    let body = &tx.inner.transaction_body;
+
+    assert!(
+        body.certificates.is_none(),
+        "found certificates in transaction: not supported yet",
+    );
+
+    assert!(
+        body.withdrawals.is_none(),
+        "found withdrawals in transaction: not supported yet",
+    );
+
+    assert!(
+        body.treasury_value.is_none(),
+        "found treasury donation in transaction: not supported yet",
+    );
+
+    assert!(
+        body.proposal_procedures.is_none(),
+        "found proposals in transaction: not supported yet",
+    );
+
+    if !change.is_empty() {
+        tx.with_change(change)?;
+    }
+
+    Ok(())
+}
+
+fn set_collateral_return(
+    tx: &mut Transaction,
+    utxo: &BTreeMap<Input<'_>, Output<'_>>,
+    params: &ProtocolParameters,
+) -> anyhow::Result<()> {
+    let (mut total_collateral_value, opt_return_address): (
+        Value<u64>,
+        Option<Address<'static, _>>,
+    ) = tx
+        .collaterals()
+        .iter()
+        .map(|input| {
+            utxo.get(input).ok_or_else(|| {
+                anyhow!("unknown collateral input").context(format!("reference={input:?}"))
+            })
+        })
+        .try_fold(
+            (Value::new(0), None),
+            |(mut total, address), maybe_output| {
+                let output = maybe_output?;
+                total.add(output.value().deref().as_ref());
+                // It is arbitrary, but we use the source address of the first collateral as the
+                // destination of the collateral change. Collaterals can't be script, so this is
+                // relatively safe as the ledger enforces that the key is known at the time the
+                // transaction is constructed.
+                Ok::<_, anyhow::Error>((
+                    total,
+                    address.or_else(|| Some(output.address().to_owned())),
+                ))
+            },
+        )?;
+
+    if let Some(return_address) = opt_return_address {
+        let minimum_required_collateral =
+            (tx.fee() as f64 * params.collateral_coefficient()).ceil() as u64;
+
+        total_collateral_value
+            .checked_sub(&Value::new(minimum_required_collateral))
+            .map_err(|e| e.context("insufficient collateral inputs"))?;
+
+        tx.inner.transaction_body.total_collateral = Some(minimum_required_collateral);
+        tx.inner.transaction_body.collateral_return = Some(pallas::TransactionOutput::from(
+            // A bit misleading but 'total_collateral_value' now refers to the total amount brought
+            // in, minus the the minimum required by the protocol, left out.
+            Output::new(return_address, total_collateral_value),
+        ));
     }
 
     Ok(())
@@ -237,75 +388,25 @@ fn evaluate_plutus_scripts(
     Ok(BTreeMap::new())
 }
 
-fn set_collateral_return(
-    tx: &mut Transaction,
-    utxo: &BTreeMap<Input<'_>, Output<'_>>,
-    params: &ProtocolParameters,
-) -> anyhow::Result<()> {
-    let (mut total_collateral_value, opt_return_address): (
-        Value<u64>,
-        Option<Address<'static, _>>,
-    ) = tx
-        .collaterals()
-        .iter()
-        .map(|input| {
-            utxo.get(input)
-                .ok_or_else(|| anyhow!("unknown collateral input").context("reference={input:?}"))
-        })
-        .try_fold(
-            (Value::new(0), None),
-            |(mut total, address), maybe_output| {
-                let output = maybe_output?;
-                total.add(output.value());
-                // It is arbitrary, but we use the source address of the first collateral as the
-                // destination of the collateral change. Collaterals can't be script, so this is
-                // relatively safe as the ledger enforces that the key is known at the time the
-                // transaction is constructed.
-                Ok::<_, anyhow::Error>((
-                    total,
-                    address.or_else(|| Some(output.address().to_owned())),
-                ))
-            },
-        )?;
-
-    if let Some(return_address) = opt_return_address {
-        let minimum_required_collateral =
-            (tx.fee() as f64 * params.collateral_coefficient()).ceil() as u64;
-
-        total_collateral_value
-            .checked_sub(&Value::new(minimum_required_collateral))
-            .map_err(|e| e.context("insufficient collateral inputs"))?;
-
-        tx.0.transaction_body.total_collateral = Some(minimum_required_collateral);
-        tx.0.transaction_body.collateral_return = Some(pallas::TransactionOutput::from(
-            // A bit misleading but 'total_collateral_value' now refers to the total amount brought
-            // in, minus the the minimum required by the protocol, left out.
-            Output::new(return_address, total_collateral_value),
-        ));
-    }
-
-    Ok(())
-}
-
 // ----------------------------------------------------------------------- Tests
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        PlutusData, PlutusVersion, ProtocolParameters, Transaction, input, mint, output,
-        plutus_script, value,
+        Address, Input, PlutusData, PlutusVersion, ProtocolParameters, Transaction, address,
+        address_test, cbor::ToCbor, input, mint, output, plutus_script, script_credential, value,
     };
     use std::{collections::BTreeMap, sync::LazyLock};
 
-    /// Some fixture parameters, simply mimicking Mainnet's parameters.
+    /// Some fixture parameters, simply mimicking Mainnet/PreProd's parameters.
     pub static FIXTURE_PROTOCOL_PARAMETERS: LazyLock<ProtocolParameters> = LazyLock::new(|| {
         ProtocolParameters::default()
-            .with_fee_coefficient(44)
+            .with_fee_per_byte(44)
             .with_fee_constant(155381)
             .with_execution_price_mem(0.0577)
             .with_execution_price_cpu(7.21e-05)
-            .with_start_time(1506203091)
-            .with_first_shelley_slot(4492800)
+            .with_start_time(1654041600)
+            .with_first_shelley_slot(86400)
             .with_plutus_v3_cost_model([
                 100788, 420, 1, 1, 1000, 173, 0, 1, 1000, 59957, 4, 1, 11183, 32, 201305, 8356, 4,
                 16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 100, 100,
@@ -324,22 +425,43 @@ mod tests {
                 18, 52948122, 18, 1995836, 36, 3227919, 12, 901022, 1, 166917843, 4307, 36, 284546,
                 36, 158221314, 26549, 36, 74698472, 36, 333849714, 1, 254006273, 72, 2174038, 72,
                 2261318, 64571, 4, 207616, 8310, 4, 1293828, 28716, 63, 0, 1, 1006041, 43623, 251,
-                0, 1,
+                0, 1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1,
+                107878, 680, 0, 1, 95336, 1, 281145, 18848, 0, 1, 180194, 159, 1, 1, 158519, 8942,
+                0, 1, 159378, 8813, 0, 1, 107490, 3298, 1, 106057, 655, 1, 1964219, 24520, 3,
             ])
     });
 
     #[test]
     fn single_in_single_out() {
-        let result = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &BTreeMap::new(), |tx| {
+        let utxo = BTreeMap::from([(
+            input!(
+                "32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c",
+                1
+            ),
+            output!(
+                "addr1qxjgtdjrdj05nge3v406z46yqhp7nwc744j7sju37287sfjrcq0durn7xns7whpp6mymksagz9msf08qxqfakhc85dgq9pynjj",
+                value!(
+                    7933351,
+                    (
+                        "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                        "534e454b",
+                        1376
+                    ),
+                    (
+                        "a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235",
+                        "484f534b59",
+                        134468443
+                    ),
+                ),
+            ),
+        )]);
+
+        let result = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
             tx
                 .with_inputs(vec![
                     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
                 ])
                 .with_outputs(vec![
-                    output!(
-                        "addr1qxjgtdjrdj05nge3v406z46yqhp7nwc744j7sju37287sfjrcq0durn7xns7whpp6mymksagz9msf08qxqfakhc85dgq9pynjj",
-                        value!(969750),
-                    ),
                     output!(
                         "addr1q8lgqva8uleq9f3wjsnggh42d6y8vm9rvah380wq3x9djqwhy3954pmhklwxjz05vsx0qt4yw4a9275eldyrkp0c0hlqgxc7du",
                         value!(
@@ -349,6 +471,16 @@ mod tests {
                         ),
                     ),
                 ])
+                .with_change_strategy(Box::new(|change, outputs| {
+                    outputs.push(
+                        output!(
+                            "addr1qxjgtdjrdj05nge3v406z46yqhp7nwc744j7sju37287sfjrcq0durn7xns7whpp6mymksagz9msf08qxqfakhc85dgq9pynjj",
+                            change,
+                        ),
+                    );
+
+                    Ok(())
+                }))
                 .ok()
         });
 
@@ -388,19 +520,15 @@ mod tests {
                 .with_collaterals(vec![
                     input!("d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50", 0),
                 ])
-                .with_outputs(vec![
-                    output!(
-                        "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
-                        value!(
-                            101843529,
-                            (
-                                "5fb286e39c3cda5a5abd17501c17b01987ebfa282df129c4df1bf27e",
-                                "e29ca82073756d6d6974203230323520646973636f756e74207368617264",
-                                100,
-                            ),
+                .with_change_strategy(Box::new(|change, outputs| {
+                    outputs.push(
+                        output!(
+                            "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
+                            change,
                         )
-                    ),
-                ])
+                    );
+                    Ok(())
+                }))
                 .with_mint(mint!(
                     (
                         "5fb286e39c3cda5a5abd17501c17b01987ebfa282df129c4df1bf27e",
@@ -445,5 +573,74 @@ mod tests {
             fee >= minimum_fee && fee <= cardano_cli_fee,
             "estimated fee={fee}, minimum required={minimum_fee}, cardano-cli's estimation={cardano_cli_fee}",
         );
+    }
+
+    #[test]
+    fn full_lifecycle() {
+        // An always-succeed script
+        let script_address: Address<'static, address::Any> = Address::from(address_test!(
+            script_credential!("bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777")
+        ));
+
+        let script = plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69");
+
+        let mut utxo = BTreeMap::from([(
+            input!(
+                "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
+                1
+            ),
+            output!(
+                "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
+                value!(47321123),
+            ),
+        )]);
+
+        let pay_to_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
+            tx.with_inputs(vec![input!(
+                "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
+                1
+            )])
+            .with_outputs(vec![output!(script_address.clone())])
+            .with_change_strategy(Box::new(|change, outputs| {
+                outputs.push(
+                    output!(
+                        "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
+                        change
+                    )
+                );
+                Ok(())
+            }))
+            .ok()
+        })
+        .unwrap();
+
+        assert_eq!(
+            hex::encode(pay_to_script.to_cbor()),
+            "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
+             2fea7b9da6e490324010181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
+             f872f57f6d3a1ffa0eb777011a000cd302021a000282b5a0f5f6"
+        );
+
+        utxo = BTreeMap::from([(
+            Input::new(pay_to_script.id(), 0),
+            output!(script_address.clone()),
+        )]);
+
+        let deploy_script = Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &utxo, |tx| {
+            let change_address = script_address.clone();
+            let change_script = script.clone();
+
+            tx.with_inputs(utxo.keys().cloned())
+                .with_change_strategy(Box::new(move |change, outputs| {
+                    outputs.push(
+                        output!(change_address, change).with_plutus_script(change_script.clone()),
+                    );
+                    Ok(())
+                }))
+                .ok()
+        })
+        .unwrap();
+
+        assert_eq!(hex::encode(deploy_script.to_cbor()), "");
     }
 }

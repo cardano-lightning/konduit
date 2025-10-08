@@ -3,5 +3,6 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 pub use pallas_addresses::*;
+pub use pallas_codec::utils::*;
 pub use pallas_crypto::*;
 pub use pallas_primitives::{alonzo::BigInt, conway::*, *};

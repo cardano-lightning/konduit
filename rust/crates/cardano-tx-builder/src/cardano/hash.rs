@@ -11,7 +11,7 @@ use std::fmt;
 #[cbor(transparent)]
 pub struct Hash<const SIZE: usize>(#[n(0)] pallas::Hash<SIZE>);
 
-// ------------------------------------------------------------------ Converting
+// ----------------------------------------------------------- Converting (from)
 
 impl<const SIZE: usize> fmt::Display for Hash<SIZE> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -36,15 +36,9 @@ impl<const SIZE: usize> TryFrom<&str> for Hash<SIZE> {
     }
 }
 
-impl<const SIZE: usize> From<Hash<SIZE>> for pallas::Hash<SIZE> {
-    fn from(hash: Hash<SIZE>) -> Self {
-        hash.0
-    }
-}
-
-impl<const SIZE: usize> From<&Hash<SIZE>> for pallas::Hash<SIZE> {
-    fn from(hash: &Hash<SIZE>) -> Self {
-        hash.0
+impl<const SIZE: usize> From<[u8; SIZE]> for Hash<SIZE> {
+    fn from(hash: [u8; SIZE]) -> Self {
+        Self::from(pallas::Hash::from(hash))
     }
 }
 
@@ -57,5 +51,19 @@ impl<const SIZE: usize> From<pallas::Hash<SIZE>> for Hash<SIZE> {
 impl<const SIZE: usize> From<&pallas::Hash<SIZE>> for Hash<SIZE> {
     fn from(hash: &pallas::Hash<SIZE>) -> Self {
         Self(*hash)
+    }
+}
+
+// ------------------------------------------------------------- Converting (to)
+
+impl<const SIZE: usize> From<Hash<SIZE>> for pallas::Hash<SIZE> {
+    fn from(hash: Hash<SIZE>) -> Self {
+        hash.0
+    }
+}
+
+impl<const SIZE: usize> From<&Hash<SIZE>> for pallas::Hash<SIZE> {
+    fn from(hash: &Hash<SIZE>) -> Self {
+        hash.0
     }
 }

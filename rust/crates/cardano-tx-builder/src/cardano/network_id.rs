@@ -11,6 +11,18 @@ use std::fmt;
 #[cbor(transparent)]
 pub struct NetworkId(#[n(0)] pallas::NetworkId);
 
+// -------------------------------------------------------------------- Building
+
+impl NetworkId {
+    pub fn mainnet() -> Self {
+        Self(pallas::NetworkId::Mainnet)
+    }
+
+    pub fn testnet() -> Self {
+        Self(pallas::NetworkId::Testnet)
+    }
+}
+
 // ----------------------------------------------------------- Converting (from)
 
 impl From<pallas::NetworkId> for NetworkId {

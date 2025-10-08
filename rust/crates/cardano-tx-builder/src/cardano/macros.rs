@@ -6,7 +6,51 @@ macro_rules! input {
 }
 
 #[macro_export]
+macro_rules! address {
+    ($payment:expr $(,)?) => {
+        $crate::Address::new($crate::NetworkId::mainnet(), $payment)
+    };
+
+    ($network:expr, $payment:expr, $delegation: expr $(,)?) => {
+        $crate::Address<_, $crate::address::Any>::from(
+            $crate::Address::new($crate::NetworkId::mainnet(), $payment).with_delegation($delegation)
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! address_test {
+    ($payment:expr $(,)?) => {
+        $crate::Address::new($crate::NetworkId::testnet(), $payment)
+    };
+
+    ($network:expr, $payment:expr, $delegation: expr $(,)?) => {
+        $crate::Address<_, $crate::address::Any>::from(
+            $crate::Address::new($crate::NetworkId::testnet(), $payment).with_delegation($delegation)
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! script_credential {
+    ($hash:expr $(,)?) => {
+        $crate::Credential::from_script(<$crate::Hash<28>>::try_from($hash).unwrap())
+    };
+}
+
+#[macro_export]
+macro_rules! key_credential {
+    ($hash:expr $(,)?) => {
+        $crate::Credential::from_key(hex::decode($hash).unwrap())
+    };
+}
+
+#[macro_export]
 macro_rules! output {
+    ($addr:expr $(,)?) => {
+        $crate::Output::to($crate::Address::try_from($addr).unwrap())
+    };
+
     ($addr:expr, $value:expr $(,)?) => {
         $crate::Output::new($crate::Address::try_from($addr).unwrap(), $value)
     };

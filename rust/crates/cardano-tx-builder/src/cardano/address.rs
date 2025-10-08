@@ -11,7 +11,7 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Address<'a, T: KnownStyle>(Cow<'a, Style>, PhantomData<T>);
 
 #[derive(Debug, Clone)]
@@ -111,6 +111,15 @@ impl Address<'static, Shelley> {
     }
 }
 
+impl Default for Address<'static, Any> {
+    fn default() -> Self {
+        Self::from(
+            Address::new(NetworkId::mainnet(), Credential::default())
+                .with_delegation(Credential::default()),
+        )
+    }
+}
+
 // ----------------------------------------------------------- Converting (from)
 
 impl From<pallas::ByronAddress> for Address<'static, Byron> {
@@ -125,15 +134,27 @@ impl From<pallas::ShelleyAddress> for Address<'static, Shelley> {
     }
 }
 
-impl<T: KnownStyle> TryFrom<pallas::Address> for Address<'static, T> {
+impl<'a> From<Address<'a, Byron>> for Address<'a, Any> {
+    fn from(byron_address: Address<'a, Byron>) -> Self {
+        Self(byron_address.0, PhantomData)
+    }
+}
+
+impl<'a> From<Address<'a, Shelley>> for Address<'a, Any> {
+    fn from(shelley_address: Address<'a, Shelley>) -> Self {
+        Self(shelley_address.0, PhantomData)
+    }
+}
+
+impl TryFrom<pallas::Address> for Address<'static, Any> {
     type Error = anyhow::Error;
 
     fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
         match address {
             pallas_addresses::Address::Byron(byron) => {
-                Ok(Address::<T>(Cow::Owned(Style::Byron(byron)), PhantomData))
+                Ok(Address::<Any>(Cow::Owned(Style::Byron(byron)), PhantomData))
             }
-            pallas_addresses::Address::Shelley(shelley) => Ok(Address::<T>(
+            pallas_addresses::Address::Shelley(shelley) => Ok(Address::<Any>(
                 Cow::Owned(Style::Shelley(shelley)),
                 PhantomData,
             )),
@@ -144,7 +165,26 @@ impl<T: KnownStyle> TryFrom<pallas::Address> for Address<'static, T> {
     }
 }
 
-impl<T: KnownStyle> TryFrom<&str> for Address<'static, T> {
+impl TryFrom<pallas::Address> for Address<'static, Shelley> {
+    type Error = anyhow::Error;
+
+    fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
+        match address {
+            pallas_addresses::Address::Shelley(shelley) => Ok(Address::<Shelley>(
+                Cow::Owned(Style::Shelley(shelley)),
+                PhantomData,
+            )),
+            pallas_addresses::Address::Byron(_) | pallas_addresses::Address::Stake(_) => {
+                Err(anyhow!("not a shelley address"))
+            }
+        }
+    }
+}
+
+impl<T: KnownStyle> TryFrom<&str> for Address<'static, T>
+where
+    Address<'static, T>: TryFrom<pallas::Address, Error = anyhow::Error>,
+{
     type Error = anyhow::Error;
 
     fn try_from(text: &str) -> anyhow::Result<Self> {
@@ -152,7 +192,10 @@ impl<T: KnownStyle> TryFrom<&str> for Address<'static, T> {
     }
 }
 
-impl<T: KnownStyle> TryFrom<&[u8]> for Address<'static, T> {
+impl<T: KnownStyle> TryFrom<&[u8]> for Address<'static, T>
+where
+    Address<'static, T>: TryFrom<pallas::Address, Error = anyhow::Error>,
+{
     type Error = anyhow::Error;
 
     fn try_from(bytes: &[u8]) -> anyhow::Result<Self> {

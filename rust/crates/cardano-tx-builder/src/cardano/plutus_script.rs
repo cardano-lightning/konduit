@@ -20,6 +20,26 @@ impl PlutusScript {
     }
 }
 
+// ------------------------------------------------------------ Converting (from)
+
+impl From<pallas::PlutusScript<1>> for PlutusScript {
+    fn from(plutus_script: pallas::PlutusScript<1>) -> Self {
+        Self(PlutusVersion::V1, plutus_script.0.to_vec())
+    }
+}
+
+impl From<pallas::PlutusScript<2>> for PlutusScript {
+    fn from(plutus_script: pallas::PlutusScript<2>) -> Self {
+        Self(PlutusVersion::V2, plutus_script.0.to_vec())
+    }
+}
+
+impl From<pallas::PlutusScript<3>> for PlutusScript {
+    fn from(plutus_script: pallas::PlutusScript<3>) -> Self {
+        Self(PlutusVersion::V3, plutus_script.0.to_vec())
+    }
+}
+
 // -------------------------------------------------------------- Converting (to)
 
 impl From<PlutusScript> for Hash<28> {
@@ -33,6 +53,22 @@ impl From<PlutusScript> for Hash<28> {
 pub struct PlutusVersionMismatch {
     pub expected: PlutusVersion,
     pub found: PlutusVersion,
+}
+
+impl From<PlutusScript> for pallas::ScriptRef {
+    fn from(PlutusScript(version, script): PlutusScript) -> Self {
+        match version {
+            PlutusVersion::V1 => pallas::ScriptRef::PlutusV1Script(pallas::PlutusScript::<1>(
+                pallas::Bytes::from(script),
+            )),
+            PlutusVersion::V2 => pallas::ScriptRef::PlutusV2Script(pallas::PlutusScript::<2>(
+                pallas::Bytes::from(script),
+            )),
+            PlutusVersion::V3 => pallas::ScriptRef::PlutusV3Script(pallas::PlutusScript::<3>(
+                pallas::Bytes::from(script),
+            )),
+        }
+    }
 }
 
 impl TryFrom<PlutusScript> for pallas::PlutusScript<1> {
