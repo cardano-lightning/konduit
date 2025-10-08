@@ -3,12 +3,16 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, ExecutionUnits, Hash, Input, Output, PlutusData, PlutusScript, PlutusVersion,
-    ProtocolParameters, RedeemerPointer, Value, cbor, pallas,
+    Address, ChangeStrategy, ExecutionUnits, Hash, Input, Output, PlutusData, PlutusScript,
+    PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor, pallas,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
-use std::{collections::BTreeMap, fmt, mem, ops::Deref};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    fmt, mem,
+    ops::Deref,
+};
 
 mod builder;
 
@@ -16,9 +20,6 @@ pub struct Transaction {
     inner: pallas::Tx,
     change_strategy: ChangeStrategy,
 }
-
-pub type ChangeStrategy =
-    Box<dyn FnOnce(Value<u64>, &mut Vec<Output<'static>>) -> anyhow::Result<()>>;
 
 // ------------------------------------------------------------------ Inspecting
 
@@ -87,7 +88,7 @@ impl Transaction {
 impl Default for Transaction {
     fn default() -> Self {
         Self {
-            change_strategy: Transaction::default_change_strategy(),
+            change_strategy: ChangeStrategy::default(),
             inner: pallas::Tx {
                 transaction_body: pallas::TransactionBody {
                     auxiliary_data_hash: None,
@@ -278,14 +279,6 @@ impl Transaction {
 // -------------------------------------------------------------------- Internal
 
 impl Transaction {
-    fn default_change_strategy() -> ChangeStrategy {
-        Box::new(|_change, _outputs| {
-            Err(anyhow!(
-                "no explicit change strategy defined; use 'with_change_strategy' to define one."
-            ))
-        })
-    }
-
     fn with_change(&mut self, change: Value<u64>) -> anyhow::Result<()> {
         let min_change_value = Output::new(Address::default(), change.clone())
             .value()
@@ -308,12 +301,9 @@ impl Transaction {
         let mut outputs = mem::take(&mut self.inner.transaction_body.outputs)
             .into_iter()
             .map(Output::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<VecDeque<_>, _>>()?;
 
-        mem::replace(&mut self.change_strategy, Self::default_change_strategy())(
-            change,
-            &mut outputs,
-        )?;
+        mem::take(&mut self.change_strategy).with(change, &mut outputs)?;
 
         self.with_outputs(outputs);
 
@@ -520,7 +510,7 @@ impl<'d, C> cbor::Decode<'d, C> for Transaction {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         Ok(Self {
             inner: d.decode_with(ctx)?,
-            change_strategy: Self::default_change_strategy(),
+            change_strategy: ChangeStrategy::default(),
         })
     }
 }

@@ -393,8 +393,9 @@ fn evaluate_plutus_scripts(
 #[cfg(test)]
 mod tests {
     use crate::{
-        Address, Input, PlutusData, PlutusVersion, ProtocolParameters, Transaction, address,
-        address_test, cbor::ToCbor, input, mint, output, plutus_script, script_credential, value,
+        Address, ChangeStrategy, Input, PlutusData, PlutusVersion, ProtocolParameters, Transaction,
+        address, address_test, cbor::ToCbor, input, mint, output, plutus_script, script_credential,
+        value,
     };
     use std::{collections::BTreeMap, sync::LazyLock};
 
@@ -471,16 +472,9 @@ mod tests {
                         ),
                     ),
                 ])
-                .with_change_strategy(Box::new(|change, outputs| {
-                    outputs.push(
-                        output!(
-                            "addr1qxjgtdjrdj05nge3v406z46yqhp7nwc744j7sju37287sfjrcq0durn7xns7whpp6mymksagz9msf08qxqfakhc85dgq9pynjj",
-                            change,
-                        ),
-                    );
-
-                    Ok(())
-                }))
+                .with_change_strategy(ChangeStrategy::as_last_output(
+                    address!("addr1qxjgtdjrdj05nge3v406z46yqhp7nwc744j7sju37287sfjrcq0durn7xns7whpp6mymksagz9msf08qxqfakhc85dgq9pynjj")
+                ))
                 .ok()
         });
 
@@ -520,15 +514,11 @@ mod tests {
                 .with_collaterals(vec![
                     input!("d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50", 0),
                 ])
-                .with_change_strategy(Box::new(|change, outputs| {
-                    outputs.push(
-                        output!(
-                            "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
-                            change,
-                        )
-                    );
-                    Ok(())
-                }))
+                .with_change_strategy(ChangeStrategy::as_last_output(
+                    address!(
+                        "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
+                    )
+                ))
                 .with_mint(mint!(
                     (
                         "5fb286e39c3cda5a5abd17501c17b01987ebfa282df129c4df1bf27e",
@@ -601,15 +591,11 @@ mod tests {
                 1
             )])
             .with_outputs(vec![output!(script_address.clone())])
-            .with_change_strategy(Box::new(|change, outputs| {
-                outputs.push(
-                    output!(
-                        "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
-                        change
-                    )
-                );
-                Ok(())
-            }))
+            .with_change_strategy(ChangeStrategy::as_last_output(
+                address_test!(
+                    "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t",
+                )
+            ))
             .ok()
         })
         .unwrap();
@@ -631,8 +617,8 @@ mod tests {
             let change_script = script.clone();
 
             tx.with_inputs(utxo.keys().cloned())
-                .with_change_strategy(Box::new(move |change, outputs| {
-                    outputs.push(
+                .with_change_strategy(ChangeStrategy::new(move |change, outputs| {
+                    outputs.push_back(
                         output!(change_address, change).with_plutus_script(change_script.clone()),
                     );
                     Ok(())

@@ -7,6 +7,10 @@ macro_rules! input {
 
 #[macro_export]
 macro_rules! address {
+    ($text:literal $(,)?) => {
+        $crate::Address::try_from($text).unwrap()
+    };
+
     ($payment:expr $(,)?) => {
         $crate::Address::new($crate::NetworkId::mainnet(), $payment)
     };
@@ -20,6 +24,10 @@ macro_rules! address {
 
 #[macro_export]
 macro_rules! address_test {
+    ($text:literal $(,)?) => {
+        $crate::Address::try_from($text).unwrap()
+    };
+
     ($payment:expr $(,)?) => {
         $crate::Address::new($crate::NetworkId::testnet(), $payment)
     };
