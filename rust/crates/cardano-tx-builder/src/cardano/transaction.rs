@@ -42,6 +42,13 @@ impl Transaction {
         self.inner.transaction_body.fee
     }
 
+    pub fn total_collateral(&self) -> u64 {
+        self.inner
+            .transaction_body
+            .total_collateral
+            .unwrap_or_default()
+    }
+
     /// The declared transaction inputs, which are spent in case of successful transaction.
     pub fn inputs(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
         Box::new(
@@ -714,14 +721,13 @@ impl Transaction {
             )?;
 
         if let Some(return_address) = opt_return_address {
-            let minimum_required_collateral =
-                (self.fee() as f64 * params.collateral_coefficient()).ceil() as u64;
+            let minimum_collateral = params.minimum_collateral(self.fee());
 
             total_collateral_value
-                .checked_sub(&Value::new(minimum_required_collateral))
+                .checked_sub(&Value::new(minimum_collateral))
                 .map_err(|e| e.context("insufficient collateral inputs"))?;
 
-            self.inner.transaction_body.total_collateral = Some(minimum_required_collateral);
+            self.inner.transaction_body.total_collateral = Some(minimum_collateral);
             self.inner.transaction_body.collateral_return = Some(pallas::TransactionOutput::from(
                 // A bit misleading but 'total_collateral_value' now refers to the total amount brought
                 // in, minus the the minimum required by the protocol, left out.

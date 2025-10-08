@@ -72,8 +72,8 @@ impl ProtocolParameters {
         }
     }
 
-    pub fn collateral_coefficient(&self) -> f64 {
-        self.collateral_coefficient
+    pub fn minimum_collateral(&self, base_fee: u64) -> u64 {
+        (base_fee as f64 * self.collateral_coefficient).ceil() as u64
     }
 
     pub fn price_mem(&self, execution_units: u64) -> u64 {
@@ -192,6 +192,7 @@ impl ProtocolParameters {
         Self::default()
             .with_fee_per_byte(44)
             .with_fee_constant(155381)
+            .with_collateral_coefficient(1.5)
             .with_referenced_scripts_base_fee_per_byte(15)
             .with_referenced_scripts_fee_multiplier(Ratio::new(12, 10))
             .with_referenced_scripts_fee_step_size(25000)

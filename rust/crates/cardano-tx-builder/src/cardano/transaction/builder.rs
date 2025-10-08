@@ -58,11 +58,11 @@ impl Transaction {
             // Add a change output according to the user's chosen strategy.
             tx.with_change(resolved_inputs)?;
 
-            // Adjust execution units calculated in previous iteration for all redeemers.
-            tx.with_execution_units(&mut redeemers)?;
-
             // Compute & add total collateral + collateral return
             tx.with_collateral_return(resolved_inputs, params)?;
+
+            // Adjust execution units calculated in previous iteration for all redeemers.
+            tx.with_execution_units(&mut redeemers)?;
 
             // Add the script integrity hash, so that it counts towards the transaction size.
             tx.with_script_integrity_hash(&required_scripts, params)?;
@@ -415,17 +415,18 @@ mod tests {
         let mut resolved_inputs = BTreeMap::from([(
             input!(
                 "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
-                1
+                3
             )
             .0,
-            Output::new(my_address.clone(), value!(47321123)),
+            Output::new(my_address.clone(), value!(11875000)),
         )]);
 
+        // https://preprod.cardanoscan.io/transaction/036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a5
         let deploy_script =
             Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
                 tx.with_inputs(vec![input!(
                     "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
-                    1
+                    3
                 )])
                 .with_outputs(vec![
                     Output::to(my_address.clone())
@@ -439,43 +440,43 @@ mod tests {
         assert_eq!(
             hex::encode(deploy_script.to_cbor()),
             "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
-             2fea7b9da6e490324010182a30058390082c1729d5fd44124a6ae72bcdb86b6e827\
+             2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827\
              aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d\
              3b2fca56572011a001092a803d818558203525101010023259800a518a4d1365640\
              04ae69a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c0\
-             92e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a02\
-             bee626021a00029755a0f5f6",
+             92e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a00\
+             a208bb021a00029755a0f5f6",
             "deploy_script no longer matches expected bytes."
         );
 
-        let pay_to_script = Transaction::build(
-            &FIXTURE_PROTOCOL_PARAMETERS,
-            &deploy_script.as_resolved_inputs(),
-            |tx| {
+        resolved_inputs.append(&mut deploy_script.as_resolved_inputs());
+
+        // https://preprod.cardanoscan.io/transaction/8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40
+        let pay_to_script =
+            Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
                 tx.with_inputs(vec![(Input::new(deploy_script.id(), 1), None)])
                     .with_outputs(vec![Output::new(
                         ALWAYS_SUCCEED_ADDRESS.clone(),
-                        value!(10_000_000),
+                        value!(5_000_000),
                     )])
                     .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
                     .ok()
-            },
-        )
-        .unwrap();
+            })
+            .unwrap();
 
         assert_eq!(
             hex::encode(pay_to_script.to_cbor()),
-            "84a300d901028182582026dad69d058e6aed8dd112266c8cda84ecca7c8132b535c\
-             65697f2409d0d2e80010182a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
-             f872f57f6d3a1ffa0eb777011a00989680a20058390082c1729d5fd44124a6ae72b\
+            "84a300d9010281825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118\
+             c5eefabee6a8e04a5010182a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
+             f872f57f6d3a1ffa0eb777011a004c4b40a20058390082c1729d5fd44124a6ae72b\
              cdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7c\
-             d277d73468d3b2fca56572011a0223c16d021a00028e39a0f5f6",
+             d277d73468d3b2fca56572011a00532f42021a00028e39a0f5f6",
             "pay_to_script no longer matches expected bytes."
         );
 
-        resolved_inputs = pay_to_script.as_resolved_inputs();
-        resolved_inputs.append(&mut deploy_script.as_resolved_inputs());
+        resolved_inputs.append(&mut pay_to_script.as_resolved_inputs());
 
+        // https://preprod.cardanoscan.io/transaction/3522a630e91e631f56897be2898e059478c300f4bb8dd7891549a191b4bf1090
         let spend_from_script =
             Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
                 tx.with_inputs(vec![(
@@ -493,16 +494,51 @@ mod tests {
 
         assert_eq!(
             hex::encode(spend_from_script.to_cbor()),
-            "84a800d901028182582004aca0496e336f36f219a1ddb8298555a1b166a988990b8\
-             427ec3ff292fc6b7a000181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
-             f872f57f6d3a1ffa0eb777011a0095ef65021a0002a71b0b5820d545623b07e425a\
-             55262585d2b5e8aaee16230fd1434e790fa4511da4bf8a4550dd901028182582004\
-             aca0496e336f36f219a1ddb8298555a1b166a988990b8427ec3ff292fc6b7a0110a\
+            "84a800d90102818258208d56891b4638203175c488e19d630bfbc8af285353aeeb1\
+             053d54a3c371b7a40000181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
+             f872f57f6d3a1ffa0eb777011a0049a375021a0002a7cb0b5820d545623b07e425a\
+             55262585d2b5e8aaee16230fd1434e790fa4511da4bf8a4550dd90102818258208d\
+             56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a400110a\
              20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4a\
-             f57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a0223c16d1\
-             10012d901028182582026dad69d058e6aed8dd112266c8cda84ecca7c8132b535c6\
-             5697f2409d0d2e8000a105a18200008280821906411a0004d2f5f5f6",
+             f57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f33911\
+             11a0003fbb112d9010281825820036fd8d808d4a87737cbb0ed1e61b08ce753323e\
+             94fc118c5eefabee6a8e04a500a105a18200008280821906411a0004d2f5f5f6",
             "spend_from_script no longer matches expected bytes."
+        );
+
+        resolved_inputs.append(&mut spend_from_script.as_resolved_inputs());
+
+        // https://preprod.cardanoscan.io/transaction/cd8c5bf00ab490d57c82ebf6364e4a6337dc214d635e8c392deaa7e4b98ed6ea
+        let unpublish_script =
+            Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
+                tx.with_inputs(vec![
+                    (
+                        Input::new(spend_from_script.id(), 0),
+                        Some(PlutusData::list(vec![])),
+                    ),
+                    (Input::new(deploy_script.id(), 0), None),
+                    (Input::new(pay_to_script.id(), 1), None),
+                ])
+                .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
+                .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
+                .ok()
+            })
+            .unwrap();
+
+        assert_eq!(
+            hex::encode(unpublish_script.to_cbor()),
+            "84a700d9010283825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118\
+             c5eefabee6a8e04a5008258203522a630e91e631f56897be2898e059478c300f4bb\
+             8dd7891549a191b4bf1090008258208d56891b4638203175c488e19d630bfbc8af2\
+             85353aeeb1053d54a3c371b7a40010181a20058390082c1729d5fd44124a6ae72bc\
+             db86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd\
+             277d73468d3b2fca56572011a00aab370021a0002b1ef0b5820d37acc9c984616d9\
+             d15825afeaf7d266e5bde38fdd4df4f8b2312703022d474d0dd90102818258208d5\
+             6891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a400110a2\
+             0058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af\
+             57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f245b11\
+             1a00040ae7a105a18200018280821906411a0004d2f5f5f6",
+            "unpublish_script no longer matches expected bytes."
         );
     }
 }
