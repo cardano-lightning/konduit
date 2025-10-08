@@ -70,7 +70,7 @@ impl Transaction {
             // Explicitly fails when there's no collaterals, but that Plutus scripts were found.
             // This informs the user of the builder that they did something wrong and forgot to set
             // one or more collateral.
-            fail_on_missing_collateral(&required_scripts, &tx.collaterals())?;
+            fail_on_missing_collateral(&required_scripts, tx.collaterals())?;
 
             // Serialise the transaction to compute its fee.
             serialized_tx.clear();
@@ -84,14 +84,12 @@ impl Transaction {
                 params,
             )?;
 
-            // This estimation is a best-effort and assumes that one input requires one signature
-            // witness. This means that:
+            // This estimation is a best-effort and assumes that one (non-script) input requires one signature
+            // witness. This means that it possibly UNDER-estimate fees for Native-script-locked inputs;
             //
-            // - it slightly OVER-estimate fees for Plutus-script-locked inputs;
-            // - it slightly OVER-estimate fees for duplicate signers;
-            // - it possibly UNDER-estimate fees for Native-script-locked inputs;
+            // We don't have a solution for it at the moment.
             let estimated_fee = {
-                let num_signatories = (tx.inputs().len() + tx.specified_signatories().len()) as u64;
+                let num_signatories = tx.required_signatories(resolved_inputs)?.len() as u64;
                 let estimated_size = serialized_tx.len() as u64
                     + SIZE_OF_KEY_WITNESSES_OVERHEAD
                     + SIZE_OF_KEY_WITNESS * num_signatories;
@@ -159,11 +157,11 @@ fn into_uplc_inputs(
 
 fn fail_on_missing_collateral<'a, T>(
     redeemers: &BTreeMap<RedeemerPointer, T>,
-    collaterals: &[Input<'a>],
+    collaterals: impl Iterator<Item = Input<'a>>,
 ) -> anyhow::Result<()> {
     let mut ptrs = redeemers.keys();
     if let Some(ptr) = ptrs.next()
-        && collaterals.is_empty()
+        && collaterals.count() == 0
     {
         let mut err = anyhow!("at {:?}", ptr);
         for ptr in ptrs {
@@ -457,15 +455,10 @@ mod tests {
             "deploy_script no longer matches expected bytes."
         );
 
+        let deploy_outputs = deploy_script.outputs().collect::<Vec<_>>();
         resolved_inputs = BTreeMap::from([
-            (
-                Input::new(deploy_script.id(), 0),
-                deploy_script.outputs()[0].clone(),
-            ),
-            (
-                Input::new(deploy_script.id(), 1),
-                deploy_script.outputs()[1].clone(),
-            ),
+            (Input::new(deploy_script.id(), 0), deploy_outputs[0].clone()),
+            (Input::new(deploy_script.id(), 1), deploy_outputs[1].clone()),
         ]);
 
         let pay_to_script =
@@ -490,18 +483,16 @@ mod tests {
             "pay_to_script no longer matches expected bytes."
         );
 
+        let pay_to_script_outputs = pay_to_script.outputs().collect::<Vec<_>>();
         resolved_inputs = BTreeMap::from([
-            (
-                Input::new(deploy_script.id(), 0),
-                deploy_script.outputs()[0].clone(),
-            ),
+            (Input::new(deploy_script.id(), 0), deploy_outputs[0].clone()),
             (
                 Input::new(pay_to_script.id(), 0),
-                pay_to_script.outputs()[0].clone(),
+                pay_to_script_outputs[0].clone(),
             ),
             (
                 Input::new(pay_to_script.id(), 1),
-                pay_to_script.outputs()[1].clone(),
+                pay_to_script_outputs[1].clone(),
             ),
         ]);
 

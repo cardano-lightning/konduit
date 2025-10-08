@@ -9,8 +9,8 @@ use crate::{
 use anyhow::anyhow;
 use itertools::Itertools;
 use std::{
-    collections::{BTreeMap, VecDeque},
-    fmt, mem,
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    fmt, iter, mem,
     ops::Deref,
 };
 
@@ -20,6 +20,8 @@ pub struct Transaction {
     inner: pallas::Tx,
     change_strategy: ChangeStrategy,
 }
+
+type BoxedIterator<'iter, T> = Box<dyn Iterator<Item = T> + 'iter>;
 
 // ------------------------------------------------------------------ Inspecting
 
@@ -41,35 +43,36 @@ impl Transaction {
     }
 
     /// The declared transaction inputs, which are spent in case of successful transaction.
-    pub fn inputs(&self) -> Vec<Input<'_>> {
-        self.inner
-            .transaction_body
-            .inputs
-            .deref()
-            .iter()
-            .map(Input::from)
-            .collect()
+    pub fn inputs(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
+        Box::new(
+            self.inner
+                .transaction_body
+                .inputs
+                .deref()
+                .iter()
+                .map(Input::from),
+        )
     }
 
     /// The declared transaction collaterals, which are spent in case of failed transaction.
-    pub fn collaterals(&self) -> Vec<Input<'_>> {
+    pub fn collaterals(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
         self.inner
             .transaction_body
             .collateral
             .as_ref()
-            .map(|xs| xs.iter().map(Input::from).collect())
-            .unwrap_or_default()
+            .map(|xs| Box::new(xs.iter().map(Input::from)) as BoxedIterator<'_, Input<'_>>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input<'_>>)
     }
 
     /// The declared transaction reference inputs, which are never spent but contribute to the
     /// script context for smart-contract execution.
-    pub fn reference_inputs(&self) -> Vec<Input<'_>> {
+    pub fn reference_inputs(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
         self.inner
             .transaction_body
             .reference_inputs
             .as_ref()
-            .map(|xs| xs.iter().map(Input::from).collect())
-            .unwrap_or_default()
+            .map(|xs| Box::new(xs.iter().map(Input::from)) as BoxedIterator<'_, Input<'_>>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input<'_>>)
     }
 
     pub fn mint(&self) -> Value<i64> {
@@ -82,15 +85,18 @@ impl Transaction {
     }
 
     /// The declared transaction outputs, which are produced in case of successful transaction.
-    pub fn outputs(&self) -> Vec<Output<'_>> {
-        self.inner
-            .transaction_body
-            .outputs
-            .iter()
-            .cloned()
-            .map(Output::try_from)
-            .collect::<Result<_, _>>()
-            .expect("transaction contains invalid outputs; should be impossible at this point.")
+    pub fn outputs(&self) -> Box<dyn Iterator<Item = Output<'_>> + '_> {
+        Box::new(
+            self.inner
+                .transaction_body
+                .outputs
+                .iter()
+                .cloned()
+                .map(Output::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .expect("transaction contains invalid outputs; should be impossible at this point.")
+                .into_iter(),
+        )
     }
 }
 
@@ -300,13 +306,50 @@ impl Transaction {
     /// - 'required_signers' (e.g. in the 'official' CDDL: <https://github.com/IntersectMBO/cardano-ledger/blob/232511b0fa01cd848cd7a569d1acc322124cf9b8/eras/conway/impl/cddl-files/conway.cddl#L142>)
     /// - 'extra_signatories' (e.g. in Aiken's stdlib: https://aiken-lang.github.io/stdlib/cardano/transaction.html#Transaction
     ///
-    fn specified_signatories(&self) -> Vec<Hash<28>> {
+    fn specified_signatories(&self) -> Box<dyn Iterator<Item = Hash<28>> + '_> {
         self.inner
             .transaction_body
             .required_signers
             .as_ref()
-            .map(|xs| xs.deref().iter().map(<Hash<_>>::from).collect())
-            .unwrap_or_default()
+            .map(|xs| Box::new(xs.deref().iter().map(<Hash<_>>::from)) as BoxedIterator<'_, _>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, _>)
+    }
+
+    /// The list of required signatories on the transaction, solely inferred from inputs,
+    /// collaterals and explicitly specified signers.
+    ///
+    /// FIXME:
+    /// - account for signers from native scripts
+    /// - account for signers from certificates
+    /// - account for signers from votes & proposals
+    /// - account for signers from withdrawals
+    fn required_signatories(
+        &self,
+        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+    ) -> anyhow::Result<BTreeSet<Hash<28>>> {
+        Ok(self
+            .specified_signatories()
+            .chain(
+                self.inputs()
+                    .chain(self.collaterals())
+                    .map(|input| {
+                        let output =
+                            resolved_inputs
+                                .get(&input)
+                                .ok_or(anyhow!("input or collateral = {input:?}").context(
+                                    "unknown output for specified input/collateral input",
+                                ))?;
+                        Ok::<_, anyhow::Error>(output)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .filter_map(|output| {
+                        let address = output.address();
+                        let address = address.as_shelley()?;
+                        address.payment_credential().as_verification_key()
+                    }),
+            )
+            .collect::<BTreeSet<_>>())
     }
 
     /// The set of scripts that must be executed and pass for the transaction to be valid. These
@@ -334,7 +377,6 @@ impl Transaction {
     ) -> BTreeMap<RedeemerPointer, Hash<28>> {
         let from_inputs = self
             .inputs()
-            .into_iter()
             .enumerate()
             .filter_map(|(index, input)| Some((index, resolved_inputs.get(&input)?)))
             .filter_map(|(index, output)| {
@@ -544,16 +586,14 @@ impl Transaction {
         let mut change = Value::default();
 
         // Add inputs to the change balance
-        self.inputs()
-            .iter()
-            .try_fold(&mut change, |total_input, input| {
-                let output = resolved_inputs.get(input).ok_or_else(|| {
-                    anyhow!("unknown input, not present in resolved set")
-                        .context(format!("input={input:?}"))
-                })?;
-
-                Ok::<_, anyhow::Error>(total_input.add(output.value().deref().as_ref()))
+        self.inputs().try_fold(&mut change, |total_input, input| {
+            let output = resolved_inputs.get(&input).ok_or_else(|| {
+                anyhow!("unknown input, not present in resolved set")
+                    .context(format!("input={input:?}"))
             })?;
+
+            Ok::<_, anyhow::Error>(total_input.add(output.value().deref().as_ref()))
+        })?;
 
         // Partition mint quantities between mint & burn
         let (mint, burn) = self.mint().assets().clone().into_iter().fold(
@@ -592,7 +632,6 @@ impl Transaction {
 
         // Subtract all outputs from the change balance
         self.outputs()
-            .iter()
             .try_fold(&mut change, |total_output, output| {
                 total_output.checked_sub(output.value().deref().as_ref())
             })
@@ -642,9 +681,8 @@ impl Transaction {
             Option<Address<'static, _>>,
         ) = self
             .collaterals()
-            .iter()
             .map(|input| {
-                resolved_inputs.get(input).ok_or_else(|| {
+                resolved_inputs.get(&input).ok_or_else(|| {
                     anyhow!("unknown collateral input").context(format!("reference={input:?}"))
                 })
             })
