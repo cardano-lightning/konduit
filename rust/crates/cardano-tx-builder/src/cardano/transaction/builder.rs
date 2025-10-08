@@ -77,9 +77,11 @@ impl Transaction {
             cbor::encode(&tx, &mut serialized_tx).unwrap();
 
             // Re-compute execution units for all scripts, if any.
+            let (total_inline_scripts_size, uplc_resolved_inputs) =
+                into_uplc_inputs(&tx, resolved_inputs)?;
             redeemers = evaluate_plutus_scripts(
                 &serialized_tx,
-                into_uplc_inputs(&tx, resolved_inputs),
+                uplc_resolved_inputs,
                 &required_scripts,
                 params,
             )?;
@@ -93,7 +95,10 @@ impl Transaction {
                 let estimated_size = serialized_tx.len() as u64
                     + SIZE_OF_KEY_WITNESSES_OVERHEAD
                     + SIZE_OF_KEY_WITNESS * num_signatories;
-                params.base_fee(estimated_size) + total_execution_cost(params, &redeemers)
+
+                params.base_fee(estimated_size)
+                    + params.referenced_scripts_fee(total_inline_scripts_size)
+                    + total_execution_cost(params, &redeemers)
             };
 
             attempts += 1;
@@ -105,7 +110,7 @@ impl Transaction {
                 return Err(anyhow!("transaction = {}", hex::encode(&serialized_tx))
                     .context(format!("fee = {fee}, estimated_fee = {estimated_fee}"))
                     .context(
-                        "failed to build transaction: did not converge after three attempts.",
+                        "failed to build transaction: did not converge after three attempts",
                     ));
             } else {
                 fee = estimated_fee;
@@ -127,23 +132,38 @@ fn total_execution_cost<'a>(
     })
 }
 
+/// Resolve specified inputs and reference inputs, and convert them into a format suitable for the
+/// UPLC VM evaluation. Also returns the sum of the size of any inline scripts found in those
+/// (counting multiple times the size of repeated scripts).
 fn into_uplc_inputs(
     tx: &Transaction,
     resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
-) -> Vec<uplc::tx::ResolvedInput> {
+) -> anyhow::Result<(u64, Vec<uplc::tx::ResolvedInput>)> {
     // Ensures that only 'known' inputs contribute to the evaluation; in case the user
     // added extra inputs to the provided UTxO which do not get correctly captured in
     // the transaction; causing the evaluation to possibly wrongly succeed.
     let known_inputs = tx
         .inputs()
-        .into_iter()
         .chain(tx.reference_inputs())
         .collect::<BTreeSet<_>>();
 
-    resolved_inputs
+    for input in known_inputs.iter() {
+        if resolved_inputs.get(input).is_none() {
+            return Err(anyhow!("unknown = {input:?}")
+                .context("unknown output for specified input or reference input; found in transaction but not in provided resolved set"));
+        }
+    }
+
+    let mut total_inline_scripts_size = 0;
+
+    let uplc_resolved_inputs = resolved_inputs
         .iter()
         .filter_map(|(i, o)| {
             if known_inputs.contains(i) {
+                if let Some(script) = o.script() {
+                    total_inline_scripts_size += script.size();
+                }
+
                 Some(uplc::tx::ResolvedInput {
                     input: pallas::TransactionInput::from((*i).clone()),
                     output: pallas::TransactionOutput::from((*o).clone()),
@@ -152,7 +172,9 @@ fn into_uplc_inputs(
                 None
             }
         })
-        .collect()
+        .collect();
+
+    Ok((total_inline_scripts_size, uplc_resolved_inputs))
 }
 
 fn fail_on_missing_collateral<'a, T>(
@@ -169,7 +191,7 @@ fn fail_on_missing_collateral<'a, T>(
         }
 
         return Err(err.context(
-            "no collaterals set, but the transaction requires at least one phase-2 script execution.",
+            "no collaterals set, but the transaction requires at least one phase-2 script execution",
         ));
     }
 
@@ -236,38 +258,9 @@ mod tests {
     };
     use std::{collections::BTreeMap, sync::LazyLock};
 
-    /// Some fixture parameters, simply mimicking Mainnet/PreProd's parameters.
-    pub static FIXTURE_PROTOCOL_PARAMETERS: LazyLock<ProtocolParameters> = LazyLock::new(|| {
-        ProtocolParameters::default()
-            .with_fee_per_byte(44)
-            .with_fee_constant(155381)
-            .with_execution_price_mem(0.0577)
-            .with_execution_price_cpu(7.21e-05)
-            .with_start_time(1654041600)
-            .with_first_shelley_slot(86400)
-            .with_plutus_v3_cost_model([
-                100788, 420, 1, 1, 1000, 173, 0, 1, 1000, 59957, 4, 1, 11183, 32, 201305, 8356, 4,
-                16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 100, 100,
-                16000, 100, 94375, 32, 132994, 32, 61462, 4, 72010, 178, 0, 1, 22151, 32, 91189,
-                769, 4, 2, 85848, 123203, 7305, -900, 1716, 549, 57, 85848, 0, 1, 1, 1000, 42921,
-                4, 2, 24548, 29498, 38, 1, 898148, 27279, 1, 51775, 558, 1, 39184, 1000, 60594, 1,
-                141895, 32, 83150, 32, 15299, 32, 76049, 1, 13169, 4, 22100, 10, 28999, 74, 1,
-                28999, 74, 1, 43285, 552, 1, 44749, 541, 1, 33852, 32, 68246, 32, 72362, 32, 7243,
-                32, 7391, 32, 11546, 32, 85848, 123203, 7305, -900, 1716, 549, 57, 85848, 0, 1,
-                90434, 519, 0, 1, 74433, 32, 85848, 123203, 7305, -900, 1716, 549, 57, 85848, 0, 1,
-                1, 85848, 123203, 7305, -900, 1716, 549, 57, 85848, 0, 1, 955506, 213312, 0, 2,
-                270652, 22588, 4, 1457325, 64566, 4, 20467, 1, 4, 0, 141992, 32, 100788, 420, 1, 1,
-                81663, 32, 59498, 32, 20142, 32, 24588, 32, 20744, 32, 25933, 32, 24623, 32,
-                43053543, 10, 53384111, 14333, 10, 43574283, 26308, 10, 16000, 100, 16000, 100,
-                962335, 18, 2780678, 6, 442008, 1, 52538055, 3756, 18, 267929, 18, 76433006, 8868,
-                18, 52948122, 18, 1995836, 36, 3227919, 12, 901022, 1, 166917843, 4307, 36, 284546,
-                36, 158221314, 26549, 36, 74698472, 36, 333849714, 1, 254006273, 72, 2174038, 72,
-                2261318, 64571, 4, 207616, 8310, 4, 1293828, 28716, 63, 0, 1, 1006041, 43623, 251,
-                0, 1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1,
-                107878, 680, 0, 1, 95336, 1, 281145, 18848, 0, 1, 180194, 159, 1, 1, 158519, 8942,
-                0, 1, 159378, 8813, 0, 1, 107490, 3298, 1, 106057, 655, 1, 1964219, 24520, 3,
-            ])
-    });
+    /// Some fixture parameters, simply mimicking PreProd's parameters.
+    pub static FIXTURE_PROTOCOL_PARAMETERS: LazyLock<ProtocolParameters> =
+        LazyLock::new(ProtocolParameters::preprod);
 
     #[test]
     fn single_in_single_out() {
@@ -502,26 +495,26 @@ mod tests {
                     Input::new(pay_to_script.id(), 0),
                     Some(PlutusData::list(vec![])),
                 )])
+                .with_reference_inputs(vec![(Input::new(deploy_script.id(), 0))])
                 .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
                 .with_change_strategy(ChangeStrategy::as_last_output(
                     ALWAYS_SUCCEED_ADDRESS.clone(),
                 ))
-                .with_plutus_scripts(vec![ALWAYS_SUCCEED_SCRIPT.clone()])
                 .ok()
             })
             .unwrap();
 
         assert_eq!(
             hex::encode(spend_from_script.to_cbor()),
-            "84a700d901028182582004aca0496e336f36f219a1ddb8298555a1b166a988990b8\
+            "84a800d901028182582004aca0496e336f36f219a1ddb8298555a1b166a988990b8\
              427ec3ff292fc6b7a000181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
-             f872f57f6d3a1ffa0eb777011a0095f2af021a0002a3d10b5820d545623b07e425a\
+             f872f57f6d3a1ffa0eb777011a0095ef65021a0002a71b0b5820d545623b07e425a\
              55262585d2b5e8aaee16230fd1434e790fa4511da4bf8a4550dd901028182582004\
              aca0496e336f36f219a1ddb8298555a1b166a988990b8427ec3ff292fc6b7a0110a\
              20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4a\
-             f57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a021fcbb31\
-             11a0003f5baa205a18200008280821906411a0004d2f507d9010281525101010023\
-             259800a518a4d136564004ae69f5f6",
+             f57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a0223c16d1\
+             10012d901028182582026dad69d058e6aed8dd112266c8cda84ecca7c8132b535c6\
+             5697f2409d0d2e8000a105a18200008280821906411a0004d2f5f5f6",
             "spend_from_script no longer matches expected bytes."
         );
     }

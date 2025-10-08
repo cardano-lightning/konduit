@@ -336,8 +336,8 @@ impl Transaction {
                         let output =
                             resolved_inputs
                                 .get(&input)
-                                .ok_or(anyhow!("input or collateral = {input:?}").context(
-                                    "unknown output for specified input/collateral input",
+                                .ok_or(anyhow!("unknown = {input:?}").context(
+                                    "unknown output for specified input or collateral input; found in transaction but not provided in resolved set",
                                 ))?;
                         Ok::<_, anyhow::Error>(output)
                     })
