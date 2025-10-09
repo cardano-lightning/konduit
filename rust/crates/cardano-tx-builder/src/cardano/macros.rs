@@ -1,13 +1,13 @@
 #[macro_export]
 macro_rules! input {
-    ($tx_hex:expr, $index:expr $(,)?) => {
+    ($id:literal, $index:expr $(,)?) => {
         (
-            $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index),
+            $crate::Input::new(<$crate::Hash<32>>::try_from($id).unwrap(), $index),
             None::<$crate::PlutusData>,
         )
     };
 
-    ($tx_hex:expr, $index:expr, $redeemer:expr $(,)?) => {
+    ($id:literal, $index:literal, $redeemer:expr $(,)?) => {
         (
             $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index),
             Some($redeemer),
@@ -51,14 +51,14 @@ macro_rules! address_test {
 
 #[macro_export]
 macro_rules! script_credential {
-    ($hash:expr $(,)?) => {
+    ($hash:literal $(,)?) => {
         $crate::Credential::from_script(<$crate::Hash<28>>::try_from($hash).unwrap())
     };
 }
 
 #[macro_export]
 macro_rules! key_credential {
-    ($hash:expr $(,)?) => {
+    ($hash:literal $(,)?) => {
         $crate::Credential::from_key(hex::decode($hash).unwrap())
     };
 }

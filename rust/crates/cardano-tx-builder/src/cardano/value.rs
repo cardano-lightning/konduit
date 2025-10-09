@@ -221,7 +221,11 @@ impl From<&Value<u64>> for pallas::Value {
 }
 
 impl From<&Value<i64>> for Option<pallas::Multiasset<pallas::NonZeroInt>> {
-    fn from(Value(_, assets): &Value<i64>) -> Self {
+    fn from(value @ Value(lovelace, assets): &Value<i64>) -> Self {
+        assert!(
+            *lovelace == 0,
+            "somehow found a mint value with a non-zero Ada quantity: {value:#?}"
+        );
         into_multiasset(assets, |quantity: &i64| {
             pallas::NonZeroInt::try_from(*quantity).ok()
         })

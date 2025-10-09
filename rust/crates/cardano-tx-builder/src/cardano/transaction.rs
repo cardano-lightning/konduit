@@ -9,8 +9,8 @@ use crate::{
 use anyhow::anyhow;
 use itertools::Itertools;
 use std::{
-    collections::{BTreeMap, VecDeque},
-    fmt, mem,
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    fmt, iter, mem,
     ops::Deref,
 };
 
@@ -20,6 +20,8 @@ pub struct Transaction {
     inner: pallas::Tx,
     change_strategy: ChangeStrategy,
 }
+
+type BoxedIterator<'iter, T> = Box<dyn Iterator<Item = T> + 'iter>;
 
 // ------------------------------------------------------------------ Inspecting
 
@@ -40,25 +42,44 @@ impl Transaction {
         self.inner.transaction_body.fee
     }
 
-    /// The declared transaction inputs, which are spent in case of successful transaction.
-    pub fn inputs(&self) -> Vec<Input<'_>> {
+    pub fn total_collateral(&self) -> u64 {
         self.inner
             .transaction_body
-            .inputs
-            .deref()
-            .iter()
-            .map(Input::from)
-            .collect()
+            .total_collateral
+            .unwrap_or_default()
+    }
+
+    /// The declared transaction inputs, which are spent in case of successful transaction.
+    pub fn inputs(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
+        Box::new(
+            self.inner
+                .transaction_body
+                .inputs
+                .deref()
+                .iter()
+                .map(Input::from),
+        )
     }
 
     /// The declared transaction collaterals, which are spent in case of failed transaction.
-    pub fn collaterals(&self) -> Vec<Input<'_>> {
+    pub fn collaterals(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
         self.inner
             .transaction_body
             .collateral
             .as_ref()
-            .map(|xs| xs.iter().map(Input::from).collect())
-            .unwrap_or_default()
+            .map(|xs| Box::new(xs.iter().map(Input::from)) as BoxedIterator<'_, Input<'_>>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input<'_>>)
+    }
+
+    /// The declared transaction reference inputs, which are never spent but contribute to the
+    /// script context for smart-contract execution.
+    pub fn reference_inputs(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
+        self.inner
+            .transaction_body
+            .reference_inputs
+            .as_ref()
+            .map(|xs| Box::new(xs.iter().map(Input::from)) as BoxedIterator<'_, Input<'_>>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input<'_>>)
     }
 
     pub fn mint(&self) -> Value<i64> {
@@ -71,15 +92,29 @@ impl Transaction {
     }
 
     /// The declared transaction outputs, which are produced in case of successful transaction.
-    pub fn outputs(&self) -> Vec<Output<'_>> {
-        self.inner
-            .transaction_body
-            .outputs
-            .iter()
-            .cloned()
-            .map(Output::try_from)
-            .collect::<Result<_, _>>()
-            .expect("transaction contains invalid outputs; should be impossible at this point.")
+    pub fn outputs(&self) -> Box<dyn Iterator<Item = Output<'_>> + '_> {
+        Box::new(
+            self.inner
+                .transaction_body
+                .outputs
+                .iter()
+                .cloned()
+                .map(Output::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .expect("transaction contains invalid outputs; should be impossible at this point.")
+                .into_iter(),
+        )
+    }
+
+    /// View this transaction as a UTxO, mapping each output to its corresponding input reference.
+    pub fn as_resolved_inputs(&self) -> BTreeMap<Input<'_>, Output<'_>> {
+        let id = self.id();
+        self.outputs()
+            .enumerate()
+            .fold(BTreeMap::new(), |mut resolved_inputs, (ix, output)| {
+                resolved_inputs.insert(Input::new(id, ix as u64), output);
+                resolved_inputs
+            })
     }
 }
 
@@ -166,6 +201,20 @@ impl Transaction {
     ) -> &mut Self {
         self.inner.transaction_body.collateral = pallas::NonEmptySet::from_vec(
             collaterals
+                .into_iter()
+                .sorted()
+                .map(pallas::TransactionInput::from)
+                .collect::<Vec<_>>(),
+        );
+        self
+    }
+
+    pub fn with_reference_inputs<'a>(
+        &mut self,
+        reference_inputs: impl IntoIterator<Item = Input<'a>>,
+    ) -> &mut Self {
+        self.inner.transaction_body.reference_inputs = pallas::NonEmptySet::from_vec(
+            reference_inputs
                 .into_iter()
                 .sorted()
                 .map(pallas::TransactionInput::from)
@@ -266,60 +315,6 @@ impl Transaction {
 // -------------------------------------------------------------------- Internal
 
 impl Transaction {
-    fn with_change(&mut self, change: Value<u64>) -> anyhow::Result<()> {
-        let min_change_value = Output::new(Address::default(), change.clone())
-            .min_acceptable_value()
-            .lovelace();
-
-        if change.lovelace() < min_change_value {
-            return Err(
-                anyhow!("not enough funds to create a sufficiently large change output").context(
-                    format!(
-                        "current value={} lovelace, minimum required={}",
-                        change.lovelace(),
-                        min_change_value
-                    ),
-                ),
-            );
-        }
-
-        let mut outputs = mem::take(&mut self.inner.transaction_body.outputs)
-            .into_iter()
-            .map(Output::try_from)
-            .collect::<Result<VecDeque<_>, _>>()?;
-
-        mem::take(&mut self.change_strategy).with(change, &mut outputs)?;
-
-        self.with_outputs(outputs);
-
-        Ok(())
-    }
-
-    fn with_redeemers(
-        &mut self,
-        discard_if: impl Fn(pallas::RedeemerTag) -> bool,
-        redeemers: BTreeMap<RedeemerPointer, PlutusData>,
-    ) -> &mut Self {
-        let redeemers = into_pallas_redeemers(redeemers);
-
-        let new_redeemers = if let Some(existing_redeemers) =
-            mem::take(&mut self.inner.transaction_witness_set.redeemer)
-        {
-            let existing_redeemers = without_existing_redeemers(existing_redeemers, discard_if);
-            Box::new(existing_redeemers.chain(redeemers))
-                as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
-        } else {
-            Box::new(redeemers)
-                as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
-        };
-
-        self.inner.transaction_witness_set.redeemer =
-            pallas::NonEmptyKeyValuePairs::from_vec(new_redeemers.collect())
-                .map(pallas::Redeemers::from);
-
-        self
-    }
-
     /// The list of signatories explicitly listed in the transaction body, and visible to any
     /// underlying validator script. This is necessary a subset of the all signatories but the
     /// total set of inferred signatories may be larger due do transaction inputs.
@@ -329,13 +324,50 @@ impl Transaction {
     /// - 'required_signers' (e.g. in the 'official' CDDL: <https://github.com/IntersectMBO/cardano-ledger/blob/232511b0fa01cd848cd7a569d1acc322124cf9b8/eras/conway/impl/cddl-files/conway.cddl#L142>)
     /// - 'extra_signatories' (e.g. in Aiken's stdlib: https://aiken-lang.github.io/stdlib/cardano/transaction.html#Transaction
     ///
-    fn specified_signatories(&self) -> Vec<Hash<28>> {
+    fn specified_signatories(&self) -> Box<dyn Iterator<Item = Hash<28>> + '_> {
         self.inner
             .transaction_body
             .required_signers
             .as_ref()
-            .map(|xs| xs.deref().iter().map(<Hash<_>>::from).collect())
-            .unwrap_or_default()
+            .map(|xs| Box::new(xs.deref().iter().map(<Hash<_>>::from)) as BoxedIterator<'_, _>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, _>)
+    }
+
+    /// The list of required signatories on the transaction, solely inferred from inputs,
+    /// collaterals and explicitly specified signers.
+    ///
+    /// FIXME:
+    /// - account for signers from native scripts
+    /// - account for signers from certificates
+    /// - account for signers from votes & proposals
+    /// - account for signers from withdrawals
+    fn required_signatories(
+        &self,
+        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+    ) -> anyhow::Result<BTreeSet<Hash<28>>> {
+        Ok(self
+            .specified_signatories()
+            .chain(
+                self.inputs()
+                    .chain(self.collaterals())
+                    .map(|input| {
+                        let output =
+                            resolved_inputs
+                                .get(&input)
+                                .ok_or(anyhow!("unknown = {input:?}").context(
+                                    "unknown output for specified input or collateral input; found in transaction but not provided in resolved set",
+                                ))?;
+                        Ok::<_, anyhow::Error>(output)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .filter_map(|output| {
+                        let address = output.address();
+                        let address = address.as_shelley()?;
+                        address.payment_credential().as_verification_key()
+                    }),
+            )
+            .collect::<BTreeSet<_>>())
     }
 
     /// The set of scripts that must be executed and pass for the transaction to be valid. These
@@ -359,13 +391,12 @@ impl Transaction {
     /// aren't implemented.
     fn required_scripts<'i, 'o>(
         &self,
-        utxo: &BTreeMap<Input<'i>, Output<'o>>,
+        resolved_inputs: &BTreeMap<Input<'i>, Output<'o>>,
     ) -> BTreeMap<RedeemerPointer, Hash<28>> {
         let from_inputs = self
             .inputs()
-            .into_iter()
             .enumerate()
-            .filter_map(|(index, input)| Some((index, utxo.get(&input)?)))
+            .filter_map(|(index, input)| Some((index, resolved_inputs.get(&input)?)))
             .filter_map(|(index, output)| {
                 let payment_credential = output.address().as_shelley()?.payment_credential();
                 Some((index, payment_credential.as_script()?))
@@ -444,6 +475,267 @@ impl Transaction {
         .unwrap();
 
         Some(Hash::from(pallas::hash::Hasher::<256>::hash(&preimage)))
+    }
+
+    fn with_change_output(&mut self, change: Value<u64>) -> anyhow::Result<()> {
+        let min_change_value = Output::new(Address::default(), change.clone())
+            .min_acceptable_value()
+            .lovelace();
+
+        if change.lovelace() < min_change_value {
+            return Err(
+                anyhow!("not enough funds to create a sufficiently large change output").context(
+                    format!(
+                        "current value={} lovelace, minimum required={}",
+                        change.lovelace(),
+                        min_change_value
+                    ),
+                ),
+            );
+        }
+
+        let mut outputs = mem::take(&mut self.inner.transaction_body.outputs)
+            .into_iter()
+            .map(Output::try_from)
+            .collect::<Result<VecDeque<_>, _>>()?;
+
+        mem::take(&mut self.change_strategy).with(change, &mut outputs)?;
+
+        self.with_outputs(outputs);
+
+        Ok(())
+    }
+
+    fn with_redeemers(
+        &mut self,
+        discard_if: impl Fn(pallas::RedeemerTag) -> bool,
+        redeemers: BTreeMap<RedeemerPointer, PlutusData>,
+    ) -> &mut Self {
+        let redeemers = into_pallas_redeemers(redeemers);
+
+        let new_redeemers = if let Some(existing_redeemers) =
+            mem::take(&mut self.inner.transaction_witness_set.redeemer)
+        {
+            let existing_redeemers = without_existing_redeemers(existing_redeemers, discard_if);
+            Box::new(existing_redeemers.chain(redeemers))
+                as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
+        } else {
+            Box::new(redeemers)
+                as Box<dyn Iterator<Item = (pallas::RedeemersKey, pallas::RedeemersValue)>>
+        };
+
+        self.inner.transaction_witness_set.redeemer =
+            pallas::NonEmptyKeyValuePairs::from_vec(new_redeemers.collect())
+                .map(pallas::Redeemers::from);
+
+        self
+    }
+
+    fn with_script_integrity_hash(
+        &mut self,
+        required_scripts: &BTreeMap<RedeemerPointer, Hash<28>>,
+        params: &ProtocolParameters,
+    ) -> anyhow::Result<()> {
+        if let Some(hash) = self.script_integrity_hash(params) {
+            self.inner.transaction_body.script_data_hash = Some(pallas::Hash::from(hash));
+        } else if !required_scripts.is_empty() {
+            let mut scripts = required_scripts.iter();
+
+            let (ptr, hash) = scripts.next().unwrap(); // Safe because it's not empty
+            let mut err = anyhow!("required_scripts = {ptr:?} -> {hash}");
+            for (ptr, hash) in scripts {
+                err = err.context(format!("required_scripts = {ptr:?} -> {hash}"));
+            }
+
+            return Err(err.context("couldn't compute required script integrity hash: datums and redeemers are missing from the transaction."));
+        }
+
+        Ok(())
+    }
+
+    fn with_execution_units(
+        &mut self,
+        redeemers: &mut BTreeMap<RedeemerPointer, ExecutionUnits>,
+    ) -> anyhow::Result<()> {
+        if let Some(declared_redeemers) =
+            std::mem::take(&mut self.inner.transaction_witness_set.redeemer)
+        {
+            match declared_redeemers {
+                pallas::Redeemers::List(..) => {
+                    unreachable!("found redeemers encoded as list: impossible with this library.")
+                }
+
+                pallas::Redeemers::Map(kv) => {
+                    self.inner.transaction_witness_set.redeemer =
+                        pallas::NonEmptyKeyValuePairs::from_vec(
+                            kv.into_iter()
+                                .map(|(key, mut value)| {
+                                    let ptr = RedeemerPointer::from(key.clone());
+                                    // If we have already computed the correct execution units
+                                    // for that redeemer in a previous round, we can adjust
+                                    // them.
+                                    if let Some(ex_units) = redeemers.remove(&ptr) {
+                                        value.ex_units = pallas::ExUnits::from(ex_units);
+                                    }
+                                    (key, value)
+                                })
+                                .collect(),
+                        )
+                        .map(pallas::Redeemers::from)
+                }
+            }
+        }
+
+        // We should technically have consumed all redeemers.
+        if !redeemers.is_empty() {
+            return Err(
+                anyhow!("extraneous redeemers in transaction; not required by any script")
+                    .context(format!("extra={:?}", redeemers.keys().collect::<Vec<_>>())),
+            );
+        }
+
+        Ok(())
+    }
+
+    fn with_change(
+        &mut self,
+        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+    ) -> anyhow::Result<()> {
+        let mut change = Value::default();
+
+        // Add inputs to the change balance
+        self.inputs().try_fold(&mut change, |total_input, input| {
+            let output = resolved_inputs.get(&input).ok_or_else(|| {
+                anyhow!("unknown input, not present in resolved set")
+                    .context(format!("input={input:?}"))
+            })?;
+
+            Ok::<_, anyhow::Error>(total_input.add(output.value().deref().as_ref()))
+        })?;
+
+        // Partition mint quantities between mint & burn
+        let (mint, burn) = self.mint().assets().clone().into_iter().fold(
+            (BTreeMap::new(), BTreeMap::new()),
+            |(mut mint, mut burn), (policy, assets)| {
+                let mut minted_assets = BTreeMap::new();
+                let mut burned_assets = BTreeMap::new();
+
+                for (asset_name, quantity) in assets {
+                    if quantity > 0 {
+                        minted_assets.insert(asset_name, quantity as u64);
+                    } else {
+                        burned_assets.insert(asset_name, (-quantity) as u64);
+                    }
+                }
+
+                if !minted_assets.is_empty() {
+                    mint.insert(policy, minted_assets);
+                }
+
+                if !burned_assets.is_empty() {
+                    burn.insert(policy, burned_assets);
+                }
+
+                (mint, burn)
+            },
+        );
+
+        // Add minted tokens to the change balance
+        change.add(&Value::default().with_assets(mint));
+
+        // Subtract burned tokens from the change balance
+        change
+            .checked_sub(&Value::default().with_assets(burn))
+            .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+        // Subtract all outputs from the change balance
+        self.outputs()
+            .try_fold(&mut change, |total_output, output| {
+                total_output.checked_sub(output.value().deref().as_ref())
+            })
+            .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+        // Subtract the transaction fee as well
+        change
+            .checked_sub(&Value::new(self.fee()))
+            .map_err(|e| e.context("insufficient balance; spending more than available"))?;
+
+        let body = &self.inner.transaction_body;
+
+        assert!(
+            body.certificates.is_none(),
+            "found certificates in transaction: not supported yet",
+        );
+
+        assert!(
+            body.withdrawals.is_none(),
+            "found withdrawals in transaction: not supported yet",
+        );
+
+        assert!(
+            body.treasury_value.is_none(),
+            "found treasury donation in transaction: not supported yet",
+        );
+
+        assert!(
+            body.proposal_procedures.is_none(),
+            "found proposals in transaction: not supported yet",
+        );
+
+        if !change.is_empty() {
+            self.with_change_output(change)?;
+        }
+
+        Ok(())
+    }
+
+    fn with_collateral_return(
+        &mut self,
+        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+        params: &ProtocolParameters,
+    ) -> anyhow::Result<()> {
+        let (mut total_collateral_value, opt_return_address): (
+            Value<u64>,
+            Option<Address<'static, _>>,
+        ) = self
+            .collaterals()
+            .map(|input| {
+                resolved_inputs.get(&input).ok_or_else(|| {
+                    anyhow!("unknown collateral input").context(format!("reference={input:?}"))
+                })
+            })
+            .try_fold(
+                (Value::new(0), None),
+                |(mut total, address), maybe_output| {
+                    let output = maybe_output?;
+                    total.add(output.value().deref().as_ref());
+                    // It is arbitrary, but we use the source address of the first collateral as the
+                    // destination of the collateral change. Collaterals can't be script, so this is
+                    // relatively safe as the ledger enforces that the key is known at the time the
+                    // transaction is constructed.
+                    Ok::<_, anyhow::Error>((
+                        total,
+                        address.or_else(|| Some(output.address().to_owned())),
+                    ))
+                },
+            )?;
+
+        if let Some(return_address) = opt_return_address {
+            let minimum_collateral = params.minimum_collateral(self.fee());
+
+            total_collateral_value
+                .checked_sub(&Value::new(minimum_collateral))
+                .map_err(|e| e.context("insufficient collateral inputs"))?;
+
+            self.inner.transaction_body.total_collateral = Some(minimum_collateral);
+            self.inner.transaction_body.collateral_return = Some(pallas::TransactionOutput::from(
+                // A bit misleading but 'total_collateral_value' now refers to the total amount brought
+                // in, minus the the minimum required by the protocol, left out.
+                Output::new(return_address, total_collateral_value),
+            ));
+        }
+
+        Ok(())
     }
 }
 

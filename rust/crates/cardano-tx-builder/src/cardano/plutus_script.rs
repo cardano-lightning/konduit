@@ -18,6 +18,10 @@ impl PlutusScript {
     pub fn version(&self) -> PlutusVersion {
         self.0
     }
+
+    pub fn size(&self) -> u64 {
+        self.1.len() as u64
+    }
 }
 
 // ------------------------------------------------------------ Converting (from)
