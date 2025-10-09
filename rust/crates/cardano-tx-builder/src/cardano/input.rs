@@ -3,11 +3,17 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{Hash, cbor, pallas};
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Input(Rc<pallas::TransactionInput>);
+
+impl fmt::Display for Input {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}#{}", &self.0.transaction_id, self.0.index)
+    }
+}
 
 // -------------------------------------------------------------------- Building
 

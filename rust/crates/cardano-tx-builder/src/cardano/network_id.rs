@@ -11,6 +11,15 @@ use std::fmt;
 #[cbor(transparent)]
 pub struct NetworkId(#[n(0)] pallas::NetworkId);
 
+impl fmt::Display for NetworkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.write_str(match self.0 {
+            pallas::NetworkId::Testnet => "testnet",
+            pallas::NetworkId::Mainnet => "mainnet",
+        })
+    }
+}
+
 // -------------------------------------------------------------------- Building
 
 impl NetworkId {
@@ -53,15 +62,6 @@ impl TryFrom<u8> for NetworkId {
 }
 
 // ------------------------------------------------------------- Converting (to)
-
-impl fmt::Display for NetworkId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.write_str(match self.0 {
-            pallas::NetworkId::Testnet => "testnet",
-            pallas::NetworkId::Mainnet => "mainnet",
-        })
-    }
-}
 
 impl From<NetworkId> for pallas::NetworkId {
     fn from(network_id: NetworkId) -> Self {

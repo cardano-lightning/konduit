@@ -3,8 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, ChangeStrategy, ExecutionUnits, Hash, Input, Output, PlutusData, PlutusScript,
-    PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor, pallas,
+    Address, ChangeStrategy, ExecutionUnits, Hash, Input, NetworkId, Output, PlutusData,
+    PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor, pallas, pretty,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -28,6 +28,232 @@ type BoxedIterator<'iter, T> = Box<dyn Iterator<Item = T> + 'iter>;
 impl fmt::Debug for Transaction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
+    }
+}
+
+impl fmt::Display for Transaction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug_struct = f.debug_struct(&format!("Transaction (id = {})", self.id()));
+
+        let body = &self.inner.transaction_body;
+
+        if !body.inputs.is_empty() {
+            debug_struct.field(
+                "inputs",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    f.debug_list()
+                        .entries(self.inputs().map(pretty::ViaDisplay))
+                        .finish()
+                }),
+            );
+        }
+
+        if !body.outputs.is_empty() {
+            debug_struct.field(
+                "outputs",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    f.debug_list()
+                        .entries(self.outputs().map(pretty::ViaDisplay))
+                        .finish()
+                }),
+            );
+        }
+
+        debug_struct.field("fee", &self.fee());
+
+        debug_assert!(
+            body.certificates.is_none(),
+            "found certificates in transaction; not yet supported"
+        );
+
+        debug_assert!(
+            body.withdrawals.is_none(),
+            "found withdrawals in transaction; not yet supported"
+        );
+
+        debug_assert!(
+            body.auxiliary_data_hash.is_none(),
+            "found auxiliary_data_hash in transaction; not yet supported"
+        );
+
+        if body.mint.is_some() {
+            debug_struct.field("mint", &pretty::ViaDisplay(self.mint()));
+        }
+
+        if let Some(hash) = body.script_data_hash {
+            debug_struct.field(
+                "script_integrity_hash",
+                &pretty::ViaDisplay(Hash::from(hash)),
+            );
+        }
+
+        if body.collateral.is_some() {
+            debug_struct.field(
+                "collaterals",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    f.debug_list()
+                        .entries(self.collaterals().map(pretty::ViaDisplay))
+                        .finish()
+                }),
+            );
+        }
+
+        if body.required_signers.is_some() {
+            debug_struct.field(
+                "specified_signatories",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    f.debug_list()
+                        .entries(self.specified_signatories().map(pretty::ViaDisplay))
+                        .finish()
+                }),
+            );
+        }
+
+        if let Some(network_id) = body.network_id {
+            debug_struct.field(
+                "network_id",
+                &pretty::ViaDisplay(NetworkId::from(network_id)),
+            );
+        }
+
+        if let Some(collateral_return) = body
+            .collateral_return
+            .as_ref()
+            .and_then(|c| Output::try_from(c.clone()).ok())
+        {
+            debug_struct.field("collateral_return", &pretty::ViaDisplay(collateral_return));
+        }
+
+        if let Some(total_collateral) = body.total_collateral {
+            debug_struct.field("total_collateral", &pretty::ViaDisplay(total_collateral));
+        }
+
+        if body.reference_inputs.is_some() {
+            debug_struct.field(
+                "reference_inputs",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    f.debug_list()
+                        .entries(self.reference_inputs().map(pretty::ViaDisplay))
+                        .finish()
+                }),
+            );
+        }
+
+        debug_assert!(
+            body.voting_procedures.is_none(),
+            "found votes in transaction; not yet supported"
+        );
+
+        debug_assert!(
+            body.proposal_procedures.is_none(),
+            "found proposals in transaction; not yet supported"
+        );
+
+        debug_assert!(
+            body.treasury_value.is_none(),
+            "found treasury value in transaction; not yet supported"
+        );
+
+        debug_assert!(
+            body.donation.is_none(),
+            "found treasury donation in transaction; not yet supported"
+        );
+
+        let witness_set = &self.inner.transaction_witness_set;
+
+        if witness_set.plutus_v1_script.is_some()
+            || witness_set.plutus_v2_script.is_some()
+            || witness_set.plutus_v3_script.is_some()
+        {
+            debug_struct.field(
+                "scripts",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    let v1_scripts = witness_set
+                        .plutus_v1_script
+                        .as_ref()
+                        .map(|set| {
+                            Box::new(set.iter().cloned().map(PlutusScript::from))
+                                as BoxedIterator<PlutusScript>
+                        })
+                        .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<PlutusScript>);
+
+                    let v2_scripts = witness_set
+                        .plutus_v2_script
+                        .as_ref()
+                        .map(|set| {
+                            Box::new(set.iter().cloned().map(PlutusScript::from))
+                                as BoxedIterator<PlutusScript>
+                        })
+                        .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<PlutusScript>);
+
+                    let v3_scripts = witness_set
+                        .plutus_v3_script
+                        .as_ref()
+                        .map(|set| {
+                            Box::new(set.iter().cloned().map(PlutusScript::from))
+                                as BoxedIterator<PlutusScript>
+                        })
+                        .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<PlutusScript>);
+
+                    let plutus_scripts = v1_scripts.chain(v2_scripts).chain(v3_scripts);
+
+                    f.debug_list()
+                        .entries(plutus_scripts.map(pretty::ViaDisplay))
+                        .finish()
+                }),
+            );
+        }
+
+        if let Some(datums) = witness_set.plutus_data.as_ref() {
+            debug_struct.field(
+                "datums",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    f.debug_list()
+                        .entries(
+                            datums
+                                .iter()
+                                .cloned()
+                                .map(PlutusData::from)
+                                .map(pretty::ViaDisplay),
+                        )
+                        .finish()
+                }),
+            );
+        }
+
+        if let Some(redeemers) = witness_set.redeemer.as_ref() {
+            debug_struct.field(
+                "redeemers",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| match redeemers {
+                    pallas::Redeemers::List(_) => panic!(
+                        "found redeemers encoded as list; shouldn't be possible with this builder."
+                    ),
+                    pallas::Redeemers::Map(map) => {
+                        let mut redeemers = f.debug_map();
+                        for (key, value) in map.iter() {
+                            redeemers.entry(
+                                &pretty::ViaDisplay(RedeemerPointer::from(key.clone())),
+                                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                                    f.debug_tuple("Redeemer")
+                                        .field(&pretty::ViaDisplay(PlutusData::from(
+                                            value.data.clone(),
+                                        )))
+                                        .field(&pretty::ViaDisplay(ExecutionUnits::from(
+                                            value.ex_units,
+                                        )))
+                                        .finish()
+                                }),
+                            );
+                        }
+                        redeemers.finish()
+                    }
+                }),
+            );
+        }
+
+        // TODO: Show signatures & native scripts
+
+        debug_struct.finish()
     }
 }
 
@@ -263,6 +489,14 @@ impl Transaction {
         self
     }
 
+    pub fn with_datums(&mut self, datums: impl IntoIterator<Item = PlutusData>) -> &mut Self {
+        self.inner.transaction_witness_set.plutus_data = pallas::NonEmptySet::from_vec(
+            datums.into_iter().map(pallas::PlutusData::from).collect(),
+        );
+
+        self
+    }
+
     pub fn with_plutus_scripts(
         &mut self,
         scripts: impl IntoIterator<Item = PlutusScript>,
@@ -292,12 +526,12 @@ impl Transaction {
             },
         );
 
-        assert!(
+        debug_assert!(
             v1.is_empty(),
             "trying to set some Plutus V1 scripts; these aren't supported yet and may fail later down the builder.",
         );
 
-        assert!(
+        debug_assert!(
             v2.is_empty(),
             "trying to set some Plutus V2 scripts; these aren't supported yet and may fail later down the builder.",
         );
@@ -335,14 +569,32 @@ impl Transaction {
     /// collaterals and explicitly specified signers.
     ///
     /// FIXME:
+    ///
     /// - account for signers from native scripts
     /// - account for signers from certificates
-    /// - account for signers from votes & proposals
+    /// - account for signers from votes
     /// - account for signers from withdrawals
     fn required_signatories(
         &self,
         resolved_inputs: &BTreeMap<Input, Output>,
     ) -> anyhow::Result<BTreeSet<Hash<28>>> {
+        let body = &self.inner.transaction_body;
+
+        debug_assert!(
+            body.certificates.is_none(),
+            "found certificates in transaction: not supported yet",
+        );
+
+        debug_assert!(
+            body.withdrawals.is_none(),
+            "found withdrawals in transaction: not supported yet",
+        );
+
+        debug_assert!(
+            body.voting_procedures.is_none(),
+            "found votes in transaction: not supported yet",
+        );
+
         Ok(self
             .specified_signatories()
             .chain(
@@ -352,7 +604,7 @@ impl Transaction {
                         let output =
                             resolved_inputs
                                 .get(&input)
-                                .ok_or(anyhow!("unknown = {input:?}").context(
+                                .ok_or(anyhow!("unknown = {input}").context(
                                     "unknown output for specified input or collateral input; found in transaction but not provided in resolved set",
                                 ))?;
                         Ok::<_, anyhow::Error>(output)
@@ -418,22 +670,22 @@ impl Transaction {
 
         let body = &self.inner.transaction_body;
 
-        assert!(
+        debug_assert!(
             body.certificates.is_none(),
             "found certificates in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.withdrawals.is_none(),
             "found withdrawals in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.voting_procedures.is_none(),
             "found votes in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.proposal_procedures.is_none(),
             "found proposals in transaction: not supported yet",
         );
@@ -446,6 +698,22 @@ impl Transaction {
 
     /// Pre-condition: this assumes and only support Plutus V3.
     fn script_integrity_hash(&self, params: &ProtocolParameters) -> Option<Hash<32>> {
+        debug_assert!(
+            self.inner
+                .transaction_witness_set
+                .plutus_v1_script
+                .is_none(),
+            "found plutus v1 scripts in the transaction witness set; not supported yet"
+        );
+
+        debug_assert!(
+            self.inner
+                .transaction_witness_set
+                .plutus_v2_script
+                .is_none(),
+            "found plutus v2 scripts in the transaction witness set; not supported yet"
+        );
+
         let redeemers = self.inner.transaction_witness_set.redeemer.as_ref();
 
         let datums = self.inner.transaction_witness_set.plutus_data.as_ref();
@@ -539,9 +807,9 @@ impl Transaction {
             let mut scripts = required_scripts.iter();
 
             let (ptr, hash) = scripts.next().unwrap(); // Safe because it's not empty
-            let mut err = anyhow!("required_scripts = {ptr:?} -> {hash}");
+            let mut err = anyhow!("required_scripts = {ptr} -> {hash}");
             for (ptr, hash) in scripts {
-                err = err.context(format!("required_scripts = {ptr:?} -> {hash}"));
+                err = err.context(format!("required_scripts = {ptr} -> {hash}"));
             }
 
             return Err(err.context("couldn't compute required script integrity hash: datums and redeemers are missing from the transaction."));
@@ -586,8 +854,15 @@ impl Transaction {
         // We should technically have consumed all redeemers.
         if !redeemers.is_empty() {
             return Err(
-                anyhow!("extraneous redeemers in transaction; not required by any script")
-                    .context(format!("extra={:?}", redeemers.keys().collect::<Vec<_>>())),
+                anyhow!("extraneous redeemers in transaction; not required by any script").context(
+                    format!(
+                        "extra={:?}",
+                        redeemers
+                            .keys()
+                            .map(|ptr| ptr.to_string())
+                            .collect::<Vec<_>>()
+                    ),
+                ),
             );
         }
 
@@ -601,7 +876,7 @@ impl Transaction {
         self.inputs().try_fold(&mut change, |total_input, input| {
             let output = resolved_inputs.get(&input).ok_or_else(|| {
                 anyhow!("unknown input, not present in resolved set")
-                    .context(format!("input={input:?}"))
+                    .context(format!("input={input}"))
             })?;
 
             Ok::<_, anyhow::Error>(total_input.add(output.value()))
@@ -656,22 +931,22 @@ impl Transaction {
 
         let body = &self.inner.transaction_body;
 
-        assert!(
+        debug_assert!(
             body.certificates.is_none(),
             "found certificates in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.withdrawals.is_none(),
             "found withdrawals in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.treasury_value.is_none(),
             "found treasury donation in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.proposal_procedures.is_none(),
             "found proposals in transaction: not supported yet",
         );
@@ -692,7 +967,7 @@ impl Transaction {
             self.collaterals()
                 .map(|input| {
                     resolved_inputs.get(&input).ok_or_else(|| {
-                        anyhow!("unknown collateral input").context(format!("reference={input:?}"))
+                        anyhow!("unknown collateral input").context(format!("reference={input}"))
                     })
                 })
                 .try_fold(
@@ -778,5 +1053,100 @@ impl<'d, C> cbor::Decode<'d, C> for Transaction {
             inner: d.decode_with(ctx)?,
             change_strategy: ChangeStrategy::default(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Transaction;
+    use crate::cbor;
+
+    #[test]
+    fn display_sample_1() {
+        let transaction: Transaction = cbor::decode(
+            &hex::decode(
+                "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
+                 2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827\
+                 aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d\
+                 3b2fca56572011a001092a803d818558203525101010023259800a518a4d1365640\
+                 04ae69a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c0\
+                 92e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a00\
+                 a208bb021a00029755a0f5f6\
+                ",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            transaction.to_string(),
+            "Transaction (id = 036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a5) { \
+                inputs: [c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324#3], \
+                outputs: [\
+                    Output { \
+                        address: addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t, \
+                        value: Value { lovelace: 1086120 }, \
+                        script: v3(bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777) \
+                    }, \
+                    Output { \
+                        address: addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t, \
+                        value: Value { lovelace: 10619067 } \
+                    }\
+                ], \
+                fee: 169813 \
+            }",
+        );
+    }
+
+    #[test]
+    fn display_sample_2() {
+        let transaction: Transaction = cbor::decode(
+            &hex::decode(
+                "84a700d9010283825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118\
+                 c5eefabee6a8e04a5008258203522a630e91e631f56897be2898e059478c300f4bb\
+                 8dd7891549a191b4bf1090008258208d56891b4638203175c488e19d630bfbc8af2\
+                 85353aeeb1053d54a3c371b7a40010181a20058390082c1729d5fd44124a6ae72bc\
+                 db86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd\
+                 277d73468d3b2fca56572011a00aab370021a0002b1ef0b5820d37acc9c984616d9\
+                 d15825afeaf7d266e5bde38fdd4df4f8b2312703022d474d0dd90102818258208d5\
+                 6891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a400110a2\
+                 0058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af\
+                 57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f245b11\
+                 1a00040ae7a105a18200018280821906411a0004d2f5f5f6\
+                ",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            transaction.to_string(),
+            "Transaction (id = cd8c5bf00ab490d57c82ebf6364e4a6337dc214d635e8c392deaa7e4b98ed6ea) { \
+                inputs: [\
+                    036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a5#0, \
+                    3522a630e91e631f56897be2898e059478c300f4bb8dd7891549a191b4bf1090#0, \
+                    8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40#1\
+                ], \
+                outputs: [\
+                    Output { \
+                        address: addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t, \
+                        value: Value { lovelace: 11187056 } \
+                    }\
+                ], \
+                fee: 176623, \
+                script_integrity_hash: d37acc9c984616d9d15825afeaf7d266e5bde38fdd4df4f8b2312703022d474d, \
+                collaterals: [\
+                    8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40#1\
+                ], \
+                collateral_return: Output { \
+                    address: addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t, \
+                    value: Value { lovelace: 5186651 } \
+                }, \
+                total_collateral: 264935, \
+                redeemers: {\
+                    Spend(1): Redeemer(CBOR(80), ExecutionUnits { mem: 1601, cpu: 316149 })\
+                } \
+            }",
+        );
     }
 }

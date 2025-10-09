@@ -3,6 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::cbor;
+use anyhow::anyhow;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[cbor(index_only)]
@@ -15,7 +17,30 @@ pub enum PlutusVersion {
     V3,
 }
 
-// -------------------------------------------------------------- Converting (to)
+impl fmt::Display for PlutusVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "v{}", u8::from(*self))
+    }
+}
+
+// ----------------------------------------------------------- Converting (from)
+
+impl TryFrom<u8> for PlutusVersion {
+    type Error = anyhow::Error;
+
+    fn try_from(version: u8) -> anyhow::Result<Self> {
+        match version {
+            1 => Ok(PlutusVersion::V1),
+            2 => Ok(PlutusVersion::V2),
+            3 => Ok(PlutusVersion::V3),
+            _ => Err(anyhow!(
+                "unknown plutus version version={version}; only 1, 2 and 3 are known"
+            )),
+        }
+    }
+}
+
+// ------------------------------------------------------------- Converting (to)
 
 impl From<PlutusVersion> for u8 {
     fn from(version: PlutusVersion) -> Self {

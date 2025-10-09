@@ -2,14 +2,21 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{cbor, pallas};
+use crate::{cbor, cbor::ToCbor, pallas};
 use num::ToPrimitive;
 use num_bigint::BigInt;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
 pub struct PlutusData(#[n(0)] pallas::PlutusData);
+
+impl fmt::Display for PlutusData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CBOR({})", hex::encode(self.to_cbor()))
+    }
+}
 
 // -------------------------------------------------------------------- Building
 

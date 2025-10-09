@@ -3,11 +3,36 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{cbor, pallas};
+use std::{cmp::Ordering, fmt};
 
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
 pub struct ExecutionUnits(#[n(0)] pallas::ExUnits);
+
+impl fmt::Display for ExecutionUnits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExecutionUnits")
+            .field("mem", &self.mem())
+            .field("cpu", &self.cpu())
+            .finish()
+    }
+}
+
+impl PartialOrd for ExecutionUnits {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        Some(self.cmp(rhs))
+    }
+}
+
+impl Ord for ExecutionUnits {
+    fn cmp(&self, rhs: &Self) -> Ordering {
+        match self.mem().cmp(&rhs.mem()) {
+            Ordering::Equal => self.cpu().cmp(&rhs.cpu()),
+            ordering @ Ordering::Less | ordering @ Ordering::Greater => ordering,
+        }
+    }
+}
 
 // ------------------------------------------------------------------ Inspecting
 

@@ -3,8 +3,6 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 pub mod cbor;
-
-mod cardano;
 pub use cardano::{
     // Re-export types for easier consumption.
     //
@@ -14,6 +12,7 @@ pub use cardano::{
     credential::Credential,
     execution_units::ExecutionUnits,
     hash::Hash,
+    inline_datum::InlineDatum,
     input::Input,
     network_id::NetworkId,
     output::Output,
@@ -27,4 +26,6 @@ pub use cardano::{
     value::Value,
 };
 
+mod cardano;
 mod pallas;
+mod pretty;

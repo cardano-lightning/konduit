@@ -161,7 +161,7 @@ fn into_uplc_inputs(
 
     for input in known_inputs.iter() {
         if resolved_inputs.get(input).is_none() {
-            return Err(anyhow!("unknown = {input:?}")
+            return Err(anyhow!("unknown = {input}")
                 .context("unknown output for specified input or reference input; found in transaction but not in provided resolved set"));
         }
     }
@@ -197,9 +197,9 @@ fn fail_on_missing_collateral<T>(
     if let Some(ptr) = ptrs.next()
         && collaterals.count() == 0
     {
-        let mut err = anyhow!("at {:?}", ptr);
+        let mut err = anyhow!("at {}", ptr);
         for ptr in ptrs {
-            err = err.context(format!("at {ptr:?}"));
+            err = err.context(format!("at {ptr}"));
         }
 
         return Err(err.context(
