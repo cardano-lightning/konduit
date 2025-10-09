@@ -103,13 +103,25 @@ macro_rules! value {
 }
 
 #[macro_export]
-macro_rules! mint {
-    // multi-assets as a 4-tuple (policy_id, asset_name, amount, redeemer)
-    ($( ($policy_hex:expr, $asset_name:expr, $amount:expr, $redeemer:expr $(,)?) ),+ $(,)? ) => {{
+macro_rules! assets {
+    // multi-assets as a 3-tuple (policy_id, asset_name, amount)
+    ($( ($policy:expr, $asset_name:expr, $amount:expr $(,)?) ),+ $(,)? ) => {{
         std::collections::BTreeMap::from([
             $(
                 (
-                    (<$crate::Hash<28>>::try_from($policy_hex).unwrap(), $redeemer),
+                    <$crate::Hash<28>>::try_from($policy).unwrap(),
+                    std::collections::BTreeMap::from([ (hex::decode($asset_name).unwrap(), $amount) ]),
+                )
+            ),+
+        ])
+    }};
+
+    // multi-assets as a 4-tuple (policy_id, asset_name, amount, redeemer)
+    ($( ($policy:expr, $asset_name:expr, $amount:expr, $redeemer:expr $(,)?) ),+ $(,)? ) => {{
+        std::collections::BTreeMap::from([
+            $(
+                (
+                    (<$crate::Hash<28>>::try_from($policy).unwrap(), $redeemer),
                     std::collections::BTreeMap::from([ (hex::decode($asset_name).unwrap(), $amount) ]),
                 )
             ),+

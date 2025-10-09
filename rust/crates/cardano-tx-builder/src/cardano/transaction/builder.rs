@@ -7,7 +7,11 @@ use crate::{
     pallas,
 };
 use anyhow::anyhow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem,
+    ops::Deref,
+};
 use uplc::tx::SlotConfig;
 
 // ```cddl
@@ -71,6 +75,15 @@ impl Transaction {
             // This informs the user of the builder that they did something wrong and forgot to set
             // one or more collateral.
             fail_on_missing_collateral(&required_scripts, tx.collaterals())?;
+
+            // Fails when any output is below its minimum Ada value. We specifically call this
+            // after 'with_change' so that it's possible for users to create outputs that are
+            // initially too small but get repleted when distributing change.
+            //
+            // The builder shall never produce an invalid change output that is too small (i.e. the
+            // 'change' given to the change strategy callback is always sufficient to cover for a
+            // full new output). But users may pre-define such outputs; hence the safeguard here.
+            fail_on_insufficiently_funded_outputs(tx.outputs())?;
 
             // Serialise the transaction to compute its fee.
             serialized_tx.clear();
@@ -198,6 +211,34 @@ fn fail_on_missing_collateral<'a, T>(
     Ok(())
 }
 
+fn fail_on_insufficiently_funded_outputs<'a>(
+    outputs: impl Iterator<Item = Output<'a>>,
+) -> anyhow::Result<()> {
+    let mut err_opt: Option<anyhow::Error> = None;
+
+    for (ix, output) in outputs.enumerate() {
+        let allocated = output.value().deref().as_ref().lovelace();
+        let minimum_required = output.min_acceptable_value();
+        if allocated < minimum_required {
+            if let Some(err) = mem::take(&mut err_opt) {
+                err_opt = Some(err.context(format!("at output index {ix}: allocated={allocated}, minimum required={minimum_required}")));
+            } else {
+                err_opt = Some(anyhow!(
+                    "at output index {ix}: allocated={allocated}, minimum required={minimum_required}"
+                ));
+            }
+        }
+    }
+
+    if let Some(err) = err_opt {
+        return Err(
+            err.context("insufficiently provisioned output(s): not enough lovelace allocated")
+        );
+    }
+
+    Ok(())
+}
+
 fn evaluate_plutus_scripts(
     serialized_tx: &[u8],
     resolved_inputs: Vec<uplc::tx::ResolvedInput>,
@@ -253,8 +294,8 @@ fn evaluate_plutus_scripts(
 mod tests {
     use crate::{
         Address, ChangeStrategy, Input, Output, PlutusData, PlutusScript, PlutusVersion,
-        ProtocolParameters, Transaction, address, address_test, cbor::ToCbor, input, mint, output,
-        plutus_script, script_credential, value,
+        ProtocolParameters, Transaction, address, address_test, assets, cbor::ToCbor, input,
+        output, plutus_script, script_credential, value,
     };
     use std::{collections::BTreeMap, sync::LazyLock};
 
@@ -325,6 +366,56 @@ mod tests {
     }
 
     #[test]
+    fn min_lovelace_value_with_nft() {
+        let resolved_inputs = [(
+            input!(
+                "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
+                0
+            )
+            .0,
+            output!(
+                "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
+                value!(
+                    102049379,
+                    (
+                        "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                        "534e454b",
+                        1
+                    ),
+                )
+            ),
+        )];
+
+        let result = Transaction::build(
+            &FIXTURE_PROTOCOL_PARAMETERS,
+            &BTreeMap::from(resolved_inputs.clone()),
+            |tx| {
+                tx.with_inputs(vec![input!(
+                    "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
+                    0
+                )])
+                .with_outputs(vec![
+                    output!("addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c").with_assets(
+                        assets!(
+                            (
+                                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                                "534e454b",
+                                1,
+                            )
+                        ),
+                    ),
+                ])
+                .with_change_strategy(ChangeStrategy::as_last_output(
+                    address!("addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c")
+                ))
+                .ok()
+            },
+        );
+
+        assert!(result.is_ok(), "{result:#?}");
+    }
+
+    #[test]
     fn mint_tokens() {
         let resolved_inputs = BTreeMap::from([(
             input!(
@@ -351,7 +442,7 @@ mod tests {
                         "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
                     )
                 ))
-                .with_mint(mint!(
+                .with_mint(assets!(
                     (
                         "5fb286e39c3cda5a5abd17501c17b01987ebfa282df129c4df1bf27e",
                         "e29ca82073756d6d6974203230323520646973636f756e74207368617264",

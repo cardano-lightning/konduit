@@ -478,9 +478,8 @@ impl Transaction {
     }
 
     fn with_change_output(&mut self, change: Value<u64>) -> anyhow::Result<()> {
-        let min_change_value = Output::new(Address::default(), change.clone())
-            .min_acceptable_value()
-            .lovelace();
+        let min_change_value =
+            Output::new(Address::default(), change.clone()).min_acceptable_value();
 
         if change.lovelace() < min_change_value {
             return Err(

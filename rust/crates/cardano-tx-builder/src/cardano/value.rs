@@ -43,6 +43,11 @@ impl<Q> Value<Q> {
     pub fn new(lovelace: u64) -> Self {
         Self(lovelace, BTreeMap::default())
     }
+
+    pub fn with_lovelace(&mut self, lovelace: u64) -> &mut Self {
+        self.0 = lovelace;
+        self
+    }
 }
 
 impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
