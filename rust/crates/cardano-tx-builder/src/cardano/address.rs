@@ -4,15 +4,10 @@
 
 use crate::{Credential, NetworkId, pallas};
 use anyhow::anyhow;
-use std::{
-    borrow::{Borrow, Cow},
-    fmt,
-    marker::PhantomData,
-    str::FromStr,
-};
+use std::{fmt, marker::PhantomData, rc::Rc, str::FromStr};
 
 #[derive(Debug, Clone)]
-pub struct Address<'a, T: KnownStyle>(Cow<'a, Style>, PhantomData<T>);
+pub struct Address<T: KnownStyle>(Rc<Style>, PhantomData<T>);
 
 #[derive(Debug, Clone)]
 enum Style {
@@ -36,20 +31,14 @@ impl KnownStyle for Shelley {}
 
 // ------------------------------------------------------------------------- Inspecting
 
-impl<T: KnownStyle> Address<'static, T> {
-    pub fn borrow<'a>(&'a self) -> Address<'a, T> {
-        Address(Cow::Borrowed(self.0.borrow()), PhantomData)
-    }
-}
-
-impl<'a, T: KnownStyle> Address<'a, T> {
+impl<T: KnownStyle> Address<T> {
     pub fn is_byron(&self) -> bool {
-        matches!(&self.0.as_ref(), Style::Byron(..))
+        matches!(self.0.as_ref(), &Style::Byron(..))
     }
 
-    pub fn as_byron(&self) -> Option<Address<'_, Byron>> {
+    pub fn as_byron(&self) -> Option<Address<Byron>> {
         if self.is_byron() {
-            return Some(Address(Cow::Borrowed(self.0.as_ref()), PhantomData));
+            return Some(Address(self.0.clone(), PhantomData));
         }
 
         None
@@ -59,16 +48,16 @@ impl<'a, T: KnownStyle> Address<'a, T> {
         matches!(&self.0.as_ref(), Style::Shelley(..))
     }
 
-    pub fn as_shelley(&self) -> Option<Address<'_, Shelley>> {
+    pub fn as_shelley(&self) -> Option<Address<Shelley>> {
         if self.is_shelley() {
-            return Some(Address(Cow::Borrowed(self.0.as_ref()), PhantomData));
+            return Some(Address(self.0.clone(), PhantomData));
         }
 
         None
     }
 }
 
-impl<'a> Address<'a, Shelley> {
+impl Address<Shelley> {
     fn cast(&self) -> &pallas::ShelleyAddress {
         match self.0.as_ref() {
             Style::Shelley(shelley) => shelley,
@@ -91,7 +80,7 @@ impl<'a> Address<'a, Shelley> {
 
 // -------------------------------------------------------------------- Building
 
-impl Address<'static, Shelley> {
+impl Address<Shelley> {
     pub fn new(network: NetworkId, payment_credential: Credential) -> Self {
         Self::from(pallas::ShelleyAddress::new(
             pallas::Network::from(network),
@@ -111,7 +100,7 @@ impl Address<'static, Shelley> {
     }
 }
 
-impl Default for Address<'static, Any> {
+impl Default for Address<Any> {
     fn default() -> Self {
         Self::from(
             Address::new(NetworkId::mainnet(), Credential::default())
@@ -122,40 +111,40 @@ impl Default for Address<'static, Any> {
 
 // ----------------------------------------------------------- Converting (from)
 
-impl From<pallas::ByronAddress> for Address<'static, Byron> {
+impl From<pallas::ByronAddress> for Address<Byron> {
     fn from(byron_address: pallas::ByronAddress) -> Self {
-        Self(Cow::Owned(Style::Byron(byron_address)), PhantomData)
+        Self(Rc::new(Style::Byron(byron_address)), PhantomData)
     }
 }
 
-impl From<pallas::ShelleyAddress> for Address<'static, Shelley> {
+impl From<pallas::ShelleyAddress> for Address<Shelley> {
     fn from(shelley_address: pallas::ShelleyAddress) -> Self {
-        Self(Cow::Owned(Style::Shelley(shelley_address)), PhantomData)
+        Self(Rc::new(Style::Shelley(shelley_address)), PhantomData)
     }
 }
 
-impl<'a> From<Address<'a, Byron>> for Address<'a, Any> {
-    fn from(byron_address: Address<'a, Byron>) -> Self {
+impl From<Address<Byron>> for Address<Any> {
+    fn from(byron_address: Address<Byron>) -> Self {
         Self(byron_address.0, PhantomData)
     }
 }
 
-impl<'a> From<Address<'a, Shelley>> for Address<'a, Any> {
-    fn from(shelley_address: Address<'a, Shelley>) -> Self {
+impl From<Address<Shelley>> for Address<Any> {
+    fn from(shelley_address: Address<Shelley>) -> Self {
         Self(shelley_address.0, PhantomData)
     }
 }
 
-impl TryFrom<pallas::Address> for Address<'static, Any> {
+impl TryFrom<pallas::Address> for Address<Any> {
     type Error = anyhow::Error;
 
     fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
         match address {
             pallas_addresses::Address::Byron(byron) => {
-                Ok(Address::<Any>(Cow::Owned(Style::Byron(byron)), PhantomData))
+                Ok(Address::<Any>(Rc::new(Style::Byron(byron)), PhantomData))
             }
             pallas_addresses::Address::Shelley(shelley) => Ok(Address::<Any>(
-                Cow::Owned(Style::Shelley(shelley)),
+                Rc::new(Style::Shelley(shelley)),
                 PhantomData,
             )),
             pallas_addresses::Address::Stake(_) => {
@@ -165,13 +154,13 @@ impl TryFrom<pallas::Address> for Address<'static, Any> {
     }
 }
 
-impl TryFrom<pallas::Address> for Address<'static, Shelley> {
+impl TryFrom<pallas::Address> for Address<Shelley> {
     type Error = anyhow::Error;
 
     fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
         match address {
             pallas_addresses::Address::Shelley(shelley) => Ok(Address::<Shelley>(
-                Cow::Owned(Style::Shelley(shelley)),
+                Rc::new(Style::Shelley(shelley)),
                 PhantomData,
             )),
             pallas_addresses::Address::Byron(_) | pallas_addresses::Address::Stake(_) => {
@@ -181,9 +170,9 @@ impl TryFrom<pallas::Address> for Address<'static, Shelley> {
     }
 }
 
-impl<T: KnownStyle> TryFrom<&str> for Address<'static, T>
+impl<T: KnownStyle> TryFrom<&str> for Address<T>
 where
-    Address<'static, T>: TryFrom<pallas::Address, Error = anyhow::Error>,
+    Address<T>: TryFrom<pallas::Address, Error = anyhow::Error>,
 {
     type Error = anyhow::Error;
 
@@ -192,9 +181,9 @@ where
     }
 }
 
-impl<T: KnownStyle> TryFrom<&[u8]> for Address<'static, T>
+impl<T: KnownStyle> TryFrom<&[u8]> for Address<T>
 where
-    Address<'static, T>: TryFrom<pallas::Address, Error = anyhow::Error>,
+    Address<T>: TryFrom<pallas::Address, Error = anyhow::Error>,
 {
     type Error = anyhow::Error;
 
@@ -205,14 +194,7 @@ where
 
 // --------------------------------------------------------------- Converting (to)
 
-impl<'a, T: KnownStyle> Address<'a, T> {
-    pub fn to_owned(self) -> Address<'static, T> {
-        let style: Style = self.0.into_owned();
-        Address(Cow::Owned(style), PhantomData)
-    }
-}
-
-impl<'a, T: KnownStyle> fmt::Display for Address<'a, T> {
+impl<T: KnownStyle> fmt::Display for Address<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self.0.as_ref() {
             Style::Byron(byron) => f.write_str(byron.to_base58().as_str()),
@@ -226,8 +208,8 @@ impl<'a, T: KnownStyle> fmt::Display for Address<'a, T> {
     }
 }
 
-impl<'a, T: KnownStyle> From<&Address<'a, T>> for Vec<u8> {
-    fn from(address: &Address<'a, T>) -> Self {
+impl<T: KnownStyle> From<&Address<T>> for Vec<u8> {
+    fn from(address: &Address<T>) -> Self {
         match address.0.as_ref() {
             Style::Byron(byron) => byron.to_vec(),
             Style::Shelley(shelley) => shelley.to_vec(),

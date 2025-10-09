@@ -23,7 +23,6 @@ pub use cardano::{
     plutus_version::PlutusVersion,
     protocol_parameters::ProtocolParameters,
     redeemer_pointer::RedeemerPointer,
-    resolved_input::ResolvedInput,
     transaction::Transaction,
     value::Value,
 };

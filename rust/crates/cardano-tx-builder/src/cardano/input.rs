@@ -3,18 +3,17 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{Hash, cbor, pallas};
-use std::borrow::Cow;
+use std::rc::Rc;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
-#[cbor(transparent)]
-pub struct Input<'a>(#[n(0)] Cow<'a, pallas::TransactionInput>);
+pub struct Input(Rc<pallas::TransactionInput>);
 
 // -------------------------------------------------------------------- Building
 
-impl<'a> Input<'a> {
+impl Input {
     pub fn new(transaction_id: Hash<32>, index: u64) -> Self {
-        Self(Cow::Owned(pallas::TransactionInput {
+        Self(Rc::new(pallas::TransactionInput {
             transaction_id: pallas::Hash::from(transaction_id),
             index,
         }))
@@ -23,22 +22,35 @@ impl<'a> Input<'a> {
 
 // ----------------------------------------------------------- Converting (from)
 
-impl<'a> From<&'a pallas::TransactionInput> for Input<'a> {
-    fn from(i: &'a pallas::TransactionInput) -> Self {
-        Input(Cow::Borrowed(i))
-    }
-}
-
-impl From<pallas::TransactionInput> for Input<'static> {
+impl From<pallas::TransactionInput> for Input {
     fn from(i: pallas::TransactionInput) -> Self {
-        Input(Cow::Owned(i))
+        Input(Rc::new(i))
     }
 }
 
 // ------------------------------------------------------------- Converting (to)
 
-impl<'a> From<Input<'a>> for pallas::TransactionInput {
-    fn from(i: Input<'a>) -> Self {
-        i.0.into_owned()
+impl From<Input> for pallas::TransactionInput {
+    fn from(i: Input) -> Self {
+        Rc::unwrap_or_clone(i.0)
+    }
+}
+
+// -------------------------------------------------------------------- Encoding
+
+impl<C> cbor::Encode<C> for Input {
+    fn encode<W: cbor::encode::write::Write>(
+        &self,
+        e: &mut cbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), cbor::encode::Error<W::Error>> {
+        e.encode_with(self.0.as_ref(), ctx)?;
+        Ok(())
+    }
+}
+
+impl<'d, C> cbor::Decode<'d, C> for Input {
+    fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
+        Ok(Self(Rc::new(d.decode_with(ctx)?)))
     }
 }

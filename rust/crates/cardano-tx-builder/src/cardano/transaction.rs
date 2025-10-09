@@ -50,36 +50,37 @@ impl Transaction {
     }
 
     /// The declared transaction inputs, which are spent in case of successful transaction.
-    pub fn inputs(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
+    pub fn inputs(&self) -> Box<dyn Iterator<Item = Input> + '_> {
         Box::new(
             self.inner
                 .transaction_body
                 .inputs
                 .deref()
                 .iter()
+                .cloned()
                 .map(Input::from),
         )
     }
 
     /// The declared transaction collaterals, which are spent in case of failed transaction.
-    pub fn collaterals(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
+    pub fn collaterals(&self) -> Box<dyn Iterator<Item = Input> + '_> {
         self.inner
             .transaction_body
             .collateral
             .as_ref()
-            .map(|xs| Box::new(xs.iter().map(Input::from)) as BoxedIterator<'_, Input<'_>>)
-            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input<'_>>)
+            .map(|xs| Box::new(xs.iter().cloned().map(Input::from)) as BoxedIterator<'_, Input>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input>)
     }
 
     /// The declared transaction reference inputs, which are never spent but contribute to the
     /// script context for smart-contract execution.
-    pub fn reference_inputs(&self) -> Box<dyn Iterator<Item = Input<'_>> + '_> {
+    pub fn reference_inputs(&self) -> Box<dyn Iterator<Item = Input> + '_> {
         self.inner
             .transaction_body
             .reference_inputs
             .as_ref()
-            .map(|xs| Box::new(xs.iter().map(Input::from)) as BoxedIterator<'_, Input<'_>>)
-            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input<'_>>)
+            .map(|xs| Box::new(xs.iter().cloned().map(Input::from)) as BoxedIterator<'_, Input>)
+            .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, Input>)
     }
 
     pub fn mint(&self) -> Value<i64> {
@@ -92,7 +93,7 @@ impl Transaction {
     }
 
     /// The declared transaction outputs, which are produced in case of successful transaction.
-    pub fn outputs(&self) -> Box<dyn Iterator<Item = Output<'_>> + '_> {
+    pub fn outputs(&self) -> Box<dyn Iterator<Item = Output> + '_> {
         Box::new(
             self.inner
                 .transaction_body
@@ -107,7 +108,7 @@ impl Transaction {
     }
 
     /// View this transaction as a UTxO, mapping each output to its corresponding input reference.
-    pub fn as_resolved_inputs(&self) -> BTreeMap<Input<'_>, Output<'_>> {
+    pub fn as_resolved_inputs(&self) -> BTreeMap<Input, Output> {
         let id = self.id();
         self.outputs()
             .enumerate()
@@ -169,9 +170,9 @@ impl Transaction {
         Ok(self)
     }
 
-    pub fn with_inputs<'a>(
+    pub fn with_inputs(
         &mut self,
-        inputs: impl IntoIterator<Item = (Input<'a>, Option<PlutusData>)>,
+        inputs: impl IntoIterator<Item = (Input, Option<PlutusData>)>,
     ) -> &mut Self {
         let mut redeemers = BTreeMap::new();
 
@@ -195,10 +196,7 @@ impl Transaction {
         self
     }
 
-    pub fn with_collaterals<'a>(
-        &mut self,
-        collaterals: impl IntoIterator<Item = Input<'a>>,
-    ) -> &mut Self {
+    pub fn with_collaterals(&mut self, collaterals: impl IntoIterator<Item = Input>) -> &mut Self {
         self.inner.transaction_body.collateral = pallas::NonEmptySet::from_vec(
             collaterals
                 .into_iter()
@@ -209,9 +207,9 @@ impl Transaction {
         self
     }
 
-    pub fn with_reference_inputs<'a>(
+    pub fn with_reference_inputs(
         &mut self,
-        reference_inputs: impl IntoIterator<Item = Input<'a>>,
+        reference_inputs: impl IntoIterator<Item = Input>,
     ) -> &mut Self {
         self.inner.transaction_body.reference_inputs = pallas::NonEmptySet::from_vec(
             reference_inputs
@@ -223,7 +221,7 @@ impl Transaction {
         self
     }
 
-    pub fn with_outputs<'a>(&mut self, outputs: impl IntoIterator<Item = Output<'a>>) -> &mut Self {
+    pub fn with_outputs(&mut self, outputs: impl IntoIterator<Item = Output>) -> &mut Self {
         self.inner.transaction_body.outputs = outputs
             .into_iter()
             .map(pallas::TransactionOutput::from)
@@ -343,7 +341,7 @@ impl Transaction {
     /// - account for signers from withdrawals
     fn required_signatories(
         &self,
-        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+        resolved_inputs: &BTreeMap<Input, Output>,
     ) -> anyhow::Result<BTreeSet<Hash<28>>> {
         Ok(self
             .specified_signatories()
@@ -389,9 +387,9 @@ impl Transaction {
     ///
     /// FIXME: the function is currently partial, as certificates, withdrawals, votes and proposals
     /// aren't implemented.
-    fn required_scripts<'i, 'o>(
+    fn required_scripts(
         &self,
-        resolved_inputs: &BTreeMap<Input<'i>, Output<'o>>,
+        resolved_inputs: &BTreeMap<Input, Output>,
     ) -> BTreeMap<RedeemerPointer, Hash<28>> {
         let from_inputs = self
             .inputs()
@@ -596,10 +594,7 @@ impl Transaction {
         Ok(())
     }
 
-    fn with_change(
-        &mut self,
-        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
-    ) -> anyhow::Result<()> {
+    fn with_change(&mut self, resolved_inputs: &BTreeMap<Input, Output>) -> anyhow::Result<()> {
         let mut change = Value::default();
 
         // Add inputs to the change balance
@@ -609,7 +604,7 @@ impl Transaction {
                     .context(format!("input={input:?}"))
             })?;
 
-            Ok::<_, anyhow::Error>(total_input.add(output.value().deref().as_ref()))
+            Ok::<_, anyhow::Error>(total_input.add(output.value()))
         })?;
 
         // Partition mint quantities between mint & burn
@@ -650,7 +645,7 @@ impl Transaction {
         // Subtract all outputs from the change balance
         self.outputs()
             .try_fold(&mut change, |total_output, output| {
-                total_output.checked_sub(output.value().deref().as_ref())
+                total_output.checked_sub(output.value())
             })
             .map_err(|e| e.context("insufficient balance; spending more than available"))?;
 
@@ -690,34 +685,31 @@ impl Transaction {
 
     fn with_collateral_return(
         &mut self,
-        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+        resolved_inputs: &BTreeMap<Input, Output>,
         params: &ProtocolParameters,
     ) -> anyhow::Result<()> {
-        let (mut total_collateral_value, opt_return_address): (
-            Value<u64>,
-            Option<Address<'static, _>>,
-        ) = self
-            .collaterals()
-            .map(|input| {
-                resolved_inputs.get(&input).ok_or_else(|| {
-                    anyhow!("unknown collateral input").context(format!("reference={input:?}"))
+        let (mut total_collateral_value, opt_return_address): (Value<u64>, Option<Address<_>>) =
+            self.collaterals()
+                .map(|input| {
+                    resolved_inputs.get(&input).ok_or_else(|| {
+                        anyhow!("unknown collateral input").context(format!("reference={input:?}"))
+                    })
                 })
-            })
-            .try_fold(
-                (Value::new(0), None),
-                |(mut total, address), maybe_output| {
-                    let output = maybe_output?;
-                    total.add(output.value().deref().as_ref());
-                    // It is arbitrary, but we use the source address of the first collateral as the
-                    // destination of the collateral change. Collaterals can't be script, so this is
-                    // relatively safe as the ledger enforces that the key is known at the time the
-                    // transaction is constructed.
-                    Ok::<_, anyhow::Error>((
-                        total,
-                        address.or_else(|| Some(output.address().to_owned())),
-                    ))
-                },
-            )?;
+                .try_fold(
+                    (Value::new(0), None),
+                    |(mut total, address), maybe_output| {
+                        let output = maybe_output?;
+                        total.add(output.value());
+                        // It is arbitrary, but we use the source address of the first collateral as the
+                        // destination of the collateral change. Collaterals can't be script, so this is
+                        // relatively safe as the ledger enforces that the key is known at the time the
+                        // transaction is constructed.
+                        Ok::<_, anyhow::Error>((
+                            total,
+                            address.or_else(|| Some(output.address().to_owned())),
+                        ))
+                    },
+                )?;
 
         if let Some(return_address) = opt_return_address {
             let minimum_collateral = params.minimum_collateral(self.fee());
