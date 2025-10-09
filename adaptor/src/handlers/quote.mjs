@@ -12,7 +12,7 @@ export function get_quote(lightning) {
     const recipient = quote.destination;
 
     const expiry = new Date(
-      Number.parseInt(quote.timestamp, 10) + Number.parseInt(quote.expiry + 10),
+      Number.parseInt(quote.timestamp, 10) + Number.parseInt(quote.expiry, 10),
     );
 
     const amount = BigInt(quote.num_msat);
