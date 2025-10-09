@@ -3,35 +3,39 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, ChangeStrategy, ExecutionUnits, Hash, Input, NetworkId, Output, PlutusData,
-    PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor, pallas, pretty,
+    Address, BoxedIterator, ChangeStrategy, ExecutionUnits, Hash, Input, NetworkId, Output,
+    PlutusData, PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor,
+    pallas, pretty,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    fmt, iter, mem,
+    fmt, iter,
+    marker::PhantomData,
+    mem,
     ops::Deref,
 };
 
 mod builder;
+pub mod state;
+pub use state::KnownState;
 
-pub struct Transaction {
+pub struct Transaction<State: KnownState> {
     inner: pallas::Tx,
     change_strategy: ChangeStrategy,
+    state: PhantomData<State>,
 }
-
-type BoxedIterator<'iter, T> = Box<dyn Iterator<Item = T> + 'iter>;
 
 // ------------------------------------------------------------------ Inspecting
 
-impl fmt::Debug for Transaction {
+impl<State: KnownState> fmt::Debug for Transaction<State> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl fmt::Display for Transaction {
+impl<State: KnownState> fmt::Display for Transaction<State> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug_struct = f.debug_struct(&format!("Transaction (id = {})", self.id()));
 
@@ -257,7 +261,7 @@ impl fmt::Display for Transaction {
     }
 }
 
-impl Transaction {
+impl<State: KnownState> Transaction<State> {
     pub fn id(&self) -> Hash<32> {
         let mut bytes = Vec::new();
         let _ = cbor::encode(&self.inner.transaction_body, &mut bytes);
@@ -347,10 +351,11 @@ impl Transaction {
 
 // -------------------------------------------------------------------- Building
 
-impl Default for Transaction {
+impl Default for Transaction<state::Malleable> {
     fn default() -> Self {
         Self {
             change_strategy: ChangeStrategy::default(),
+            state: PhantomData,
             inner: pallas::Tx {
                 transaction_body: pallas::TransactionBody {
                     auxiliary_data_hash: None,
@@ -391,7 +396,7 @@ impl Default for Transaction {
     }
 }
 
-impl Transaction {
+impl Transaction<state::Malleable> {
     pub fn ok(&mut self) -> anyhow::Result<&mut Self> {
         Ok(self)
     }
@@ -546,7 +551,7 @@ impl Transaction {
 
 // -------------------------------------------------------------------- Internal
 
-impl Transaction {
+impl<State: KnownState> Transaction<State> {
     /// The list of signatories explicitly listed in the transaction body, and visible to any
     /// underlying validator script. This is necessary a subset of the all signatories but the
     /// total set of inferred signatories may be larger due do transaction inputs.
@@ -742,7 +747,9 @@ impl Transaction {
 
         Some(Hash::from(pallas::hash::Hasher::<256>::hash(&preimage)))
     }
+}
 
+impl Transaction<state::Malleable> {
     fn with_change_output(&mut self, change: Value<u64>) -> anyhow::Result<()> {
         let min_change_value =
             Output::new(Address::default(), change.clone()).min_acceptable_value();
@@ -1036,7 +1043,7 @@ fn into_pallas_redeemers(
 
 // -------------------------------------------------------------------- Encoding
 
-impl<C> cbor::Encode<C> for Transaction {
+impl<C, State: KnownState> cbor::Encode<C> for Transaction<State> {
     fn encode<W: cbor::encode::write::Write>(
         &self,
         e: &mut cbor::Encoder<W>,
@@ -1047,10 +1054,11 @@ impl<C> cbor::Encode<C> for Transaction {
     }
 }
 
-impl<'d, C> cbor::Decode<'d, C> for Transaction {
+impl<'d, C, State: KnownState> cbor::Decode<'d, C> for Transaction<State> {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         Ok(Self {
             inner: d.decode_with(ctx)?,
+            state: PhantomData,
             change_strategy: ChangeStrategy::default(),
         })
     }
@@ -1058,12 +1066,12 @@ impl<'d, C> cbor::Decode<'d, C> for Transaction {
 
 #[cfg(test)]
 mod tests {
-    use super::Transaction;
+    use super::{Transaction, state};
     use crate::cbor;
 
     #[test]
     fn display_sample_1() {
-        let transaction: Transaction = cbor::decode(
+        let transaction: Transaction<state::Sealed> = cbor::decode(
             &hex::decode(
                 "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
                  2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827\
@@ -1100,7 +1108,7 @@ mod tests {
 
     #[test]
     fn display_sample_2() {
-        let transaction: Transaction = cbor::decode(
+        let transaction: Transaction<state::Sealed> = cbor::decode(
             &hex::decode(
                 "84a700d9010283825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118\
                  c5eefabee6a8e04a5008258203522a630e91e631f56897be2898e059478c300f4bb\

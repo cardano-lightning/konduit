@@ -8,7 +8,7 @@ pub use cardano::{
     //
     // NOTE: This main function of this comment is to force the formatter to put one import per
     // line in the following import list; making diffs and extensions easier.
-    address::{self, Address},
+    address::{Address, KnownStyle, style},
     credential::Credential,
     execution_units::ExecutionUnits,
     hash::Hash,
@@ -22,10 +22,13 @@ pub use cardano::{
     plutus_version::PlutusVersion,
     protocol_parameters::ProtocolParameters,
     redeemer_pointer::RedeemerPointer,
-    transaction::Transaction,
+    transaction::{KnownState, Transaction, state},
     value::Value,
 };
 
 mod cardano;
 mod pallas;
 mod pretty;
+mod protected;
+
+pub(crate) type BoxedIterator<'iter, T> = Box<dyn Iterator<Item = T> + 'iter>;

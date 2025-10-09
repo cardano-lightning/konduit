@@ -6,6 +6,9 @@ use crate::{Credential, NetworkId, pallas};
 use anyhow::anyhow;
 use std::{cmp::Ordering, fmt, marker::PhantomData, rc::Rc, str::FromStr};
 
+pub mod style;
+pub use style::KnownStyle;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Address<T: KnownStyle>(Rc<Style>, PhantomData<T>);
 
@@ -27,20 +30,6 @@ enum Style {
     Shelley(pallas::ShelleyAddress),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Any;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Shelley;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Byron;
-
-pub trait KnownStyle {}
-impl KnownStyle for Any {}
-impl KnownStyle for Byron {}
-impl KnownStyle for Shelley {}
-
 // ------------------------------------------------------------------------- Inspecting
 
 impl<T: KnownStyle> Address<T> {
@@ -48,7 +37,7 @@ impl<T: KnownStyle> Address<T> {
         matches!(self.0.as_ref(), &Style::Byron(..))
     }
 
-    pub fn as_byron(&self) -> Option<Address<Byron>> {
+    pub fn as_byron(&self) -> Option<Address<style::Byron>> {
         if self.is_byron() {
             return Some(Address(self.0.clone(), PhantomData));
         }
@@ -60,7 +49,7 @@ impl<T: KnownStyle> Address<T> {
         matches!(&self.0.as_ref(), Style::Shelley(..))
     }
 
-    pub fn as_shelley(&self) -> Option<Address<Shelley>> {
+    pub fn as_shelley(&self) -> Option<Address<style::Shelley>> {
         if self.is_shelley() {
             return Some(Address(self.0.clone(), PhantomData));
         }
@@ -69,7 +58,7 @@ impl<T: KnownStyle> Address<T> {
     }
 }
 
-impl Address<Shelley> {
+impl Address<style::Shelley> {
     fn cast(&self) -> &pallas::ShelleyAddress {
         match self.0.as_ref() {
             Style::Shelley(shelley) => shelley,
@@ -92,7 +81,7 @@ impl Address<Shelley> {
 
 // -------------------------------------------------------------------- Building
 
-impl Address<Shelley> {
+impl Address<style::Shelley> {
     pub fn new(network: NetworkId, payment_credential: Credential) -> Self {
         Self::from(pallas::ShelleyAddress::new(
             pallas::Network::from(network),
@@ -112,7 +101,7 @@ impl Address<Shelley> {
     }
 }
 
-impl Default for Address<Any> {
+impl Default for Address<style::Any> {
     fn default() -> Self {
         Self::from(
             Address::new(NetworkId::mainnet(), Credential::default())
@@ -123,39 +112,40 @@ impl Default for Address<Any> {
 
 // ----------------------------------------------------------- Converting (from)
 
-impl From<pallas::ByronAddress> for Address<Byron> {
+impl From<pallas::ByronAddress> for Address<style::Byron> {
     fn from(byron_address: pallas::ByronAddress) -> Self {
         Self(Rc::new(Style::Byron(byron_address)), PhantomData)
     }
 }
 
-impl From<pallas::ShelleyAddress> for Address<Shelley> {
+impl From<pallas::ShelleyAddress> for Address<style::Shelley> {
     fn from(shelley_address: pallas::ShelleyAddress) -> Self {
         Self(Rc::new(Style::Shelley(shelley_address)), PhantomData)
     }
 }
 
-impl From<Address<Byron>> for Address<Any> {
-    fn from(byron_address: Address<Byron>) -> Self {
+impl From<Address<style::Byron>> for Address<style::Any> {
+    fn from(byron_address: Address<style::Byron>) -> Self {
         Self(byron_address.0, PhantomData)
     }
 }
 
-impl From<Address<Shelley>> for Address<Any> {
-    fn from(shelley_address: Address<Shelley>) -> Self {
+impl From<Address<style::Shelley>> for Address<style::Any> {
+    fn from(shelley_address: Address<style::Shelley>) -> Self {
         Self(shelley_address.0, PhantomData)
     }
 }
 
-impl TryFrom<pallas::Address> for Address<Any> {
+impl TryFrom<pallas::Address> for Address<style::Any> {
     type Error = anyhow::Error;
 
     fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
         match address {
-            pallas_addresses::Address::Byron(byron) => {
-                Ok(Address::<Any>(Rc::new(Style::Byron(byron)), PhantomData))
-            }
-            pallas_addresses::Address::Shelley(shelley) => Ok(Address::<Any>(
+            pallas_addresses::Address::Byron(byron) => Ok(Address::<style::Any>(
+                Rc::new(Style::Byron(byron)),
+                PhantomData,
+            )),
+            pallas_addresses::Address::Shelley(shelley) => Ok(Address::<style::Any>(
                 Rc::new(Style::Shelley(shelley)),
                 PhantomData,
             )),
@@ -166,12 +156,12 @@ impl TryFrom<pallas::Address> for Address<Any> {
     }
 }
 
-impl TryFrom<pallas::Address> for Address<Shelley> {
+impl TryFrom<pallas::Address> for Address<style::Shelley> {
     type Error = anyhow::Error;
 
     fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
         match address {
-            pallas_addresses::Address::Shelley(shelley) => Ok(Address::<Shelley>(
+            pallas_addresses::Address::Shelley(shelley) => Ok(Address::<style::Shelley>(
                 Rc::new(Style::Shelley(shelley)),
                 PhantomData,
             )),

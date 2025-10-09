@@ -3,8 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, address, cbor, cbor::ToCbor,
-    pallas, pretty,
+    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, cbor, cbor::ToCbor, pallas,
+    pretty, style,
 };
 use anyhow::anyhow;
 use std::{fmt, rc::Rc};
@@ -21,7 +21,7 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
-    address: Address<address::Any>,
+    address: Address<style::Any>,
     value: DeferredValue,
     datum: Option<Rc<InlineDatum>>,
     script: Option<Rc<PlutusScript>>,
@@ -56,7 +56,7 @@ enum DeferredValue {
 // ------------------------------------------------------------------ Inspecting
 
 impl Output {
-    pub fn address(&self) -> &Address<address::Any> {
+    pub fn address(&self) -> &Address<style::Any> {
         &self.address
     }
 
@@ -113,7 +113,7 @@ impl Output {
 
 impl Output {
     /// Construct a new output from an address and a value.
-    pub fn new(address: Address<address::Any>, value: Value<u64>) -> Self {
+    pub fn new(address: Address<style::Any>, value: Value<u64>) -> Self {
         Self {
             address,
             value: DeferredValue::Explicit(Rc::new(value)),
@@ -123,7 +123,7 @@ impl Output {
     }
 
     /// Like [`Self::new`], but assumes a minimum Ada value as output.
-    pub fn to(address: Address<address::Any>) -> Self {
+    pub fn to(address: Address<style::Any>) -> Self {
         let mut output = Self {
             address,
             value: DeferredValue::Minimum(Rc::new(Value::default())),
