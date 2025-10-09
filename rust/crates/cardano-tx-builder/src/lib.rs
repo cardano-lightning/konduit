@@ -26,6 +26,8 @@ pub use cardano::{
     value::Value,
 };
 
+pub use pallas_crypto::key::ed25519;
+
 mod cardano;
 mod pallas;
 mod pretty;

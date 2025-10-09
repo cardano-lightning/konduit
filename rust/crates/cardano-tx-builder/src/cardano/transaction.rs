@@ -5,7 +5,7 @@
 use crate::{
     Address, BoxedIterator, ChangeStrategy, ExecutionUnits, Hash, Input, NetworkId, Output,
     PlutusData, PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor,
-    pallas, pretty,
+    ed25519, pallas, pretty,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -165,6 +165,34 @@ impl<State: KnownState> fmt::Display for Transaction<State> {
 
         let witness_set = &self.inner.transaction_witness_set;
 
+        if let Some(signatures) = &witness_set.vkeywitness {
+            debug_struct.field(
+                "signatures",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    let mut map = f.debug_map();
+
+                    for witness in signatures.iter() {
+                        map.entry(
+                            &pretty::ViaDisplay(hex::encode(&witness.vkey[..])),
+                            &pretty::ViaDisplay(hex::encode(&witness.signature[..])),
+                        );
+                    }
+
+                    map.finish()
+                }),
+            );
+        }
+
+        debug_assert!(
+            witness_set.bootstrap_witness.is_none(),
+            "found bootstrap witness in transaction; not yet supported",
+        );
+
+        debug_assert!(
+            witness_set.native_script.is_none(),
+            "found native script in transaction; not yet supported",
+        );
+
         if witness_set.plutus_v1_script.is_some()
             || witness_set.plutus_v2_script.is_some()
             || witness_set.plutus_v3_script.is_some()
@@ -254,8 +282,6 @@ impl<State: KnownState> fmt::Display for Transaction<State> {
                 }),
             );
         }
-
-        // TODO: Show signatures & native scripts
 
         debug_struct.finish()
     }
@@ -544,6 +570,44 @@ impl Transaction<state::Malleable> {
         self.inner.transaction_witness_set.plutus_v1_script = pallas::NonEmptySet::from_vec(v1);
         self.inner.transaction_witness_set.plutus_v2_script = pallas::NonEmptySet::from_vec(v2);
         self.inner.transaction_witness_set.plutus_v3_script = pallas::NonEmptySet::from_vec(v3);
+
+        self
+    }
+}
+
+// -------------------------------------------------------------------- Signing
+
+impl Transaction<state::Sealed> {
+    pub fn sign(&mut self, secret_key: ed25519::SecretKey) -> &mut Self {
+        let public_key = pallas::Bytes::from(Vec::from(<[u8; ed25519::PublicKey::SIZE]>::from(
+            secret_key.public_key(),
+        )));
+
+        let witness = pallas::VKeyWitness {
+            vkey: public_key.clone(),
+            signature: pallas::Bytes::from(Vec::from(secret_key.sign(self.id()).as_ref())),
+        };
+
+        if let Some(signatures) = mem::take(&mut self.inner.transaction_witness_set.vkeywitness) {
+            // Unfortunately, we don't have a proper set at the Pallas level. We also don't want to
+            // use an intermediate BTreeSet here because it would arbitrarily change the order of
+            // witnesses (which do not matter, but may be confusing when indexing / browsing the
+            // witnesses after the fact.
+            //
+            // So, we preserve the set by simply discarding any matching signature, should one
+            // decide to sign again with the same key.
+            self.inner.transaction_witness_set.vkeywitness = pallas::NonEmptySet::from_vec(
+                signatures
+                    .to_vec()
+                    .into_iter()
+                    .filter(|existing_witness| existing_witness.vkey != public_key)
+                    .chain(vec![witness])
+                    .collect(),
+            );
+        } else {
+            self.inner.transaction_witness_set.vkeywitness =
+                pallas::NonEmptySet::from_vec(vec![witness]);
+        }
 
         self
     }
@@ -1066,12 +1130,11 @@ impl<'d, C, State: KnownState> cbor::Decode<'d, C> for Transaction<State> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Transaction, state};
-    use crate::cbor;
+    use crate::{Transaction, cbor, ed25519, state};
 
     #[test]
     fn display_sample_1() {
-        let transaction: Transaction<state::Sealed> = cbor::decode(
+        let mut transaction: Transaction<state::Sealed> = cbor::decode(
             &hex::decode(
                 "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
                  2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827\
@@ -1085,6 +1148,12 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
+
+        let secret_key = ed25519::SecretKey::from([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        transaction.sign(secret_key);
 
         assert_eq!(
             transaction.to_string(),
@@ -1101,7 +1170,11 @@ mod tests {
                         value: Value { lovelace: 10619067 } \
                     }\
                 ], \
-                fee: 169813 \
+                fee: 169813, \
+                signatures: {\
+                    3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29: \
+                        d739204915ea986ce309662cadfab44f8ffb9b0c10c6ade3839e2c5b11a6ba738ee2cbb1365ab714312fb79af0effb98c54ec92c88c99967e1e6cc87b56dc90e\
+                } \
             }",
         );
     }
