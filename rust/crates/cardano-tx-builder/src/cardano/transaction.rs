@@ -263,6 +263,14 @@ impl Transaction {
         self
     }
 
+    pub fn with_datums(&mut self, datums: impl IntoIterator<Item = PlutusData>) -> &mut Self {
+        self.inner.transaction_witness_set.plutus_data = pallas::NonEmptySet::from_vec(
+            datums.into_iter().map(pallas::PlutusData::from).collect(),
+        );
+
+        self
+    }
+
     pub fn with_plutus_scripts(
         &mut self,
         scripts: impl IntoIterator<Item = PlutusScript>,

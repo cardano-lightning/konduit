@@ -2,7 +2,10 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Address, Hash, PlutusScript, Value, address, cbor, cbor::ToCbor, pallas};
+use crate::{
+    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, address, cbor, cbor::ToCbor,
+    pallas,
+};
 use anyhow::anyhow;
 use std::rc::Rc;
 
@@ -16,14 +19,15 @@ const MIN_VALUE_PER_UTXO_BYTE: u64 = 4310;
 /// The CBOR overhead accounting for the in-memory size of inputs and utxo, as per [CIP-0055](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0055#the-new-minimum-lovelace-calculation).
 const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 
-#[derive(Debug, Clone)]
-pub struct Output(
-    Address<address::Any>,
-    DeferredValue,
-    Option<Rc<PlutusScript>>,
-);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Output {
+    address: Address<address::Any>,
+    value: DeferredValue,
+    datum: Option<Rc<InlineDatum>>,
+    script: Option<Rc<PlutusScript>>,
+}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum DeferredValue {
     Minimum(Rc<Value<u64>>),
     Explicit(Rc<Value<u64>>),
@@ -33,17 +37,21 @@ enum DeferredValue {
 
 impl Output {
     pub fn address(&self) -> &Address<address::Any> {
-        &self.0
+        &self.address
     }
 
     pub fn value(&self) -> &Value<u64> {
-        match &self.1 {
+        match &self.value {
             DeferredValue::Minimum(value) | DeferredValue::Explicit(value) => value.as_ref(),
         }
     }
 
     pub fn script(&self) -> Option<&PlutusScript> {
-        self.2.as_deref()
+        self.script.as_deref()
+    }
+
+    pub fn datum(&self) -> Option<&InlineDatum> {
+        self.datum.as_deref()
     }
 
     /// The minimum quantity of lovelace acceptable to carry this output. Address' delegation,
@@ -76,23 +84,6 @@ impl Output {
         MIN_VALUE_PER_UTXO_BYTE * (self.size() + MIN_LOVELACE_VALUE_CBOR_OVERHEAD + extra_size)
     }
 
-    /// Adjust the lovelace quantities of deferred values using the size of the serialised output.
-    /// This does nothing on explicitly given values -- EVEN WHEN they are below the minimum
-    /// threshold.
-    fn set_minimum_utxo_value(&mut self) {
-        // Only compute the minimum when it's actually required. Note that we cannot do this within
-        // the next block because of the immutable borrow that occurs already.
-        let min_acceptable_value = match &self.1 {
-            DeferredValue::Explicit(_) => 0,
-            DeferredValue::Minimum(_) => self.min_acceptable_value(),
-        };
-
-        if let DeferredValue::Minimum(rc) = &mut self.1 {
-            let value: &mut Value<u64> = Rc::make_mut(rc);
-            value.with_lovelace(min_acceptable_value);
-        }
-    }
-
     fn size(&self) -> u64 {
         self.to_cbor().len() as u64
     }
@@ -103,18 +94,26 @@ impl Output {
 impl Output {
     /// Construct a new output from an address and a value.
     pub fn new(address: Address<address::Any>, value: Value<u64>) -> Self {
-        Self(address, DeferredValue::Explicit(Rc::new(value)), None)
+        Self {
+            address,
+            value: DeferredValue::Explicit(Rc::new(value)),
+            datum: None,
+            script: None,
+        }
     }
 
     /// Like [`Self::new`], but assumes a minimum Ada value as output.
     pub fn to(address: Address<address::Any>) -> Self {
-        let mut value = Self(
+        let mut output = Self {
             address,
-            DeferredValue::Minimum(Rc::new(Value::default())),
-            None,
-        );
-        value.set_minimum_utxo_value();
-        value
+            value: DeferredValue::Minimum(Rc::new(Value::default())),
+            datum: None,
+            script: None,
+        };
+
+        output.set_minimum_utxo_value();
+
+        output
     }
 
     /// Attach assets to the output, while preserving the Ada value. If minimum was assumed (e.g.
@@ -123,16 +122,47 @@ impl Output {
         mut self,
         assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (Vec<u8>, u64)>)>,
     ) -> Self {
-        self.1 = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
+        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
         self.set_minimum_utxo_value();
         self
     }
 
-    /// Attach a reference script to the output
+    /// Attach a reference script to the output.
     pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
-        self.2 = Some(Rc::new(plutus_script));
+        self.script = Some(Rc::new(plutus_script));
         self.set_minimum_utxo_value();
         self
+    }
+
+    /// Attach a datum hash to the output.
+    pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
+        self.datum = Some(Rc::new(InlineDatum::Hash(hash)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Attach a plain PlutusData datum to the output.
+    pub fn with_datum(mut self, data: PlutusData) -> Self {
+        self.datum = Some(Rc::new(InlineDatum::Data(data)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Adjust the lovelace quantities of deferred values using the size of the serialised output.
+    /// This does nothing on explicitly given values -- EVEN WHEN they are below the minimum
+    /// threshold.
+    fn set_minimum_utxo_value(&mut self) {
+        // Only compute the minimum when it's actually required. Note that we cannot do this within
+        // the next block because of the immutable borrow that occurs already.
+        let min_acceptable_value = match &self.value {
+            DeferredValue::Explicit(_) => 0,
+            DeferredValue::Minimum(_) => self.min_acceptable_value(),
+        };
+
+        if let DeferredValue::Minimum(rc) = &mut self.value {
+            let value: &mut Value<u64> = Rc::make_mut(rc);
+            value.with_lovelace(min_acceptable_value);
+        }
     }
 }
 

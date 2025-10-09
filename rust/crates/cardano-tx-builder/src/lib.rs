@@ -14,6 +14,7 @@ pub use cardano::{
     credential::Credential,
     execution_units::ExecutionUnits,
     hash::Hash,
+    inline_datum::InlineDatum,
     input::Input,
     network_id::NetworkId,
     output::Output,
