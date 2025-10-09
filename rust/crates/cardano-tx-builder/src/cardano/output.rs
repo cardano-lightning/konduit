@@ -196,7 +196,7 @@ impl TryFrom<pallas::TransactionOutput> for Output {
             pallas::TransactionOutput::Legacy(legacy) => {
                 let address = Address::try_from(legacy.address.as_slice())?;
                 let value = Value::from(&legacy.amount);
-                let datum_opt = legacy.datum_hash.map(|h| InlineDatum::Hash(h.into()));
+                let datum_opt = legacy.datum_hash.map(|hash| InlineDatum::Hash(Hash::from(hash)));
                 let plutus_script_opt = None;
 
                 Ok::<_, anyhow::Error>((address, value, datum_opt, plutus_script_opt))
@@ -207,8 +207,8 @@ impl TryFrom<pallas::TransactionOutput> for Output {
                 let value = Value::from(&modern.value);
                 let datum_opt = match modern.datum_option {
                     None => None,
-                    Some(pallas::DatumOption::Hash(h)) => Some(InlineDatum::Hash(h.into())),
-                    Some(pallas::DatumOption::Data(data)) => Some(InlineDatum::Data(data.0.into())),
+                    Some(pallas::DatumOption::Hash(hash)) => Some(InlineDatum::Hash(Hash::from(hash))),
+                    Some(pallas::DatumOption::Data(data)) => Some(InlineDatum::Data(PlutusData::from(data.0))),
                 };
                 let plutus_script_opt = match modern.script_ref.map(|wrap| wrap.unwrap()) {
                     None => Ok(None),
