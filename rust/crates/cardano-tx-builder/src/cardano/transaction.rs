@@ -242,8 +242,8 @@ impl Transaction {
     ) -> &mut Self {
         let (redeemers, mint) = mint.into_iter().enumerate().fold(
             (BTreeMap::new(), BTreeMap::new()),
-            |(mut redeemers, mut mint), (index, ((policy, data), assets))| {
-                mint.insert(policy, assets);
+            |(mut redeemers, mut mint), (index, ((script_hash, data), assets))| {
+                mint.insert(script_hash, assets);
 
                 redeemers.insert(RedeemerPointer::mint(index as u32), data);
 
@@ -382,7 +382,7 @@ impl Transaction {
     ///
     /// - inputs (for script-locked inputs)
     /// - certificates (for script-based credentials)
-    /// - mint (for minting/burning policies)
+    /// - mint (for minting/burning scripts)
     /// - withdrawals (for script-based credentials)
     /// - proposals (for any defined constitution guardrails)
     /// - votes (for script-based credentials)
@@ -409,8 +409,8 @@ impl Transaction {
             .mint
             .as_ref()
             .map(|assets| {
-                Box::new(assets.iter().enumerate().map(|(index, (policy, _))| {
-                    (RedeemerPointer::mint(index as u32), Hash::from(policy))
+                Box::new(assets.iter().enumerate().map(|(index, (script_hash, _))| {
+                    (RedeemerPointer::mint(index as u32), Hash::from(script_hash))
                 })) as Box<dyn Iterator<Item = (RedeemerPointer, Hash<28>)>>
             })
             .unwrap_or_else(|| {
@@ -478,9 +478,8 @@ impl Transaction {
     }
 
     fn with_change_output(&mut self, change: Value<u64>) -> anyhow::Result<()> {
-        let min_change_value = Output::new(Address::default(), change.clone())
-            .min_acceptable_value()
-            .lovelace();
+        let min_change_value =
+            Output::new(Address::default(), change.clone()).min_acceptable_value();
 
         if change.lovelace() < min_change_value {
             return Err(
@@ -616,7 +615,7 @@ impl Transaction {
         // Partition mint quantities between mint & burn
         let (mint, burn) = self.mint().assets().clone().into_iter().fold(
             (BTreeMap::new(), BTreeMap::new()),
-            |(mut mint, mut burn), (policy, assets)| {
+            |(mut mint, mut burn), (script_hash, assets)| {
                 let mut minted_assets = BTreeMap::new();
                 let mut burned_assets = BTreeMap::new();
 
@@ -629,11 +628,11 @@ impl Transaction {
                 }
 
                 if !minted_assets.is_empty() {
-                    mint.insert(policy, minted_assets);
+                    mint.insert(script_hash, minted_assets);
                 }
 
                 if !burned_assets.is_empty() {
-                    burn.insert(policy, burned_assets);
+                    burn.insert(script_hash, burned_assets);
                 }
 
                 (mint, burn)

@@ -88,13 +88,13 @@ macro_rules! value {
         $crate::Value::new($lovelace)
     };
 
-    // Lovelace + multi-assets as triples: (policy_id, asset_name, amount)
-    ($lovelace:expr, $( ($policy_hex:expr, $asset_name:expr, $amount:expr $(,)?) ),+ $(,)? ) => {{
+    // Lovelace + multi-assets as triples: (script_hash, asset_name, amount)
+    ($lovelace:expr, $( ($script_hash:expr, $asset_name:expr, $amount:expr $(,)?) ),+ $(,)? ) => {{
         $crate::Value::new($lovelace)
             .with_assets(vec![
                 $(
                     (
-                        <$crate::Hash<28>>::try_from($policy_hex).unwrap(),
+                        <$crate::Hash<28>>::try_from($script_hash).unwrap(),
                         vec![ (hex::decode($asset_name).unwrap(), $amount) ],
                     )
                 ),+
@@ -103,13 +103,25 @@ macro_rules! value {
 }
 
 #[macro_export]
-macro_rules! mint {
-    // multi-assets as a 4-tuple (policy_id, asset_name, amount, redeemer)
-    ($( ($policy_hex:expr, $asset_name:expr, $amount:expr, $redeemer:expr $(,)?) ),+ $(,)? ) => {{
+macro_rules! assets {
+    // multi-assets as a 3-tuple (script_hash, asset_name, amount)
+    ($( ($script_hash:expr, $asset_name:expr, $amount:expr $(,)?) ),+ $(,)? ) => {{
         std::collections::BTreeMap::from([
             $(
                 (
-                    (<$crate::Hash<28>>::try_from($policy_hex).unwrap(), $redeemer),
+                    <$crate::Hash<28>>::try_from($script_hash).unwrap(),
+                    std::collections::BTreeMap::from([ (hex::decode($asset_name).unwrap(), $amount) ]),
+                )
+            ),+
+        ])
+    }};
+
+    // multi-assets as a 4-tuple (script_hash, asset_name, amount, redeemer)
+    ($( ($script_hash:expr, $asset_name:expr, $amount:expr, $redeemer:expr $(,)?) ),+ $(,)? ) => {{
+        std::collections::BTreeMap::from([
+            $(
+                (
+                    (<$crate::Hash<28>>::try_from($script_hash).unwrap(), $redeemer),
                     std::collections::BTreeMap::from([ (hex::decode($asset_name).unwrap(), $amount) ]),
                 )
             ),+

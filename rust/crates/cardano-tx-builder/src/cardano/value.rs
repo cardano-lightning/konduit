@@ -43,15 +43,20 @@ impl<Q> Value<Q> {
     pub fn new(lovelace: u64) -> Self {
         Self(lovelace, BTreeMap::default())
     }
+
+    pub fn with_lovelace(&mut self, lovelace: u64) -> &mut Self {
+        self.0 = lovelace;
+        self
+    }
 }
 
 impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
     pub fn add(&mut self, rhs: &Self) -> &mut Self {
         self.0 += rhs.0;
 
-        for (policy, assets) in &rhs.1 {
+        for (script_hash, assets) in &rhs.1 {
             self.1
-                .entry(*policy)
+                .entry(*script_hash)
                 .and_modify(|lhs| {
                     for (asset_name, quantity) in assets {
                         lhs.entry(asset_name.clone())
@@ -73,11 +78,11 @@ impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
                 .context(format!("lhs = {}, rhs = {}", self.0, rhs.0))
         })?;
 
-        for (policy, assets) in &rhs.1 {
-            match self.1.entry(*policy) {
+        for (script_hash, assets) in &rhs.1 {
+            match self.1.entry(*script_hash) {
                 btree_map::Entry::Vacant(_) => {
-                    return Err(anyhow!("insufficient lhs asset: unknown asset policy")
-                        .context(format!("policy={:?}", policy)));
+                    return Err(anyhow!("insufficient lhs asset: unknown asset script_hash")
+                        .context(format!("script_hash={:?}", script_hash)));
                 }
                 btree_map::Entry::Occupied(mut lhs) => {
                     for (asset_name, quantity) in assets {
@@ -85,16 +90,16 @@ impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
                             btree_map::Entry::Vacant(_) => {
                                 return Err(anyhow!("insufficient lhs asset: unknown asset")
                                     .context(format!(
-                                        "policy={:?}, asset_name={:?}",
-                                        policy, asset_name
+                                        "script_hash={:?}, asset_name={:?}",
+                                        script_hash, asset_name
                                     )));
                             }
                             btree_map::Entry::Occupied(mut q) => {
                                 *q.get_mut() = q.get().checked_sub(quantity).ok_or_else(|| {
                                     anyhow!("insufficient lhs asset: insufficient quantity")
                                         .context(format!(
-                                            "policy={:?}, asset_name={:?}",
-                                            policy, asset_name
+                                            "script_hash={:?}, asset_name={:?}",
+                                            script_hash, asset_name
                                         ))
                                         .context(format!(
                                             "lhs quantity={}, rhs quantity={}",
@@ -120,14 +125,14 @@ impl<Q: Zero> Value<Q> {
         mut self,
         assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (Vec<u8>, Q)>)>,
     ) -> Self {
-        for (policy, inner) in assets.into_iter() {
+        for (script_hash, inner) in assets.into_iter() {
             let mut inner = inner
                 .into_iter()
                 .map(|(asset_name, quantity)| {
                     assert!(
                         !quantity.is_zero(),
                         "null quantity of asset {}.{}",
-                        policy,
+                        script_hash,
                         hex::encode(&asset_name)
                     );
                     (asset_name, quantity)
@@ -135,7 +140,7 @@ impl<Q: Zero> Value<Q> {
                 .collect::<BTreeMap<_, _>>();
 
             self.1
-                .entry(policy)
+                .entry(script_hash)
                 .and_modify(|entry| entry.append(&mut inner))
                 .or_insert(inner);
         }
@@ -156,9 +161,9 @@ impl From<&pallas::alonzo::Value> for Value<u64> {
                 *lovelace,
                 assets
                     .iter()
-                    .map(|(policy, inner)| {
+                    .map(|(script_hash, inner)| {
                         (
-                            Hash::from(policy),
+                            Hash::from(script_hash),
                             inner
                                 .iter()
                                 .map(|(asset_name, quantity)| (asset_name.to_vec(), *quantity))
@@ -196,9 +201,9 @@ fn from_multiasset<Q: Copy, P: Copy>(
 ) -> BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>> {
     assets
         .iter()
-        .map(|(policy, inner)| {
+        .map(|(script_hash, inner)| {
             (
-                Hash::from(policy),
+                Hash::from(script_hash),
                 inner
                     .iter()
                     .map(|(asset_name, quantity)| (asset_name.to_vec(), from_quantity(quantity)))
@@ -241,7 +246,7 @@ fn into_multiasset<Q: Copy, P: Copy>(
     pallas::NonEmptyKeyValuePairs::from_vec(
         assets
             .iter()
-            .filter_map(|(policy, inner)| {
+            .filter_map(|(script_hash, inner)| {
                 pallas::NonEmptyKeyValuePairs::from_vec(
                     inner
                         .iter()
@@ -251,7 +256,7 @@ fn into_multiasset<Q: Copy, P: Copy>(
                         })
                         .collect::<Vec<_>>(),
                 )
-                .map(|inner| (pallas::Hash::from(policy), inner))
+                .map(|inner| (pallas::Hash::from(script_hash), inner))
             })
             .collect::<Vec<_>>(),
     )
@@ -279,9 +284,9 @@ impl<'d, C> cbor::Decode<'d, C> for Value<u64> {
 // -------------------------------------------------------------------- Internal
 
 fn prune_null_values<Q: Zero>(value: &mut BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>) {
-    let mut policies_to_remove = Vec::new();
+    let mut script_hashes_to_remove = Vec::new();
 
-    for (policy, assets) in value.iter_mut() {
+    for (script_hash, assets) in value.iter_mut() {
         let mut assets_to_remove = Vec::new();
 
         for (asset_name, quantity) in assets.iter() {
@@ -295,11 +300,11 @@ fn prune_null_values<Q: Zero>(value: &mut BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q
         }
 
         if assets.is_empty() {
-            policies_to_remove.push(*policy)
+            script_hashes_to_remove.push(*script_hash)
         }
     }
 
-    for policy in policies_to_remove {
-        value.remove(&policy);
+    for script_hash in script_hashes_to_remove {
+        value.remove(&script_hash);
     }
 }

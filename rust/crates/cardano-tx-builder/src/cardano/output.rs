@@ -2,9 +2,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Address, PlutusScript, Value, address, cbor, cbor::ToCbor, pallas};
+use crate::{Address, Hash, PlutusScript, Value, address, cbor, cbor::ToCbor, pallas};
 use anyhow::anyhow;
-use std::{borrow::Cow, cell::RefCell, ops::Deref, rc::Rc};
+use std::{borrow::Cow, ops::Deref, rc::Rc};
 
 pub mod change_strategy;
 
@@ -25,7 +25,7 @@ pub struct Output<'a>(
 
 #[derive(Debug, Clone)]
 enum DeferredValue<'a> {
-    Minimum(RefCell<Rc<Value<u64>>>),
+    Minimum(Rc<Value<u64>>),
     Explicit(Cow<'a, Value<u64>>),
 }
 
@@ -36,13 +36,9 @@ impl<'a> Output<'a> {
         self.0.borrow()
     }
 
-    pub fn min_acceptable_value(&'a self) -> Value<u64> {
-        Value::new(MIN_VALUE_PER_UTXO_BYTE * (self.size() + MIN_LOVELACE_VALUE_CBOR_OVERHEAD))
-    }
-
     pub fn value(&'a self) -> Box<dyn AsRef<Value<u64>> + 'a> {
         match &self.1 {
-            DeferredValue::Minimum(cell) => Box::new(cell.borrow().clone()),
+            DeferredValue::Minimum(cell) => Box::new(cell.clone()),
             DeferredValue::Explicit(value) => Box::new(value),
         }
     }
@@ -51,13 +47,51 @@ impl<'a> Output<'a> {
         self.2.as_deref()
     }
 
-    /// Minimum lovelace value required at a UTxO.
-    fn refresh_minimum_utxo_value(self) -> Self {
-        if let DeferredValue::Minimum(cell) = &self.1 {
-            *cell.borrow_mut() = Rc::new(self.min_acceptable_value());
-        }
+    /// The minimum quantity of lovelace acceptable to carry this output. Address' delegation,
+    /// assets, scripts and datums may increase this value.
+    pub fn min_acceptable_value(&'a self) -> u64 {
+        // In case where values are too small, we still count for 5 bytes to avoid having to search
+        // for a fixed point. This is because CBOR uses variable-length encoding for integers,
+        // according to the following rules:
+        //
+        // | value                  | encoding size       |
+        // | ---------------------- | ------------------- |
+        // | 0      <= n < 24       | 1 byte              |
+        // | 24     <= n < 2 ^ 8    | 2 bytes             |
+        // | 2 ^ 8  <= n < 2 ^ 16   | 3 bytes             |
+        // | 2 ^ 16 <= n < 2 ^ 32   | 5 bytes             |
+        // | 2 ^ 32 <= n < 2 ^ 64   | 9 bytes             |
+        //
+        // Values are at least MIN_VALUE_PER_UTXO_BYTE * MIN_LOVELACE_VALUE_CBOR_OVERHEAD = 689600,
+        // so that means the encoding will never be smaller than 5 bytes; if it is, we must inflate
+        // the size artificially to compensate.
+        let current_value = self.value().deref().as_ref().lovelace();
 
-        self
+        let extra_size = match current_value {
+            _ if current_value < 24 => 4,
+            _ if current_value < 256 => 3,
+            _ if current_value < 65535 => 2,
+            _ => 0,
+        };
+
+        MIN_VALUE_PER_UTXO_BYTE * (self.size() + MIN_LOVELACE_VALUE_CBOR_OVERHEAD + extra_size)
+    }
+
+    /// Adjust the lovelace quantities of deferred values using the size of the serialised output.
+    /// This does nothing on explicitly given values -- EVEN WHEN they are below the minimum
+    /// threshold.
+    fn set_minimum_utxo_value(&mut self) {
+        // Only compute the minimum when it's actually required. Note that we cannot do this within
+        // the next block because of the immutable borrow that occurs already.
+        let min_acceptable_value = match &self.1 {
+            DeferredValue::Explicit(_) => 0,
+            DeferredValue::Minimum(_) => self.min_acceptable_value(),
+        };
+
+        if let DeferredValue::Minimum(rc) = &mut self.1 {
+            let value: &mut Value<u64> = Rc::make_mut(rc);
+            value.with_lovelace(min_acceptable_value);
+        }
     }
 
     fn size(&self) -> u64 {
@@ -75,20 +109,31 @@ impl<'a> Output<'a> {
 
     /// Like [`Self::new`], but assumes a minimum Ada value as output.
     pub fn to(address: Address<'static, address::Any>) -> Self {
-        Self(
+        let mut value = Self(
             address,
-            // We use an initial value that's at least 2 ^ 16, so that it is CBOR-encoded over 5
-            // bytes and results in a correct minimum value based on the serialised size.
-            DeferredValue::Minimum(RefCell::new(Rc::new(Value::new(2 ^ 16)))),
+            DeferredValue::Minimum(Rc::new(Value::default())),
             None,
-        )
-        .refresh_minimum_utxo_value()
+        );
+        value.set_minimum_utxo_value();
+        value
+    }
+
+    /// Attach assets to the output, while preserving the Ada value. If minimum was assumed (e.g.
+    /// using [`to`]), then the minimum will automatically grow to compensate for the new assets.
+    pub fn with_assets(
+        mut self,
+        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (Vec<u8>, u64)>)>,
+    ) -> Self {
+        self.1 = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
+        self.set_minimum_utxo_value();
+        self
     }
 
     /// Attach a reference script to the output
     pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
         self.2 = Some(Cow::Owned(plutus_script));
-        self.refresh_minimum_utxo_value()
+        self.set_minimum_utxo_value();
+        self
     }
 }
 
