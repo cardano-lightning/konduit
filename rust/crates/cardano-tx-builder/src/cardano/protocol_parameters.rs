@@ -4,7 +4,7 @@
 
 use num::rational::Ratio;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct ProtocolParameters {
     /// Multiplier coefficient on fee, in lovelace/bytes
     fee_per_byte: u64,

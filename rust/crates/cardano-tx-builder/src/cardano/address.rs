@@ -4,24 +4,36 @@
 
 use crate::{Credential, NetworkId, pallas};
 use anyhow::anyhow;
-use std::{fmt, marker::PhantomData, rc::Rc, str::FromStr};
+use std::{cmp::Ordering, fmt, marker::PhantomData, rc::Rc, str::FromStr};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Address<T: KnownStyle>(Rc<Style>, PhantomData<T>);
 
-#[derive(Debug, Clone)]
+impl<T: KnownStyle + Eq> PartialOrd for Address<T> {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        Some(self.cmp(rhs))
+    }
+}
+
+impl<T: KnownStyle + Eq> Ord for Address<T> {
+    fn cmp(&self, rhs: &Self) -> Ordering {
+        <Vec<u8>>::from(self).cmp(&<Vec<u8>>::from(rhs))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Style {
     Byron(pallas::ByronAddress),
     Shelley(pallas::ShelleyAddress),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Any;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Shelley;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Byron;
 
 pub trait KnownStyle {}

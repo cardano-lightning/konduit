@@ -11,13 +11,13 @@ use std::fmt;
 #[cbor(transparent)]
 pub struct Hash<const SIZE: usize>(#[n(0)] pallas::Hash<SIZE>);
 
-// ----------------------------------------------------------- Converting (from)
-
 impl<const SIZE: usize> fmt::Display for Hash<SIZE> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.0.fmt(f)
     }
 }
+
+// ----------------------------------------------------------- Converting (from)
 
 impl<const SIZE: usize> TryFrom<&str> for Hash<SIZE> {
     type Error = anyhow::Error;

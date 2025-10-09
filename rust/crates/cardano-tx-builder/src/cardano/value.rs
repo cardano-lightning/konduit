@@ -2,18 +2,60 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Hash, cbor, pallas};
+use crate::{Hash, cbor, pallas, pretty};
 use anyhow::anyhow;
 use num::{CheckedSub, Num, Zero};
 use std::{
     collections::{BTreeMap, btree_map},
+    fmt,
     fmt::Display,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// A multi-asset value, where 'Q' may typically be instantiated to either `u64` or `i64`
 /// depending on whether it is represent an output value, or a mint value respectively.
 pub struct Value<Q>(u64, BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>);
+
+impl<Q: fmt::Debug + Copy> fmt::Display for Value<Q> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug_struct = f.debug_struct("Value");
+
+        debug_struct.field("lovelace", &self.0);
+
+        if !self.assets().is_empty() {
+            debug_struct.field(
+                "assets",
+                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                    let mut outer = f.debug_map();
+                    for (script_hash, assets) in &self.1 {
+                        outer.entry(
+                            &pretty::ViaDisplayNoAlloc(script_hash),
+                            &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                                let mut inner = f.debug_map();
+                                for (name, qty) in assets {
+                                    if let Ok(utf8) = str::from_utf8(name.as_slice()) {
+                                        inner.entry(&pretty::ViaDisplayNoAlloc(utf8), qty);
+                                    } else {
+                                        inner.entry(
+                                            &pretty::ViaDisplayNoAlloc(&hex::encode(
+                                                name.as_slice(),
+                                            )),
+                                            qty,
+                                        );
+                                    }
+                                }
+                                inner.finish()
+                            }),
+                        );
+                    }
+                    outer.finish()
+                }),
+            );
+        }
+
+        debug_struct.finish()
+    }
+}
 
 // -------------------------------------------------------------------- Inspecting
 
@@ -81,31 +123,33 @@ impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
         for (script_hash, assets) in &rhs.1 {
             match self.1.entry(*script_hash) {
                 btree_map::Entry::Vacant(_) => {
-                    return Err(anyhow!("insufficient lhs asset: unknown asset script_hash")
-                        .context(format!("script_hash={:?}", script_hash)));
+                    return Err(anyhow!("script_hash={}", script_hash)
+                        .context("insufficient lhs asset: unknown asset script_hash"));
                 }
                 btree_map::Entry::Occupied(mut lhs) => {
                     for (asset_name, quantity) in assets {
                         match lhs.get_mut().entry(asset_name.clone()) {
                             btree_map::Entry::Vacant(_) => {
-                                return Err(anyhow!("insufficient lhs asset: unknown asset")
-                                    .context(format!(
-                                        "script_hash={:?}, asset_name={:?}",
-                                        script_hash, asset_name
-                                    )));
+                                return Err(anyhow!(
+                                    "script hash={}, asset name={}",
+                                    script_hash,
+                                    display_asset_name(asset_name),
+                                )
+                                .context("insufficient lhs asset: unknown asset"));
                             }
                             btree_map::Entry::Occupied(mut q) => {
                                 *q.get_mut() = q.get().checked_sub(quantity).ok_or_else(|| {
-                                    anyhow!("insufficient lhs asset: insufficient quantity")
-                                        .context(format!(
-                                            "script_hash={:?}, asset_name={:?}",
-                                            script_hash, asset_name
-                                        ))
-                                        .context(format!(
-                                            "lhs quantity={}, rhs quantity={}",
-                                            q.get(),
-                                            quantity,
-                                        ))
+                                    anyhow!(
+                                        "script hash={}, asset name={}",
+                                        script_hash,
+                                        display_asset_name(asset_name),
+                                    )
+                                    .context(format!(
+                                        "lhs quantity={}, rhs quantity={}",
+                                        q.get(),
+                                        quantity,
+                                    ))
+                                    .context("insufficient lhs asset: insufficient quantity")
                                 })?;
                             }
                         }
@@ -306,5 +350,58 @@ fn prune_null_values<Q: Zero>(value: &mut BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q
 
     for script_hash in script_hashes_to_remove {
         value.remove(&script_hash);
+    }
+}
+
+fn display_asset_name(asset_name: &[u8]) -> String {
+    if let Ok(utf8) = str::from_utf8(asset_name) {
+        utf8.to_string()
+    } else {
+        hex::encode(asset_name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Value;
+    use crate::value;
+
+    #[test]
+    fn display_only_lovelace() {
+        let value: Value<u64> = Value::new(42);
+        assert_eq!(value.to_string(), "Value { lovelace: 42 }")
+    }
+
+    #[test]
+    fn display_value_with_assets() {
+        let value: Value<u64> = value!(
+            6687232,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                1376
+            ),
+            (
+                "a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235",
+                "484f534b59",
+                134468443
+            ),
+            (
+                "f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c2a002835",
+                "b4d8cdcb5b039b",
+                1
+            ),
+        );
+        assert_eq!(
+            value.to_string(),
+            "Value { \
+                lovelace: 6687232, \
+                assets: {\
+                    279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f: {SNEK: 1376}, \
+                    a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235: {HOSKY: 134468443}, \
+                    f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c2a002835: {b4d8cdcb5b039b: 1}\
+                } \
+            }",
+        )
     }
 }

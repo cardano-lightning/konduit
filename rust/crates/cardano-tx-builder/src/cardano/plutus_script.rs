@@ -3,9 +3,16 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{Hash, PlutusVersion, pallas};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PlutusScript(PlutusVersion, Vec<u8>);
+
+impl fmt::Display for PlutusScript {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}({})", self.0, <Hash<28>>::from(self))
+    }
+}
 
 // --------------------------------------------------------------------- Building
 
@@ -46,9 +53,9 @@ impl From<pallas::PlutusScript<3>> for PlutusScript {
 
 // -------------------------------------------------------------- Converting (to)
 
-impl From<PlutusScript> for Hash<28> {
-    fn from(PlutusScript(version, script): PlutusScript) -> Self {
-        let mut buffer: Vec<u8> = vec![u8::from(version)];
+impl From<&PlutusScript> for Hash<28> {
+    fn from(PlutusScript(version, script): &PlutusScript) -> Self {
+        let mut buffer: Vec<u8> = vec![u8::from(*version)];
         buffer.extend_from_slice(script.as_slice());
         Hash::from(pallas::hash::Hasher::<224>::hash(&buffer))
     }
