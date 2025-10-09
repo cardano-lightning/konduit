@@ -67,3 +67,15 @@ impl<const SIZE: usize> From<&Hash<SIZE>> for pallas::Hash<SIZE> {
         hash.0
     }
 }
+
+impl<const SIZE: usize> From<Hash<SIZE>> for [u8; SIZE] {
+    fn from(hash: Hash<SIZE>) -> Self {
+        *hash.0
+    }
+}
+
+impl<const SIZE: usize> AsRef<[u8]> for Hash<SIZE> {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
