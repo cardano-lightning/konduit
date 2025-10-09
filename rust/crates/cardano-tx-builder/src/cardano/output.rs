@@ -192,18 +192,24 @@ impl TryFrom<pallas::TransactionOutput> for Output {
     type Error = anyhow::Error;
 
     fn try_from(source: pallas::TransactionOutput) -> anyhow::Result<Self> {
-        let (address, value, plutus_script_opt) = match source {
+        let (address, value, datum_opt, plutus_script_opt) = match source {
             pallas::TransactionOutput::Legacy(legacy) => {
                 let address = Address::try_from(legacy.address.as_slice())?;
                 let value = Value::from(&legacy.amount);
+                let datum_opt = legacy.datum_hash.map(|hash| InlineDatum::Hash(Hash::from(hash)));
                 let plutus_script_opt = None;
 
-                Ok::<_, anyhow::Error>((address, value, plutus_script_opt))
+                Ok::<_, anyhow::Error>((address, value, datum_opt, plutus_script_opt))
             }
 
             pallas::TransactionOutput::PostAlonzo(modern) => {
                 let address = Address::try_from(modern.address.as_slice())?;
                 let value = Value::from(&modern.value);
+                let datum_opt = match modern.datum_option {
+                    None => None,
+                    Some(pallas::DatumOption::Hash(hash)) => Some(InlineDatum::Hash(Hash::from(hash))),
+                    Some(pallas::DatumOption::Data(data)) => Some(InlineDatum::Data(PlutusData::from(data.0))),
+                };
                 let plutus_script_opt = match modern.script_ref.map(|wrap| wrap.unwrap()) {
                     None => Ok(None),
                     Some(pallas::ScriptRef::NativeScript(_)) => {
@@ -220,11 +226,17 @@ impl TryFrom<pallas::TransactionOutput> for Output {
                     }
                 }?;
 
-                Ok::<_, anyhow::Error>((address, value, plutus_script_opt))
+                Ok::<_, anyhow::Error>((address, value, datum_opt, plutus_script_opt))
             }
         }?;
 
         let mut output = Output::new(address, value);
+
+        output = match datum_opt {
+            Some(InlineDatum::Data(data)) => output.with_datum(data),
+            Some(InlineDatum::Hash(hash)) => output.with_datum_hash(hash),
+            None => output,
+        };
 
         if let Some(plutus_script) = plutus_script_opt {
             output = output.with_plutus_script(plutus_script);
@@ -241,7 +253,12 @@ impl From<&Output> for pallas::TransactionOutput {
         pallas::TransactionOutput::PostAlonzo(pallas::PostAlonzoTransactionOutput {
             address: pallas::Bytes::from(<Vec<u8>>::from(output.address())),
             value: pallas::Value::from(output.value()),
-            datum_option: None,
+            datum_option: output.datum().map(|datum| match datum {
+                InlineDatum::Hash(hash) => pallas::DatumOption::Hash(pallas::DatumHash::from(hash)),
+                InlineDatum::Data(data) => pallas::DatumOption::Data(pallas::CborWrap(
+                    pallas::PlutusData::from(data.clone()),
+                )),
+            }),
             script_ref: output
                 .script()
                 .map(|script| pallas::CborWrap(pallas::ScriptRef::from(script.clone()))),
