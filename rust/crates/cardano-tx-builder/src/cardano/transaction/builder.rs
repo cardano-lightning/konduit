@@ -10,7 +10,6 @@ use anyhow::anyhow;
 use std::{
     collections::{BTreeMap, BTreeSet},
     mem,
-    ops::Deref,
 };
 use uplc::tx::SlotConfig;
 
@@ -40,7 +39,7 @@ impl Transaction {
     /// The final transaction has corresponding fees and execution units set.
     pub fn build<F>(
         params: &ProtocolParameters,
-        resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+        resolved_inputs: &BTreeMap<Input, Output>,
         build: F,
     ) -> anyhow::Result<Self>
     where
@@ -150,7 +149,7 @@ fn total_execution_cost<'a>(
 /// (counting multiple times the size of repeated scripts).
 fn into_uplc_inputs(
     tx: &Transaction,
-    resolved_inputs: &BTreeMap<Input<'_>, Output<'_>>,
+    resolved_inputs: &BTreeMap<Input, Output>,
 ) -> anyhow::Result<(u64, Vec<uplc::tx::ResolvedInput>)> {
     // Ensures that only 'known' inputs contribute to the evaluation; in case the user
     // added extra inputs to the provided UTxO which do not get correctly captured in
@@ -190,9 +189,9 @@ fn into_uplc_inputs(
     Ok((total_inline_scripts_size, uplc_resolved_inputs))
 }
 
-fn fail_on_missing_collateral<'a, T>(
+fn fail_on_missing_collateral<T>(
     redeemers: &BTreeMap<RedeemerPointer, T>,
-    collaterals: impl Iterator<Item = Input<'a>>,
+    collaterals: impl Iterator<Item = Input>,
 ) -> anyhow::Result<()> {
     let mut ptrs = redeemers.keys();
     if let Some(ptr) = ptrs.next()
@@ -211,13 +210,13 @@ fn fail_on_missing_collateral<'a, T>(
     Ok(())
 }
 
-fn fail_on_insufficiently_funded_outputs<'a>(
-    outputs: impl Iterator<Item = Output<'a>>,
+fn fail_on_insufficiently_funded_outputs(
+    outputs: impl Iterator<Item = Output>,
 ) -> anyhow::Result<()> {
     let mut err_opt: Option<anyhow::Error> = None;
 
     for (ix, output) in outputs.enumerate() {
-        let allocated = output.value().deref().as_ref().lovelace();
+        let allocated = output.value().lovelace();
         let minimum_required = output.min_acceptable_value();
         if allocated < minimum_required {
             if let Some(err) = mem::take(&mut err_opt) {
@@ -297,11 +296,22 @@ mod tests {
         ProtocolParameters, Transaction, address, address_test, assets, cbor::ToCbor, input,
         output, plutus_script, script_credential, value,
     };
-    use std::{collections::BTreeMap, sync::LazyLock};
+    use std::{cell::LazyCell, collections::BTreeMap, sync::LazyLock};
 
     /// Some fixture parameters, simply mimicking PreProd's parameters.
     pub static FIXTURE_PROTOCOL_PARAMETERS: LazyLock<ProtocolParameters> =
         LazyLock::new(ProtocolParameters::preprod);
+
+    #[allow(clippy::declare_interior_mutable_const)]
+    const ALWAYS_SUCCEED_ADDRESS: LazyCell<Address<address::Any>> = LazyCell::new(|| {
+        Address::from(address_test!(script_credential!(
+            "bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777"
+        )))
+    });
+
+    #[allow(clippy::declare_interior_mutable_const)]
+    const ALWAYS_SUCCEED_SCRIPT: LazyCell<PlutusScript> =
+        LazyCell::new(|| plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69"));
 
     #[test]
     fn single_in_single_out() {
@@ -488,18 +498,12 @@ mod tests {
         );
     }
 
-    static ALWAYS_SUCCEED_ADDRESS: LazyLock<Address<'static, address::Any>> = LazyLock::new(|| {
-        Address::from(address_test!(script_credential!(
-            "bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777"
-        )))
-    });
-
-    static ALWAYS_SUCCEED_SCRIPT: LazyLock<PlutusScript> =
-        LazyLock::new(|| plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69"));
-
     #[test]
     fn full_lifecycle() {
-        let my_address: Address<'_, address::Any> = address!(
+        let always_succeed_script = ALWAYS_SUCCEED_SCRIPT;
+        let always_succeed_address = ALWAYS_SUCCEED_ADDRESS;
+
+        let my_address: Address<address::Any> = address!(
             "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t"
         );
 
@@ -521,7 +525,7 @@ mod tests {
                 )])
                 .with_outputs(vec![
                     Output::to(my_address.clone())
-                        .with_plutus_script(ALWAYS_SUCCEED_SCRIPT.clone()),
+                        .with_plutus_script(always_succeed_script.clone()),
                 ])
                 .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
                 .ok()
@@ -547,7 +551,7 @@ mod tests {
             Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
                 tx.with_inputs(vec![(Input::new(deploy_script.id(), 1), None)])
                     .with_outputs(vec![Output::new(
-                        ALWAYS_SUCCEED_ADDRESS.clone(),
+                        always_succeed_address.clone(),
                         value!(5_000_000),
                     )])
                     .with_change_strategy(ChangeStrategy::as_last_output(my_address.clone()))
@@ -577,7 +581,7 @@ mod tests {
                 .with_reference_inputs(vec![(Input::new(deploy_script.id(), 0))])
                 .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
                 .with_change_strategy(ChangeStrategy::as_last_output(
-                    ALWAYS_SUCCEED_ADDRESS.clone(),
+                    always_succeed_address.clone(),
                 ))
                 .ok()
             })

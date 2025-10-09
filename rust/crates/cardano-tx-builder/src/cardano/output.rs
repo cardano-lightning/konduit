@@ -4,7 +4,7 @@
 
 use crate::{Address, Hash, PlutusScript, Value, address, cbor, cbor::ToCbor, pallas};
 use anyhow::anyhow;
-use std::{borrow::Cow, ops::Deref, rc::Rc};
+use std::rc::Rc;
 
 pub mod change_strategy;
 
@@ -17,39 +17,38 @@ const MIN_VALUE_PER_UTXO_BYTE: u64 = 4310;
 const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 
 #[derive(Debug, Clone)]
-pub struct Output<'a>(
-    Address<'static, address::Any>,
-    DeferredValue<'a>,
-    Option<Cow<'a, PlutusScript>>,
+pub struct Output(
+    Address<address::Any>,
+    DeferredValue,
+    Option<Rc<PlutusScript>>,
 );
 
 #[derive(Debug, Clone)]
-enum DeferredValue<'a> {
+enum DeferredValue {
     Minimum(Rc<Value<u64>>),
-    Explicit(Cow<'a, Value<u64>>),
+    Explicit(Rc<Value<u64>>),
 }
 
 // ------------------------------------------------------------------ Inspecting
 
-impl<'a> Output<'a> {
-    pub fn address(&'a self) -> Address<'a, address::Any> {
-        self.0.borrow()
+impl Output {
+    pub fn address(&self) -> &Address<address::Any> {
+        &self.0
     }
 
-    pub fn value(&'a self) -> Box<dyn AsRef<Value<u64>> + 'a> {
+    pub fn value(&self) -> &Value<u64> {
         match &self.1 {
-            DeferredValue::Minimum(cell) => Box::new(cell.clone()),
-            DeferredValue::Explicit(value) => Box::new(value),
+            DeferredValue::Minimum(value) | DeferredValue::Explicit(value) => value.as_ref(),
         }
     }
 
-    pub fn script(&'a self) -> Option<&'a PlutusScript> {
+    pub fn script(&self) -> Option<&PlutusScript> {
         self.2.as_deref()
     }
 
     /// The minimum quantity of lovelace acceptable to carry this output. Address' delegation,
     /// assets, scripts and datums may increase this value.
-    pub fn min_acceptable_value(&'a self) -> u64 {
+    pub fn min_acceptable_value(&self) -> u64 {
         // In case where values are too small, we still count for 5 bytes to avoid having to search
         // for a fixed point. This is because CBOR uses variable-length encoding for integers,
         // according to the following rules:
@@ -65,7 +64,7 @@ impl<'a> Output<'a> {
         // Values are at least MIN_VALUE_PER_UTXO_BYTE * MIN_LOVELACE_VALUE_CBOR_OVERHEAD = 689600,
         // so that means the encoding will never be smaller than 5 bytes; if it is, we must inflate
         // the size artificially to compensate.
-        let current_value = self.value().deref().as_ref().lovelace();
+        let current_value = self.value().lovelace();
 
         let extra_size = match current_value {
             _ if current_value < 24 => 4,
@@ -101,14 +100,14 @@ impl<'a> Output<'a> {
 
 // -------------------------------------------------------------------- Building
 
-impl<'a> Output<'a> {
+impl Output {
     /// Construct a new output from an address and a value.
-    pub fn new(address: Address<'static, address::Any>, value: Value<u64>) -> Self {
-        Self(address, DeferredValue::Explicit(Cow::Owned(value)), None)
+    pub fn new(address: Address<address::Any>, value: Value<u64>) -> Self {
+        Self(address, DeferredValue::Explicit(Rc::new(value)), None)
     }
 
     /// Like [`Self::new`], but assumes a minimum Ada value as output.
-    pub fn to(address: Address<'static, address::Any>) -> Self {
+    pub fn to(address: Address<address::Any>) -> Self {
         let mut value = Self(
             address,
             DeferredValue::Minimum(Rc::new(Value::default())),
@@ -131,7 +130,7 @@ impl<'a> Output<'a> {
 
     /// Attach a reference script to the output
     pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
-        self.2 = Some(Cow::Owned(plutus_script));
+        self.2 = Some(Rc::new(plutus_script));
         self.set_minimum_utxo_value();
         self
     }
@@ -139,7 +138,7 @@ impl<'a> Output<'a> {
 
 // ------------------------------------------------------------ Converting (from)
 
-impl TryFrom<pallas::TransactionOutput> for Output<'static> {
+impl TryFrom<pallas::TransactionOutput> for Output {
     type Error = anyhow::Error;
 
     fn try_from(source: pallas::TransactionOutput) -> anyhow::Result<Self> {
@@ -187,11 +186,11 @@ impl TryFrom<pallas::TransactionOutput> for Output<'static> {
 
 // -------------------------------------------------------------- Converting (to)
 
-impl<'a> From<&Output<'a>> for pallas::TransactionOutput {
-    fn from(output: &Output<'a>) -> Self {
+impl From<&Output> for pallas::TransactionOutput {
+    fn from(output: &Output) -> Self {
         pallas::TransactionOutput::PostAlonzo(pallas::PostAlonzoTransactionOutput {
-            address: pallas::Bytes::from(<Vec<u8>>::from(&output.address())),
-            value: pallas::Value::from(output.value().deref().as_ref()),
+            address: pallas::Bytes::from(<Vec<u8>>::from(output.address())),
+            value: pallas::Value::from(output.value()),
             datum_option: None,
             script_ref: output
                 .script()
@@ -200,15 +199,15 @@ impl<'a> From<&Output<'a>> for pallas::TransactionOutput {
     }
 }
 
-impl<'a> From<Output<'a>> for pallas::TransactionOutput {
-    fn from(this: Output<'a>) -> Self {
+impl From<Output> for pallas::TransactionOutput {
+    fn from(this: Output) -> Self {
         pallas::TransactionOutput::from(&this)
     }
 }
 
 // -------------------------------------------------------------------- Encoding
 
-impl<'a, C> cbor::Encode<C> for Output<'a> {
+impl<C> cbor::Encode<C> for Output {
     fn encode<W: cbor::encode::write::Write>(
         &self,
         e: &mut cbor::Encoder<W>,
@@ -218,7 +217,7 @@ impl<'a, C> cbor::Encode<C> for Output<'a> {
     }
 }
 
-impl<'d, C> cbor::Decode<'d, C> for Output<'static> {
+impl<'d, C> cbor::Decode<'d, C> for Output {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         let output: pallas::TransactionOutput = d.decode_with(ctx)?;
         Self::try_from(output).map_err(cbor::decode::Error::message)
