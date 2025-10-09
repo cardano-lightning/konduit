@@ -172,14 +172,12 @@ impl<Q: Zero> Value<Q> {
         for (script_hash, inner) in assets.into_iter() {
             let mut inner = inner
                 .into_iter()
-                .map(|(asset_name, quantity)| {
-                    assert!(
-                        !quantity.is_zero(),
-                        "null quantity of asset {}.{}",
-                        script_hash,
-                        hex::encode(&asset_name)
-                    );
-                    (asset_name, quantity)
+                .filter_map(|(asset_name, quantity)| {
+                    if quantity.is_zero() {
+                        None
+                    } else {
+                        Some((asset_name, quantity))
+                    }
                 })
                 .collect::<BTreeMap<_, _>>();
 
@@ -271,7 +269,7 @@ impl From<&Value<u64>> for pallas::Value {
 
 impl From<&Value<i64>> for Option<pallas::Multiasset<pallas::NonZeroInt>> {
     fn from(value @ Value(lovelace, assets): &Value<i64>) -> Self {
-        assert!(
+        debug_assert!(
             *lovelace == 0,
             "somehow found a mint value with a non-zero Ada quantity: {value:#?}"
         );

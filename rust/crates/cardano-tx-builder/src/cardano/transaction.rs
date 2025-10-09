@@ -61,17 +61,17 @@ impl fmt::Display for Transaction {
 
         debug_struct.field("fee", &self.fee());
 
-        assert!(
+        debug_assert!(
             body.certificates.is_none(),
             "found certificates in transaction; not yet supported"
         );
 
-        assert!(
+        debug_assert!(
             body.withdrawals.is_none(),
             "found withdrawals in transaction; not yet supported"
         );
 
-        assert!(
+        debug_assert!(
             body.auxiliary_data_hash.is_none(),
             "found auxiliary_data_hash in transaction; not yet supported"
         );
@@ -139,22 +139,22 @@ impl fmt::Display for Transaction {
             );
         }
 
-        assert!(
+        debug_assert!(
             body.voting_procedures.is_none(),
             "found votes in transaction; not yet supported"
         );
 
-        assert!(
+        debug_assert!(
             body.proposal_procedures.is_none(),
             "found proposals in transaction; not yet supported"
         );
 
-        assert!(
+        debug_assert!(
             body.treasury_value.is_none(),
             "found treasury value in transaction; not yet supported"
         );
 
-        assert!(
+        debug_assert!(
             body.donation.is_none(),
             "found treasury donation in transaction; not yet supported"
         );
@@ -526,12 +526,12 @@ impl Transaction {
             },
         );
 
-        assert!(
+        debug_assert!(
             v1.is_empty(),
             "trying to set some Plutus V1 scripts; these aren't supported yet and may fail later down the builder.",
         );
 
-        assert!(
+        debug_assert!(
             v2.is_empty(),
             "trying to set some Plutus V2 scripts; these aren't supported yet and may fail later down the builder.",
         );
@@ -580,17 +580,17 @@ impl Transaction {
     ) -> anyhow::Result<BTreeSet<Hash<28>>> {
         let body = &self.inner.transaction_body;
 
-        assert!(
+        debug_assert!(
             body.certificates.is_none(),
             "found certificates in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.withdrawals.is_none(),
             "found withdrawals in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.voting_procedures.is_none(),
             "found votes in transaction: not supported yet",
         );
@@ -670,22 +670,22 @@ impl Transaction {
 
         let body = &self.inner.transaction_body;
 
-        assert!(
+        debug_assert!(
             body.certificates.is_none(),
             "found certificates in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.withdrawals.is_none(),
             "found withdrawals in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.voting_procedures.is_none(),
             "found votes in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.proposal_procedures.is_none(),
             "found proposals in transaction: not supported yet",
         );
@@ -698,7 +698,7 @@ impl Transaction {
 
     /// Pre-condition: this assumes and only support Plutus V3.
     fn script_integrity_hash(&self, params: &ProtocolParameters) -> Option<Hash<32>> {
-        assert!(
+        debug_assert!(
             self.inner
                 .transaction_witness_set
                 .plutus_v1_script
@@ -706,7 +706,7 @@ impl Transaction {
             "found plutus v1 scripts in the transaction witness set; not supported yet"
         );
 
-        assert!(
+        debug_assert!(
             self.inner
                 .transaction_witness_set
                 .plutus_v2_script
@@ -931,22 +931,22 @@ impl Transaction {
 
         let body = &self.inner.transaction_body;
 
-        assert!(
+        debug_assert!(
             body.certificates.is_none(),
             "found certificates in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.withdrawals.is_none(),
             "found withdrawals in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.treasury_value.is_none(),
             "found treasury donation in transaction: not supported yet",
         );
 
-        assert!(
+        debug_assert!(
             body.proposal_procedures.is_none(),
             "found proposals in transaction: not supported yet",
         );
