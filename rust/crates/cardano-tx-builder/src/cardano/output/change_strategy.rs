@@ -2,7 +2,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Address, Output, Value, address};
+use crate::{Address, Output, Value, address::kind::*};
 use anyhow::anyhow;
 use std::collections::VecDeque;
 
@@ -38,14 +38,14 @@ impl ChangeStrategy {
         Self(Box::new(strategy))
     }
 
-    pub fn as_last_output(change_address: Address<address::Any>) -> Self {
+    pub fn as_last_output(change_address: Address<Any>) -> Self {
         Self::new(move |change, outputs| {
             outputs.push_back(Output::new(change_address, change));
             Ok(())
         })
     }
 
-    pub fn as_first_output(change_address: Address<address::Any>) -> Self {
+    pub fn as_first_output(change_address: Address<Any>) -> Self {
         Self::new(move |change, outputs| {
             outputs.push_front(Output::new(change_address, change));
             Ok(())

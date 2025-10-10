@@ -3,12 +3,14 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    ExecutionUnits, Hash, Input, Output, ProtocolParameters, RedeemerPointer, Transaction, cbor,
-    pallas,
+    ExecutionUnits, Hash, Input, Output, ProtocolParameters, RedeemerPointer, Transaction,
+    cardano::transaction::{KnownTransactionBodyState, state},
+    cbor, pallas,
 };
 use anyhow::anyhow;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    marker::PhantomData,
     mem,
 };
 use uplc::tx::SlotConfig;
@@ -32,7 +34,7 @@ const SIZE_OF_KEY_WITNESS: u64 = 1 // 1 byte for the 2-tuple declaration
 /// practice, We could potentially distinguish based on the type of witness, but that's more work.
 const SIZE_OF_KEY_WITNESSES_OVERHEAD: u64 = 2 * (1 + 3 + 3);
 
-impl Transaction {
+impl Transaction<state::InConstruction> {
     /// Build a transaction by repeatedly executing some building logic with different fee and execution
     /// units settings. Stops when a fixed point is reached.
     ///
@@ -41,7 +43,7 @@ impl Transaction {
         params: &ProtocolParameters,
         resolved_inputs: &BTreeMap<Input, Output>,
         build: F,
-    ) -> anyhow::Result<Self>
+    ) -> anyhow::Result<Transaction<state::ReadyForSigning>>
     where
         F: Fn(&mut Self) -> anyhow::Result<&mut Self>,
     {
@@ -129,7 +131,11 @@ impl Transaction {
             }
         }
 
-        Ok(tx)
+        Ok(Transaction {
+            inner: tx.inner,
+            change_strategy: tx.change_strategy,
+            state: PhantomData,
+        })
     }
 }
 
@@ -147,8 +153,8 @@ fn total_execution_cost<'a>(
 /// Resolve specified inputs and reference inputs, and convert them into a format suitable for the
 /// UPLC VM evaluation. Also returns the sum of the size of any inline scripts found in those
 /// (counting multiple times the size of repeated scripts).
-fn into_uplc_inputs(
-    tx: &Transaction,
+fn into_uplc_inputs<State: KnownTransactionBodyState>(
+    tx: &Transaction<State>,
     resolved_inputs: &BTreeMap<Input, Output>,
 ) -> anyhow::Result<(u64, Vec<uplc::tx::ResolvedInput>)> {
     // Ensures that only 'known' inputs contribute to the evaluation; in case the user
@@ -293,8 +299,8 @@ fn evaluate_plutus_scripts(
 mod tests {
     use crate::{
         Address, ChangeStrategy, Input, Output, PlutusData, PlutusScript, PlutusVersion,
-        ProtocolParameters, Transaction, address, address_test, assets, cbor::ToCbor, input,
-        output, plutus_script, script_credential, value,
+        ProtocolParameters, Transaction, address, address::kind::*, address_test, assets,
+        cbor::ToCbor, input, output, plutus_script, script_credential, value,
     };
     use std::{cell::LazyCell, collections::BTreeMap, sync::LazyLock};
 
@@ -303,7 +309,7 @@ mod tests {
         LazyLock::new(ProtocolParameters::preprod);
 
     #[allow(clippy::declare_interior_mutable_const)]
-    const ALWAYS_SUCCEED_ADDRESS: LazyCell<Address<address::Any>> = LazyCell::new(|| {
+    const ALWAYS_SUCCEED_ADDRESS: LazyCell<Address<Any>> = LazyCell::new(|| {
         Address::from(address_test!(script_credential!(
             "bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777"
         )))
@@ -503,7 +509,7 @@ mod tests {
         let always_succeed_script = ALWAYS_SUCCEED_SCRIPT;
         let always_succeed_address = ALWAYS_SUCCEED_ADDRESS;
 
-        let my_address: Address<address::Any> = address!(
+        let my_address: Address<Any> = address!(
             "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t"
         );
 
