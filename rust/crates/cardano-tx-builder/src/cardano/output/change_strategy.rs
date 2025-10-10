@@ -19,17 +19,6 @@ pub struct ChangeStrategy(
     Box<dyn FnOnce(Value<u64>, &mut VecDeque<Output>) -> anyhow::Result<()>>,
 );
 
-// --------------------------------------------------------------------- Running
-
-impl ChangeStrategy {
-    /// Run the encapsulated (faillible) strategy on a mutable set of outputs. This is called
-    /// internally by the [`Transaction::build`](crate::Transaction::build) when necessary to
-    /// distribute change to the outputs according to the given strategy.
-    pub fn apply(self, change: Value<u64>, outputs: &mut VecDeque<Output>) -> anyhow::Result<()> {
-        self.0(change, outputs)
-    }
-}
-
 // -------------------------------------------------------------------- Building
 
 impl Default for ChangeStrategy {
@@ -43,6 +32,24 @@ impl Default for ChangeStrategy {
 }
 
 impl ChangeStrategy {
+    /// A change strategy that creates a new output with all change sent at the given address, and
+    /// prepend it to the existing list of outputs.
+    pub fn as_first_output(change_address: Address<Any>) -> Self {
+        Self::new(move |change, outputs| {
+            outputs.push_front(Output::new(change_address, change));
+            Ok(())
+        })
+    }
+
+    /// A change strategy that creates a new output with all change sent at the given address, and
+    /// append it to the existing list of outputs.
+    pub fn as_last_output(change_address: Address<Any>) -> Self {
+        Self::new(move |change, outputs| {
+            outputs.push_back(Output::new(change_address, change));
+            Ok(())
+        })
+    }
+
     /// Define a custom strategy manually. For example, we have:
     ///
     /// ```ignore
@@ -67,22 +74,15 @@ impl ChangeStrategy {
     ) -> Self {
         Self(Box::new(strategy))
     }
+}
 
-    /// A change strategy that creates a new output with all change sent at the given address, and
-    /// append it to the existing list of outputs.
-    pub fn as_last_output(change_address: Address<Any>) -> Self {
-        Self::new(move |change, outputs| {
-            outputs.push_back(Output::new(change_address, change));
-            Ok(())
-        })
-    }
+// --------------------------------------------------------------------- Running
 
-    /// A change strategy that creates a new output with all change sent at the given address, and
-    /// prepend it to the existing list of outputs.
-    pub fn as_first_output(change_address: Address<Any>) -> Self {
-        Self::new(move |change, outputs| {
-            outputs.push_front(Output::new(change_address, change));
-            Ok(())
-        })
+impl ChangeStrategy {
+    /// Run the encapsulated (faillible) strategy on a mutable set of outputs. This is called
+    /// internally by the [`Transaction::build`](crate::Transaction::build) when necessary to
+    /// distribute change to the outputs according to the given strategy.
+    pub fn apply(self, change: Value<u64>, outputs: &mut VecDeque<Output>) -> anyhow::Result<()> {
+        self.0(change, outputs)
     }
 }

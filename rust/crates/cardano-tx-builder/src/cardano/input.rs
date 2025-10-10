@@ -5,24 +5,38 @@
 use crate::{Hash, cbor, pallas};
 use std::{fmt, rc::Rc};
 
+/// A reference to a past transaction output.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Input(Rc<pallas::TransactionInput>);
 
 impl fmt::Display for Input {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}#{}", &self.0.transaction_id, self.0.index)
+        write!(f, "Input({}#{})", &self.0.transaction_id, self.0.index)
     }
 }
 
 // -------------------------------------------------------------------- Building
 
 impl Input {
-    pub fn new(transaction_id: Hash<32>, index: u64) -> Self {
+    /// See also [`input!`](crate::input).
+    pub fn new(transaction_id: Hash<32>, output_index: u64) -> Self {
         Self(Rc::new(pallas::TransactionInput {
             transaction_id: pallas::Hash::from(transaction_id),
-            index,
+            index: output_index,
         }))
+    }
+}
+
+// ------------------------------------------------------------------ Inspecting
+
+impl Input {
+    pub fn transaction_id(&self) -> Hash<32> {
+        Hash::from(self.0.transaction_id)
+    }
+
+    pub fn output_index(&self) -> u64 {
+        self.0.index
     }
 }
 
@@ -58,5 +72,37 @@ impl<C> cbor::Encode<C> for Input {
 impl<'d, C> cbor::Decode<'d, C> for Input {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         Ok(Self(Rc::new(d.decode_with(ctx)?)))
+    }
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod tests {
+    use crate::{Input, any, hash};
+    use proptest::prelude::*;
+
+    // -------------------------------------------------------------- Unit tests
+
+    #[test]
+    fn display_input() {
+        assert_eq!(
+            Input::new(
+                hash!("702206530b2e1566e90b3aec753bd0abbf397842bd5421e0c3d23ed10167b3ce"),
+                42,
+            )
+            .to_string(),
+            "Input(702206530b2e1566e90b3aec753bd0abbf397842bd5421e0c3d23ed10167b3ce#42)",
+        );
+    }
+
+    // -------------------------------------------------------------- Generators
+
+    pub mod generators {
+        use super::*;
+
+        prop_compose! {
+            pub fn input()(id in any::hash32(), ix in any::<u64>()) -> Input {
+                Input::new(id, ix)
+            }
+        }
     }
 }

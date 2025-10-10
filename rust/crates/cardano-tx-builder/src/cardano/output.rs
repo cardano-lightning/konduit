@@ -63,6 +63,87 @@ enum DeferredValue {
     Explicit(Rc<Value<u64>>),
 }
 
+// -------------------------------------------------------------------- Building
+
+impl Output {
+    /// Construct a new output from an [`Address`] and a [`Value<u64>`]. See also [`Self::to`] for
+    /// constructing a value without an explicit value.
+    pub fn new(address: Address<Any>, value: Value<u64>) -> Self {
+        Self {
+            address,
+            value: DeferredValue::Explicit(Rc::new(value)),
+            datum: None,
+            script: None,
+        }
+    }
+
+    /// Like [`Self::new`], but assumes a minimum lovelace value as output. The value automatically
+    /// adjusts based on the other Output's elements (assets, scripts, etc..).
+    pub fn to(address: Address<Any>) -> Self {
+        let mut output = Self {
+            address,
+            value: DeferredValue::Minimum(Rc::new(Value::default())),
+            datum: None,
+            script: None,
+        };
+
+        output.set_minimum_utxo_value();
+
+        output
+    }
+
+    /// Attach assets to the output, while preserving the lovelace value.
+    pub fn with_assets<AssetName>(
+        mut self,
+        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (AssetName, u64)>)>,
+    ) -> Self
+    where
+        AssetName: AsRef<[u8]>,
+    {
+        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Attach a reference script to the output.
+    pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
+        self.script = Some(Rc::new(plutus_script));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Attach a datum reference as [`struct@Hash<32>`] to the output.
+    pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
+        self.datum = Some(Rc::new(InlineDatum::Hash(hash)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Attach a plain [`PlutusData`] datum to the output.
+    pub fn with_datum(mut self, data: PlutusData) -> Self {
+        self.datum = Some(Rc::new(InlineDatum::Data(data)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Adjust the lovelace quantities of deferred values using the size of the serialised output.
+    /// This does nothing on explicitly given values -- EVEN WHEN they are below the minimum
+    /// threshold.
+    fn set_minimum_utxo_value(&mut self) {
+        // Only compute the minimum when it's actually required. Note that we cannot do this within
+        // the next block because of the immutable borrow that occurs already.
+        let min_acceptable_value = match &self.value {
+            DeferredValue::Explicit(_) => 0,
+            DeferredValue::Minimum(_) => self.min_acceptable_value(),
+        };
+
+        if let DeferredValue::Minimum(rc) = &mut self.value {
+            let value: &mut Value<u64> = Rc::make_mut(rc);
+            value.with_lovelace(min_acceptable_value);
+        }
+    }
+}
+
 // ------------------------------------------------------------------ Inspecting
 
 impl Output {
@@ -168,87 +249,6 @@ impl Output {
 
     fn size(&self) -> u64 {
         self.to_cbor().len() as u64
-    }
-}
-
-// -------------------------------------------------------------------- Building
-
-impl Output {
-    /// Construct a new output from an [`Address`] and a [`Value<u64>`]. See also [`Self::to`] for
-    /// constructing a value without an explicit value.
-    pub fn new(address: Address<Any>, value: Value<u64>) -> Self {
-        Self {
-            address,
-            value: DeferredValue::Explicit(Rc::new(value)),
-            datum: None,
-            script: None,
-        }
-    }
-
-    /// Like [`Self::new`], but assumes a minimum lovelace value as output. The value automatically
-    /// adjusts based on the other Output's elements (assets, scripts, etc..).
-    pub fn to(address: Address<Any>) -> Self {
-        let mut output = Self {
-            address,
-            value: DeferredValue::Minimum(Rc::new(Value::default())),
-            datum: None,
-            script: None,
-        };
-
-        output.set_minimum_utxo_value();
-
-        output
-    }
-
-    /// Attach assets to the output, while preserving the lovelace value.
-    pub fn with_assets<AssetName>(
-        mut self,
-        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (AssetName, u64)>)>,
-    ) -> Self
-    where
-        AssetName: AsRef<[u8]>,
-    {
-        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Attach a reference script to the output.
-    pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
-        self.script = Some(Rc::new(plutus_script));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Attach a datum reference as [`struct@Hash<32>`] to the output.
-    pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
-        self.datum = Some(Rc::new(InlineDatum::Hash(hash)));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Attach a plain [`PlutusData`] datum to the output.
-    pub fn with_datum(mut self, data: PlutusData) -> Self {
-        self.datum = Some(Rc::new(InlineDatum::Data(data)));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Adjust the lovelace quantities of deferred values using the size of the serialised output.
-    /// This does nothing on explicitly given values -- EVEN WHEN they are below the minimum
-    /// threshold.
-    fn set_minimum_utxo_value(&mut self) {
-        // Only compute the minimum when it's actually required. Note that we cannot do this within
-        // the next block because of the immutable borrow that occurs already.
-        let min_acceptable_value = match &self.value {
-            DeferredValue::Explicit(_) => 0,
-            DeferredValue::Minimum(_) => self.min_acceptable_value(),
-        };
-
-        if let DeferredValue::Minimum(rc) = &mut self.value {
-            let value: &mut Value<u64> = Rc::make_mut(rc);
-            value.with_lovelace(min_acceptable_value);
-        }
     }
 }
 

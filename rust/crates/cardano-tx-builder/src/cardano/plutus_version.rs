@@ -6,6 +6,7 @@ use crate::cbor;
 use anyhow::anyhow;
 use std::fmt;
 
+/// The version of a Plutus program, defining available semantic and builtins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[cbor(index_only)]
 pub enum PlutusVersion {

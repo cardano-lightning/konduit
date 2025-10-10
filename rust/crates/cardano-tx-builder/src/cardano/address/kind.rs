@@ -10,7 +10,7 @@
 ///
 /// See also: [`Address::as_shelley`](super::Address::as_shelley) and/or
 /// [`Address::as_byron`](super::Address::as_byron).
-pub trait KnownAddressKind: crate::non_extensible::NonExtensible {}
+pub trait IsAddressKind: crate::non_extensible::NonExtensible {}
 
 /// Indicates that the underlying [`Address`](super::Address) is one of any kind. Many methods are
 /// available on _any_ addresses.
@@ -19,7 +19,7 @@ pub trait KnownAddressKind: crate::non_extensible::NonExtensible {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Any;
 impl crate::non_extensible::NonExtensible for Any {}
-impl KnownAddressKind for Any {}
+impl IsAddressKind for Any {}
 
 /// Indicates that the underlying [`Address`](super::Address) is a Byron (a.k.a Bootstrap) address.
 /// Specific methods may be available only to Byron addresses.
@@ -28,7 +28,7 @@ impl KnownAddressKind for Any {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Byron;
 impl crate::non_extensible::NonExtensible for Byron {}
-impl KnownAddressKind for Byron {}
+impl IsAddressKind for Byron {}
 
 /// Indicates that the underlying [`Address`](super::Address) is a Shelley address. Specific
 /// methods may be available only to Shelley addresses.
@@ -37,4 +37,4 @@ impl KnownAddressKind for Byron {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Shelley;
 impl crate::non_extensible::NonExtensible for Shelley {}
-impl KnownAddressKind for Shelley {}
+impl IsAddressKind for Shelley {}

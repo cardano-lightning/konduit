@@ -19,23 +19,273 @@ use std::{
 
 mod builder;
 pub mod state;
-pub use state::KnownTransactionBodyState;
+pub use state::IsTransactionBodyState;
 
-pub struct Transaction<State: KnownTransactionBodyState> {
+/// A transaction, either under construction or fully signed.
+///
+/// The [`State`](IsTransactionBodyState) captures the current state of the transaction and
+/// restricts the methods available based on the state. In practice, a transaction starts in the
+/// [`state::InConstruction`] using either [`Self::default`] or provided in the callback to
+/// [`Self::build`].
+///
+/// Then it reaches the [`state::ReadyForSigning`] which enables the method [`Self::sign`], and
+/// forbid any method that modifies the transaction body.
+///
+/// Note that [`Self::build`] is currently the only way by which one can get a transaction in the
+/// [`state::ReadyForSigning`].
+pub struct Transaction<State: IsTransactionBodyState> {
     inner: pallas::Tx,
     change_strategy: ChangeStrategy,
     state: PhantomData<State>,
 }
 
+// -------------------------------------------------------------------- Building
+
+impl Default for Transaction<state::InConstruction> {
+    fn default() -> Self {
+        Self {
+            change_strategy: ChangeStrategy::default(),
+            state: PhantomData,
+            inner: pallas::Tx {
+                transaction_body: pallas::TransactionBody {
+                    auxiliary_data_hash: None,
+                    certificates: None,
+                    collateral: None,
+                    collateral_return: None,
+                    donation: None,
+                    fee: 0,
+                    inputs: pallas::Set::from(vec![]),
+                    mint: None,
+                    network_id: None,
+                    outputs: vec![],
+                    proposal_procedures: None,
+                    reference_inputs: None,
+                    required_signers: None,
+                    script_data_hash: None,
+                    total_collateral: None,
+                    treasury_value: None,
+                    ttl: None,
+                    validity_interval_start: None,
+                    voting_procedures: None,
+                    withdrawals: None,
+                },
+                transaction_witness_set: pallas::WitnessSet {
+                    bootstrap_witness: None,
+                    native_script: None,
+                    plutus_data: None,
+                    plutus_v1_script: None,
+                    plutus_v2_script: None,
+                    plutus_v3_script: None,
+                    redeemer: None,
+                    vkeywitness: None,
+                },
+                success: true,
+                auxiliary_data: pallas::Nullable::Null,
+            },
+        }
+    }
+}
+
+impl Transaction<state::InConstruction> {
+    pub fn ok(&mut self) -> anyhow::Result<&mut Self> {
+        Ok(self)
+    }
+
+    pub fn with_inputs(
+        &mut self,
+        inputs: impl IntoIterator<Item = (Input, Option<PlutusData>)>,
+    ) -> &mut Self {
+        let mut redeemers = BTreeMap::new();
+
+        self.inner.transaction_body.inputs = pallas::Set::from(
+            inputs
+                .into_iter()
+                .sorted()
+                .enumerate()
+                .map(|(ix, (input, redeemer))| {
+                    if let Some(data) = redeemer {
+                        redeemers.insert(RedeemerPointer::spend(ix as u32), data);
+                    }
+
+                    pallas::TransactionInput::from(input)
+                })
+                .collect::<Vec<_>>(),
+        );
+
+        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Spend), redeemers);
+
+        self
+    }
+
+    pub fn with_collaterals(&mut self, collaterals: impl IntoIterator<Item = Input>) -> &mut Self {
+        self.inner.transaction_body.collateral = pallas::NonEmptySet::from_vec(
+            collaterals
+                .into_iter()
+                .sorted()
+                .map(pallas::TransactionInput::from)
+                .collect::<Vec<_>>(),
+        );
+        self
+    }
+
+    pub fn with_reference_inputs(
+        &mut self,
+        reference_inputs: impl IntoIterator<Item = Input>,
+    ) -> &mut Self {
+        self.inner.transaction_body.reference_inputs = pallas::NonEmptySet::from_vec(
+            reference_inputs
+                .into_iter()
+                .sorted()
+                .map(pallas::TransactionInput::from)
+                .collect::<Vec<_>>(),
+        );
+        self
+    }
+
+    pub fn with_outputs(&mut self, outputs: impl IntoIterator<Item = Output>) -> &mut Self {
+        self.inner.transaction_body.outputs = outputs
+            .into_iter()
+            .map(pallas::TransactionOutput::from)
+            .collect::<Vec<_>>();
+        self
+    }
+
+    pub fn with_change_strategy(&mut self, with: ChangeStrategy) -> &mut Self {
+        self.change_strategy = with;
+        self
+    }
+
+    pub fn with_mint(
+        &mut self,
+        mint: BTreeMap<(Hash<28>, PlutusData), BTreeMap<Vec<u8>, i64>>,
+    ) -> &mut Self {
+        let (redeemers, mint) = mint.into_iter().enumerate().fold(
+            (BTreeMap::new(), BTreeMap::new()),
+            |(mut redeemers, mut mint), (index, ((script_hash, data), assets))| {
+                mint.insert(script_hash, assets);
+
+                redeemers.insert(RedeemerPointer::mint(index as u32), data);
+
+                (redeemers, mint)
+            },
+        );
+
+        let value = Value::default().with_assets(mint);
+
+        self.inner.transaction_body.mint = <Option<pallas::Multiasset<_>>>::from(&value);
+
+        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Mint), redeemers);
+
+        self
+    }
+
+    pub fn with_fee(&mut self, fee: u64) -> &mut Self {
+        self.inner.transaction_body.fee = fee;
+        self
+    }
+
+    pub fn with_datums(&mut self, datums: impl IntoIterator<Item = PlutusData>) -> &mut Self {
+        self.inner.transaction_witness_set.plutus_data = pallas::NonEmptySet::from_vec(
+            datums.into_iter().map(pallas::PlutusData::from).collect(),
+        );
+
+        self
+    }
+
+    pub fn with_plutus_scripts(
+        &mut self,
+        scripts: impl IntoIterator<Item = PlutusScript>,
+    ) -> &mut Self {
+        let (v1, v2, v3) = scripts.into_iter().fold(
+            (vec![], vec![], vec![]),
+            |(mut v1, mut v2, mut v3), script| {
+                match script.version() {
+                    PlutusVersion::V1 => {
+                        if let Ok(v1_script) = <pallas::PlutusScript<1>>::try_from(script) {
+                            v1.push(v1_script)
+                        }
+                    }
+                    PlutusVersion::V2 => {
+                        if let Ok(v2_script) = <pallas::PlutusScript<2>>::try_from(script) {
+                            v2.push(v2_script)
+                        }
+                    }
+                    PlutusVersion::V3 => {
+                        if let Ok(v3_script) = <pallas::PlutusScript<3>>::try_from(script) {
+                            v3.push(v3_script)
+                        }
+                    }
+                };
+
+                (v1, v2, v3)
+            },
+        );
+
+        debug_assert!(
+            v1.is_empty(),
+            "trying to set some Plutus V1 scripts; these aren't supported yet and may fail later down the builder.",
+        );
+
+        debug_assert!(
+            v2.is_empty(),
+            "trying to set some Plutus V2 scripts; these aren't supported yet and may fail later down the builder.",
+        );
+
+        self.inner.transaction_witness_set.plutus_v1_script = pallas::NonEmptySet::from_vec(v1);
+        self.inner.transaction_witness_set.plutus_v2_script = pallas::NonEmptySet::from_vec(v2);
+        self.inner.transaction_witness_set.plutus_v3_script = pallas::NonEmptySet::from_vec(v3);
+
+        self
+    }
+}
+
+// -------------------------------------------------------------------- Signing
+
+impl Transaction<state::ReadyForSigning> {
+    pub fn sign(&mut self, secret_key: ed25519::SecretKey) -> &mut Self {
+        let public_key = pallas::Bytes::from(Vec::from(<[u8; ed25519::PublicKey::SIZE]>::from(
+            secret_key.public_key(),
+        )));
+
+        let witness = pallas::VKeyWitness {
+            vkey: public_key.clone(),
+            signature: pallas::Bytes::from(Vec::from(secret_key.sign(self.id()).as_ref())),
+        };
+
+        if let Some(signatures) = mem::take(&mut self.inner.transaction_witness_set.vkeywitness) {
+            // Unfortunately, we don't have a proper set at the Pallas level. We also don't want to
+            // use an intermediate BTreeSet here because it would arbitrarily change the order of
+            // witnesses (which do not matter, but may be confusing when indexing / browsing the
+            // witnesses after the fact.
+            //
+            // So, we preserve the set by simply discarding any matching signature, should one
+            // decide to sign again with the same key.
+            self.inner.transaction_witness_set.vkeywitness = pallas::NonEmptySet::from_vec(
+                signatures
+                    .to_vec()
+                    .into_iter()
+                    .filter(|existing_witness| existing_witness.vkey != public_key)
+                    .chain(vec![witness])
+                    .collect(),
+            );
+        } else {
+            self.inner.transaction_witness_set.vkeywitness =
+                pallas::NonEmptySet::from_vec(vec![witness]);
+        }
+
+        self
+    }
+}
+
 // ------------------------------------------------------------------ Inspecting
 
-impl<State: KnownTransactionBodyState> fmt::Debug for Transaction<State> {
+impl<State: IsTransactionBodyState> fmt::Debug for Transaction<State> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl<State: KnownTransactionBodyState> fmt::Display for Transaction<State> {
+impl<State: IsTransactionBodyState> fmt::Display for Transaction<State> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug_struct = f.debug_struct(&format!("Transaction (id = {})", self.id()));
 
@@ -287,7 +537,12 @@ impl<State: KnownTransactionBodyState> fmt::Display for Transaction<State> {
     }
 }
 
-impl<State: KnownTransactionBodyState> Transaction<State> {
+impl<State: IsTransactionBodyState> Transaction<State> {
+    /// The transaction identifier, as a _blake2b-256_ hash digest of its serialised body.
+    ///
+    /// <div class="warning">While the method can be called at any time, any change on the
+    /// transaction body will alter the id. It is only stable when the state is
+    /// [`state::ReadyForSigning`]</div>
     pub fn id(&self) -> Hash<32> {
         let mut bytes = Vec::new();
         let _ = cbor::encode(&self.inner.transaction_body, &mut bytes);
@@ -375,247 +630,9 @@ impl<State: KnownTransactionBodyState> Transaction<State> {
     }
 }
 
-// -------------------------------------------------------------------- Building
-
-impl Default for Transaction<state::InConstruction> {
-    fn default() -> Self {
-        Self {
-            change_strategy: ChangeStrategy::default(),
-            state: PhantomData,
-            inner: pallas::Tx {
-                transaction_body: pallas::TransactionBody {
-                    auxiliary_data_hash: None,
-                    certificates: None,
-                    collateral: None,
-                    collateral_return: None,
-                    donation: None,
-                    fee: 0,
-                    inputs: pallas::Set::from(vec![]),
-                    mint: None,
-                    network_id: None,
-                    outputs: vec![],
-                    proposal_procedures: None,
-                    reference_inputs: None,
-                    required_signers: None,
-                    script_data_hash: None,
-                    total_collateral: None,
-                    treasury_value: None,
-                    ttl: None,
-                    validity_interval_start: None,
-                    voting_procedures: None,
-                    withdrawals: None,
-                },
-                transaction_witness_set: pallas::WitnessSet {
-                    bootstrap_witness: None,
-                    native_script: None,
-                    plutus_data: None,
-                    plutus_v1_script: None,
-                    plutus_v2_script: None,
-                    plutus_v3_script: None,
-                    redeemer: None,
-                    vkeywitness: None,
-                },
-                success: true,
-                auxiliary_data: pallas::Nullable::Null,
-            },
-        }
-    }
-}
-
-impl Transaction<state::InConstruction> {
-    pub fn ok(&mut self) -> anyhow::Result<&mut Self> {
-        Ok(self)
-    }
-
-    pub fn with_inputs(
-        &mut self,
-        inputs: impl IntoIterator<Item = (Input, Option<PlutusData>)>,
-    ) -> &mut Self {
-        let mut redeemers = BTreeMap::new();
-
-        self.inner.transaction_body.inputs = pallas::Set::from(
-            inputs
-                .into_iter()
-                .sorted()
-                .enumerate()
-                .map(|(ix, (input, redeemer))| {
-                    if let Some(data) = redeemer {
-                        redeemers.insert(RedeemerPointer::spend(ix as u32), data);
-                    }
-
-                    pallas::TransactionInput::from(input)
-                })
-                .collect::<Vec<_>>(),
-        );
-
-        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Spend), redeemers);
-
-        self
-    }
-
-    pub fn with_collaterals(&mut self, collaterals: impl IntoIterator<Item = Input>) -> &mut Self {
-        self.inner.transaction_body.collateral = pallas::NonEmptySet::from_vec(
-            collaterals
-                .into_iter()
-                .sorted()
-                .map(pallas::TransactionInput::from)
-                .collect::<Vec<_>>(),
-        );
-        self
-    }
-
-    pub fn with_reference_inputs(
-        &mut self,
-        reference_inputs: impl IntoIterator<Item = Input>,
-    ) -> &mut Self {
-        self.inner.transaction_body.reference_inputs = pallas::NonEmptySet::from_vec(
-            reference_inputs
-                .into_iter()
-                .sorted()
-                .map(pallas::TransactionInput::from)
-                .collect::<Vec<_>>(),
-        );
-        self
-    }
-
-    pub fn with_outputs(&mut self, outputs: impl IntoIterator<Item = Output>) -> &mut Self {
-        self.inner.transaction_body.outputs = outputs
-            .into_iter()
-            .map(pallas::TransactionOutput::from)
-            .collect::<Vec<_>>();
-        self
-    }
-
-    pub fn with_change_strategy(&mut self, with: ChangeStrategy) -> &mut Self {
-        self.change_strategy = with;
-        self
-    }
-
-    pub fn with_mint(
-        &mut self,
-        mint: BTreeMap<(Hash<28>, PlutusData), BTreeMap<Vec<u8>, i64>>,
-    ) -> &mut Self {
-        let (redeemers, mint) = mint.into_iter().enumerate().fold(
-            (BTreeMap::new(), BTreeMap::new()),
-            |(mut redeemers, mut mint), (index, ((script_hash, data), assets))| {
-                mint.insert(script_hash, assets);
-
-                redeemers.insert(RedeemerPointer::mint(index as u32), data);
-
-                (redeemers, mint)
-            },
-        );
-
-        let value = Value::default().with_assets(mint);
-
-        self.inner.transaction_body.mint = <Option<pallas::Multiasset<_>>>::from(&value);
-
-        self.with_redeemers(|tag| matches!(tag, pallas::RedeemerTag::Mint), redeemers);
-
-        self
-    }
-
-    pub fn with_fee(&mut self, fee: u64) -> &mut Self {
-        self.inner.transaction_body.fee = fee;
-        self
-    }
-
-    pub fn with_datums(&mut self, datums: impl IntoIterator<Item = PlutusData>) -> &mut Self {
-        self.inner.transaction_witness_set.plutus_data = pallas::NonEmptySet::from_vec(
-            datums.into_iter().map(pallas::PlutusData::from).collect(),
-        );
-
-        self
-    }
-
-    pub fn with_plutus_scripts(
-        &mut self,
-        scripts: impl IntoIterator<Item = PlutusScript>,
-    ) -> &mut Self {
-        let (v1, v2, v3) = scripts.into_iter().fold(
-            (vec![], vec![], vec![]),
-            |(mut v1, mut v2, mut v3), script| {
-                match script.version() {
-                    PlutusVersion::V1 => {
-                        if let Ok(v1_script) = <pallas::PlutusScript<1>>::try_from(script) {
-                            v1.push(v1_script)
-                        }
-                    }
-                    PlutusVersion::V2 => {
-                        if let Ok(v2_script) = <pallas::PlutusScript<2>>::try_from(script) {
-                            v2.push(v2_script)
-                        }
-                    }
-                    PlutusVersion::V3 => {
-                        if let Ok(v3_script) = <pallas::PlutusScript<3>>::try_from(script) {
-                            v3.push(v3_script)
-                        }
-                    }
-                };
-
-                (v1, v2, v3)
-            },
-        );
-
-        debug_assert!(
-            v1.is_empty(),
-            "trying to set some Plutus V1 scripts; these aren't supported yet and may fail later down the builder.",
-        );
-
-        debug_assert!(
-            v2.is_empty(),
-            "trying to set some Plutus V2 scripts; these aren't supported yet and may fail later down the builder.",
-        );
-
-        self.inner.transaction_witness_set.plutus_v1_script = pallas::NonEmptySet::from_vec(v1);
-        self.inner.transaction_witness_set.plutus_v2_script = pallas::NonEmptySet::from_vec(v2);
-        self.inner.transaction_witness_set.plutus_v3_script = pallas::NonEmptySet::from_vec(v3);
-
-        self
-    }
-}
-
-// -------------------------------------------------------------------- Signing
-
-impl Transaction<state::ReadyForSigning> {
-    pub fn sign(&mut self, secret_key: ed25519::SecretKey) -> &mut Self {
-        let public_key = pallas::Bytes::from(Vec::from(<[u8; ed25519::PublicKey::SIZE]>::from(
-            secret_key.public_key(),
-        )));
-
-        let witness = pallas::VKeyWitness {
-            vkey: public_key.clone(),
-            signature: pallas::Bytes::from(Vec::from(secret_key.sign(self.id()).as_ref())),
-        };
-
-        if let Some(signatures) = mem::take(&mut self.inner.transaction_witness_set.vkeywitness) {
-            // Unfortunately, we don't have a proper set at the Pallas level. We also don't want to
-            // use an intermediate BTreeSet here because it would arbitrarily change the order of
-            // witnesses (which do not matter, but may be confusing when indexing / browsing the
-            // witnesses after the fact.
-            //
-            // So, we preserve the set by simply discarding any matching signature, should one
-            // decide to sign again with the same key.
-            self.inner.transaction_witness_set.vkeywitness = pallas::NonEmptySet::from_vec(
-                signatures
-                    .to_vec()
-                    .into_iter()
-                    .filter(|existing_witness| existing_witness.vkey != public_key)
-                    .chain(vec![witness])
-                    .collect(),
-            );
-        } else {
-            self.inner.transaction_witness_set.vkeywitness =
-                pallas::NonEmptySet::from_vec(vec![witness]);
-        }
-
-        self
-    }
-}
-
 // -------------------------------------------------------------------- Internal
 
-impl<State: KnownTransactionBodyState> Transaction<State> {
+impl<State: IsTransactionBodyState> Transaction<State> {
     /// The list of signatories explicitly listed in the transaction body, and visible to any
     /// underlying validator script. This is necessary a subset of the all signatories but the
     /// total set of inferred signatories may be larger due do transaction inputs.
@@ -1107,7 +1124,7 @@ fn into_pallas_redeemers(
 
 // -------------------------------------------------------------------- Encoding
 
-impl<C, State: KnownTransactionBodyState> cbor::Encode<C> for Transaction<State> {
+impl<C, State: IsTransactionBodyState> cbor::Encode<C> for Transaction<State> {
     fn encode<W: cbor::encode::write::Write>(
         &self,
         e: &mut cbor::Encoder<W>,
@@ -1118,7 +1135,7 @@ impl<C, State: KnownTransactionBodyState> cbor::Encode<C> for Transaction<State>
     }
 }
 
-impl<'d, C, State: KnownTransactionBodyState> cbor::Decode<'d, C> for Transaction<State> {
+impl<'d, C, State: IsTransactionBodyState> cbor::Decode<'d, C> for Transaction<State> {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         Ok(Self {
             inner: d.decode_with(ctx)?,
@@ -1133,7 +1150,7 @@ mod tests {
     use crate::{Transaction, cbor, ed25519, transaction::state::*};
 
     #[test]
-    fn display_sample_1() {
+    fn display_transaction_1() {
         let mut transaction: Transaction<ReadyForSigning> = cbor::decode(
             &hex::decode(
                 "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
@@ -1158,7 +1175,7 @@ mod tests {
         assert_eq!(
             transaction.to_string(),
             "Transaction (id = 036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a5) { \
-                inputs: [c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324#3], \
+                inputs: [Input(c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324#3)], \
                 outputs: [\
                     Output { \
                         address: addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t, \
@@ -1180,7 +1197,7 @@ mod tests {
     }
 
     #[test]
-    fn display_sample_2() {
+    fn display_transaction_2() {
         let transaction: Transaction<ReadyForSigning> = cbor::decode(
             &hex::decode(
                 "84a700d9010283825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118\
@@ -1204,9 +1221,9 @@ mod tests {
             transaction.to_string(),
             "Transaction (id = cd8c5bf00ab490d57c82ebf6364e4a6337dc214d635e8c392deaa7e4b98ed6ea) { \
                 inputs: [\
-                    036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a5#0, \
-                    3522a630e91e631f56897be2898e059478c300f4bb8dd7891549a191b4bf1090#0, \
-                    8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40#1\
+                    Input(036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a5#0), \
+                    Input(3522a630e91e631f56897be2898e059478c300f4bb8dd7891549a191b4bf1090#0), \
+                    Input(8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40#1)\
                 ], \
                 outputs: [\
                     Output { \
@@ -1217,7 +1234,7 @@ mod tests {
                 fee: 176623, \
                 script_integrity_hash: d37acc9c984616d9d15825afeaf7d266e5bde38fdd4df4f8b2312703022d474d, \
                 collaterals: [\
-                    8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40#1\
+                    Input(8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40#1)\
                 ], \
                 collateral_return: Output { \
                     address: addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t, \

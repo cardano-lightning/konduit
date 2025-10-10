@@ -9,7 +9,7 @@ pub use cardano::{
     //
     // NOTE: The main function of this comment is to force the formatter to put one import per
     // line in the following import list; making diffs and extensions easier.
-    address::{Address, KnownAddressKind},
+    address::{Address, IsAddressKind},
     credential::Credential,
     execution_units::ExecutionUnits,
     hash::Hash,
@@ -23,7 +23,7 @@ pub use cardano::{
     plutus_version::PlutusVersion,
     protocol_parameters::ProtocolParameters,
     redeemer_pointer::RedeemerPointer,
-    transaction::{KnownTransactionBodyState, Transaction},
+    transaction::{IsTransactionBodyState, Transaction},
     value::Value,
 };
 
@@ -36,6 +36,15 @@ pub use cardano::transaction;
 pub use cardano::macros;
 
 pub use pallas_crypto::key::ed25519;
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod any {
+    pub use super::cardano::{
+        address::tests::generators::*, credential::tests::generators::*,
+        execution_units::tests::generators::*, hash::tests::generators::*,
+        input::tests::generators::*, network_id::tests::generators::*,
+    };
+}
 
 mod cardano;
 mod non_extensible;

@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use std::{cmp::Ordering, fmt, marker::PhantomData, rc::Rc, str::FromStr};
 
 pub mod kind;
-pub use kind::KnownAddressKind;
+pub use kind::IsAddressKind;
 
 /// An address captures spending and delegation conditions of assets in the network.
 ///
@@ -19,10 +19,12 @@ pub use kind::KnownAddressKind;
 /// An [`Address`] can be constructed in a variety of ways.
 ///
 /// 1. Either directly using the provided builder:
-///   - [`Address<kind::Shelley>::new`]
-///   - [`Address<kind::Shelley>::with_delegation`]
+///    - [`Address<kind::Shelley>::new`]
+///    - [`Address<kind::Shelley>::with_delegation`]
 ///
-/// 2. Or by converting from another representation (e.g. bech32, base58 or base16 text strings, or
+/// 2. Using the [`address!`](crate::address!) or [`address_test!`](crate::address_test!) macros.
+///
+/// 3. Or by converting from another representation (e.g. bech32, base58 or base16 text strings, or
 ///    raw bytes):
 ///
 ///    ```rust
@@ -66,18 +68,16 @@ pub use kind::KnownAddressKind;
 ///      ).is_ok()
 ///    );
 ///    ```
-///
-///    3. Or using the [`crate::address!`] or [`crate::address_test!`] macros.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Address<T: KnownAddressKind>(Rc<AddressKind>, PhantomData<T>);
+pub struct Address<T: IsAddressKind>(Rc<AddressKind>, PhantomData<T>);
 
-impl<T: KnownAddressKind + Eq> PartialOrd for Address<T> {
+impl<T: IsAddressKind + Eq> PartialOrd for Address<T> {
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
         Some(self.cmp(rhs))
     }
 }
 
-impl<T: KnownAddressKind + Eq> Ord for Address<T> {
+impl<T: IsAddressKind + Eq> Ord for Address<T> {
     fn cmp(&self, rhs: &Self) -> Ordering {
         <Vec<u8>>::from(self).cmp(&<Vec<u8>>::from(rhs))
     }
@@ -89,17 +89,77 @@ enum AddressKind {
     Shelley(pallas::ShelleyAddress),
 }
 
-// ------------------------------------------------------------------------- Inspecting
+// ------------------------------------------------------ Building (Shelley)
 
-/// Working with unknown address kind
-impl<T: KnownAddressKind> Address<T> {
+impl Address<kind::Shelley> {
+    /// See also [`address!`](crate::address!)/[`address_test!`](crate::address_test!)
+    pub fn new(network: NetworkId, payment_credential: Credential) -> Self {
+        Self::from(pallas::ShelleyAddress::new(
+            pallas::Network::from(network),
+            pallas::ShelleyPaymentPart::from(payment_credential),
+            pallas::ShelleyDelegationPart::Null,
+        ))
+    }
+
+    /// See also [`address!`](crate::address!)/[`address_test!`](crate::address_test!)
+    pub fn with_delegation(mut self, delegation_credential: Credential) -> Self {
+        self = Self::from(pallas::ShelleyAddress::new(
+            pallas::Network::from(self.network_id()),
+            pallas::ShelleyPaymentPart::from(self.payment_credential()),
+            pallas::ShelleyDelegationPart::from(delegation_credential),
+        ));
+
+        self
+    }
+}
+
+// ---------------------------------------------------- Inspecting (Shelley)
+
+impl Address<kind::Shelley> {
+    fn cast(&self) -> &pallas::ShelleyAddress {
+        match self.0.as_ref() {
+            AddressKind::Shelley(shelley) => shelley,
+            _ => unreachable!(),
+        }
+    }
+
+    // NOTE: Technically, this method should also be available on Byron kind. But that requires
+    // accessing the internal address attributes, which Pallas doesn't provide support for and this
+    // is quite out of scope of our mission right now.
+    pub fn network_id(&self) -> NetworkId {
+        NetworkId::from(self.cast().network())
+    }
+
+    pub fn payment_credential(&self) -> Credential {
+        Credential::from(self.cast().payment())
+    }
+
+    pub fn delegation_credential(&self) -> Option<Credential> {
+        Credential::try_from(self.cast().delegation()).ok()
+    }
+}
+
+// ------------------------------------------------------------- Constructing (Any)
+
+impl Default for Address<kind::Any> {
+    fn default() -> Self {
+        Self::from(
+            Address::new(NetworkId::mainnet(), Credential::default())
+                .with_delegation(Credential::default()),
+        )
+    }
+}
+
+// ------------------------------------------------------------- Inspecting (Any)
+
+impl<T: IsAddressKind> Address<T> {
     /// Check whether an address is a [`kind::Byron`] address. To carry this proof at the
     /// type-level, use [`Self::as_byron`].
     ///
     /// # examples
     ///
     /// ```rust
-    /// # use cardano_tx_builder::{Address, address, address::kind::*};
+    /// # use cardano_tx_builder::{address};
     /// assert_eq!(
     ///     address!(
     ///         "37btjrVyb4KDXBNC4haBVPCrro8AQPHwvCMp3R\
@@ -108,7 +168,10 @@ impl<T: KnownAddressKind> Address<T> {
     ///     ).is_byron(),
     ///     true,
     /// );
+    /// ```
     ///
+    /// ```rust
+    /// # use cardano_tx_builder::{address};
     /// assert_eq!(
     ///     address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h").is_byron(),
     ///     false,
@@ -134,7 +197,7 @@ impl<T: KnownAddressKind> Address<T> {
     /// # examples
     ///
     /// ```rust
-    /// # use cardano_tx_builder::{Address, address, address::kind::*};
+    /// # use cardano_tx_builder::{address};
     /// assert_eq!(
     ///     address!(
     ///         "37btjrVyb4KDXBNC4haBVPCrro8AQPHwvCMp3R\
@@ -143,7 +206,10 @@ impl<T: KnownAddressKind> Address<T> {
     ///     ).is_shelley(),
     ///     false,
     /// );
+    /// ```
     ///
+    /// ```rust
+    /// # use cardano_tx_builder::{address};
     /// assert_eq!(
     ///     address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h").is_shelley(),
     ///     true,
@@ -161,63 +227,6 @@ impl<T: KnownAddressKind> Address<T> {
         }
 
         None
-    }
-}
-
-/// Inspecting [`kind::Shelley`] addresses
-impl Address<kind::Shelley> {
-    fn cast(&self) -> &pallas::ShelleyAddress {
-        match self.0.as_ref() {
-            AddressKind::Shelley(shelley) => shelley,
-            _ => unreachable!(),
-        }
-    }
-
-    // NOTE: Technically, this method should also be available on Byron kind. But that requires
-    // accessing the internal address attributes, which Pallas doesn't provide support for and this
-    // is quite out of scope of our mission right now.
-    pub fn network_id(&self) -> NetworkId {
-        NetworkId::from(self.cast().network())
-    }
-
-    pub fn payment_credential(&self) -> Credential {
-        Credential::from(self.cast().payment())
-    }
-
-    pub fn delegation_credential(&self) -> Option<Credential> {
-        Credential::try_from(self.cast().delegation()).ok()
-    }
-}
-
-// -------------------------------------------------------------------- Building
-
-/// Constructing [`kind::Shelley`] addresses
-impl Address<kind::Shelley> {
-    pub fn new(network: NetworkId, payment_credential: Credential) -> Self {
-        Self::from(pallas::ShelleyAddress::new(
-            pallas::Network::from(network),
-            pallas::ShelleyPaymentPart::from(payment_credential),
-            pallas::ShelleyDelegationPart::Null,
-        ))
-    }
-
-    pub fn with_delegation(mut self, delegation_credential: Credential) -> Self {
-        self = Self::from(pallas::ShelleyAddress::new(
-            pallas::Network::from(self.network_id()),
-            pallas::ShelleyPaymentPart::from(self.payment_credential()),
-            pallas::ShelleyDelegationPart::from(delegation_credential),
-        ));
-
-        self
-    }
-}
-
-impl Default for Address<kind::Any> {
-    fn default() -> Self {
-        Self::from(
-            Address::new(NetworkId::mainnet(), Credential::default())
-                .with_delegation(Credential::default()),
-        )
     }
 }
 
@@ -283,7 +292,7 @@ impl TryFrom<pallas::Address> for Address<kind::Shelley> {
     }
 }
 
-impl<T: KnownAddressKind> TryFrom<&str> for Address<T>
+impl<T: IsAddressKind> TryFrom<&str> for Address<T>
 where
     Address<T>: TryFrom<pallas::Address, Error = anyhow::Error>,
 {
@@ -294,7 +303,7 @@ where
     }
 }
 
-impl<T: KnownAddressKind> TryFrom<&[u8]> for Address<T>
+impl<T: IsAddressKind> TryFrom<&[u8]> for Address<T>
 where
     Address<T>: TryFrom<pallas::Address, Error = anyhow::Error>,
 {
@@ -307,7 +316,7 @@ where
 
 // --------------------------------------------------------------- Converting (to)
 
-impl<T: KnownAddressKind> fmt::Display for Address<T> {
+impl<T: IsAddressKind> fmt::Display for Address<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self.0.as_ref() {
             AddressKind::Byron(byron) => f.write_str(byron.to_base58().as_str()),
@@ -321,11 +330,39 @@ impl<T: KnownAddressKind> fmt::Display for Address<T> {
     }
 }
 
-impl<T: KnownAddressKind> From<&Address<T>> for Vec<u8> {
+impl<T: IsAddressKind> From<&Address<T>> for Vec<u8> {
     fn from(address: &Address<T>) -> Self {
         match address.0.as_ref() {
             AddressKind::Byron(byron) => byron.to_vec(),
             AddressKind::Shelley(shelley) => shelley.to_vec(),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod tests {
+    use crate::{Address, address::kind::*, any};
+    use proptest::{option, prelude::*};
+
+    // -------------------------------------------------------------- Generators
+
+    pub mod generators {
+        use super::*;
+
+        prop_compose! {
+            pub fn address_shelley()(
+                network_id in any::network_id(),
+                payment_credential in any::credential(),
+                delegation_credential_opt in option::of(any::credential()),
+            ) -> Address<Shelley> {
+                let address = Address::new(network_id, payment_credential);
+
+                if let Some(delegation_credential) = delegation_credential_opt {
+                    return address.with_delegation(delegation_credential)
+                }
+
+                address
+            }
         }
     }
 }

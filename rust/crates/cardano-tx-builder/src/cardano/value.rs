@@ -57,22 +57,6 @@ impl<Quantity: fmt::Debug + Copy> fmt::Display for Value<Quantity> {
     }
 }
 
-// -------------------------------------------------------------------- Inspecting
-
-impl<Quantity> Value<Quantity> {
-    pub fn lovelace(&self) -> u64 {
-        self.0
-    }
-
-    pub fn assets(&self) -> &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>> {
-        &self.1
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.lovelace() == 0 && self.assets().is_empty()
-    }
-}
-
 // -------------------------------------------------------------------- Building
 
 impl<Quantity> Default for Value<Quantity> {
@@ -82,17 +66,93 @@ impl<Quantity> Default for Value<Quantity> {
 }
 
 impl<Quantity> Value<Quantity> {
+    /// Construct a new value holding only lovelaces. Use [`Self::with_assets`] to add assets if
+    /// needed.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::{Value, hash, value};
+    /// assert_eq!(Value::<u64>::new(123456789), value!(123_456_789));
+    /// ```
+    ///
+    /// See also [`value!`](crate::value!).
     pub fn new(lovelace: u64) -> Self {
         Self(lovelace, BTreeMap::default())
     }
 
+    /// Replace the amount of lovelaces currently attached to the value.
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::{Value};
+    /// assert_eq!(
+    ///     Value::<u64>::new(14).with_lovelace(42).lovelace(),
+    ///     42,
+    /// )
+    /// ```
     pub fn with_lovelace(&mut self, lovelace: u64) -> &mut Self {
         self.0 = lovelace;
         self
     }
 }
 
+impl<Quantity: Zero> Value<Quantity> {
+    /// Attach native assets to the value, replacing any existing assets already set on the value.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::{Value, hash, value};
+    /// assert_eq!(
+    ///     Value::new(123456789)
+    ///         .with_assets([
+    ///             (
+    ///                 hash!("279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f"),
+    ///                 [( b"SNEK", 1_000_000)]
+    ///             ),
+    ///         ]),
+    ///     value!(
+    ///         123_456_789,
+    ///         (
+    ///             "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+    ///             "534e454b",
+    ///             1_000_000,
+    ///         ),
+    ///     ),
+    /// );
+    /// ```
+    pub fn with_assets<AssetName>(
+        mut self,
+        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (AssetName, Quantity)>)>,
+    ) -> Self
+    where
+        AssetName: AsRef<[u8]>,
+    {
+        for (script_hash, inner) in assets.into_iter() {
+            let mut inner = inner
+                .into_iter()
+                .filter_map(|(asset_name, quantity)| {
+                    if quantity.is_zero() {
+                        None
+                    } else {
+                        Some((Vec::from(asset_name.as_ref()), quantity))
+                    }
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            self.1
+                .entry(script_hash)
+                .and_modify(|entry| entry.append(&mut inner))
+                .or_insert(inner);
+        }
+
+        self
+    }
+}
+
 impl<Quantity: Num + CheckedSub + Copy + Display> Value<Quantity> {
+    /// Add two values together, removing any entries that results in a null quantity. The latter
+    /// is possible when quantities can take negative values (e.g. [`i64`]).
     pub fn add(&mut self, rhs: &Self) -> &mut Self {
         self.0 += rhs.0;
 
@@ -114,6 +174,69 @@ impl<Quantity: Num + CheckedSub + Copy + Display> Value<Quantity> {
         self
     }
 
+    /// Subtract the right-hand side argument from the current value; returning an error if there's
+    /// not enough of a particular quantity on the left-hand side.
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::{Value};
+    /// assert!(Value::<u64>::new(10).checked_sub(&Value::new(20)).is_err());
+    /// ```
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::{Value, hash};
+    /// let lhs: Value<u64> =
+    ///   Value::default()
+    ///     .with_assets([
+    ///       (
+    ///           hash!("b558ea5ecfa2a6e9701dab150248e94104402f789c090426eb60eb60"),
+    ///           vec![( Vec::from(b"Snekkie0903"), 1), ( Vec::from(b"Snekkie3556"), 1)],
+    ///       ),
+    ///       (
+    ///           hash!("a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235"),
+    ///           vec![( Vec::from(b"HOSKY"), 42_000_000)],
+    ///       ),
+    ///     ]);
+    ///
+    /// assert!(lhs.clone().checked_sub(&lhs).is_ok_and(|value| value == &Value::default()));
+    ///
+    /// let rhs_missing_asset =
+    ///   Value::default()
+    ///     .with_assets([
+    ///       (
+    ///           hash!("b558ea5ecfa2a6e9701dab150248e94104402f789c090426eb60eb60"),
+    ///           vec![( Vec::from(b"Snekkie9999"), 1)],
+    ///       ),
+    ///       (
+    ///           hash!("a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235"),
+    ///           vec![( Vec::from(b"HOSKY"), 42_000_000)],
+    ///       ),
+    ///     ]);
+    ///
+    /// assert!(lhs.clone().checked_sub(&rhs_missing_asset).is_err());
+    ///
+    /// let rhs_missing_script =
+    ///   Value::default()
+    ///     .with_assets([
+    ///       (
+    ///           hash!("dcb56b039bfb08e4bb4d8c4d7c3c7d481c235a0028f350aaabe0545f"),
+    ///           vec![( Vec::from(b"HOSKY"), 42_000_000)],
+    ///       ),
+    ///     ]);
+    ///
+    /// assert!(lhs.clone().checked_sub(&rhs_missing_script).is_err());
+    ///
+    /// let rhs_missing_quantity =
+    ///   Value::default()
+    ///     .with_assets([
+    ///       (
+    ///           hash!("b558ea5ecfa2a6e9701dab150248e94104402f789c090426eb60eb60"),
+    ///           vec![( Vec::from(b"Snekkie0903"), 2)],
+    ///       ),
+    ///     ]);
+    ///
+    /// assert!(lhs.clone().checked_sub(&rhs_missing_quantity).is_err());
+    /// ```
     pub fn checked_sub(&mut self, rhs: &Self) -> anyhow::Result<&mut Self> {
         self.0 = self.0.checked_sub(rhs.0).ok_or_else(|| {
             anyhow!("insufficient lhs lovelace")
@@ -164,33 +287,19 @@ impl<Quantity: Num + CheckedSub + Copy + Display> Value<Quantity> {
     }
 }
 
-impl<Quantity: Zero> Value<Quantity> {
-    pub fn with_assets<AssetName>(
-        mut self,
-        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (AssetName, Quantity)>)>,
-    ) -> Self
-    where
-        AssetName: AsRef<[u8]>,
-    {
-        for (script_hash, inner) in assets.into_iter() {
-            let mut inner = inner
-                .into_iter()
-                .filter_map(|(asset_name, quantity)| {
-                    if quantity.is_zero() {
-                        None
-                    } else {
-                        Some((Vec::from(asset_name.as_ref()), quantity))
-                    }
-                })
-                .collect::<BTreeMap<_, _>>();
+// -------------------------------------------------------------------- Inspecting
 
-            self.1
-                .entry(script_hash)
-                .and_modify(|entry| entry.append(&mut inner))
-                .or_insert(inner);
-        }
+impl<Quantity> Value<Quantity> {
+    pub fn lovelace(&self) -> u64 {
+        self.0
+    }
 
-        self
+    pub fn assets(&self) -> &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>> {
+        &self.1
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lovelace() == 0 && self.assets().is_empty()
     }
 }
 

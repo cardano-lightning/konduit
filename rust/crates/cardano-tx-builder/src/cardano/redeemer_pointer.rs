@@ -5,6 +5,7 @@
 use crate::{cbor, pallas};
 use std::fmt;
 
+/// A mostly-internal type linking scripts redeemers with their targets.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
@@ -40,6 +41,33 @@ impl RedeemerPointer {
     pub fn spend(index: u32) -> Self {
         RedeemerPointer(pallas::RedeemersKey {
             tag: pallas::RedeemerTag::Spend,
+            index,
+        })
+    }
+    pub fn withdraw(index: u32) -> Self {
+        RedeemerPointer(pallas::RedeemersKey {
+            tag: pallas::RedeemerTag::Reward,
+            index,
+        })
+    }
+
+    pub fn publish(index: u32) -> Self {
+        RedeemerPointer(pallas::RedeemersKey {
+            tag: pallas::RedeemerTag::Cert,
+            index,
+        })
+    }
+
+    pub fn vote(index: u32) -> Self {
+        RedeemerPointer(pallas::RedeemersKey {
+            tag: pallas::RedeemerTag::Vote,
+            index,
+        })
+    }
+
+    pub fn propose(index: u32) -> Self {
+        RedeemerPointer(pallas::RedeemersKey {
+            tag: pallas::RedeemerTag::Propose,
             index,
         })
     }
