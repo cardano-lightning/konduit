@@ -5,6 +5,7 @@
 use crate::{cbor, pallas};
 use std::{cmp::Ordering, fmt};
 
+/// Abstract execution units used to measure execution of [`PlutusScript`](crate::PlutusScript).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
@@ -54,6 +55,12 @@ impl Default for ExecutionUnits {
     }
 }
 
+impl ExecutionUnits {
+    pub fn new(mem: u64, cpu: u64) -> Self {
+        Self(pallas::ExUnits { mem, steps: cpu })
+    }
+}
+
 // ----------------------------------------------------------- Converting (from)
 
 impl From<pallas::ExUnits> for ExecutionUnits {
@@ -67,5 +74,44 @@ impl From<pallas::ExUnits> for ExecutionUnits {
 impl From<ExecutionUnits> for pallas::ExUnits {
     fn from(ex_units: ExecutionUnits) -> Self {
         ex_units.0
+    }
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod tests {
+    use crate::{ExecutionUnits, any, pallas};
+    use proptest::prelude::*;
+
+    // -------------------------------------------------------------- Unit tests
+
+    #[test]
+    fn display_execution_units() {
+        assert_eq!(
+            ExecutionUnits::default().to_string(),
+            "ExecutionUnits { mem: 0, cpu: 0 }",
+        );
+    }
+
+    // -------------------------------------------------------------- Properties
+
+    proptest! {
+        #[test]
+        fn pallas_roundtrip(execution_units in any::execution_units()) {
+            let pallas_execution_units = pallas::ExUnits::from(execution_units);
+            let execution_units_back = ExecutionUnits::from(pallas_execution_units);
+            prop_assert_eq!(execution_units, execution_units_back);
+        }
+    }
+
+    // -------------------------------------------------------------- Generators
+
+    pub mod generators {
+        use super::*;
+
+        prop_compose! {
+            pub fn execution_units()(mem in any::<u64>(), cpu in any::<u64>()) -> ExecutionUnits {
+                ExecutionUnits::new(mem, cpu)
+            }
+        }
     }
 }

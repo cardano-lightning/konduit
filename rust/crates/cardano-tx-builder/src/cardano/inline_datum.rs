@@ -5,6 +5,7 @@
 use crate::{Hash, PlutusData};
 use std::fmt;
 
+/// A datum as found in [`Output`](crate::Output).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InlineDatum {
     Hash(Hash<32>),
