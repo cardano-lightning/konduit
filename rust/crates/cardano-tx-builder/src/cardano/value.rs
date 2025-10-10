@@ -12,8 +12,10 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// A multi-asset value, where 'Q' may typically be instantiated to either `u64` or `i64`
-/// depending on whether it is represent an output value, or a mint value respectively.
+/// A multi-asset value, generic in its asset quantities.
+///
+/// `Quantity` will typically be instantiated to either `u64` or `i64` depending on whether it is
+/// represent an output value, or a mint value respectively.
 pub struct Value<Quantity>(u64, BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>>);
 
 impl<Quantity: fmt::Debug + Copy> fmt::Display for Value<Quantity> {
