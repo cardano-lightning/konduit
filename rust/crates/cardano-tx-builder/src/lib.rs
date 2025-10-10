@@ -6,9 +6,9 @@ pub mod cbor;
 pub use cardano::{
     // Re-export types for easier consumption.
     //
-    // NOTE: This main function of this comment is to force the formatter to put one import per
+    // NOTE: The main function of this comment is to force the formatter to put one import per
     // line in the following import list; making diffs and extensions easier.
-    address::{Address, KnownStyle, style},
+    address::{self, Address, KnownAddressKind},
     credential::Credential,
     execution_units::ExecutionUnits,
     hash::Hash,
@@ -22,15 +22,17 @@ pub use cardano::{
     plutus_version::PlutusVersion,
     protocol_parameters::ProtocolParameters,
     redeemer_pointer::RedeemerPointer,
-    transaction::{KnownState, Transaction, state},
+    transaction::{self, KnownTransactionBodyState, Transaction},
     value::Value,
 };
+
+pub use cardano::macros;
 
 pub use pallas_crypto::key::ed25519;
 
 mod cardano;
+mod non_extensible;
 mod pallas;
 mod pretty;
-mod protected;
 
 pub(crate) type BoxedIterator<'iter, T> = Box<dyn Iterator<Item = T> + 'iter>;

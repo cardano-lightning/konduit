@@ -19,9 +19,9 @@ use std::{
 
 mod builder;
 pub mod state;
-pub use state::KnownState;
+pub use state::KnownTransactionBodyState;
 
-pub struct Transaction<State: KnownState> {
+pub struct Transaction<State: KnownTransactionBodyState> {
     inner: pallas::Tx,
     change_strategy: ChangeStrategy,
     state: PhantomData<State>,
@@ -29,13 +29,13 @@ pub struct Transaction<State: KnownState> {
 
 // ------------------------------------------------------------------ Inspecting
 
-impl<State: KnownState> fmt::Debug for Transaction<State> {
+impl<State: KnownTransactionBodyState> fmt::Debug for Transaction<State> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl<State: KnownState> fmt::Display for Transaction<State> {
+impl<State: KnownTransactionBodyState> fmt::Display for Transaction<State> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug_struct = f.debug_struct(&format!("Transaction (id = {})", self.id()));
 
@@ -287,7 +287,7 @@ impl<State: KnownState> fmt::Display for Transaction<State> {
     }
 }
 
-impl<State: KnownState> Transaction<State> {
+impl<State: KnownTransactionBodyState> Transaction<State> {
     pub fn id(&self) -> Hash<32> {
         let mut bytes = Vec::new();
         let _ = cbor::encode(&self.inner.transaction_body, &mut bytes);
@@ -377,7 +377,7 @@ impl<State: KnownState> Transaction<State> {
 
 // -------------------------------------------------------------------- Building
 
-impl Default for Transaction<state::Malleable> {
+impl Default for Transaction<state::InConstruction> {
     fn default() -> Self {
         Self {
             change_strategy: ChangeStrategy::default(),
@@ -422,7 +422,7 @@ impl Default for Transaction<state::Malleable> {
     }
 }
 
-impl Transaction<state::Malleable> {
+impl Transaction<state::InConstruction> {
     pub fn ok(&mut self) -> anyhow::Result<&mut Self> {
         Ok(self)
     }
@@ -577,7 +577,7 @@ impl Transaction<state::Malleable> {
 
 // -------------------------------------------------------------------- Signing
 
-impl Transaction<state::Sealed> {
+impl Transaction<state::ReadyForSigning> {
     pub fn sign(&mut self, secret_key: ed25519::SecretKey) -> &mut Self {
         let public_key = pallas::Bytes::from(Vec::from(<[u8; ed25519::PublicKey::SIZE]>::from(
             secret_key.public_key(),
@@ -615,7 +615,7 @@ impl Transaction<state::Sealed> {
 
 // -------------------------------------------------------------------- Internal
 
-impl<State: KnownState> Transaction<State> {
+impl<State: KnownTransactionBodyState> Transaction<State> {
     /// The list of signatories explicitly listed in the transaction body, and visible to any
     /// underlying validator script. This is necessary a subset of the all signatories but the
     /// total set of inferred signatories may be larger due do transaction inputs.
@@ -813,7 +813,7 @@ impl<State: KnownState> Transaction<State> {
     }
 }
 
-impl Transaction<state::Malleable> {
+impl Transaction<state::InConstruction> {
     fn with_change_output(&mut self, change: Value<u64>) -> anyhow::Result<()> {
         let min_change_value =
             Output::new(Address::default(), change.clone()).min_acceptable_value();
@@ -1107,7 +1107,7 @@ fn into_pallas_redeemers(
 
 // -------------------------------------------------------------------- Encoding
 
-impl<C, State: KnownState> cbor::Encode<C> for Transaction<State> {
+impl<C, State: KnownTransactionBodyState> cbor::Encode<C> for Transaction<State> {
     fn encode<W: cbor::encode::write::Write>(
         &self,
         e: &mut cbor::Encoder<W>,
@@ -1118,7 +1118,7 @@ impl<C, State: KnownState> cbor::Encode<C> for Transaction<State> {
     }
 }
 
-impl<'d, C, State: KnownState> cbor::Decode<'d, C> for Transaction<State> {
+impl<'d, C, State: KnownTransactionBodyState> cbor::Decode<'d, C> for Transaction<State> {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         Ok(Self {
             inner: d.decode_with(ctx)?,
@@ -1130,11 +1130,11 @@ impl<'d, C, State: KnownState> cbor::Decode<'d, C> for Transaction<State> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Transaction, cbor, ed25519, state};
+    use crate::{Transaction, cbor, ed25519, transaction::state::*};
 
     #[test]
     fn display_sample_1() {
-        let mut transaction: Transaction<state::Sealed> = cbor::decode(
+        let mut transaction: Transaction<ReadyForSigning> = cbor::decode(
             &hex::decode(
                 "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc\
                  2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827\
@@ -1181,7 +1181,7 @@ mod tests {
 
     #[test]
     fn display_sample_2() {
-        let transaction: Transaction<state::Sealed> = cbor::decode(
+        let transaction: Transaction<ReadyForSigning> = cbor::decode(
             &hex::decode(
                 "84a700d9010283825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118\
                  c5eefabee6a8e04a5008258203522a630e91e631f56897be2898e059478c300f4bb\

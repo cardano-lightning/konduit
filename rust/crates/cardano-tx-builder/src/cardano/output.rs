@@ -3,8 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, cbor, cbor::ToCbor, pallas,
-    pretty, style,
+    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, address::kind::*, cbor,
+    cbor::ToCbor, pallas, pretty,
 };
 use anyhow::anyhow;
 use std::{fmt, rc::Rc};
@@ -21,7 +21,7 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
-    address: Address<style::Any>,
+    address: Address<Any>,
     value: DeferredValue,
     datum: Option<Rc<InlineDatum>>,
     script: Option<Rc<PlutusScript>>,
@@ -56,7 +56,7 @@ enum DeferredValue {
 // ------------------------------------------------------------------ Inspecting
 
 impl Output {
-    pub fn address(&self) -> &Address<style::Any> {
+    pub fn address(&self) -> &Address<Any> {
         &self.address
     }
 
@@ -112,8 +112,9 @@ impl Output {
 // -------------------------------------------------------------------- Building
 
 impl Output {
-    /// Construct a new output from an address and a value.
-    pub fn new(address: Address<style::Any>, value: Value<u64>) -> Self {
+    /// Construct a new output from an [`Address`] and a [`Value<u64>`]. See also [`Self::to`] for
+    /// constructing a value without an explicit value.
+    pub fn new(address: Address<Any>, value: Value<u64>) -> Self {
         Self {
             address,
             value: DeferredValue::Explicit(Rc::new(value)),
@@ -122,8 +123,9 @@ impl Output {
         }
     }
 
-    /// Like [`Self::new`], but assumes a minimum Ada value as output.
-    pub fn to(address: Address<style::Any>) -> Self {
+    /// Like [`Self::new`], but assumes a minimum lovelace value as output. The value automatically
+    /// adjusts based on the other Output's elements (assets, scripts, etc..).
+    pub fn to(address: Address<Any>) -> Self {
         let mut output = Self {
             address,
             value: DeferredValue::Minimum(Rc::new(Value::default())),

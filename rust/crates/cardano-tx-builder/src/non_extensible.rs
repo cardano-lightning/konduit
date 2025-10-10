@@ -4,5 +4,5 @@
 
 /// A trait that is only public within the crate, but doesn't get exposed. This pattern allows to
 /// define restrictions on generic types using traits, without allowing implementations of the
-/// protected trait.
-pub trait Protected {}
+/// non-extensible trait.
+pub trait NonExtensible {}
