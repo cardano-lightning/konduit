@@ -19,6 +19,16 @@ const MIN_VALUE_PER_UTXO_BYTE: u64 = 4310;
 /// The CBOR overhead accounting for the in-memory size of inputs and utxo, as per [CIP-0055](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0055#the-new-minimum-lovelace-calculation).
 const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 
+/// A transaction output, which comprises of at least an [`Address`] and a [`Value<u64>`].
+///
+/// The value can be either explicit set using [`Self::new`] or defined to the minimum acceptable
+/// by the protocol using [`Self::to`].
+///
+/// Optionally, one can attach an [`InlineDatum`] and/or a [`PlutusScript`] via
+/// [`Self::with_datum`]/[`Self::with_datum_hash`] and [`Self::with_plutus_script`] respectively.
+///
+/// <div class="warning">Native scripts as reference scripts aren't yet supported. Only Plutus
+/// scripts are.</div>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     address: Address<Any>,
@@ -76,6 +86,58 @@ impl Output {
 
     /// The minimum quantity of lovelace acceptable to carry this output. Address' delegation,
     /// assets, scripts and datums may increase this value.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::*;
+    /// // Simple, undelegated address. About as low as we can go.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .min_acceptable_value(),
+    ///   857690,
+    /// );
+    ///
+    /// // Address with delegation.
+    /// assert_eq!(
+    ///   output!("addr1qytp6yfl9wwamcqu3j5kqhjz8hlgkt62nd82d837g9dlsmn85wjc8sjtq2wqxfmahmpn6h85y0ug7mzclf2jl4zyt3vq587s69")
+    ///     .min_acceptable_value(),
+    ///   978370,
+    /// );
+    ///
+    /// // Undelegated address with some native assets.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .with_assets([
+    ///         (
+    ///             hash!("279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f"),
+    ///             [(b"SNEK".to_vec(), 1_000_000_000)]
+    ///         )
+    ///     ])
+    ///     .min_acceptable_value(),
+    ///   1043020,
+    /// );
+    ///
+    /// // Undelegated address with some inline datum.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .with_datum(PlutusData::list([
+    ///         PlutusData::integer(14),
+    ///         PlutusData::integer(42),
+    ///         PlutusData::bytes(b"foobar"),
+    ///     ]))
+    ///     .min_acceptable_value(),
+    ///   935270,
+    /// );
+    ///
+    /// // Undelegated address with some datum hash.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .with_datum_hash(hash!("279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f00000000"))
+    ///     .min_acceptable_value(),
+    ///   1017160,
+    /// );
+    /// ```
     pub fn min_acceptable_value(&self) -> u64 {
         // In case where values are too small, we still count for 5 bytes to avoid having to search
         // for a fixed point. This is because CBOR uses variable-length encoding for integers,
@@ -138,12 +200,14 @@ impl Output {
         output
     }
 
-    /// Attach assets to the output, while preserving the Ada value. If minimum was assumed (e.g.
-    /// using [`to`]), then the minimum will automatically grow to compensate for the new assets.
-    pub fn with_assets(
+    /// Attach assets to the output, while preserving the lovelace value.
+    pub fn with_assets<AssetName>(
         mut self,
-        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (Vec<u8>, u64)>)>,
-    ) -> Self {
+        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (AssetName, u64)>)>,
+    ) -> Self
+    where
+        AssetName: AsRef<[u8]>,
+    {
         self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
         self.set_minimum_utxo_value();
         self
@@ -156,14 +220,14 @@ impl Output {
         self
     }
 
-    /// Attach a datum hash to the output.
+    /// Attach a datum reference as [`struct@Hash<32>`] to the output.
     pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
         self.datum = Some(Rc::new(InlineDatum::Hash(hash)));
         self.set_minimum_utxo_value();
         self
     }
 
-    /// Attach a plain PlutusData datum to the output.
+    /// Attach a plain [`PlutusData`] datum to the output.
     pub fn with_datum(mut self, data: PlutusData) -> Self {
         self.datum = Some(Rc::new(InlineDatum::Data(data)));
         self.set_minimum_utxo_value();
@@ -198,7 +262,9 @@ impl TryFrom<pallas::TransactionOutput> for Output {
             pallas::TransactionOutput::Legacy(legacy) => {
                 let address = Address::try_from(legacy.address.as_slice())?;
                 let value = Value::from(&legacy.amount);
-                let datum_opt = legacy.datum_hash.map(|hash| InlineDatum::Hash(Hash::from(hash)));
+                let datum_opt = legacy
+                    .datum_hash
+                    .map(|hash| InlineDatum::Hash(Hash::from(hash)));
                 let plutus_script_opt = None;
 
                 Ok::<_, anyhow::Error>((address, value, datum_opt, plutus_script_opt))
@@ -209,8 +275,12 @@ impl TryFrom<pallas::TransactionOutput> for Output {
                 let value = Value::from(&modern.value);
                 let datum_opt = match modern.datum_option {
                     None => None,
-                    Some(pallas::DatumOption::Hash(hash)) => Some(InlineDatum::Hash(Hash::from(hash))),
-                    Some(pallas::DatumOption::Data(data)) => Some(InlineDatum::Data(PlutusData::from(data.0))),
+                    Some(pallas::DatumOption::Hash(hash)) => {
+                        Some(InlineDatum::Hash(Hash::from(hash)))
+                    }
+                    Some(pallas::DatumOption::Data(data)) => {
+                        Some(InlineDatum::Data(PlutusData::from(data.0)))
+                    }
                 };
                 let plutus_script_opt = match modern.script_ref.map(|wrap| wrap.unwrap()) {
                     None => Ok(None),

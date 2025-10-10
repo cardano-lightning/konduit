@@ -56,7 +56,7 @@ impl ProtocolParameters {
         size * self.fee_per_byte + self.fee_constant
     }
 
-    /// According to https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md
+    /// Compute the tiered-fee of included reference scripts according to <https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md>.
     pub fn referenced_scripts_fee(&self, mut size: u64) -> u64 {
         let mut cost: Ratio<u64> = Ratio::ZERO;
         let mut fee_per_byte: Ratio<u64> = Ratio::from(self.referenced_scripts_base_fee_per_byte);

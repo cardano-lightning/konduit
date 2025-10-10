@@ -16,16 +16,16 @@ pub struct Credential(#[n(0)] pallas::StakeCredential);
 impl Credential {
     pub fn select<T>(
         &self,
-        mut when_verification_key: impl FnMut(Hash<28>) -> T,
+        mut when_key: impl FnMut(Hash<28>) -> T,
         mut when_script: impl FnMut(Hash<28>) -> T,
     ) -> T {
         match &self.0 {
-            pallas::StakeCredential::AddrKeyhash(hash) => when_verification_key(Hash::from(hash)),
+            pallas::StakeCredential::AddrKeyhash(hash) => when_key(Hash::from(hash)),
             pallas::StakeCredential::ScriptHash(hash) => when_script(Hash::from(hash)),
         }
     }
 
-    pub fn as_verification_key(&self) -> Option<Hash<28>> {
+    pub fn as_key(&self) -> Option<Hash<28>> {
         self.select(Some, |_| None)
     }
 
@@ -38,14 +38,14 @@ impl Credential {
 
 impl Default for Credential {
     fn default() -> Self {
-        Self::from_verification_key(Hash::from([
+        Self::from_key(Hash::from([
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]))
     }
 }
 
 impl Credential {
-    pub fn from_verification_key(hash: Hash<28>) -> Self {
+    pub fn from_key(hash: Hash<28>) -> Self {
         Self::from(pallas::StakeCredential::AddrKeyhash(pallas::Hash::from(
             hash,
         )))

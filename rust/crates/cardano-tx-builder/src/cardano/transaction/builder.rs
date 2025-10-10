@@ -22,16 +22,16 @@ const SIZE_OF_KEY_WITNESS: u64 = 1 // 1 byte for the 2-tuple declaration
     + (32 + 2) // 32 bytes of verification & 2 bytes of CBOR bytestring declaration
     + (64 + 2); // 64 bytes of signature + 2 bytes of CBOR bytestring declaration
 
-/// - 1 bytes for the map key(s).
-///
-/// - 3 bytes for the declaration of a CBOR-Set, 1 for the tag itself, and 2 for the tag index.
-///
-/// - 1 to 3 bytes for the witness lists declaration. The size varies based on the number of
-///   witnesses. For more than 255 witnesses, the size will be encoded over 3 bytes and allow up to
-///   65535 witnesses, which should be enough...
-///
-/// TODO: Note that we then multiply that size by 2 to cope with both standard and byron witnesses. In
-/// practice, We could potentially distinguish based on the type of witness, but that's more work.
+// - 1 bytes for the map key(s).
+//
+// - 3 bytes for the declaration of a CBOR-Set, 1 for the tag itself, and 2 for the tag index.
+//
+// - 1 to 3 bytes for the witness lists declaration. The size varies based on the number of
+//   witnesses. For more than 255 witnesses, the size will be encoded over 3 bytes and allow up to
+//   65535 witnesses, which should be enough...
+//
+// TODO: Note that we then multiply that size by 2 to cope with both standard and byron witnesses. In
+// practice, We could potentially distinguish based on the type of witness, but that's more work.
 const SIZE_OF_KEY_WITNESSES_OVERHEAD: u64 = 2 * (1 + 3 + 3);
 
 impl Transaction<state::InConstruction> {
@@ -509,7 +509,7 @@ mod tests {
         let always_succeed_script = ALWAYS_SUCCEED_SCRIPT;
         let always_succeed_address = ALWAYS_SUCCEED_ADDRESS;
 
-        let my_address: Address<Any> = address!(
+        let my_address: Address<Any> = address_test!(
             "addr_test1qzpvzu5atl2yzf9x4eetekuxkm5z02kx5apsreqq8syjum6274ase8lkeffp39narear74ed0nf804e5drfm9l99v4eq3ecz8t"
         );
 

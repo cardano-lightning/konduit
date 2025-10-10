@@ -683,7 +683,7 @@ impl<State: KnownTransactionBodyState> Transaction<State> {
                     .filter_map(|output| {
                         let address = output.address();
                         let address = address.as_shelley()?;
-                        address.payment_credential().as_verification_key()
+                        address.payment_credential().as_key()
                     }),
             )
             .collect::<BTreeSet<_>>())
@@ -835,7 +835,7 @@ impl Transaction<state::InConstruction> {
             .map(Output::try_from)
             .collect::<Result<VecDeque<_>, _>>()?;
 
-        mem::take(&mut self.change_strategy).with(change, &mut outputs)?;
+        mem::take(&mut self.change_strategy).apply(change, &mut outputs)?;
 
         self.with_outputs(outputs);
 

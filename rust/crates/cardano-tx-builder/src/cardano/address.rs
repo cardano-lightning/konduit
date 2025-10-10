@@ -9,6 +9,65 @@ use std::{cmp::Ordering, fmt, marker::PhantomData, rc::Rc, str::FromStr};
 pub mod kind;
 pub use kind::KnownAddressKind;
 
+/// An address captures spending and delegation conditions of assets in the network.
+///
+/// Addresses can be one of two [`kind`]:
+///
+/// - [`kind::Byron`]: legacy, not longer used. Also called _"bootstrap"_ addresses sometimes.
+/// - [`kind::Shelley`]: most used and modern format, which can bear delegation rights.
+///
+/// An [`Address`] can be constructed in a variety of ways.
+///
+/// 1. Either directly using the provided builder:
+///   - [`Address<kind::Shelley>::new`]
+///   - [`Address<kind::Shelley>::with_delegation`]
+///
+/// 2. Or by converting from another representation (e.g. bech32, base58 or base16 text strings, or
+///    raw bytes):
+///
+///    ```rust
+///    # use cardano_tx_builder::{Address, address::kind};
+///    // Parse a string as Shelley address; will fail if presented with a Byron address:
+///    assert!(
+///      <Address<kind::Shelley>>::try_from(
+///        "addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h"
+///      ).is_ok()
+///    );
+///
+///    assert!(
+///      <Address<kind::Shelley>>::try_from(
+///        "Ae2tdPwUPEYwNguM7TB3dMnZMfZxn1pjGHyGdjaF4mFqZF9L3bj6cdhiH8t"
+///      ).is_err()
+///    );
+///    ```
+///
+///    ```rust
+///    # use cardano_tx_builder::{Address, address::kind};
+///    // Parse a string as any address; will also success on Byron addresses:
+///    assert!(
+///      <Address<kind::Any>>::try_from(
+///        "addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h"
+///      ).is_ok()
+///    );
+///
+///    assert!(
+///      <Address<kind::Any>>::try_from(
+///        "Ae2tdPwUPEYwNguM7TB3dMnZMfZxn1pjGHyGdjaF4mFqZF9L3bj6cdhiH8t"
+///      ).is_ok()
+///    );
+///    ```
+///
+///    ```rust
+///    # use cardano_tx_builder::{Address, address::kind};
+///    // Also work with base16 encoded addresses:
+///    assert!(
+///      <Address<kind::Shelley>>::try_from(
+///        "61e28b59d19805db228624ffc1830905d0dd51964b134330eb32a9c4b6"
+///      ).is_ok()
+///    );
+///    ```
+///
+///    3. Or using the [`crate::address!`] or [`crate::address_test!`] macros.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Address<T: KnownAddressKind>(Rc<AddressKind>, PhantomData<T>);
 
@@ -32,11 +91,35 @@ enum AddressKind {
 
 // ------------------------------------------------------------------------- Inspecting
 
+/// Working with unknown address kind
 impl<T: KnownAddressKind> Address<T> {
+    /// Check whether an address is a [`kind::Byron`] address. To carry this proof at the
+    /// type-level, use [`Self::as_byron`].
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::{Address, address, address::kind::*};
+    /// assert_eq!(
+    ///     address!(
+    ///         "37btjrVyb4KDXBNC4haBVPCrro8AQPHwvCMp3R\
+    ///          FhhSVWwfFmZ6wwzSK6JK1hY6wHNmtrpTf1kdbv\
+    ///          a8TCneM2YsiXT7mrzT21EacHnPpz5YyUdj64na"
+    ///     ).is_byron(),
+    ///     true,
+    /// );
+    ///
+    /// assert_eq!(
+    ///     address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h").is_byron(),
+    ///     false,
+    /// );
+    /// ```
     pub fn is_byron(&self) -> bool {
         matches!(self.0.as_ref(), &AddressKind::Byron(..))
     }
 
+    /// Refine the kind of the address, assuming it is a [`kind::Byron`] to enable specific methods
+    /// for this kind.
     pub fn as_byron(&self) -> Option<Address<kind::Byron>> {
         if self.is_byron() {
             return Some(Address(self.0.clone(), PhantomData));
@@ -45,10 +128,33 @@ impl<T: KnownAddressKind> Address<T> {
         None
     }
 
+    /// Check whether an address is a [`kind::Byron`] address. To carry this proof at the
+    /// type-level, use [`Self::as_shelley`].
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::{Address, address, address::kind::*};
+    /// assert_eq!(
+    ///     address!(
+    ///         "37btjrVyb4KDXBNC4haBVPCrro8AQPHwvCMp3R\
+    ///          FhhSVWwfFmZ6wwzSK6JK1hY6wHNmtrpTf1kdbv\
+    ///          a8TCneM2YsiXT7mrzT21EacHnPpz5YyUdj64na"
+    ///     ).is_shelley(),
+    ///     false,
+    /// );
+    ///
+    /// assert_eq!(
+    ///     address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h").is_shelley(),
+    ///     true,
+    /// );
+    /// ```
     pub fn is_shelley(&self) -> bool {
         matches!(&self.0.as_ref(), AddressKind::Shelley(..))
     }
 
+    /// Refine the kind of the address, assuming it is a [`kind::Shelley`] to enable specific methods
+    /// for this kind.
     pub fn as_shelley(&self) -> Option<Address<kind::Shelley>> {
         if self.is_shelley() {
             return Some(Address(self.0.clone(), PhantomData));
@@ -58,6 +164,7 @@ impl<T: KnownAddressKind> Address<T> {
     }
 }
 
+/// Inspecting [`kind::Shelley`] addresses
 impl Address<kind::Shelley> {
     fn cast(&self) -> &pallas::ShelleyAddress {
         match self.0.as_ref() {
@@ -66,7 +173,10 @@ impl Address<kind::Shelley> {
         }
     }
 
-    pub fn network(&self) -> NetworkId {
+    // NOTE: Technically, this method should also be available on Byron kind. But that requires
+    // accessing the internal address attributes, which Pallas doesn't provide support for and this
+    // is quite out of scope of our mission right now.
+    pub fn network_id(&self) -> NetworkId {
         NetworkId::from(self.cast().network())
     }
 
@@ -81,6 +191,7 @@ impl Address<kind::Shelley> {
 
 // -------------------------------------------------------------------- Building
 
+/// Constructing [`kind::Shelley`] addresses
 impl Address<kind::Shelley> {
     pub fn new(network: NetworkId, payment_credential: Credential) -> Self {
         Self::from(pallas::ShelleyAddress::new(
@@ -92,7 +203,7 @@ impl Address<kind::Shelley> {
 
     pub fn with_delegation(mut self, delegation_credential: Credential) -> Self {
         self = Self::from(pallas::ShelleyAddress::new(
-            pallas::Network::from(self.network()),
+            pallas::Network::from(self.network_id()),
             pallas::ShelleyPaymentPart::from(self.payment_credential()),
             pallas::ShelleyDelegationPart::from(delegation_credential),
         ));

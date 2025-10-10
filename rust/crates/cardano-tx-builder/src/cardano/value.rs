@@ -14,9 +14,9 @@ use std::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// A multi-asset value, where 'Q' may typically be instantiated to either `u64` or `i64`
 /// depending on whether it is represent an output value, or a mint value respectively.
-pub struct Value<Q>(u64, BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>);
+pub struct Value<Quantity>(u64, BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>>);
 
-impl<Q: fmt::Debug + Copy> fmt::Display for Value<Q> {
+impl<Quantity: fmt::Debug + Copy> fmt::Display for Value<Quantity> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug_struct = f.debug_struct("Value");
 
@@ -59,12 +59,12 @@ impl<Q: fmt::Debug + Copy> fmt::Display for Value<Q> {
 
 // -------------------------------------------------------------------- Inspecting
 
-impl<Q> Value<Q> {
+impl<Quantity> Value<Quantity> {
     pub fn lovelace(&self) -> u64 {
         self.0
     }
 
-    pub fn assets(&self) -> &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>> {
+    pub fn assets(&self) -> &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>> {
         &self.1
     }
 
@@ -75,13 +75,13 @@ impl<Q> Value<Q> {
 
 // -------------------------------------------------------------------- Building
 
-impl<Q> Default for Value<Q> {
+impl<Quantity> Default for Value<Quantity> {
     fn default() -> Self {
         Self::new(0)
     }
 }
 
-impl<Q> Value<Q> {
+impl<Quantity> Value<Quantity> {
     pub fn new(lovelace: u64) -> Self {
         Self(lovelace, BTreeMap::default())
     }
@@ -92,7 +92,7 @@ impl<Q> Value<Q> {
     }
 }
 
-impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
+impl<Quantity: Num + CheckedSub + Copy + Display> Value<Quantity> {
     pub fn add(&mut self, rhs: &Self) -> &mut Self {
         self.0 += rhs.0;
 
@@ -164,11 +164,14 @@ impl<Q: Num + CheckedSub + Copy + Display> Value<Q> {
     }
 }
 
-impl<Q: Zero> Value<Q> {
-    pub fn with_assets(
+impl<Quantity: Zero> Value<Quantity> {
+    pub fn with_assets<AssetName>(
         mut self,
-        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (Vec<u8>, Q)>)>,
-    ) -> Self {
+        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (AssetName, Quantity)>)>,
+    ) -> Self
+    where
+        AssetName: AsRef<[u8]>,
+    {
         for (script_hash, inner) in assets.into_iter() {
             let mut inner = inner
                 .into_iter()
@@ -176,7 +179,7 @@ impl<Q: Zero> Value<Q> {
                     if quantity.is_zero() {
                         None
                     } else {
-                        Some((asset_name, quantity))
+                        Some((Vec::from(asset_name.as_ref()), quantity))
                     }
                 })
                 .collect::<BTreeMap<_, _>>();
@@ -237,10 +240,10 @@ impl From<&pallas::Multiasset<pallas::NonZeroInt>> for Value<i64> {
     }
 }
 
-fn from_multiasset<Q: Copy, P: Copy>(
-    assets: &pallas::Multiasset<P>,
-    from_quantity: impl Fn(&P) -> Q,
-) -> BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>> {
+fn from_multiasset<Quantity: Copy, PositiveCoin: Copy>(
+    assets: &pallas::Multiasset<PositiveCoin>,
+    from_quantity: impl Fn(&PositiveCoin) -> Quantity,
+) -> BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>> {
     assets
         .iter()
         .map(|(script_hash, inner)| {
@@ -281,10 +284,10 @@ impl From<&Value<i64>> for Option<pallas::Multiasset<pallas::NonZeroInt>> {
 
 /// Convert a multi-asset map into a Pallas' Multiasset. Returns 'None' when empty once pruned of
 /// any null quantities values.
-fn into_multiasset<Q: Copy, P: Copy>(
-    assets: &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>,
-    from_quantity: impl Fn(&Q) -> Option<P>,
-) -> Option<pallas::Multiasset<P>> {
+fn into_multiasset<Quantity: Copy, PositiveCoin: Copy>(
+    assets: &BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>>,
+    from_quantity: impl Fn(&Quantity) -> Option<PositiveCoin>,
+) -> Option<pallas::Multiasset<PositiveCoin>> {
     pallas::NonEmptyKeyValuePairs::from_vec(
         assets
             .iter()
@@ -325,7 +328,7 @@ impl<'d, C> cbor::Decode<'d, C> for Value<u64> {
 
 // -------------------------------------------------------------------- Internal
 
-fn prune_null_values<Q: Zero>(value: &mut BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Q>>) {
+fn prune_null_values<Quantity: Zero>(value: &mut BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>>) {
     let mut script_hashes_to_remove = Vec::new();
 
     for (script_hash, assets) in value.iter_mut() {

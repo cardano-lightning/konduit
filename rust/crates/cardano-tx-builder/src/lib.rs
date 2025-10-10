@@ -2,13 +2,14 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+/// A re-export of [`minicbor`](https://docs.rs/minicbor/latest/minicbor/index.html).
 pub mod cbor;
 pub use cardano::{
     // Re-export types for easier consumption.
     //
     // NOTE: The main function of this comment is to force the formatter to put one import per
     // line in the following import list; making diffs and extensions easier.
-    address::{self, Address, KnownAddressKind},
+    address::{Address, KnownAddressKind},
     credential::Credential,
     execution_units::ExecutionUnits,
     hash::Hash,
@@ -22,9 +23,15 @@ pub use cardano::{
     plutus_version::PlutusVersion,
     protocol_parameters::ProtocolParameters,
     redeemer_pointer::RedeemerPointer,
-    transaction::{self, KnownTransactionBodyState, Transaction},
+    transaction::{KnownTransactionBodyState, Transaction},
     value::Value,
 };
+
+/// A namespace for address-related sub-modules.
+pub use cardano::address;
+
+/// A namespace for transaction-related sub-modules.
+pub use cardano::transaction;
 
 pub use cardano::macros;
 
