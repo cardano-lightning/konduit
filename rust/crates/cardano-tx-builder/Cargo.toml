@@ -13,6 +13,10 @@ rust-version.workspace = true
 [package.metadata.release]
 release = false
 
+[features]
+default = []
+test-utils = ["dep:proptest"]
+
 [dependencies]
 anyhow.workspace = true
 bech32.workspace = true
@@ -27,3 +31,7 @@ uplc.workspace = true
 num.workspace = true
 itertools.workspace = true
 num-bigint.workspace = true
+proptest = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true

@@ -4,12 +4,13 @@
 
 use num::rational::Ratio;
 
+/// Protocol parameters restricted to the set immediately useful to this library.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct ProtocolParameters {
-    /// Multiplier coefficient on fee, in lovelace/bytes
+    /// Multiplier fee coefficient on the size of transactions
     fee_per_byte: u64,
 
-    /// Flat/fixed fee, in lovelace
+    /// Flat/fixed fee for all transactions, in lovelace
     fee_constant: u64,
 
     /// Price of a single memory execution unit, in lovelace/unit
@@ -18,10 +19,10 @@ pub struct ProtocolParameters {
     /// Price of a single cpu execution unit, in lovelace/unit
     price_cpu: f64,
 
-    /// The multiplier coefficient to apply to fees to obtain the collateral, in lovelace
+    /// Coefficient to apply to fees to obtain the collateral, in lovelace
     collateral_coefficient: f64,
 
-    /// Multiplier coefficient on the size of referenced scripts, in lovelace/bytes
+    /// Initial fee coefficient on the size of referenced scripts, in lovelace/bytes
     referenced_scripts_base_fee_per_byte: u64,
 
     /// Multiplier exponentially increasing the cost of reference scripts at each size step.
@@ -36,7 +37,7 @@ pub struct ProtocolParameters {
     /// But it may very well be soon enough.
     referenced_scripts_fee_step_size: u64,
 
-    /// Cost model for Plutus version 3
+    /// Cost model for Plutus version 3, ordered according to the [_"spec"_](https://github.com/IntersectMBO/plutus/blob/b12c894833cae725bab11577c845701aeb05dc97/plutus-ledger-api/CostModel/Params/CostModelParams/costModelParamNames.golden.txt)
     plutus_v3_cost_model: PlutusV3CostModel,
 
     /// The network POSIX start time, in seconds.
@@ -47,47 +48,6 @@ pub struct ProtocolParameters {
 }
 
 type PlutusV3CostModel = Vec<i64>;
-
-// ------------------------------------------------------------------ Inspecting
-
-impl ProtocolParameters {
-    /// Base transaction fee, computed from the size of a serialised transaction.
-    pub fn base_fee(&self, size: u64) -> u64 {
-        size * self.fee_per_byte + self.fee_constant
-    }
-
-    /// According to https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md
-    pub fn referenced_scripts_fee(&self, mut size: u64) -> u64 {
-        let mut cost: Ratio<u64> = Ratio::ZERO;
-        let mut fee_per_byte: Ratio<u64> = Ratio::from(self.referenced_scripts_base_fee_per_byte);
-
-        loop {
-            if size < self.referenced_scripts_fee_step_size {
-                return (cost + fee_per_byte * size).floor().to_integer();
-            }
-
-            cost += fee_per_byte * self.referenced_scripts_fee_step_size;
-            fee_per_byte *= self.referenced_scripts_fee_multiplier;
-            size -= self.referenced_scripts_fee_step_size;
-        }
-    }
-
-    pub fn minimum_collateral(&self, base_fee: u64) -> u64 {
-        (base_fee as f64 * self.collateral_coefficient).ceil() as u64
-    }
-
-    pub fn price_mem(&self, execution_units: u64) -> u64 {
-        (self.price_mem * execution_units as f64).ceil() as u64
-    }
-
-    pub fn price_cpu(&self, execution_units: u64) -> u64 {
-        (self.price_cpu * execution_units as f64).ceil() as u64
-    }
-
-    pub fn plutus_v3_cost_model(&self) -> &PlutusV3CostModel {
-        &self.plutus_v3_cost_model
-    }
-}
 
 // --------------------------------------------------------------------- Building
 
@@ -110,72 +70,10 @@ impl Default for ProtocolParameters {
 }
 
 impl ProtocolParameters {
-    pub fn with_fee_per_byte(mut self, fee_per_byte: u64) -> Self {
-        self.fee_per_byte = fee_per_byte;
-        self
-    }
-
-    pub fn with_fee_constant(mut self, fee_constant: u64) -> Self {
-        self.fee_constant = fee_constant;
-        self
-    }
-
-    pub fn with_collateral_coefficient(mut self, collateral_coefficient: f64) -> Self {
-        self.collateral_coefficient = collateral_coefficient;
-        self
-    }
-
-    pub fn with_referenced_scripts_base_fee_per_byte(
-        mut self,
-        referenced_scripts_base_fee_per_byte: u64,
-    ) -> Self {
-        self.referenced_scripts_base_fee_per_byte = referenced_scripts_base_fee_per_byte;
-        self
-    }
-
-    pub fn with_referenced_scripts_fee_multiplier(
-        mut self,
-        referenced_scripts_fee_multiplier: Ratio<u64>,
-    ) -> Self {
-        self.referenced_scripts_fee_multiplier = referenced_scripts_fee_multiplier;
-        self
-    }
-
-    pub fn with_referenced_scripts_fee_step_size(
-        mut self,
-        referenced_scripts_fee_step_size: u64,
-    ) -> Self {
-        self.referenced_scripts_fee_step_size = referenced_scripts_fee_step_size;
-        self
-    }
-
-    pub fn with_execution_price_mem(mut self, price_mem: f64) -> Self {
-        self.price_mem = price_mem;
-        self
-    }
-
-    pub fn with_execution_price_cpu(mut self, price_cpu: f64) -> Self {
-        self.price_cpu = price_cpu;
-        self
-    }
-
-    pub fn with_start_time(mut self, start_time: u64) -> Self {
-        self.start_time = start_time;
-        self
-    }
-
-    pub fn with_first_shelley_slot(mut self, first_shelley_slot: u64) -> Self {
-        self.first_shelley_slot = first_shelley_slot;
-        self
-    }
-
-    pub fn with_plutus_v3_cost_model(mut self, cost_model: PlutusV3CostModel) -> Self {
-        self.plutus_v3_cost_model = cost_model;
-        self
-    }
-}
-
-impl ProtocolParameters {
+    /// _Current_ Mainnet protocol parameters.
+    ///
+    /// <div class="warning">This may drift from actual parameters based on protocol updates. Ideally, parameters should be
+    /// reconstructed from a blockchain provider.</div>
     pub fn mainnet() -> Self {
         Self::default()
             .with_fee_per_byte(44)
@@ -212,10 +110,133 @@ impl ProtocolParameters {
             ])
     }
 
+    /// _Current_ PreProd protocol parameters.
+    ///
+    /// <div class="warning">This may drift from actual parameters based on protocol updates. Ideally, parameters should be
+    /// reconstructed from a blockchain provider.</div>
     pub fn preprod() -> Self {
         Self::mainnet()
             .with_start_time(1654041600)
             .with_first_shelley_slot(86400)
+    }
+
+    /// Specify the multiplier fee coefficient on the size of transactions, in lovelace/bytes
+    pub fn with_fee_per_byte(mut self, fee_per_byte: u64) -> Self {
+        self.fee_per_byte = fee_per_byte;
+        self
+    }
+
+    /// Flat/fixed fee for all transactions, in lovelace
+    pub fn with_fee_constant(mut self, fee_constant: u64) -> Self {
+        self.fee_constant = fee_constant;
+        self
+    }
+
+    /// Specify the coefficient to apply to fees to obtain the collateral, in lovelace
+    pub fn with_collateral_coefficient(mut self, collateral_coefficient: f64) -> Self {
+        self.collateral_coefficient = collateral_coefficient;
+        self
+    }
+
+    /// Specify the initial fee coefficient on the size of referenced scripts, in lovelace/bytes
+    pub fn with_referenced_scripts_base_fee_per_byte(
+        mut self,
+        referenced_scripts_base_fee_per_byte: u64,
+    ) -> Self {
+        self.referenced_scripts_base_fee_per_byte = referenced_scripts_base_fee_per_byte;
+        self
+    }
+
+    /// Specify the multiplier exponentially increasing the cost of reference scripts at each size step.
+    pub fn with_referenced_scripts_fee_multiplier(
+        mut self,
+        referenced_scripts_fee_multiplier: Ratio<u64>,
+    ) -> Self {
+        self.referenced_scripts_fee_multiplier = referenced_scripts_fee_multiplier;
+        self
+    }
+
+    /// Specify the size of each step after which the cost of referenced script bytes increases, in bytes
+    pub fn with_referenced_scripts_fee_step_size(
+        mut self,
+        referenced_scripts_fee_step_size: u64,
+    ) -> Self {
+        self.referenced_scripts_fee_step_size = referenced_scripts_fee_step_size;
+        self
+    }
+
+    /// Specify the price of a single memory execution unit, in lovelace/unit
+    pub fn with_execution_price_mem(mut self, price_mem: f64) -> Self {
+        self.price_mem = price_mem;
+        self
+    }
+
+    /// Specify the price of a single cpu execution unit, in lovelace/unit
+    pub fn with_execution_price_cpu(mut self, price_cpu: f64) -> Self {
+        self.price_cpu = price_cpu;
+        self
+    }
+
+    /// Specify the network POSIX start time, in seconds.
+    pub fn with_start_time(mut self, start_time: u64) -> Self {
+        self.start_time = start_time;
+        self
+    }
+
+    /// The first (not-necessarily active) slot of the Shelley era.
+    pub fn with_first_shelley_slot(mut self, first_shelley_slot: u64) -> Self {
+        self.first_shelley_slot = first_shelley_slot;
+        self
+    }
+
+    /// Specify the cost model for Plutus version 3, ordered according to the [_"spec"_](https://github.com/IntersectMBO/plutus/blob/b12c894833cae725bab11577c845701aeb05dc97/plutus-ledger-api/CostModel/Params/CostModelParams/costModelParamNames.golden.txt)
+    pub fn with_plutus_v3_cost_model(mut self, cost_model: PlutusV3CostModel) -> Self {
+        self.plutus_v3_cost_model = cost_model;
+        self
+    }
+}
+
+// ------------------------------------------------------------------ Inspecting
+
+impl ProtocolParameters {
+    /// Base transaction fee, computed from the size of a serialised transaction.
+    pub fn base_fee(&self, size: u64) -> u64 {
+        size * self.fee_per_byte + self.fee_constant
+    }
+
+    /// Compute the tiered-fee of included reference scripts according to [ADR- 2024-08-14_009-refscripts-fee-change](https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md).
+    pub fn referenced_scripts_fee(&self, mut size: u64) -> u64 {
+        let mut cost: Ratio<u64> = Ratio::ZERO;
+        let mut fee_per_byte: Ratio<u64> = Ratio::from(self.referenced_scripts_base_fee_per_byte);
+
+        loop {
+            if size < self.referenced_scripts_fee_step_size {
+                return (cost + fee_per_byte * size).floor().to_integer();
+            }
+
+            cost += fee_per_byte * self.referenced_scripts_fee_step_size;
+            fee_per_byte *= self.referenced_scripts_fee_multiplier;
+            size -= self.referenced_scripts_fee_step_size;
+        }
+    }
+
+    /// Compute the minimum collateral value, based on the current transaction fee.
+    pub fn minimum_collateral(&self, base_fee: u64) -> u64 {
+        (base_fee as f64 * self.collateral_coefficient).ceil() as u64
+    }
+
+    /// Compute the price, in lovelace, of memory units usage.
+    pub fn price_mem(&self, execution_units: u64) -> u64 {
+        (self.price_mem * execution_units as f64).ceil() as u64
+    }
+
+    /// Compute the price, in lovelace, of cpu units usage.
+    pub fn price_cpu(&self, execution_units: u64) -> u64 {
+        (self.price_cpu * execution_units as f64).ceil() as u64
+    }
+
+    pub fn plutus_v3_cost_model(&self) -> &PlutusV3CostModel {
+        &self.plutus_v3_cost_model
     }
 }
 
