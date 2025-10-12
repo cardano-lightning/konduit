@@ -3,8 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, address, cbor, cbor::ToCbor,
-    pallas, pretty,
+    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, address::kind::*, cbor,
+    cbor::ToCbor, pallas, pretty,
 };
 use anyhow::anyhow;
 use std::{fmt, rc::Rc};
@@ -19,9 +19,19 @@ const MIN_VALUE_PER_UTXO_BYTE: u64 = 4310;
 /// The CBOR overhead accounting for the in-memory size of inputs and utxo, as per [CIP-0055](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0055#the-new-minimum-lovelace-calculation).
 const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 
+/// A transaction output, which comprises of at least an [`Address`] and a [`Value<u64>`].
+///
+/// The value can be either explicit set using [`Self::new`] or defined to the minimum acceptable
+/// by the protocol using [`Self::to`].
+///
+/// Optionally, one can attach an [`InlineDatum`] and/or a [`PlutusScript`] via
+/// [`Self::with_datum`]/[`Self::with_datum_hash`] and [`Self::with_plutus_script`] respectively.
+///
+/// <div class="warning">Native scripts as reference scripts aren't yet supported. Only Plutus
+/// scripts are.</div>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
-    address: Address<address::Any>,
+    address: Address<Any>,
     value: DeferredValue,
     datum: Option<Rc<InlineDatum>>,
     script: Option<Rc<PlutusScript>>,
@@ -53,10 +63,91 @@ enum DeferredValue {
     Explicit(Rc<Value<u64>>),
 }
 
+// -------------------------------------------------------------------- Building
+
+impl Output {
+    /// Construct a new output from an [`Address`] and a [`Value<u64>`]. See also [`Self::to`] for
+    /// constructing a value without an explicit value.
+    pub fn new(address: Address<Any>, value: Value<u64>) -> Self {
+        Self {
+            address,
+            value: DeferredValue::Explicit(Rc::new(value)),
+            datum: None,
+            script: None,
+        }
+    }
+
+    /// Like [`Self::new`], but assumes a minimum lovelace value as output. The value automatically
+    /// adjusts based on the other Output's elements (assets, scripts, etc..).
+    pub fn to(address: Address<Any>) -> Self {
+        let mut output = Self {
+            address,
+            value: DeferredValue::Minimum(Rc::new(Value::default())),
+            datum: None,
+            script: None,
+        };
+
+        output.set_minimum_utxo_value();
+
+        output
+    }
+
+    /// Attach assets to the output, while preserving the lovelace value.
+    pub fn with_assets<AssetName>(
+        mut self,
+        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (AssetName, u64)>)>,
+    ) -> Self
+    where
+        AssetName: AsRef<[u8]>,
+    {
+        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Attach a reference script to the output.
+    pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
+        self.script = Some(Rc::new(plutus_script));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Attach a datum reference as [`struct@Hash<32>`] to the output.
+    pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
+        self.datum = Some(Rc::new(InlineDatum::Hash(hash)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Attach a plain [`PlutusData`] datum to the output.
+    pub fn with_datum(mut self, data: PlutusData) -> Self {
+        self.datum = Some(Rc::new(InlineDatum::Data(data)));
+        self.set_minimum_utxo_value();
+        self
+    }
+
+    /// Adjust the lovelace quantities of deferred values using the size of the serialised output.
+    /// This does nothing on explicitly given values -- EVEN WHEN they are below the minimum
+    /// threshold.
+    fn set_minimum_utxo_value(&mut self) {
+        // Only compute the minimum when it's actually required. Note that we cannot do this within
+        // the next block because of the immutable borrow that occurs already.
+        let min_acceptable_value = match &self.value {
+            DeferredValue::Explicit(_) => 0,
+            DeferredValue::Minimum(_) => self.min_acceptable_value(),
+        };
+
+        if let DeferredValue::Minimum(rc) = &mut self.value {
+            let value: &mut Value<u64> = Rc::make_mut(rc);
+            value.with_lovelace(min_acceptable_value);
+        }
+    }
+}
+
 // ------------------------------------------------------------------ Inspecting
 
 impl Output {
-    pub fn address(&self) -> &Address<address::Any> {
+    pub fn address(&self) -> &Address<Any> {
         &self.address
     }
 
@@ -76,6 +167,58 @@ impl Output {
 
     /// The minimum quantity of lovelace acceptable to carry this output. Address' delegation,
     /// assets, scripts and datums may increase this value.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::*;
+    /// // Simple, undelegated address. About as low as we can go.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .min_acceptable_value(),
+    ///   857690,
+    /// );
+    ///
+    /// // Address with delegation.
+    /// assert_eq!(
+    ///   output!("addr1qytp6yfl9wwamcqu3j5kqhjz8hlgkt62nd82d837g9dlsmn85wjc8sjtq2wqxfmahmpn6h85y0ug7mzclf2jl4zyt3vq587s69")
+    ///     .min_acceptable_value(),
+    ///   978370,
+    /// );
+    ///
+    /// // Undelegated address with some native assets.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .with_assets([
+    ///         (
+    ///             hash!("279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f"),
+    ///             [(b"SNEK".to_vec(), 1_000_000_000)]
+    ///         )
+    ///     ])
+    ///     .min_acceptable_value(),
+    ///   1043020,
+    /// );
+    ///
+    /// // Undelegated address with some inline datum.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .with_datum(PlutusData::list([
+    ///         PlutusData::integer(14),
+    ///         PlutusData::integer(42),
+    ///         PlutusData::bytes(b"foobar"),
+    ///     ]))
+    ///     .min_acceptable_value(),
+    ///   935270,
+    /// );
+    ///
+    /// // Undelegated address with some datum hash.
+    /// assert_eq!(
+    ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")
+    ///     .with_datum_hash(hash!("279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f00000000"))
+    ///     .min_acceptable_value(),
+    ///   1017160,
+    /// );
+    /// ```
     pub fn min_acceptable_value(&self) -> u64 {
         // In case where values are too small, we still count for 5 bytes to avoid having to search
         // for a fixed point. This is because CBOR uses variable-length encoding for integers,
@@ -109,83 +252,6 @@ impl Output {
     }
 }
 
-// -------------------------------------------------------------------- Building
-
-impl Output {
-    /// Construct a new output from an address and a value.
-    pub fn new(address: Address<address::Any>, value: Value<u64>) -> Self {
-        Self {
-            address,
-            value: DeferredValue::Explicit(Rc::new(value)),
-            datum: None,
-            script: None,
-        }
-    }
-
-    /// Like [`Self::new`], but assumes a minimum Ada value as output.
-    pub fn to(address: Address<address::Any>) -> Self {
-        let mut output = Self {
-            address,
-            value: DeferredValue::Minimum(Rc::new(Value::default())),
-            datum: None,
-            script: None,
-        };
-
-        output.set_minimum_utxo_value();
-
-        output
-    }
-
-    /// Attach assets to the output, while preserving the Ada value. If minimum was assumed (e.g.
-    /// using [`to`]), then the minimum will automatically grow to compensate for the new assets.
-    pub fn with_assets(
-        mut self,
-        assets: impl IntoIterator<Item = (Hash<28>, impl IntoIterator<Item = (Vec<u8>, u64)>)>,
-    ) -> Self {
-        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Attach a reference script to the output.
-    pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
-        self.script = Some(Rc::new(plutus_script));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Attach a datum hash to the output.
-    pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
-        self.datum = Some(Rc::new(InlineDatum::Hash(hash)));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Attach a plain PlutusData datum to the output.
-    pub fn with_datum(mut self, data: PlutusData) -> Self {
-        self.datum = Some(Rc::new(InlineDatum::Data(data)));
-        self.set_minimum_utxo_value();
-        self
-    }
-
-    /// Adjust the lovelace quantities of deferred values using the size of the serialised output.
-    /// This does nothing on explicitly given values -- EVEN WHEN they are below the minimum
-    /// threshold.
-    fn set_minimum_utxo_value(&mut self) {
-        // Only compute the minimum when it's actually required. Note that we cannot do this within
-        // the next block because of the immutable borrow that occurs already.
-        let min_acceptable_value = match &self.value {
-            DeferredValue::Explicit(_) => 0,
-            DeferredValue::Minimum(_) => self.min_acceptable_value(),
-        };
-
-        if let DeferredValue::Minimum(rc) = &mut self.value {
-            let value: &mut Value<u64> = Rc::make_mut(rc);
-            value.with_lovelace(min_acceptable_value);
-        }
-    }
-}
-
 // ------------------------------------------------------------ Converting (from)
 
 impl TryFrom<pallas::TransactionOutput> for Output {
@@ -196,7 +262,9 @@ impl TryFrom<pallas::TransactionOutput> for Output {
             pallas::TransactionOutput::Legacy(legacy) => {
                 let address = Address::try_from(legacy.address.as_slice())?;
                 let value = Value::from(&legacy.amount);
-                let datum_opt = legacy.datum_hash.map(|hash| InlineDatum::Hash(Hash::from(hash)));
+                let datum_opt = legacy
+                    .datum_hash
+                    .map(|hash| InlineDatum::Hash(Hash::from(hash)));
                 let plutus_script_opt = None;
 
                 Ok::<_, anyhow::Error>((address, value, datum_opt, plutus_script_opt))
@@ -207,8 +275,12 @@ impl TryFrom<pallas::TransactionOutput> for Output {
                 let value = Value::from(&modern.value);
                 let datum_opt = match modern.datum_option {
                     None => None,
-                    Some(pallas::DatumOption::Hash(hash)) => Some(InlineDatum::Hash(Hash::from(hash))),
-                    Some(pallas::DatumOption::Data(data)) => Some(InlineDatum::Data(PlutusData::from(data.0))),
+                    Some(pallas::DatumOption::Hash(hash)) => {
+                        Some(InlineDatum::Hash(Hash::from(hash)))
+                    }
+                    Some(pallas::DatumOption::Data(data)) => {
+                        Some(InlineDatum::Data(PlutusData::from(data.0)))
+                    }
                 };
                 let plutus_script_opt = match modern.script_ref.map(|wrap| wrap.unwrap()) {
                     None => Ok(None),

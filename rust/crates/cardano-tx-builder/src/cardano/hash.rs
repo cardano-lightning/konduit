@@ -6,6 +6,49 @@ use crate::{cbor, pallas};
 use anyhow::anyhow;
 use std::fmt;
 
+/// A _blake2b_ hash digest; typically 28 or 32 bytes long.
+///
+/// There are several ways to construct [`Self`], but fundamentally:
+///
+/// - Conversions from static byte arrays of known sizes are infaillible:
+///
+///   ```rust
+///   # use cardano_tx_builder::Hash;
+///   assert_eq!(
+///     <Hash<28>>::from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).to_string(),
+///     "00000000000000000000000000000000000000000000000000000000",
+///   );
+///   ```
+///
+/// - Conversions from vectors or slices are possible but faillible:
+///
+///   ```rust
+///   # use cardano_tx_builder::Hash;
+///   // Vectors contains exactly 28 elements
+///   assert!(
+///     <Hash<28>>::try_from(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+///         .is_ok()
+///   );
+///
+///   // Vectors still contains only 28 elements
+///   assert!(
+///     <Hash<32>>::try_from(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+///         .is_err()
+///   );
+///   ```
+///
+/// - Conversions from base16-encoded text strings are also possible:
+///
+///   ```rust
+///   # use cardano_tx_builder::Hash;
+///   // The text string is indeed 56 character-long.
+///   assert!(
+///     <Hash<28>>::try_from("00000000000000000000000000000000000000000000000000000000")
+///         .is_ok()
+///   );
+///   ```
+///
+/// - For the latter, we also provide the [`hash!`](crate::hash) macro.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
@@ -29,6 +72,22 @@ impl<const SIZE: usize> TryFrom<&str> for Hash<SIZE> {
                 "invalid hex string length; expected {}, got {}",
                 2 * SIZE,
                 s.len()
+            )
+        })?;
+
+        Ok(Hash(pallas::Hash::new(fixed_sized_bytes)))
+    }
+}
+
+impl<const SIZE: usize> TryFrom<Vec<u8>> for Hash<SIZE> {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes: Vec<u8>) -> anyhow::Result<Self> {
+        let fixed_sized_bytes = <[u8; SIZE]>::try_from(bytes.as_slice()).map_err(|_| {
+            anyhow!(
+                "invalid bytes sequence length; expected {} bytes, got {} bytes",
+                SIZE,
+                bytes.len(),
             )
         })?;
 
@@ -77,5 +136,25 @@ impl<const SIZE: usize> From<Hash<SIZE>> for [u8; SIZE] {
 impl<const SIZE: usize> AsRef<[u8]> for Hash<SIZE> {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod tests {
+    use crate::Hash;
+    use proptest::prelude::*;
+
+    // -------------------------------------------------------------- Generators
+
+    pub mod generators {
+        use super::*;
+
+        pub fn hash28() -> impl Strategy<Value = Hash<28>> {
+            any::<[u8; 28]>().prop_map(Hash::from)
+        }
+
+        pub fn hash32() -> impl Strategy<Value = Hash<32>> {
+            any::<[u8; 32]>().prop_map(Hash::from)
+        }
     }
 }

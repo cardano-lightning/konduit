@@ -5,6 +5,17 @@
 use crate::{Hash, PlutusVersion, pallas};
 use std::fmt;
 
+/// A flat-encoded Plutus program, alongside its [`PlutusVersion`](crate::PlutusVersion).
+///
+/// Note that a hash of the script can be obtained using [`Hash::from`](crate::Hash::from):
+///
+/// ```rust
+/// # use cardano_tx_builder::{Hash, PlutusVersion, hash, plutus_script};
+/// assert_eq!(
+///     Hash::from(&plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69")),
+///     hash!("bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777"),
+/// )
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PlutusScript(PlutusVersion, Vec<u8>);
 
@@ -17,15 +28,22 @@ impl fmt::Display for PlutusScript {
 // --------------------------------------------------------------------- Building
 
 impl PlutusScript {
-    /// Instance a script from its language and serialised form (CBOR + Flat encoding).
+    /// Instantiate a script from its language and serialised (flat) form
+    ///
+    /// See also [`plutus_script!`](crate::plutus_script!).
     pub fn new(version: PlutusVersion, script: Vec<u8>) -> Self {
         Self(version, script)
     }
+}
 
+// ------------------------------------------------------------------- Inspecting
+
+impl PlutusScript {
     pub fn version(&self) -> PlutusVersion {
         self.0
     }
 
+    /// The size of the flat-serialized script, without any CBOR wrapper.
     pub fn size(&self) -> u64 {
         self.1.len() as u64
     }
