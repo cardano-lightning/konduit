@@ -9,6 +9,7 @@ pub mod hash;
 pub mod inline_datum;
 pub mod input;
 pub mod macros;
+pub mod network;
 pub mod network_id;
 pub mod output;
 pub mod plutus_data;

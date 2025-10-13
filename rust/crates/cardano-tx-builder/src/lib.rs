@@ -15,6 +15,7 @@ pub use cardano::{
     hash::Hash,
     inline_datum::InlineDatum,
     input::Input,
+    network::Network,
     network_id::NetworkId,
     output::Output,
     output::change_strategy::ChangeStrategy,
@@ -42,7 +43,8 @@ pub mod any {
     pub use super::cardano::{
         address::tests::generators::*, credential::tests::generators::*,
         execution_units::tests::generators::*, hash::tests::generators::*,
-        input::tests::generators::*, network_id::tests::generators::*,
+        input::tests::generators::*, network::tests::generators::*,
+        network_id::tests::generators::*,
     };
 }
 
