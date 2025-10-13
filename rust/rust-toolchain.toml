@@ -20,4 +20,4 @@ targets = [
     # # WebAssembly
     # "wasm32-unknown-unknown"
 ]
-components = ["clippy", "rustfmt"]
+components = ["clippy", "rustfmt", "rust-analyzer", "rust-src",]
