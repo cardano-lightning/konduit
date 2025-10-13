@@ -23,6 +23,7 @@
       ];
       systems = ["x86_64-linux" "aarch64-darwin"];
       perSystem = {
+        lib,
         config,
         self',
         inputs',
@@ -54,23 +55,28 @@
         pre-commit.settings.hooks = {
           treefmt.enable = true;
         };
-        # NOTE: You can also use `config.pre-commit.devShell`
         devShells.default = pkgs.mkShell {
-          nativeBuildInputs = [
-            config.treefmt.build.wrapper
-            config.devShells.rust.nativeBuildInputs
-          ];
+          name = "konduit-shell";
           shellHook = ''
             ${config.pre-commit.installationScript}
             echo 1>&2 "Welcome to the development shell!"
+            export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
           '';
-          name = "konduit-shell";
-          # Let's keep this "path discovery techinque" here for refernece:
-          # (builtins.trace (builtins.attrNames inputs.cardano-addresses.packages.${system}) inputs.cardano-cli.packages)
-          packages = [
-            inputs'.aiken.packages.aiken
-            pkgs.yarn
-            pkgs.nodePackages_latest.nodejs
+          packages =
+            [
+              inputs'.aiken.packages.aiken
+              pkgs.yarn
+              pkgs.nodePackages_latest.nodejs
+              config.rust-project.toolchain
+            ]
+            ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
+          buildInputs =
+            [
+              pkgs.libiconv
+            ]
+            ++ lib.mapAttrsToList (_: crate: crate.crane.args.buildInputs) config.rust-project.crates;
+          nativeBuildInputs = [
+            config.treefmt.build.wrapper
           ];
         };
       };
