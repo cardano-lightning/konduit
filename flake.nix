@@ -67,6 +67,7 @@
               inputs'.aiken.packages.aiken
               pkgs.yarn
               pkgs.nodePackages_latest.nodejs
+              pkgs.openssl
               config.rust-project.toolchain
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
