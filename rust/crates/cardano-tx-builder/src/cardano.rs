@@ -4,9 +4,9 @@
 
 pub mod address;
 pub mod credential;
+pub mod datum;
 pub mod execution_units;
 pub mod hash;
-pub mod inline_datum;
 pub mod input;
 pub mod macros;
 pub mod network_id;

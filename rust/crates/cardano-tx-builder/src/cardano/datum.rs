@@ -7,16 +7,16 @@ use std::fmt;
 
 /// A datum as found in [`Output`](crate::Output).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum InlineDatum {
+pub enum Datum {
     Hash(Hash<32>),
-    Data(PlutusData<'static>),
+    Inline(PlutusData<'static>),
 }
 
-impl fmt::Display for InlineDatum {
+impl fmt::Display for Datum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            InlineDatum::Hash(hash) => write!(f, "Hash({})", hash),
-            InlineDatum::Data(data) => write!(f, "Data({})", data),
+            Datum::Hash(hash) => write!(f, "Hash({})", hash),
+            Datum::Inline(data) => write!(f, "Inline({})", data),
         }
     }
 }
