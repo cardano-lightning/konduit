@@ -9,7 +9,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InlineDatum {
     Hash(Hash<32>),
-    Data(PlutusData),
+    Data(PlutusData<'static>),
 }
 
 impl fmt::Display for InlineDatum {
