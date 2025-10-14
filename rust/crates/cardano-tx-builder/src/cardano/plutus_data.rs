@@ -240,22 +240,29 @@ impl<'a> PlutusData<'a> {
 // ------------------------------------------------------------------ Inspecting
 
 impl<'a> PlutusData<'a> {
-    pub fn as_integer<T>(&'a self) -> Option<T>
-    where
-        T: TryFrom<BigInt> + TryFrom<i128>,
-    {
+    pub fn select<T>(
+        &'a self,
+        when_integer: impl Fn(BigInt) -> anyhow::Result<T>,
+        when_bytes: impl Fn(&'_ [u8]) -> anyhow::Result<T>,
+        when_list: impl Fn(Vec<Self>) -> anyhow::Result<T>,
+        when_map: impl Fn(Vec<(Self, Self)>) -> anyhow::Result<T>,
+        when_constr: impl Fn(u64, Vec<Self>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         match self.0.as_ref() {
-            pallas::PlutusData::BigInt(big_int) => match big_int {
-                pallas::BigInt::Int(int) => <T>::try_from(<i128>::from(*int)).ok(),
-                pallas::BigInt::BigUInt(bounded_bytes) => {
-                    <T>::try_from(BigInt::from_bytes_be(num_bigint::Sign::Plus, bounded_bytes)).ok()
-                }
-                pallas::BigInt::BigNInt(bounded_bytes) => <T>::try_from(BigInt::from_bytes_be(
-                    num_bigint::Sign::Minus,
-                    bounded_bytes,
-                ))
-                .ok(),
-            },
+            pallas::PlutusData::BigInt(big_int) => when_integer(from_pallas_bigint(big_int)),
+            pallas::PlutusData::BoundedBytes(bytes) => when_bytes(bytes.as_slice()),
+            pallas::PlutusData::Array(array) => when_list(from_pallas_array(array)),
+            pallas::PlutusData::Map(map) => when_map(from_pallas_map(map)),
+            pallas::PlutusData::Constr(constr) => {
+                let (ix, fields) = from_pallas_constr(constr);
+                when_constr(ix, fields)
+            }
+        }
+    }
+
+    pub fn as_integer(&'a self) -> Option<BigInt> {
+        match self.0.as_ref() {
+            pallas::PlutusData::BigInt(big_int) => Some(from_pallas_bigint(big_int)),
             _ => None,
         }
     }
@@ -271,71 +278,86 @@ impl<'a> PlutusData<'a> {
 
     pub fn as_list(&'a self) -> Option<Vec<Self>> {
         match self.0.as_ref() {
-            pallas::PlutusData::Array(array) => {
-                let elems = match array {
-                    pallas::MaybeIndefArray::Def(elems) => elems,
-                    pallas::MaybeIndefArray::Indef(elems) => elems,
-                };
-                Some(
-                    elems
-                        .iter()
-                        .map(|x| Self(Cow::Borrowed(x)))
-                        .collect::<Vec<_>>(),
-                )
-            }
+            pallas::PlutusData::Array(array) => Some(from_pallas_array(array)),
             _ => None,
         }
     }
 
     pub fn as_map(&'a self) -> Option<Vec<(Self, Self)>> {
         match self.0.as_ref() {
-            pallas::PlutusData::Map(map) => {
-                let items = match map {
-                    uplc::KeyValuePairs::Def(items) => items,
-                    uplc::KeyValuePairs::Indef(items) => items,
-                };
-                Some(
-                    items
-                        .iter()
-                        .map(|(k, v)| (Self(Cow::Borrowed(k)), Self(Cow::Borrowed(v))))
-                        .collect::<Vec<_>>(),
-                )
-            }
+            pallas::PlutusData::Map(map) => Some(from_pallas_map(map)),
             _ => None,
         }
     }
 
     pub fn as_constr(&'a self) -> Option<(u64, Vec<Self>)> {
         match self.0.as_ref() {
-            pallas::PlutusData::Constr(pallas::Constr {
-                tag,
-                fields,
-                any_constructor,
-                ..
-            }) => {
-                let fields = match fields {
-                    pallas::MaybeIndefArray::Def(fields) => fields,
-                    pallas::MaybeIndefArray::Indef(fields) => fields,
-                }
-                .iter()
-                .map(|x| Self(Cow::Borrowed(x)))
-                .collect::<Vec<_>>();
-
-                let ix = if *tag == 102 {
-                    any_constructor.expect(
-                        "'any_constructor' was 'None' but 'tag' was set to 102? This is absurd.",
-                    )
-                } else if *tag >= 1280 {
-                    tag - 1280 + 7
-                } else {
-                    tag - 121
-                };
-
-                Some((ix, fields))
-            }
+            pallas::PlutusData::Constr(constr) => Some(from_pallas_constr(constr)),
             _ => None,
         }
     }
+}
+
+// -------------------------------------------------------------------- Internal
+
+fn from_pallas_bigint(big_int: &pallas::BigInt) -> BigInt {
+    match big_int {
+        pallas::BigInt::Int(int) => BigInt::from(i128::from(*int)),
+        pallas::BigInt::BigUInt(bounded_bytes) => {
+            BigInt::from_bytes_be(num_bigint::Sign::Plus, bounded_bytes)
+        }
+        pallas::BigInt::BigNInt(bounded_bytes) => {
+            BigInt::from_bytes_be(num_bigint::Sign::Minus, bounded_bytes)
+        }
+    }
+}
+
+fn from_pallas_array<'a>(
+    array: &'a pallas::MaybeIndefArray<pallas::PlutusData>,
+) -> Vec<PlutusData<'a>> {
+    match array {
+        pallas::MaybeIndefArray::Def(elems) => elems,
+        pallas::MaybeIndefArray::Indef(elems) => elems,
+    }
+    .iter()
+    .map(|x| PlutusData(Cow::Borrowed(x)))
+    .collect::<Vec<_>>()
+}
+
+fn from_pallas_map<'a>(
+    map: &'a pallas::KeyValuePairs<pallas::PlutusData, pallas::PlutusData>,
+) -> Vec<(PlutusData<'a>, PlutusData<'a>)> {
+    match map {
+        pallas::KeyValuePairs::Def(items) => items,
+        pallas::KeyValuePairs::Indef(items) => items,
+    }
+    .iter()
+    .map(|(k, v)| (PlutusData(Cow::Borrowed(k)), PlutusData(Cow::Borrowed(v))))
+    .collect::<Vec<_>>()
+}
+
+fn from_pallas_constr<'a>(
+    constr: &'a pallas::Constr<pallas::PlutusData>,
+) -> (u64, Vec<PlutusData<'a>>) {
+    let fields = match &constr.fields {
+        pallas::MaybeIndefArray::Def(fields) => fields,
+        pallas::MaybeIndefArray::Indef(fields) => fields,
+    }
+    .iter()
+    .map(|x| PlutusData(Cow::Borrowed(x)))
+    .collect::<Vec<_>>();
+
+    let ix = if constr.tag == 102 {
+        constr
+            .any_constructor
+            .expect("'any_constructor' was 'None' but 'tag' was set to 102? This is absurd.")
+    } else if constr.tag >= 1280 {
+        constr.tag - 1280 + 7
+    } else {
+        constr.tag - 121
+    };
+
+    (ix, fields)
 }
 
 // ----------------------------------------------------------- Converting (from)
