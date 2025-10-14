@@ -93,7 +93,7 @@ impl Transaction<state::InConstruction> {
 
     pub fn with_inputs(
         &mut self,
-        inputs: impl IntoIterator<Item = (Input, Option<PlutusData>)>,
+        inputs: impl IntoIterator<Item = (Input, Option<PlutusData<'static>>)>,
     ) -> &mut Self {
         let mut redeemers = BTreeMap::new();
 
@@ -184,7 +184,10 @@ impl Transaction<state::InConstruction> {
         self
     }
 
-    pub fn with_datums(&mut self, datums: impl IntoIterator<Item = PlutusData>) -> &mut Self {
+    pub fn with_datums(
+        &mut self,
+        datums: impl IntoIterator<Item = PlutusData<'static>>,
+    ) -> &mut Self {
         self.inner.transaction_witness_set.plutus_data = pallas::NonEmptySet::from_vec(
             datums.into_iter().map(pallas::PlutusData::from).collect(),
         );
