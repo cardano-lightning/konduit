@@ -120,7 +120,7 @@ impl Output {
     }
 
     /// Attach a plain [`PlutusData`] datum to the output.
-    pub fn with_datum(mut self, data: PlutusData) -> Self {
+    pub fn with_datum(mut self, data: PlutusData<'static>) -> Self {
         self.datum = Some(Rc::new(InlineDatum::Data(data)));
         self.set_minimum_utxo_value();
         self
