@@ -72,28 +72,6 @@ impl PlutusData {
         })
     }
 
-    pub fn as_integer<T>(self) -> Option<T>
-    where
-        T: TryFrom<BigInt> + TryFrom<i128>,
-    {
-        match self.0 {
-            pallas::PlutusData::BigInt(big_int) => match big_int {
-                pallas::BigInt::Int(int) => <T>::try_from(<i128>::from(int)).ok(),
-                pallas::BigInt::BigUInt(bounded_bytes) => <T>::try_from(BigInt::from_bytes_be(
-                    num_bigint::Sign::Plus,
-                    &bounded_bytes,
-                ))
-                .ok(),
-                pallas::BigInt::BigNInt(bounded_bytes) => <T>::try_from(BigInt::from_bytes_be(
-                    num_bigint::Sign::Minus,
-                    &bounded_bytes,
-                ))
-                .ok(),
-            },
-            _ => None,
-        }
-    }
-
     /// Construct an arbitrarily-sized byte-array value.
     ///
     /// # examples
@@ -119,13 +97,6 @@ impl PlutusData {
         Self(pallas::PlutusData::BoundedBytes(
             pallas::BoundedBytes::from(bytes.as_ref().to_vec()),
         ))
-    }
-
-    pub fn as_bytes(self) -> Option<Vec<u8>> {
-        match self.0 {
-            pallas::PlutusData::BoundedBytes(bounded_bytes) => Some(bounded_bytes.into()),
-            _ => None,
-        }
     }
 
     /// Construct an arbitrarily-sized list of [`self::PlutusData`] values.
@@ -172,19 +143,6 @@ impl PlutusData {
         }))
     }
 
-    pub fn as_list(self) -> Option<Vec<Self>> {
-        match self.0 {
-            pallas::PlutusData::Array(array) => {
-                let elems = match array {
-                    pallas::MaybeIndefArray::Def(elems) => elems,
-                    pallas::MaybeIndefArray::Indef(elems) => elems,
-                };
-                Some(elems.into_iter().map(|x| Self(x)).collect::<Vec<_>>())
-            }
-            _ => None,
-        }
-    }
-
     /// Construct an arbitrarily-sized list of [`self::PlutusData`] values.
     ///
     /// # examples
@@ -214,24 +172,6 @@ impl PlutusData {
             .collect::<Vec<_>>();
 
         Self(pallas::PlutusData::Map(pallas::KeyValuePairs::from(kvs)))
-    }
-
-    pub fn as_map(self) -> Option<Vec<(Self, Self)>> {
-        match self.0 {
-            pallas::PlutusData::Map(map) => {
-                let items = match map {
-                    uplc::KeyValuePairs::Def(items) => items,
-                    uplc::KeyValuePairs::Indef(items) => items,
-                };
-                Some(
-                    items
-                        .into_iter()
-                        .map(|(k, v)| (Self(k), Self(v)))
-                        .collect::<Vec<_>>(),
-                )
-            }
-            _ => None,
-        }
     }
 
     /// Construct a tagged variant with [`self::PlutusData`] fields.
@@ -293,6 +233,70 @@ impl PlutusData {
                 fields,
             })
         })
+    }
+}
+
+// ------------------------------------------------------------------ Inspecting
+
+impl PlutusData {
+    pub fn as_integer<T>(self) -> Option<T>
+    where
+        T: TryFrom<BigInt> + TryFrom<i128>,
+    {
+        match self.0 {
+            pallas::PlutusData::BigInt(big_int) => match big_int {
+                pallas::BigInt::Int(int) => <T>::try_from(<i128>::from(int)).ok(),
+                pallas::BigInt::BigUInt(bounded_bytes) => <T>::try_from(BigInt::from_bytes_be(
+                    num_bigint::Sign::Plus,
+                    &bounded_bytes,
+                ))
+                .ok(),
+                pallas::BigInt::BigNInt(bounded_bytes) => <T>::try_from(BigInt::from_bytes_be(
+                    num_bigint::Sign::Minus,
+                    &bounded_bytes,
+                ))
+                .ok(),
+            },
+            _ => None,
+        }
+    }
+
+    pub fn as_bytes(self) -> Option<Vec<u8>> {
+        match self.0 {
+            pallas::PlutusData::BoundedBytes(bounded_bytes) => Some(bounded_bytes.into()),
+            _ => None,
+        }
+    }
+
+    pub fn as_list(self) -> Option<Vec<Self>> {
+        match self.0 {
+            pallas::PlutusData::Array(array) => {
+                let elems = match array {
+                    pallas::MaybeIndefArray::Def(elems) => elems,
+                    pallas::MaybeIndefArray::Indef(elems) => elems,
+                };
+                Some(elems.into_iter().map(|x| Self(x)).collect::<Vec<_>>())
+            }
+            _ => None,
+        }
+    }
+
+    pub fn as_map(self) -> Option<Vec<(Self, Self)>> {
+        match self.0 {
+            pallas::PlutusData::Map(map) => {
+                let items = match map {
+                    uplc::KeyValuePairs::Def(items) => items,
+                    uplc::KeyValuePairs::Indef(items) => items,
+                };
+                Some(
+                    items
+                        .into_iter()
+                        .map(|(k, v)| (Self(k), Self(v)))
+                        .collect::<Vec<_>>(),
+                )
+            }
+            _ => None,
+        }
     }
 
     pub fn as_constr(self) -> Option<(u64, Vec<Self>)> {
