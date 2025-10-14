@@ -307,7 +307,12 @@ impl<'a> PlutusData<'a> {
 
     pub fn as_constr(&'a self) -> Option<(u64, Vec<Self>)> {
         match self.0.as_ref() {
-            pallas::PlutusData::Constr(pallas::Constr { tag, fields, .. }) => {
+            pallas::PlutusData::Constr(pallas::Constr {
+                tag,
+                fields,
+                any_constructor,
+                ..
+            }) => {
                 let fields = match fields {
                     pallas::MaybeIndefArray::Def(fields) => fields,
                     pallas::MaybeIndefArray::Indef(fields) => fields,
@@ -317,7 +322,9 @@ impl<'a> PlutusData<'a> {
                 .collect::<Vec<_>>();
 
                 let ix = if *tag == 102 {
-                    9999
+                    any_constructor.expect(
+                        "'any_constructor' was 'None' but 'tag' was set to 102? This is absurd.",
+                    )
                 } else if *tag >= 1280 {
                     tag - 1280 + 7
                 } else {
