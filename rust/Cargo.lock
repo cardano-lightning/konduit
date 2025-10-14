@@ -212,8 +212,12 @@ dependencies = [
  "blockfrost-openapi",
  "cardano-connect",
  "cardano-tx-builder",
+ "futures",
+ "hex",
  "num",
  "reqwest",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -1144,6 +1148,14 @@ dependencies = [
  "once_cell",
  "sha2",
  "signature",
+]
+
+[[package]]
+name = "konduit-data"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-tx-builder",
 ]
 
 [[package]]

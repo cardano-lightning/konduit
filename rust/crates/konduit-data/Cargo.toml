@@ -1,5 +1,5 @@
 [package]
-name = "cardano-connect-blockfrost"
+name = "konduit-data"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -15,13 +15,4 @@ release = false
 
 [dependencies]
 anyhow.workspace = true
-num.workspace = true
 cardano-tx-builder = { path = "../cardano-tx-builder" }
-cardano-connect = { path = "../cardano-connect" }
-blockfrost-openapi = "0.1.75"
-blockfrost = "1.1.0"
-reqwest = "0.12.23"
-tokio = { version = "1.47.1", features = ["rt-multi-thread"] }
-hex.workspace = true
-serde = "1.0.228"
-futures = "0.3.31"
