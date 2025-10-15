@@ -3,6 +3,7 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{cbor, cbor::ToCbor, pallas};
+use anyhow::anyhow;
 use num::ToPrimitive;
 use num_bigint::BigInt;
 use std::{borrow::Cow, fmt};
@@ -242,100 +243,100 @@ impl<'a> PlutusData<'a> {
 impl<'a> PlutusData<'a> {
     pub fn as_integer<T>(&'a self) -> Option<T>
     where
-        T: TryFrom<BigInt> + TryFrom<i128>,
+        T: TryFrom<BigInt>,
     {
         match self.0.as_ref() {
-            pallas::PlutusData::BigInt(big_int) => match big_int {
-                pallas::BigInt::Int(int) => <T>::try_from(<i128>::from(*int)).ok(),
-                pallas::BigInt::BigUInt(bounded_bytes) => {
-                    <T>::try_from(BigInt::from_bytes_be(num_bigint::Sign::Plus, bounded_bytes)).ok()
-                }
-                pallas::BigInt::BigNInt(bounded_bytes) => <T>::try_from(BigInt::from_bytes_be(
-                    num_bigint::Sign::Minus,
-                    bounded_bytes,
-                ))
-                .ok(),
-            },
+            pallas::PlutusData::BigInt(big_int) => from_pallas_bigint(big_int).try_into().ok(),
             _ => None,
         }
     }
 
-    pub fn as_bytes(&'a self) -> Option<Vec<u8>> {
+    pub fn as_bytes(&'a self) -> Option<&'a [u8]> {
         match self.0.as_ref() {
-            pallas::PlutusData::BoundedBytes(bounded_bytes) => {
-                Some(Vec::from(bounded_bytes.as_slice()))
-            }
+            pallas::PlutusData::BoundedBytes(bounded_bytes) => Some(bounded_bytes.as_slice()),
             _ => None,
         }
     }
 
-    pub fn as_list(&'a self) -> Option<Vec<Self>> {
+    pub fn as_list(&'a self) -> Option<impl Iterator<Item = Self>> {
         match self.0.as_ref() {
-            pallas::PlutusData::Array(array) => {
-                let elems = match array {
-                    pallas::MaybeIndefArray::Def(elems) => elems,
-                    pallas::MaybeIndefArray::Indef(elems) => elems,
-                };
-                Some(
-                    elems
-                        .iter()
-                        .map(|x| Self(Cow::Borrowed(x)))
-                        .collect::<Vec<_>>(),
-                )
-            }
+            pallas::PlutusData::Array(array) => Some(from_pallas_array(array)),
             _ => None,
         }
     }
 
-    pub fn as_map(&'a self) -> Option<Vec<(Self, Self)>> {
+    pub fn as_map(&'a self) -> Option<impl Iterator<Item = (Self, Self)>> {
         match self.0.as_ref() {
-            pallas::PlutusData::Map(map) => {
-                let items = match map {
-                    uplc::KeyValuePairs::Def(items) => items,
-                    uplc::KeyValuePairs::Indef(items) => items,
-                };
-                Some(
-                    items
-                        .iter()
-                        .map(|(k, v)| (Self(Cow::Borrowed(k)), Self(Cow::Borrowed(v))))
-                        .collect::<Vec<_>>(),
-                )
-            }
+            pallas::PlutusData::Map(map) => Some(from_pallas_map(map)),
             _ => None,
         }
     }
 
-    pub fn as_constr(&'a self) -> Option<(u64, Vec<Self>)> {
+    pub fn as_constr(&'a self) -> Option<(u64, impl Iterator<Item = Self>)> {
         match self.0.as_ref() {
-            pallas::PlutusData::Constr(pallas::Constr {
-                tag,
-                fields,
-                any_constructor,
-                ..
-            }) => {
-                let fields = match fields {
-                    pallas::MaybeIndefArray::Def(fields) => fields,
-                    pallas::MaybeIndefArray::Indef(fields) => fields,
-                }
-                .iter()
-                .map(|x| Self(Cow::Borrowed(x)))
-                .collect::<Vec<_>>();
-
-                let ix = if *tag == 102 {
-                    any_constructor.expect(
-                        "'any_constructor' was 'None' but 'tag' was set to 102? This is absurd.",
-                    )
-                } else if *tag >= 1280 {
-                    tag - 1280 + 7
-                } else {
-                    tag - 121
-                };
-
-                Some((ix, fields))
-            }
+            pallas::PlutusData::Constr(constr) => Some(from_pallas_constr(constr)),
             _ => None,
         }
     }
+}
+
+// --------------------------------------------------------------------- Helpers
+
+fn from_pallas_bigint(big_int: &pallas::BigInt) -> BigInt {
+    match big_int {
+        pallas::BigInt::Int(int) => BigInt::from(i128::from(*int)),
+        pallas::BigInt::BigUInt(bounded_bytes) => {
+            BigInt::from_bytes_be(num_bigint::Sign::Plus, bounded_bytes)
+        }
+        pallas::BigInt::BigNInt(bounded_bytes) => {
+            BigInt::from_bytes_be(num_bigint::Sign::Minus, bounded_bytes)
+        }
+    }
+}
+
+fn from_pallas_array<'a>(
+    array: &'a pallas::MaybeIndefArray<pallas::PlutusData>,
+) -> impl Iterator<Item = PlutusData<'a>> {
+    match array {
+        pallas::MaybeIndefArray::Def(elems) => elems,
+        pallas::MaybeIndefArray::Indef(elems) => elems,
+    }
+    .iter()
+    .map(|x| PlutusData(Cow::Borrowed(x)))
+}
+
+fn from_pallas_map<'a>(
+    map: &'a pallas::KeyValuePairs<pallas::PlutusData, pallas::PlutusData>,
+) -> impl Iterator<Item = (PlutusData<'a>, PlutusData<'a>)> {
+    match map {
+        pallas::KeyValuePairs::Def(items) => items,
+        pallas::KeyValuePairs::Indef(items) => items,
+    }
+    .iter()
+    .map(|(k, v)| (PlutusData(Cow::Borrowed(k)), PlutusData(Cow::Borrowed(v))))
+}
+
+fn from_pallas_constr<'a>(
+    constr: &'a pallas::Constr<pallas::PlutusData>,
+) -> (u64, impl Iterator<Item = PlutusData<'a>>) {
+    let fields = match &constr.fields {
+        pallas::MaybeIndefArray::Def(fields) => fields,
+        pallas::MaybeIndefArray::Indef(fields) => fields,
+    }
+    .iter()
+    .map(|x| PlutusData(Cow::Borrowed(x)));
+
+    let ix = if constr.tag == 102 {
+        constr
+            .any_constructor
+            .expect("'any_constructor' was 'None' but 'tag' was set to 102? This is absurd.")
+    } else if constr.tag >= 1280 {
+        constr.tag - 1280 + 7
+    } else {
+        constr.tag - 121
+    };
+
+    (ix, fields)
 }
 
 // ----------------------------------------------------------- Converting (from)
@@ -351,6 +352,163 @@ impl From<pallas::PlutusData> for PlutusData<'static> {
 impl From<PlutusData<'_>> for pallas::PlutusData {
     fn from(data: PlutusData<'_>) -> Self {
         data.0.into_owned()
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for u8 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for u16 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for u32 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for u64 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for u128 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for usize {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for i8 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for i16 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for i32 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for i64 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for i128 {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for isize {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for BigInt {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_integer().ok_or(anyhow!("expected an integer"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for &'a [u8] {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_bytes().ok_or(anyhow!("expected bytes"))
+    }
+}
+
+impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for &'a [u8; T] {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        data.as_bytes()
+            .ok_or(anyhow!("expected bytes"))?
+            .try_into()
+            .map_err(|_| anyhow!("bytes length mismatch"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<PlutusData<'a>> {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        Ok(data.as_list().ok_or(anyhow!("expected a list"))?.collect())
+    }
+}
+
+impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for [PlutusData<'a>; T] {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        let list: Vec<PlutusData<'_>> = data.try_into()?;
+        <[PlutusData<'_>; T]>::try_from(list).map_err(|_| anyhow!("tuple length mismatch"))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<(PlutusData<'a>, PlutusData<'a>)> {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        Ok(data.as_map().ok_or(anyhow!("expected a map"))?.collect())
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for (u64, Vec<PlutusData<'a>>) {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        let (ix, fields) = data.as_constr().ok_or(anyhow!("expected a constr"))?;
+        Ok((ix, fields.collect()))
     }
 }
 

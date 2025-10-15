@@ -3,8 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, Hash, InlineDatum, PlutusData, PlutusScript, Value, address::kind::*, cbor,
-    cbor::ToCbor, pallas, pretty,
+    Address, Datum, Hash, PlutusData, PlutusScript, Value, address::kind::*, cbor, cbor::ToCbor,
+    pallas, pretty,
 };
 use anyhow::anyhow;
 use std::{fmt, rc::Rc};
@@ -24,7 +24,7 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 /// The value can be either explicit set using [`Self::new`] or defined to the minimum acceptable
 /// by the protocol using [`Self::to`].
 ///
-/// Optionally, one can attach an [`InlineDatum`] and/or a [`PlutusScript`] via
+/// Optionally, one can attach an [`Datum`] and/or a [`PlutusScript`] via
 /// [`Self::with_datum`]/[`Self::with_datum_hash`] and [`Self::with_plutus_script`] respectively.
 ///
 /// <div class="warning">Native scripts as reference scripts aren't yet supported. Only Plutus
@@ -33,7 +33,7 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 pub struct Output {
     address: Address<Any>,
     value: DeferredValue,
-    datum: Option<Rc<InlineDatum>>,
+    datum: Option<Rc<Datum>>,
     script: Option<Rc<PlutusScript>>,
 }
 
@@ -114,14 +114,14 @@ impl Output {
 
     /// Attach a datum reference as [`struct@Hash<32>`] to the output.
     pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
-        self.datum = Some(Rc::new(InlineDatum::Hash(hash)));
+        self.datum = Some(Rc::new(Datum::Hash(hash)));
         self.set_minimum_utxo_value();
         self
     }
 
     /// Attach a plain [`PlutusData`] datum to the output.
     pub fn with_datum(mut self, data: PlutusData<'static>) -> Self {
-        self.datum = Some(Rc::new(InlineDatum::Data(data)));
+        self.datum = Some(Rc::new(Datum::Inline(data)));
         self.set_minimum_utxo_value();
         self
     }
@@ -161,7 +161,7 @@ impl Output {
         self.script.as_deref()
     }
 
-    pub fn datum(&self) -> Option<&InlineDatum> {
+    pub fn datum(&self) -> Option<&Datum> {
         self.datum.as_deref()
     }
 
@@ -262,9 +262,7 @@ impl TryFrom<pallas::TransactionOutput> for Output {
             pallas::TransactionOutput::Legacy(legacy) => {
                 let address = Address::try_from(legacy.address.as_slice())?;
                 let value = Value::from(&legacy.amount);
-                let datum_opt = legacy
-                    .datum_hash
-                    .map(|hash| InlineDatum::Hash(Hash::from(hash)));
+                let datum_opt = legacy.datum_hash.map(|hash| Datum::Hash(Hash::from(hash)));
                 let plutus_script_opt = None;
 
                 Ok::<_, anyhow::Error>((address, value, datum_opt, plutus_script_opt))
@@ -275,11 +273,9 @@ impl TryFrom<pallas::TransactionOutput> for Output {
                 let value = Value::from(&modern.value);
                 let datum_opt = match modern.datum_option {
                     None => None,
-                    Some(pallas::DatumOption::Hash(hash)) => {
-                        Some(InlineDatum::Hash(Hash::from(hash)))
-                    }
+                    Some(pallas::DatumOption::Hash(hash)) => Some(Datum::Hash(Hash::from(hash))),
                     Some(pallas::DatumOption::Data(data)) => {
-                        Some(InlineDatum::Data(PlutusData::from(data.0)))
+                        Some(Datum::Inline(PlutusData::from(data.0)))
                     }
                 };
                 let plutus_script_opt = match modern.script_ref.map(|wrap| wrap.unwrap()) {
@@ -305,8 +301,8 @@ impl TryFrom<pallas::TransactionOutput> for Output {
         let mut output = Output::new(address, value);
 
         output = match datum_opt {
-            Some(InlineDatum::Data(data)) => output.with_datum(data),
-            Some(InlineDatum::Hash(hash)) => output.with_datum_hash(hash),
+            Some(Datum::Inline(data)) => output.with_datum(data),
+            Some(Datum::Hash(hash)) => output.with_datum_hash(hash),
             None => output,
         };
 
@@ -326,8 +322,8 @@ impl From<&Output> for pallas::TransactionOutput {
             address: pallas::Bytes::from(<Vec<u8>>::from(output.address())),
             value: pallas::Value::from(output.value()),
             datum_option: output.datum().map(|datum| match datum {
-                InlineDatum::Hash(hash) => pallas::DatumOption::Hash(pallas::DatumHash::from(hash)),
-                InlineDatum::Data(data) => pallas::DatumOption::Data(pallas::CborWrap(
+                Datum::Hash(hash) => pallas::DatumOption::Hash(pallas::DatumHash::from(hash)),
+                Datum::Inline(data) => pallas::DatumOption::Data(pallas::CborWrap(
                     pallas::PlutusData::from(data.clone()),
                 )),
             }),

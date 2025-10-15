@@ -11,9 +11,9 @@ pub use cardano::{
     // line in the following import list; making diffs and extensions easier.
     address::{Address, IsAddressKind},
     credential::Credential,
+    datum::Datum,
     execution_units::ExecutionUnits,
     hash::Hash,
-    inline_datum::InlineDatum,
     input::Input,
     network_id::NetworkId,
     output::Output,
