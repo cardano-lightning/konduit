@@ -104,7 +104,7 @@ impl Transaction<state::InConstruction> {
                 .enumerate()
                 .map(|(ix, (input, redeemer))| {
                     if let Some(data) = redeemer {
-                        redeemers.insert(RedeemerPointer::spend(ix as u32), data);
+                        redeemers.insert(RedeemerPointer::from_spend(ix as u32), data);
                     }
 
                     pallas::TransactionInput::from(input)
@@ -164,7 +164,7 @@ impl Transaction<state::InConstruction> {
             |(mut redeemers, mut mint), (index, ((script_hash, data), assets))| {
                 mint.insert(script_hash, assets);
 
-                redeemers.insert(RedeemerPointer::mint(index as u32), data);
+                redeemers.insert(RedeemerPointer::from_mint(index as u32), data);
 
                 (redeemers, mint)
             },
@@ -703,7 +703,7 @@ impl<State: IsTransactionBodyState> Transaction<State> {
                     .filter_map(|output| {
                         let address = output.address();
                         let address = address.as_shelley()?;
-                        address.payment_credential().as_key()
+                        address.payment().as_key()
                     }),
             )
             .collect::<BTreeSet<_>>())
@@ -737,10 +737,10 @@ impl<State: IsTransactionBodyState> Transaction<State> {
             .enumerate()
             .filter_map(|(index, input)| Some((index, resolved_inputs.get(&input)?)))
             .filter_map(|(index, output)| {
-                let payment_credential = output.address().as_shelley()?.payment_credential();
+                let payment_credential = output.address().as_shelley()?.payment();
                 Some((index, payment_credential.as_script()?))
             })
-            .map(|(index, hash)| (RedeemerPointer::spend(index as u32), hash));
+            .map(|(index, hash)| (RedeemerPointer::from_spend(index as u32), hash));
 
         let from_mint = self
             .inner
@@ -749,7 +749,10 @@ impl<State: IsTransactionBodyState> Transaction<State> {
             .as_ref()
             .map(|assets| {
                 Box::new(assets.iter().enumerate().map(|(index, (script_hash, _))| {
-                    (RedeemerPointer::mint(index as u32), Hash::from(script_hash))
+                    (
+                        RedeemerPointer::from_mint(index as u32),
+                        Hash::from(script_hash),
+                    )
                 })) as Box<dyn Iterator<Item = (RedeemerPointer, Hash<28>)>>
             })
             .unwrap_or_else(|| {
