@@ -1,26 +1,23 @@
+use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
-
-use crate::utils::v2a;
 
 #[derive(Debug, Clone)]
 pub struct Index(pub u64);
 
-impl TryFrom<PlutusData> for Index {
-    type Error = anyhow::Error;
+impl<'a> TryFrom<PlutusData<'a>> for Index {
+    type Error = Error;
 
-    fn try_from(pd: PlutusData) -> anyhow::Result<Self> {}
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_integer() {
+            Some(int) => Ok(Self(int)),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
 }
 
-impl PData for Index {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::int(self.0.into())
-    }
-
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(plutus::unint(data)?.try_into()?))
+impl<'a> From<Index> for PlutusData<'a> {
+    fn from(value: Index) -> Self {
+        Self::integer(value.0)
     }
 }
 
@@ -33,56 +30,68 @@ impl Index {
 #[derive(Debug, Clone)]
 pub struct Timestamp(pub u64);
 
-impl PData for Timestamp {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::int(self.0.into())
-    }
+impl<'a> TryFrom<PlutusData<'a>> for Timestamp {
+    type Error = Error;
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(plutus::unint(data)?.try_into()?))
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_integer() {
+            Some(int) => Ok(Self(int)),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
+}
+
+impl<'a> From<Timestamp> for PlutusData<'a> {
+    fn from(value: Timestamp) -> Self {
+        Self::integer(value.0)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct TimeDelta(pub u64);
 
-impl PData for TimeDelta {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::int(self.0.into())
-    }
+impl<'a> TryFrom<PlutusData<'a>> for TimeDelta {
+    type Error = Error;
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(plutus::unint(data)?.try_into()?))
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_integer() {
+            Some(int) => Ok(Self(int)),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
+}
+
+impl<'a> From<TimeDelta> for PlutusData<'a> {
+    fn from(value: TimeDelta) -> Self {
+        Self::integer(value.0)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Amount(pub u64);
 
-impl PData for Amount {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::int(self.0.into())
-    }
+impl<'a> TryFrom<PlutusData<'a>> for Amount {
+    type Error = Error;
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(plutus::unint(data)?.try_into()?))
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_integer() {
+            Some(int) => Ok(Self(int)),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
+}
+
+impl<'a> From<Amount> for PlutusData<'a> {
+    fn from(value: Amount) -> Self {
+        Self::integer(value.0)
     }
 }
 
 impl Amount {
-    fn add(&self, x: u64) -> Self {
+    pub fn add(&self, x: u64) -> Self {
         Self(self.0 + x)
     }
-    fn sub(&self, x: u64) -> anyhow::Result<Self> {
+    pub fn sub(&self, x: u64) -> Result<Self> {
         if x <= self.0 {
             Ok(Self(self.0 - x))
         } else {
@@ -92,97 +101,131 @@ impl Amount {
 }
 
 #[derive(Debug, Clone)]
-pub struct Hash32([u8; 32]);
+pub struct Lock(pub [u8; 32]);
 
-impl PData for Hash32 {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::bytes(&self.0)
-    }
+impl<'a> TryFrom<PlutusData<'a>> for Lock {
+    type Error = Error;
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(v2a(plutus::unbytes(data)?)?))
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_bytes() {
+            Some(bytes) => Ok(Self(
+                <[u8; 32]>::try_from(bytes).map_err(|_| anyhow!("Bad length"))?,
+            )),
+            None => Err(anyhow!("Bad plutus data")),
+        }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Hash28(pub [u8; 28]);
-
-impl PData for Hash28 {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::bytes(&self.0)
-    }
-
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(v2a(plutus::unbytes(data)?)?))
+impl<'a> From<Lock> for PlutusData<'a> {
+    fn from(value: Lock) -> Self {
+        Self::bytes(value.0)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Secret(pub [u8; 32]);
 
-impl PData for Secret {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::bytes(&self.0)
-    }
+impl<'a> TryFrom<PlutusData<'a>> for Secret {
+    type Error = Error;
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(v2a(plutus::unbytes(data)?)?))
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_bytes() {
+            Some(bytes) => Ok(Self(
+                <[u8; 32]>::try_from(bytes).map_err(|_| anyhow!("Bad length"))?,
+            )),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
+}
+
+impl<'a> From<Secret> for PlutusData<'a> {
+    fn from(value: Secret) -> Self {
+        Self::bytes(value.0)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct VKey(pub [u8; 32]);
+pub struct ScriptHash(pub [u8; 28]);
 
-impl PData for VKey {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::bytes(&self.0)
+impl<'a> TryFrom<PlutusData<'a>> for ScriptHash {
+    type Error = Error;
+
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_bytes() {
+            Some(bytes) => Ok(Self(
+                <[u8; 28]>::try_from(bytes).map_err(|_| anyhow!("Bad length"))?,
+            )),
+            None => Err(anyhow!("Bad plutus data")),
+        }
     }
+}
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(v2a(plutus::unbytes(data)?)?))
+impl<'a> From<ScriptHash> for PlutusData<'a> {
+    fn from(value: ScriptHash) -> Self {
+        Self::bytes(value.0)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Vkey(pub [u8; 32]);
+
+impl<'a> TryFrom<PlutusData<'a>> for Vkey {
+    type Error = Error;
+
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_bytes() {
+            Some(bytes) => Ok(Self(
+                <[u8; 32]>::try_from(bytes).map_err(|_| anyhow!("Bad length"))?,
+            )),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
+}
+
+impl<'a> From<Vkey> for PlutusData<'a> {
+    fn from(value: Vkey) -> Self {
+        Self::bytes(value.0)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Signature(pub [u8; 64]);
 
-impl PData for Signature {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::bytes(&self.0)
-    }
+impl<'a> TryFrom<PlutusData<'a>> for Signature {
+    type Error = Error;
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(v2a(plutus::unbytes(data)?)?))
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_bytes() {
+            Some(bytes) => Ok(Self(
+                <[u8; 64]>::try_from(bytes).map_err(|_| anyhow!("Bad length"))?,
+            )),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
+}
+
+impl<'a> From<Signature> for PlutusData<'a> {
+    fn from(value: Signature) -> Self {
+        Self::bytes(value.0)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Tag(pub Vec<u8>);
 
-impl PData for Tag {
-    fn to_plutus_data(&self) -> uplc::PlutusData {
-        plutus::bytes(&self.0)
-    }
+impl<'a> TryFrom<PlutusData<'a>> for Tag {
+    type Error = Error;
 
-    fn from_plutus_data(data: &uplc::PlutusData) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self(plutus::unbytes(data)?))
+    fn try_from(pd: PlutusData<'a>) -> Result<Self> {
+        match pd.as_bytes() {
+            Some(bytes) => Ok(Self(bytes.into())),
+            None => Err(anyhow!("Bad plutus data")),
+        }
+    }
+}
+
+impl<'a> From<Tag> for PlutusData<'a> {
+    fn from(value: Tag) -> Self {
+        Self::bytes(value.0)
     }
 }

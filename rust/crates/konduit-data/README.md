@@ -1,5 +1,3 @@
-# Cardano connect
+# Konduit Data
 
-> No frills interface to Cardano
-
-Just enough to get konduit running
+> Data types for konduit

@@ -1,52 +1,48 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Error, Result};
+use cardano_tx_builder::PlutusData;
 
-use pallas_primitives::PlutusData;
-
-use super::base::{Amount, Hash32, Index, Timestamp};
-use super::plutus::{self, PData};
+use crate::base::{Amount, Index, Lock, Timestamp};
 
 #[derive(Debug, Clone)]
 pub struct ChequeBody {
     index: Index,
     amount: Amount,
     timeout: Timestamp,
-    image: Hash32,
+    lock: Lock,
 }
 
 impl ChequeBody {
-    pub fn new(index: Index, amount: Amount, timeout: Timestamp, image: Hash32) -> Self {
+    pub fn new(index: Index, amount: Amount, timeout: Timestamp, lock: Lock) -> Self {
         Self {
             index,
             amount,
             timeout,
-            image,
+            lock,
         }
     }
 }
 
-impl PData for ChequeBody {
-    fn to_plutus_data(self: &Self) -> PlutusData {
-        let data = plutus::list(&vec![
-            self.index.to_plutus_data(),
-            self.amount.to_plutus_data(),
-            self.timeout.to_plutus_data(),
-            self.image.to_plutus_data(),
-        ]);
-        data
-    }
+impl<'a> TryFrom<PlutusData<'a>> for ChequeBody {
+    type Error = Error;
 
-    fn from_plutus_data(d: &PlutusData) -> Result<ChequeBody> {
-        match &plutus::unlist(d)?[..] {
-            [a, b, c, d] => {
-                let r = Self::new(
-                    PData::from_plutus_data(a)?,
-                    PData::from_plutus_data(b)?,
-                    PData::from_plutus_data(c)?,
-                    PData::from_plutus_data(d)?,
-                );
-                Ok(r)
-            }
-            _ => Err(anyhow!("bad length")),
-        }
+    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+        let [a, b, c, d] = <[PlutusData; 4]>::try_from(&data)?;
+        Ok(Self::new(
+            Index::try_from(a)?,
+            Amount::try_from(b)?,
+            Timestamp::try_from(c)?,
+            Lock::try_from(d)?,
+        ))
+    }
+}
+
+impl<'a> From<ChequeBody> for PlutusData<'a> {
+    fn from(value: ChequeBody) -> Self {
+        Self::list(vec![
+            PlutusData::from(value.index),
+            PlutusData::from(value.amount),
+            PlutusData::from(value.timeout),
+            PlutusData::from(value.lock),
+        ])
     }
 }

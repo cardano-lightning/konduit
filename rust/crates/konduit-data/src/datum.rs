@@ -1,20 +1,19 @@
-use super::base::Hash28;
-use super::constants::Constants;
-use super::stage::Stage;
-use anyhow::anyhow;
+use anyhow::{Error, Result};
+use cardano_tx_builder::PlutusData;
 
-use pallas_primitives::PlutusData;
+use crate::base::ScriptHash;
+use crate::constants::Constants;
+use crate::stage::Stage;
 
-use super::plutus::{self, PData};
-
+#[derive(Debug, Clone)]
 pub struct Datum {
-    pub own_hash: Hash28,
+    pub own_hash: ScriptHash,
     pub constants: Constants,
     pub stage: Stage,
 }
 
 impl Datum {
-    pub fn new(own_hash: Hash28, constants: Constants, stage: Stage) -> Self {
+    pub fn new(own_hash: ScriptHash, constants: Constants, stage: Stage) -> Self {
         Self {
             own_hash,
             constants,
@@ -23,27 +22,25 @@ impl Datum {
     }
 }
 
-impl PData for Datum {
-    fn to_plutus_data(self: &Self) -> PlutusData {
-        let data = plutus::list(&vec![
-            self.own_hash.to_plutus_data(),
-            self.constants.to_plutus_data(),
-            self.stage.to_plutus_data(),
-        ]);
-        data
-    }
+impl<'a> TryFrom<PlutusData<'a>> for Datum {
+    type Error = Error;
 
-    fn from_plutus_data(d: &PlutusData) -> anyhow::Result<Datum> {
-        match &plutus::unlist(d)?[..] {
-            [a, b, c] => {
-                let r = Self::new(
-                    PData::from_plutus_data(a)?,
-                    PData::from_plutus_data(b)?,
-                    PData::from_plutus_data(c)?,
-                );
-                Ok(r)
-            }
-            _ => Err(anyhow!("bad length")),
-        }
+    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+        let [a, b, c] = <[PlutusData; 3]>::try_from(&data)?;
+        Ok(Self::new(
+            ScriptHash::try_from(a)?,
+            Constants::try_from(&b)?,
+            Stage::try_from(c)?,
+        ))
+    }
+}
+
+impl<'a> From<Datum> for PlutusData<'a> {
+    fn from(value: Datum) -> Self {
+        Self::list(vec![
+            PlutusData::from(value.own_hash),
+            PlutusData::from(value.constants),
+            PlutusData::from(value.stage),
+        ])
     }
 }

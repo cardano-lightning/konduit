@@ -1,8 +1,7 @@
-use anyhow::{Result, anyhow};
-use pallas_primitives::PlutusData;
+use anyhow::{Error, Result, anyhow};
+use cardano_tx_builder::PlutusData;
 
-use super::plutus::{self, PData, constr, constr_arr, unlist};
-use super::step::Steps;
+use crate::steps::Steps;
 
 #[derive(Debug, Clone)]
 pub enum Redeemer {
@@ -25,31 +24,33 @@ impl Redeemer {
     }
 }
 
-impl PData for Redeemer {
-    fn to_plutus_data(self: &Self) -> PlutusData {
-        match &self {
-            Redeemer::Batch => constr(0, vec![]),
-            Redeemer::Main(steps) => constr(1, steps.0.iter().map(PData::to_plutus_data).collect()),
-            Redeemer::Mutual => constr(2, vec![]),
+impl<'a> TryFrom<PlutusData<'a>> for Redeemer {
+    type Error = Error;
+
+    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+        let (xi, fields) = data.as_constr().ok_or(anyhow!("Expect constr"))?;
+        let fields = fields.collect::<Vec<PlutusData>>();
+        if xi == 0 {
+            let [] = <[PlutusData; 0]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
+            Ok(Self::new_batch())
+        } else if xi == 1 {
+            let [a] = <[PlutusData; 1]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
+            Ok(Self::new_main(Steps::try_from(&a)?))
+        } else if xi == 2 {
+            let [] = <[PlutusData; 0]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
+            Ok(Self::new_mutual())
+        } else {
+            Err(anyhow!("Bad tag"))
         }
     }
+}
 
-    fn from_plutus_data(d: &PlutusData) -> Result<Redeemer> {
-        let (constr_index, v) = &plutus::unconstr(d)?;
-        match constr_index {
-            0 => match &v[..] {
-                [] => Ok(Self::new_batch()),
-                _ => Err(anyhow!("bad length")),
-            },
-            1 => match &v[..] {
-                [a] => Ok(Self::new_main(PData::from_plutus_data(&a)?)),
-                _ => Err(anyhow!("bad length")),
-            },
-            2 => match &v[..] {
-                [] => Ok(Self::new_mutual()),
-                _ => Err(anyhow!("bad length")),
-            },
-            _ => Err(anyhow!("Bad constr tag")),
+impl<'a> From<Redeemer> for PlutusData<'a> {
+    fn from(value: Redeemer) -> Self {
+        match value {
+            Redeemer::Batch => PlutusData::constr(0, vec![]),
+            Redeemer::Main(steps) => PlutusData::constr(0, vec![PlutusData::from(steps)]),
+            Redeemer::Mutual => PlutusData::constr(0, vec![]),
         }
     }
 }

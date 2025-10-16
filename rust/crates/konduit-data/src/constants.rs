@@ -1,20 +1,18 @@
-use super::base::{Tag, TimeDelta, VKey};
-use anyhow::anyhow;
+use anyhow::{Error, Result, anyhow};
+use cardano_tx_builder::PlutusData;
 
-use pallas_primitives::PlutusData;
-
-use super::plutus::{self, PData};
+use crate::base::{Tag, TimeDelta, Vkey};
 
 #[derive(Debug, Clone)]
 pub struct Constants {
     pub tag: Tag,
-    pub add_vkey: VKey,
-    pub sub_vkey: VKey,
+    pub add_vkey: Vkey,
+    pub sub_vkey: Vkey,
     pub close_period: TimeDelta,
 }
 
 impl Constants {
-    pub fn new(tag: Tag, add_vkey: VKey, sub_vkey: VKey, close_period: TimeDelta) -> Self {
+    pub fn new(tag: Tag, add_vkey: Vkey, sub_vkey: Vkey, close_period: TimeDelta) -> Self {
         Self {
             tag,
             add_vkey,
@@ -24,29 +22,49 @@ impl Constants {
     }
 }
 
-impl PData for Constants {
-    fn to_plutus_data(self: &Self) -> PlutusData {
-        let data = plutus::list(&vec![
-            self.tag.to_plutus_data(),
-            self.add_vkey.to_plutus_data(),
-            self.sub_vkey.to_plutus_data(),
-            self.close_period.to_plutus_data(),
-        ]);
-        data
-    }
+impl<'a> TryFrom<Vec<PlutusData<'a>>> for Constants {
+    type Error = Error;
 
-    fn from_plutus_data(d: &PlutusData) -> anyhow::Result<Constants> {
-        match &plutus::unlist(d)?[..] {
-            [a, b, c, d] => {
-                let r = Self::new(
-                    PData::from_plutus_data(a)?,
-                    PData::from_plutus_data(b)?,
-                    PData::from_plutus_data(c)?,
-                    PData::from_plutus_data(d)?,
-                );
-                Ok(r)
-            }
-            _ => Err(anyhow!("bad length")),
-        }
+    fn try_from(value: Vec<PlutusData<'a>>) -> Result<Self> {
+        Self::try_from(<[PlutusData; 4]>::try_from(value).map_err(|_| anyhow!("Bad length"))?)
+    }
+}
+
+impl<'a> TryFrom<[PlutusData<'a>; 4]> for Constants {
+    type Error = Error;
+
+    fn try_from(value: [PlutusData<'a>; 4]) -> Result<Self> {
+        let [a, b, c, d] = value;
+        Ok(Self::new(
+            Tag::try_from(a)?,
+            Vkey::try_from(b)?,
+            Vkey::try_from(c)?,
+            TimeDelta::try_from(d)?,
+        ))
+    }
+}
+
+impl<'a> TryFrom<&PlutusData<'a>> for Constants {
+    type Error = Error;
+
+    fn try_from(data: &PlutusData<'a>) -> Result<Self> {
+        Self::try_from(<[PlutusData; 4]>::try_from(data)?)
+    }
+}
+
+impl<'a> From<Constants> for [PlutusData<'a>; 4] {
+    fn from(value: Constants) -> Self {
+        [
+            PlutusData::from(value.tag),
+            PlutusData::from(value.add_vkey),
+            PlutusData::from(value.sub_vkey),
+            PlutusData::from(value.close_period),
+        ]
+    }
+}
+
+impl<'a> From<Constants> for PlutusData<'a> {
+    fn from(value: Constants) -> Self {
+        Self::list(<[PlutusData; 4]>::from(value).to_vec())
     }
 }

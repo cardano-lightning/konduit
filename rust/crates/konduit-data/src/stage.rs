@@ -1,18 +1,16 @@
-use anyhow::{Result, anyhow};
-use pallas_primitives::PlutusData;
+use anyhow::{Error, Result, anyhow};
+use cardano_tx_builder::PlutusData;
 
-use super::plutus::{self, PData, constr};
-
-use super::{
+use crate::{
     base::{Amount, Timestamp},
-    pend_cheque::PendCheques,
+    pendings::Pendings,
 };
 
 #[derive(Debug, Clone)]
 pub enum Stage {
     Opened(Amount),
     Closed(Amount, Timestamp),
-    Responded(Amount, PendCheques),
+    Responded(Amount, Pendings),
 }
 
 impl Stage {
@@ -24,47 +22,48 @@ impl Stage {
         Self::Closed(amount, timeout)
     }
 
-    pub fn new_responded(amount: Amount, pends: PendCheques) -> Self {
-        Self::Responded(amount, pends)
+    pub fn new_responded(amount: Amount, pendings: Pendings) -> Self {
+        Self::Responded(amount, pendings)
     }
 }
 
-impl PData for Stage {
-    fn to_plutus_data(self: &Self) -> PlutusData {
-        match &self {
-            Stage::Opened(amount) => constr(0, vec![amount.to_plutus_data()]),
-            Stage::Closed(amount, timeout) => {
-                constr(1, vec![amount.to_plutus_data(), timeout.to_plutus_data()])
-            }
-            Stage::Responded(amount, pend_cheques) => constr(
-                2,
-                vec![amount.to_plutus_data(), pend_cheques.to_plutus_data()],
-            ),
+impl<'a> TryFrom<PlutusData<'a>> for Stage {
+    type Error = Error;
+
+    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+        let (xi, fields) = data.as_constr().ok_or(anyhow!("Expect constr"))?;
+        let fields = fields.collect::<Vec<PlutusData>>();
+        if xi == 0 {
+            let [a] = <[PlutusData; 1]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
+            Ok(Self::new_opened(Amount::try_from(a)?))
+        } else if xi == 1 {
+            let [a, b] = <[PlutusData; 2]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
+            Ok(Self::new_closed(
+                Amount::try_from(a)?,
+                Timestamp::try_from(b)?,
+            ))
+        } else if xi == 2 {
+            let [a, b] = <[PlutusData; 2]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
+            Ok(Self::new_responded(
+                Amount::try_from(a)?,
+                Pendings::try_from(&b)?,
+            ))
+        } else {
+            Err(anyhow!("Bad tag"))
         }
     }
+}
 
-    fn from_plutus_data(d: &PlutusData) -> Result<Stage> {
-        let (constr_index, v) = &plutus::unconstr(d)?;
-        match constr_index {
-            0 => match &v[..] {
-                [a] => Ok(Self::new_opened(PData::from_plutus_data(&a)?)),
-                _ => Err(anyhow!("bad length")),
-            },
-            1 => match &v[..] {
-                [a, b] => Ok(Self::new_closed(
-                    PData::from_plutus_data(&a)?,
-                    PData::from_plutus_data(&b)?,
-                )),
-                _ => Err(anyhow!("bad length")),
-            },
-            2 => match &v[..] {
-                [a, b] => Ok(Self::new_responded(
-                    PData::from_plutus_data(&a)?,
-                    PData::from_plutus_data(&b)?,
-                )),
-                _ => Err(anyhow!("bad length")),
-            },
-            _ => Err(anyhow!("Bad constr tag")),
+impl<'a> From<Stage> for PlutusData<'a> {
+    fn from(value: Stage) -> Self {
+        match value {
+            Stage::Opened(a) => PlutusData::constr(0, vec![PlutusData::from(a)]),
+            Stage::Closed(a, b) => {
+                PlutusData::constr(1, vec![PlutusData::from(a), PlutusData::from(b)])
+            }
+            Stage::Responded(a, b) => {
+                PlutusData::constr(2, vec![PlutusData::from(a), PlutusData::from(b)])
+            }
         }
     }
 }
