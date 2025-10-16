@@ -31,41 +31,41 @@ impl fmt::Display for RedeemerPointer {
 // --------------------------------------------------------------------- Building
 
 impl RedeemerPointer {
-    pub fn mint(index: u32) -> Self {
+    pub fn from_mint(index: u32) -> Self {
         RedeemerPointer(pallas::RedeemersKey {
             tag: pallas::RedeemerTag::Mint,
             index,
         })
     }
 
-    pub fn spend(index: u32) -> Self {
+    pub fn from_spend(index: u32) -> Self {
         RedeemerPointer(pallas::RedeemersKey {
             tag: pallas::RedeemerTag::Spend,
             index,
         })
     }
-    pub fn withdraw(index: u32) -> Self {
+    pub fn from_withdraw(index: u32) -> Self {
         RedeemerPointer(pallas::RedeemersKey {
             tag: pallas::RedeemerTag::Reward,
             index,
         })
     }
 
-    pub fn publish(index: u32) -> Self {
+    pub fn from_publish(index: u32) -> Self {
         RedeemerPointer(pallas::RedeemersKey {
             tag: pallas::RedeemerTag::Cert,
             index,
         })
     }
 
-    pub fn vote(index: u32) -> Self {
+    pub fn from_vote(index: u32) -> Self {
         RedeemerPointer(pallas::RedeemersKey {
             tag: pallas::RedeemerTag::Vote,
             index,
         })
     }
 
-    pub fn propose(index: u32) -> Self {
+    pub fn from_propose(index: u32) -> Self {
         RedeemerPointer(pallas::RedeemersKey {
             tag: pallas::RedeemerTag::Propose,
             index,

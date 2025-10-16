@@ -13,8 +13,8 @@ use std::fmt;
 ///
 /// ```rust
 /// # use cardano_tx_builder::{NetworkId};
-/// assert_eq!(u8::from(NetworkId::testnet()), 0);
-/// assert_eq!(u8::from(NetworkId::mainnet()), 1);
+/// assert_eq!(u8::from(NetworkId::TESTNET), 0);
+/// assert_eq!(u8::from(NetworkId::MAINNET), 1);
 /// ```
 ///
 /// ```rust
@@ -39,13 +39,8 @@ impl fmt::Display for NetworkId {
 // -------------------------------------------------------------------- Building
 
 impl NetworkId {
-    pub fn mainnet() -> Self {
-        Self(pallas::NetworkId::Mainnet)
-    }
-
-    pub fn testnet() -> Self {
-        Self(pallas::NetworkId::Testnet)
-    }
+    pub const MAINNET: Self = Self(pallas::NetworkId::Mainnet);
+    pub const TESTNET: Self = Self(pallas::NetworkId::Testnet);
 }
 
 // ------------------------------------------------------------------ Inspecting
@@ -121,12 +116,12 @@ pub mod tests {
 
     #[test]
     fn display_testnet() {
-        assert_eq!(NetworkId::testnet().to_string(), "testnet")
+        assert_eq!(NetworkId::TESTNET.to_string(), "testnet")
     }
 
     #[test]
     fn display_mainnet() {
-        assert_eq!(NetworkId::mainnet().to_string(), "mainnet")
+        assert_eq!(NetworkId::MAINNET.to_string(), "mainnet")
     }
 
     // -------------------------------------------------------------- Generators
@@ -137,9 +132,9 @@ pub mod tests {
         prop_compose! {
             pub fn network_id()(is_testnet in any::<bool>()) -> NetworkId {
                 if is_testnet {
-                    NetworkId::testnet()
+                    NetworkId::TESTNET
                 } else {
-                    NetworkId::mainnet()
+                    NetworkId::MAINNET
                 }
             }
         }

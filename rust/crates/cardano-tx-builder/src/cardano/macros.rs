@@ -99,7 +99,7 @@ macro_rules! address {
         let address = $crate::Address::<$crate::address::kind::Any>::try_from($text).unwrap();
         if address
             .as_shelley()
-            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::mainnet())
+            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::MAINNET)
         {
             panic!("network mismatch for address {}", $text);
         }
@@ -107,11 +107,11 @@ macro_rules! address {
     }};
 
     ($payment:expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::mainnet(), $payment)
+        $crate::Address::new($crate::NetworkId::MAINNET, $payment)
     };
 
     ($payment:expr, $delegation: expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::mainnet(), $payment).with_delegation($delegation)
+        $crate::Address::new($crate::NetworkId::MAINNET, $payment).with_delegation($delegation)
     };
 }
 
@@ -158,7 +158,7 @@ macro_rules! address_test {
         let address = $crate::Address::<$crate::address::kind::Any>::try_from($text).unwrap();
         if address
             .as_shelley()
-            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::testnet())
+            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::TESTNET)
         {
             panic!("network mismatch for address {}", $text);
         }
@@ -166,11 +166,11 @@ macro_rules! address_test {
     }};
 
     ($payment:expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::testnet(), $payment)
+        $crate::Address::new($crate::NetworkId::TESTNET, $payment)
     };
 
     ($payment:expr, $delegation: expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::testnet(), $payment).with_delegation($delegation)
+        $crate::Address::new($crate::NetworkId::TESTNET, $payment).with_delegation($delegation)
     };
 }
 
@@ -252,7 +252,7 @@ macro_rules! key_credential {
 /// ```rust
 /// # use cardano_tx_builder::{address, output};
 /// assert_eq!(
-///   output!(address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")).to_string(),
+///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h").to_string(),
 ///   "Output { \
 ///      address: addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h, \
 ///      value: Value { lovelace: 857690 } \
@@ -264,7 +264,7 @@ macro_rules! key_credential {
 /// # use cardano_tx_builder::{address, output, value};
 /// assert_eq!(
 ///   output!(
-///     address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h"),
+///     "addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h",
 ///     value!(
 ///         123456789,
 ///         (

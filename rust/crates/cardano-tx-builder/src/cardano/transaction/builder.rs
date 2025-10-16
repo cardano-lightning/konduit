@@ -58,7 +58,7 @@ impl Transaction<state::InConstruction> {
     /// // The available UTxO, typically fetched from a blockchain provider or an indexer.
     /// let resolved_inputs = BTreeMap::from([
     ///   (
-    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1).0,
+    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
     ///     output!(
     ///       "addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47",
     ///       value!(10_000_000),
@@ -71,7 +71,7 @@ impl Transaction<state::InConstruction> {
     /// assert_eq!(
     ///   Transaction::build(&ProtocolParameters::mainnet(), &resolved_inputs, |tx| tx
     ///     .with_inputs(vec![
-    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
+    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1, _),
     ///     ])
     ///     .with_outputs(vec![
     ///       output!("addr1wyhcwt6h7mf6rlaqadmhh5awnyd44t7v4lju5ur430fk4xczzq8aw"),
@@ -106,7 +106,7 @@ impl Transaction<state::InConstruction> {
     /// # use std::collections::btree_map::BTreeMap;
     /// let resolved_inputs = BTreeMap::from([
     ///   (
-    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1).0,
+    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
     ///     output!(
     ///       "addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47",
     ///       value!(10_000_000),
@@ -118,10 +118,10 @@ impl Transaction<state::InConstruction> {
     /// assert_eq!(
     ///   Transaction::build(&ProtocolParameters::mainnet(), &resolved_inputs, |tx| tx
     ///     .with_inputs(vec![
-    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
+    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1, _),
     ///     ])
     ///     .with_collaterals(vec![
-    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1).0,
+    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
     ///     ])
     ///     .with_change_strategy(ChangeStrategy::as_last_output(
     ///       address!("addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47"),
