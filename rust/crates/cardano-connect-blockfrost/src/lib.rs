@@ -3,7 +3,7 @@ use futures::stream::{self, StreamExt};
 use std::collections::BTreeMap;
 
 use cardano_tx_builder::{
-    Address, Credential, InlineDatum, Input, Output, PlutusData, PlutusScript, PlutusVersion,
+    Address, Credential, Input, Output, PlutusData, PlutusScript, PlutusVersion,
     ProtocolParameters, Value, address::kind, cbor,
 };
 
@@ -28,8 +28,6 @@ pub struct Blockfrost {
     network: Network,
     project_id: String,
 }
-
-type Datum = InlineDatum;
 
 impl Blockfrost {
     pub fn new(project_id: String) -> Self {
@@ -60,7 +58,7 @@ impl Blockfrost {
             .ok_or(anyhow!("Expect key `cbor`"))?
             .as_str()
             .ok_or(anyhow!("Expect value to be string"))?;
-        plutus_data_from_inline(&data)
+        Ok(cbor::decode(&hex::decode(&data)?)?)
     }
 
     pub async fn resolve_utxo(&self, bf_utxo: AddressUtxoContentInner) -> Result<(Input, Output)> {
@@ -74,7 +72,7 @@ impl Blockfrost {
             from_tx_content_output_amounts(&bf_utxo.amount[..])?,
         );
         if let Some(inline_datum) = &bf_utxo.inline_datum {
-            output = output.with_datum(plutus_data_from_inline(inline_datum)?);
+            output = output.with_datum(plutus_data_from_inline(&inline_datum)?);
         } else if let Some(datum_hash) = &bf_utxo.data_hash {
             let datum = self.resolve_datum_hash(datum_hash).await?;
             output = output.with_datum(datum);
@@ -229,7 +227,7 @@ impl CardanoConnect for Blockfrost {
     }
 }
 
-pub fn plutus_data_from_inline(inline_datum: &str) -> Result<PlutusData> {
+pub fn plutus_data_from_inline<'a>(inline_datum: &str) -> Result<PlutusData<'a>> {
     Ok(cbor::decode(&hex::decode(inline_datum)?)?)
 }
 
