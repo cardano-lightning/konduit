@@ -25,7 +25,7 @@
 /// ```
 #[macro_export]
 macro_rules! hash {
-    ($txt:expr $(,)?) => {
+    ($txt:literal $(,)?) => {
         <$crate::Hash<_>>::try_from($txt).unwrap()
     };
 }
@@ -34,19 +34,23 @@ macro_rules! hash {
 /// Construct [`Input`](crate::Input) from base16-encoded text strings & plain numbers.
 ///
 /// The macro is variadic. It always requires a [`Hash<32>`](crate::Hash) for transaction id, and a
-/// [`u64`] index. It may also take in an optional [`PlutusData`](crate::PlutusData) redeemer in
-/// cases where the input is spending from a script.
+/// [`u64`] index. It may also take in an optional [`PlutusData`](crate::PlutusData) redeemer or
+/// '_' to indicate none, in cases where the input is spending from a script.
 macro_rules! input {
-    ($id:expr, $index:expr $(,)?) => {
+    ($id:literal, $index:expr $(,)?) => {
+        $crate::Input::new(<$crate::Hash<32>>::try_from($id).unwrap(), $index)
+    };
+
+    ($id:literal, $index:expr, _ $(,)?) => {
         (
             $crate::Input::new(<$crate::Hash<32>>::try_from($id).unwrap(), $index),
-            None::<$crate::PlutusData>,
+            None,
         )
     };
 
-    ($id:expr, $index:expr, $redeemer:expr $(,)?) => {
+    ($id:literal, $index:expr, $redeemer:expr $(,)?) => {
         (
-            $crate::Input::new(<$crate::Hash<32>>::try_from($tx_hex).unwrap(), $index),
+            $crate::Input::new(<$crate::Hash<32>>::try_from($id).unwrap(), $index),
             Some($redeemer),
         )
     };
@@ -95,7 +99,7 @@ macro_rules! address {
         let address = $crate::Address::<$crate::address::kind::Any>::try_from($text).unwrap();
         if address
             .as_shelley()
-            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::mainnet())
+            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::MAINNET)
         {
             panic!("network mismatch for address {}", $text);
         }
@@ -103,11 +107,11 @@ macro_rules! address {
     }};
 
     ($payment:expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::mainnet(), $payment)
+        $crate::Address::new($crate::NetworkId::MAINNET, $payment)
     };
 
     ($payment:expr, $delegation: expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::mainnet(), $payment).with_delegation($delegation)
+        $crate::Address::new($crate::NetworkId::MAINNET, $payment).with_delegation($delegation)
     };
 }
 
@@ -154,7 +158,7 @@ macro_rules! address_test {
         let address = $crate::Address::<$crate::address::kind::Any>::try_from($text).unwrap();
         if address
             .as_shelley()
-            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::testnet())
+            .is_some_and(|shelley| shelley.network_id() != $crate::NetworkId::TESTNET)
         {
             panic!("network mismatch for address {}", $text);
         }
@@ -162,11 +166,11 @@ macro_rules! address_test {
     }};
 
     ($payment:expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::testnet(), $payment)
+        $crate::Address::new($crate::NetworkId::TESTNET, $payment)
     };
 
     ($payment:expr, $delegation: expr $(,)?) => {
-        $crate::Address::new($crate::NetworkId::testnet(), $payment).with_delegation($delegation)
+        $crate::Address::new($crate::NetworkId::TESTNET, $payment).with_delegation($delegation)
     };
 }
 
@@ -197,7 +201,7 @@ macro_rules! address_test {
 /// ```
 #[macro_export]
 macro_rules! script_credential {
-    ($hash:expr $(,)?) => {
+    ($hash:literal $(,)?) => {
         $crate::Credential::from_script(<$crate::Hash<28>>::try_from($hash).unwrap())
     };
 }
@@ -229,7 +233,7 @@ macro_rules! script_credential {
 /// ```
 #[macro_export]
 macro_rules! key_credential {
-    ($hash:expr $(,)?) => {
+    ($hash:literal $(,)?) => {
         $crate::Credential::from_key(<$crate::Hash<28>>::try_from($hash).unwrap())
     };
 }
@@ -248,7 +252,7 @@ macro_rules! key_credential {
 /// ```rust
 /// # use cardano_tx_builder::{address, output};
 /// assert_eq!(
-///   output!(address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h")).to_string(),
+///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h").to_string(),
 ///   "Output { \
 ///      address: addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h, \
 ///      value: Value { lovelace: 857690 } \
@@ -260,7 +264,7 @@ macro_rules! key_credential {
 /// # use cardano_tx_builder::{address, output, value};
 /// assert_eq!(
 ///   output!(
-///     address!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h"),
+///     "addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h",
 ///     value!(
 ///         123456789,
 ///         (
@@ -281,11 +285,11 @@ macro_rules! key_credential {
 /// ```
 #[macro_export]
 macro_rules! output {
-    ($addr:expr $(,)?) => {
+    ($addr:literal $(,)?) => {
         $crate::Output::to($crate::Address::try_from($addr).unwrap())
     };
 
-    ($addr:expr, $value:expr $(,)?) => {
+    ($addr:literal, $value:expr $(,)?) => {
         $crate::Output::new($crate::Address::try_from($addr).unwrap(), $value)
     };
 }
@@ -304,8 +308,24 @@ macro_rules! output {
 /// ```
 #[macro_export]
 macro_rules! plutus_script {
-    ($lang:expr, $bytes:expr $(,)?) => {
+    ($lang:expr, $bytes:literal $(,)?) => {
         $crate::PlutusScript::new($lang, hex::decode($bytes).unwrap())
+    };
+}
+
+/// Construct a [`PlutusData`](crate::PlutusData) from a serialised CBOR hex-encoded string.
+///
+/// See also:
+///
+/// - [`PlutusData::integer`](crate::PlutusData::integer)
+/// - [`PlutusData::bytes`](crate::PlutusData::bytes)
+/// - [`PlutusData::list`](crate::PlutusData::list)
+/// - [`PlutusData::map`](crate::PlutusData::map)
+/// - [`PlutusData::constr`](crate::PlutusData::constr)
+#[macro_export]
+macro_rules! plutus_data {
+    ($bytes:literal $(,)?) => {
+        $crate::cbor::decode::<$crate::PlutusData>(hex::decode($bytes).unwrap().as_slice()).unwrap()
     };
 }
 

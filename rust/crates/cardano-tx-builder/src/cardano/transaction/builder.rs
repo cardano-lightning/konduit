@@ -58,7 +58,7 @@ impl Transaction<state::InConstruction> {
     /// // The available UTxO, typically fetched from a blockchain provider or an indexer.
     /// let resolved_inputs = BTreeMap::from([
     ///   (
-    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1).0,
+    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
     ///     output!(
     ///       "addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47",
     ///       value!(10_000_000),
@@ -71,7 +71,7 @@ impl Transaction<state::InConstruction> {
     /// assert_eq!(
     ///   Transaction::build(&ProtocolParameters::mainnet(), &resolved_inputs, |tx| tx
     ///     .with_inputs(vec![
-    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
+    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1, _),
     ///     ])
     ///     .with_outputs(vec![
     ///       output!("addr1wyhcwt6h7mf6rlaqadmhh5awnyd44t7v4lju5ur430fk4xczzq8aw"),
@@ -106,7 +106,7 @@ impl Transaction<state::InConstruction> {
     /// # use std::collections::btree_map::BTreeMap;
     /// let resolved_inputs = BTreeMap::from([
     ///   (
-    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1).0,
+    ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
     ///     output!(
     ///       "addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47",
     ///       value!(10_000_000),
@@ -118,10 +118,10 @@ impl Transaction<state::InConstruction> {
     /// assert_eq!(
     ///   Transaction::build(&ProtocolParameters::mainnet(), &resolved_inputs, |tx| tx
     ///     .with_inputs(vec![
-    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
+    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1, _),
     ///     ])
     ///     .with_collaterals(vec![
-    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1).0,
+    ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
     ///     ])
     ///     .with_change_strategy(ChangeStrategy::as_last_output(
     ///       address!("addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47"),
@@ -429,7 +429,7 @@ mod tests {
     use crate::{
         Address, ChangeStrategy, Input, Output, PlutusData, PlutusScript, PlutusVersion,
         ProtocolParameters, Transaction, address, address::kind::*, address_test, assets,
-        cbor::ToCbor, input, output, plutus_script, script_credential, value,
+        cbor::ToCbor, hash, input, output, plutus_data, plutus_script, script_credential, value,
     };
     use std::{cell::LazyCell, collections::BTreeMap, sync::LazyLock};
 
@@ -449,13 +449,131 @@ mod tests {
         LazyCell::new(|| plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69"));
 
     #[test]
+    fn spend_from_datum_hash() {
+        let always_succeed_script = ALWAYS_SUCCEED_SCRIPT;
+        let always_succeed_address = ALWAYS_SUCCEED_ADDRESS;
+
+        let resolved_inputs = [
+            (
+                input!(
+                    "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
+                    0,
+                ),
+                Output::new(always_succeed_address.clone(), value!(102049379)).with_datum_hash(
+                    hash!("747a61e363e1fbee6a0ce234320a55bae7262ed62aa7e979d5d390339be3dd18"),
+                ),
+            ),
+            (
+                input!(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                    1,
+                ),
+                output!(
+                    "addr1vxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytckt7nh9",
+                    value!(10000000),
+                ),
+            ),
+        ];
+
+        // With a missing datum hash.
+        let result = Transaction::build(
+            &FIXTURE_PROTOCOL_PARAMETERS,
+            &BTreeMap::from(resolved_inputs.clone()),
+            |tx| {
+                tx.with_inputs(vec![input!(
+                    "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
+                    0,
+                    PlutusData::list([]),
+                )])
+                .with_collaterals(vec![input!(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                    1
+                )])
+                .with_change_strategy(ChangeStrategy::as_last_output(
+                    address!("addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c")
+                ))
+                .with_plutus_scripts(vec![always_succeed_script.clone()])
+                .ok()
+            },
+        );
+
+        let debug = format!("{result:#?}");
+
+        assert!(
+            result.is_err_and(|e| e.to_string().contains("MissingRequiredDatum")),
+            "{debug}",
+        );
+
+        // Providing the datum hash
+        let result = Transaction::build(
+            &FIXTURE_PROTOCOL_PARAMETERS,
+            &BTreeMap::from(resolved_inputs.clone()),
+            |tx| {
+                tx.with_inputs(vec![input!(
+                    "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
+                    0,
+                    PlutusData::list([]),
+                )])
+                .with_collaterals(vec![input!(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                    1
+                )])
+                .with_change_strategy(ChangeStrategy::as_last_output(
+                    address!("addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c")
+                ))
+                .with_plutus_scripts(vec![always_succeed_script.clone()])
+                .with_datums(vec![
+                    plutus_data!(
+                        "d8799fd8799fd87a9f581c1eae96baf29e27682ea3f815aba361a0c\
+                         6059d45e4bfbe95bbd2f44affffd8799f4040ffd8799f581cf66d78\
+                         b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b6988044694\
+                         55448ff1a9deac9cb1b00000033accac2401a02311bec18641864d8\
+                         799f190e52ffd87980ff"
+                    )
+                ])
+                .ok()
+            },
+        );
+
+        assert_eq!(
+            result
+                .map(|tx| tx.to_string())
+                .unwrap_or_else(|e| e.to_string()),
+            "Transaction (id = 3bd44ee7393607ab23ac97bc0928cce42edf7316195d301308fc346877d8a55d) { \
+                inputs: [Input(d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50#0)], \
+                outputs: [\
+                    Output { \
+                        address: addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c, \
+                        value: Value { lovelace: 101870870 } \
+                    }\
+                ], \
+                fee: 178509, \
+                script_integrity_hash: 3b2ff5d0ea6d2fa720d12f01d71e015306d77524c750df84b2106bbe0919a4e2, \
+                collaterals: [Input(0000000000000000000000000000000000000000000000000000000000000000#1)], \
+                collateral_return: Output { address: addr1vxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytckt7nh9, value: Value { lovelace: 9732236 } }, \
+                total_collateral: 267764, \
+                scripts: [v3(bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777)], \
+                datums: [\
+                    CBOR(d8799fd8799fd87a9f581c1eae96baf29e27682ea3f815aba361a0c\
+                         6059d45e4bfbe95bbd2f44affffd8799f4040ffd8799f581cf66d78\
+                         b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b6988044694\
+                         55448ff1a9deac9cb1b00000033accac2401a02311bec18641864d8\
+                         799f190e52ffd87980ff)\
+                ], \
+                redeemers: {\
+                    Spend(0): Redeemer(CBOR(80), ExecutionUnits { mem: 1601, cpu: 316149 })\
+                } \
+            }"
+        );
+    }
+
+    #[test]
     fn min_lovelace_value_with_nft() {
         let resolved_inputs = [(
             input!(
                 "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
                 0
-            )
-            .0,
+            ),
             output!(
                 "addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c",
                 value!(
@@ -475,7 +593,8 @@ mod tests {
             |tx| {
                 tx.with_inputs(vec![input!(
                     "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
-                    0
+                    0,
+                    _
                 )])
                 .with_outputs(vec![
                     output!("addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c").with_assets(
@@ -511,8 +630,7 @@ mod tests {
             input!(
                 "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
                 3
-            )
-            .0,
+            ),
             Output::new(my_address.clone(), value!(11875000)),
         )]);
 
@@ -521,7 +639,8 @@ mod tests {
             Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
                 tx.with_inputs(vec![input!(
                     "c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324",
-                    3
+                    3,
+                    _
                 )])
                 .with_outputs(vec![
                     Output::to(my_address.clone())

@@ -93,20 +93,20 @@ enum AddressKind {
 
 impl Address<kind::Shelley> {
     /// See also [`address!`](crate::address!)/[`address_test!`](crate::address_test!)
-    pub fn new(network: NetworkId, payment_credential: Credential) -> Self {
+    pub fn new(network: NetworkId, payment: Credential) -> Self {
         Self::from(pallas::ShelleyAddress::new(
             pallas::Network::from(network),
-            pallas::ShelleyPaymentPart::from(payment_credential),
+            pallas::ShelleyPaymentPart::from(payment),
             pallas::ShelleyDelegationPart::Null,
         ))
     }
 
     /// See also [`address!`](crate::address!)/[`address_test!`](crate::address_test!)
-    pub fn with_delegation(mut self, delegation_credential: Credential) -> Self {
+    pub fn with_delegation(mut self, delegation: Credential) -> Self {
         self = Self::from(pallas::ShelleyAddress::new(
             pallas::Network::from(self.network_id()),
-            pallas::ShelleyPaymentPart::from(self.payment_credential()),
-            pallas::ShelleyDelegationPart::from(delegation_credential),
+            pallas::ShelleyPaymentPart::from(self.payment()),
+            pallas::ShelleyDelegationPart::from(delegation),
         ));
 
         self
@@ -130,11 +130,11 @@ impl Address<kind::Shelley> {
         NetworkId::from(self.cast().network())
     }
 
-    pub fn payment_credential(&self) -> Credential {
+    pub fn payment(&self) -> Credential {
         Credential::from(self.cast().payment())
     }
 
-    pub fn delegation_credential(&self) -> Option<Credential> {
+    pub fn delegation(&self) -> Option<Credential> {
         Credential::try_from(self.cast().delegation()).ok()
     }
 }
@@ -144,7 +144,7 @@ impl Address<kind::Shelley> {
 impl Default for Address<kind::Any> {
     fn default() -> Self {
         Self::from(
-            Address::new(NetworkId::mainnet(), Credential::default())
+            Address::new(NetworkId::MAINNET, Credential::default())
                 .with_delegation(Credential::default()),
         )
     }
