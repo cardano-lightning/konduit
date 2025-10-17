@@ -12,8 +12,8 @@ pub enum Network {
 impl From<Network> for NetworkId {
     fn from(network: Network) -> NetworkId {
         match network {
-            Network::Mainnet => NetworkId::mainnet(),
-            _ => NetworkId::testnet(),
+            Network::Mainnet => NetworkId::MAINNET,
+            _ => NetworkId::TESTNET,
         }
     }
 }

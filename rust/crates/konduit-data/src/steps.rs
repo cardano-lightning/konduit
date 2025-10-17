@@ -13,7 +13,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Steps {
         let list = data.as_list().ok_or(anyhow!("Expect list"))?;
         let inner = list
             .into_iter()
-            .map(|x| Step::try_from(x))
+            .map(Step::try_from)
             .collect::<Result<Vec<Step>>>()?;
         Ok(Steps(inner))
     }

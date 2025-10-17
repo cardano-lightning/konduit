@@ -13,7 +13,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Unpends {
             .into_iter()
             .map(|x| {
                 x.as_bytes()
-                    .and_then(|x| Some(x.to_vec()))
+                    .map(|x| x.to_vec())
                     .ok_or(anyhow!("Expect bytes"))
             })
             .collect::<Result<Vec<Vec<u8>>>>()?;
@@ -23,6 +23,6 @@ impl<'a> TryFrom<&PlutusData<'a>> for Unpends {
 
 impl<'a> From<Unpends> for PlutusData<'a> {
     fn from(value: Unpends) -> Self {
-        Self::list(value.0.into_iter().map(|x| Self::bytes(x)))
+        Self::list(value.0.into_iter().map(Self::bytes))
     }
 }

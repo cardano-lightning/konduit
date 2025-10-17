@@ -13,7 +13,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for MixedCheques {
         let list = data.as_list().ok_or(anyhow!("Expect list"))?;
         let inner = list
             .into_iter()
-            .map(|x| MixedCheque::try_from(x))
+            .map(MixedCheque::try_from)
             .collect::<Result<Vec<MixedCheque>>>()?;
         Ok(MixedCheques(inner))
     }

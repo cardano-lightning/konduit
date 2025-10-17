@@ -49,7 +49,7 @@ impl Blockfrost {
         }
     }
 
-    pub async fn resolve_datum_hash(&self, datum_hash: &str) -> Result<PlutusData> {
+    pub async fn resolve_datum_hash(&self, datum_hash: &str) -> Result<PlutusData<'static>> {
         let x = self.api.scripts_datum_hash_cbor(datum_hash).await?;
         let data = x
             .as_object()
@@ -58,7 +58,7 @@ impl Blockfrost {
             .ok_or(anyhow!("Expect key `cbor`"))?
             .as_str()
             .ok_or(anyhow!("Expect value to be string"))?;
-        Ok(cbor::decode(&hex::decode(&data)?)?)
+        Ok(cbor::decode(&hex::decode(data)?)?)
     }
 
     pub async fn resolve_utxo(&self, bf_utxo: AddressUtxoContentInner) -> Result<(Input, Output)> {
@@ -72,13 +72,13 @@ impl Blockfrost {
             from_tx_content_output_amounts(&bf_utxo.amount[..])?,
         );
         if let Some(inline_datum) = &bf_utxo.inline_datum {
-            output = output.with_datum(plutus_data_from_inline(&inline_datum)?);
+            output = output.with_datum(plutus_data_from_inline(inline_datum)?);
         } else if let Some(datum_hash) = &bf_utxo.data_hash {
             let datum = self.resolve_datum_hash(datum_hash).await?;
             output = output.with_datum(datum);
         }
         if let Some(script_hash) = &bf_utxo.reference_script_hash {
-            let script = self.resolve_script(&script_hash).await?;
+            let script = self.resolve_script(script_hash).await?;
             output = output.with_plutus_script(script);
         };
         Ok((input, output))
@@ -95,7 +95,7 @@ impl Blockfrost {
     pub async fn scripts_hash_cbor(&self, script_hash: &str) -> Result<Vec<u8>> {
         let response = self
             .client
-            .get(&format!("{}/scripts/{}", self.base_url, script_hash))
+            .get(format!("{}/scripts/{}", self.base_url, script_hash))
             .header("Accept", "application/json")
             .header("project_id", self.project_id.as_str())
             .send()
@@ -115,7 +115,7 @@ impl Blockfrost {
     pub async fn plutus_version(&self, script_hash: &str) -> Result<PlutusVersion> {
         let response = self
             .client
-            .get(&format!("{}/scripts/{}/cbor", self.base_url, script_hash))
+            .get(format!("{}/scripts/{}/cbor", self.base_url, script_hash))
             .header("Accept", "application/json")
             .header("project_id", self.project_id.as_str())
             .send()
@@ -227,7 +227,7 @@ impl CardanoConnect for Blockfrost {
     }
 }
 
-pub fn plutus_data_from_inline<'a>(inline_datum: &str) -> Result<PlutusData<'a>> {
+pub fn plutus_data_from_inline(inline_datum: &str) -> Result<PlutusData<'static>> {
     Ok(cbor::decode(&hex::decode(inline_datum)?)?)
 }
 

@@ -1,5 +1,4 @@
 use cardano_connect::CardanoConnect;
-use cardano_connect_blockfrost;
 use cardano_tx_builder::address_test;
 use tokio::runtime::Runtime;
 
@@ -12,7 +11,7 @@ fn main() {
     rt.block_on(async {
         println!(
             "{:?}",
-            conn.utxos_at(&address.as_shelley().unwrap().payment_credential(), &None,)
+            conn.utxos_at(&address.as_shelley().unwrap().payment(), &None,)
                 .await
         );
     })
