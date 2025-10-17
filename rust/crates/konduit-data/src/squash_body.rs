@@ -8,9 +8,9 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct SquashBody {
-    amount: Amount,
-    index: Index,
-    exclude: Exclude,
+    pub amount: Amount,
+    pub index: Index,
+    pub exclude: Exclude,
 }
 
 impl SquashBody {

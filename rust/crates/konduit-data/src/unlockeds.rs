@@ -1,9 +1,26 @@
 use cardano_tx_builder::PlutusData;
 
-use crate::unlocked::Unlocked;
+use crate::{
+    base::{Amount, Timestamp},
+    unlocked::Unlocked,
+};
 
 #[derive(Debug, Clone)]
 pub struct Unlockeds(pub Vec<Unlocked>);
+
+impl Unlockeds {
+    pub fn amount(&self) -> Amount {
+        Amount(self.0.iter().map(|x| x.cheque_body.amount.0).sum())
+    }
+
+    pub fn max_timeout(&self) -> Option<Timestamp> {
+        self.0
+            .iter()
+            .map(|x| x.cheque_body.timeout.0)
+            .max()
+            .map(Timestamp)
+    }
+}
 
 impl<'a> TryFrom<&PlutusData<'a>> for Unlockeds {
     type Error = anyhow::Error;

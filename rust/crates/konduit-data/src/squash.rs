@@ -1,7 +1,7 @@
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
 
-use crate::base::Signature;
+use crate::base::{Amount, Signature};
 use crate::squash_body::SquashBody;
 
 #[derive(Debug, Clone)]
@@ -16,6 +16,10 @@ impl Squash {
             squash_body,
             signature,
         }
+    }
+
+    pub fn amount(&self) -> Amount {
+        self.squash_body.amount.clone()
     }
 }
 

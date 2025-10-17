@@ -1,6 +1,6 @@
 use cardano_tx_builder::PlutusData;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Index(pub u64);
 

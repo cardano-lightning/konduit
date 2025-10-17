@@ -26,3 +26,17 @@ impl<'a> From<Unpends> for PlutusData<'a> {
         Self::list(value.0.into_iter().map(Self::bytes))
     }
 }
+
+impl Unpends {
+    // TODO :: I'm pretty sure we support this
+    pub fn truncate(mut self) -> Self {
+        while let Some(last) = self.0.last() {
+            if last.is_empty() {
+                self.0.pop();
+            } else {
+                break;
+            }
+        }
+        self
+    }
+}

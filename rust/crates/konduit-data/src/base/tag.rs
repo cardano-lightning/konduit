@@ -1,6 +1,6 @@
 use cardano_tx_builder::PlutusData;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Tag(pub Vec<u8>);
 

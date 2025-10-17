@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Amount(pub u64);
 

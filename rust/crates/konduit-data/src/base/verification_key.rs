@@ -1,6 +1,8 @@
 use cardano_tx_builder::PlutusData;
 
-#[derive(Debug, Clone, Copy)]
+use crate::crypto::blake2b_224;
+
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct VerificationKey(pub [u8; 32]);
 
@@ -25,5 +27,11 @@ impl<'a> TryFrom<PlutusData<'a>> for VerificationKey {
 impl<'a> From<VerificationKey> for PlutusData<'a> {
     fn from(value: VerificationKey) -> Self {
         Self::bytes(value.0)
+    }
+}
+
+impl VerificationKey {
+    pub fn hash(&self) -> [u8; 28] {
+        blake2b_224(&self.0)
     }
 }

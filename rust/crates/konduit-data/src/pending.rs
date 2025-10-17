@@ -5,9 +5,9 @@ use crate::base::{Amount, Lock, Timestamp};
 
 #[derive(Debug, Clone)]
 pub struct Pending {
-    amount: Amount,
-    timeout: Timestamp,
-    lock: Lock,
+    pub amount: Amount,
+    pub timeout: Timestamp,
+    pub lock: Lock,
 }
 
 impl Pending {

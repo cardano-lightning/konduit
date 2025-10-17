@@ -1,8 +1,17 @@
 use cardano_tx_builder::PlutusData;
+use sha2::{Digest, Sha256};
 
-#[derive(Debug, Clone, Copy)]
+use crate::base::Secret;
+
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Lock(pub [u8; 32]);
+
+impl Lock {
+    pub fn from_secret(s: Secret) -> Self {
+        Self(Sha256::digest(s.0).into())
+    }
+}
 
 impl<'a> TryFrom<&PlutusData<'a>> for Lock {
     type Error = anyhow::Error;

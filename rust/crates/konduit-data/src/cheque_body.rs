@@ -5,10 +5,10 @@ use crate::base::{Amount, Index, Lock, Timestamp};
 
 #[derive(Debug, Clone)]
 pub struct ChequeBody {
-    index: Index,
-    amount: Amount,
-    timeout: Timestamp,
-    lock: Lock,
+    pub index: Index,
+    pub amount: Amount,
+    pub timeout: Timestamp,
+    pub lock: Lock,
 }
 
 impl ChequeBody {

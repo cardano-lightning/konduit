@@ -3,7 +3,7 @@ use cardano_tx_builder::PlutusData;
 
 use crate::base::{Tag, TimeDelta, VerificationKey};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Constants {
     pub tag: Tag,
     pub add_vkey: VerificationKey,

@@ -2,6 +2,7 @@ pub mod base;
 pub mod cheque;
 pub mod cheque_body;
 pub mod constants;
+pub mod crypto;
 pub mod datum;
 pub mod exclude;
 pub mod mixed_cheque;

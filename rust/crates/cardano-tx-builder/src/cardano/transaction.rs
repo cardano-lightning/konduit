@@ -142,6 +142,19 @@ impl Transaction<state::InConstruction> {
         self
     }
 
+    pub fn with_specified_signatories(
+        &mut self,
+        verification_key_hashes: impl IntoIterator<Item = Hash<28>>,
+    ) -> &mut Self {
+        self.inner.transaction_body.required_signers = pallas::NonEmptySet::from_vec(
+            verification_key_hashes
+                .into_iter()
+                .map(|x| pallas::Hash::from(x))
+                .collect(),
+        );
+        self
+    }
+
     pub fn with_outputs(&mut self, outputs: impl IntoIterator<Item = Output>) -> &mut Self {
         self.inner.transaction_body.outputs = outputs
             .into_iter()
@@ -643,11 +656,7 @@ impl<State: IsTransactionBodyState> Transaction<State> {
                 resolved_inputs
             })
     }
-}
 
-// -------------------------------------------------------------------- Internal
-
-impl<State: IsTransactionBodyState> Transaction<State> {
     /// The list of signatories explicitly listed in the transaction body, and visible to any
     /// underlying validator script. This is necessary a subset of the all signatories but the
     /// total set of inferred signatories may be larger due do transaction inputs.
@@ -665,7 +674,11 @@ impl<State: IsTransactionBodyState> Transaction<State> {
             .map(|xs| Box::new(xs.deref().iter().map(<Hash<_>>::from)) as BoxedIterator<'_, _>)
             .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, _>)
     }
+}
 
+// -------------------------------------------------------------------- Internal
+
+impl<State: IsTransactionBodyState> Transaction<State> {
     /// The list of required signatories on the transaction, solely inferred from inputs,
     /// collaterals and explicitly specified signers.
     ///
