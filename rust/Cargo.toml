@@ -23,7 +23,10 @@ tag-name = "v{{version}}"
 [workspace.dependencies]
 anyhow = "1.0.100"
 bech32 = "0.11.0"
+blockfrost = "1.1.0"
+blockfrost-openapi = "0.1.75"
 cryptoxide = "0.5.1"
+futures = "0.3.31"
 hex = "0.4.3"
 itertools = "0.14.0"
 minicbor = { version = "0.25.1", features = ["alloc", "derive"] }
@@ -34,4 +37,12 @@ pallas-codec = "0.33.0"
 pallas-crypto = "0.33.0"
 pallas-primitives = "0.33.0"
 proptest = "1.8.0"
+reqwest = "0.12.23"
+serde = "1.0.228"
+tokio = { version = "1.47.1", features = ["rt-multi-thread"] }
 uplc = "1.1.19"
+
+cardano-tx-builder = { path = "crates/cardano-tx-builder" }
+cardano-connect = { path = "crates/cardano-connect" }
+cardano-connect-blockfrost = { path = "crates/cardano-connect-blockfrost" }
+konduit-data = { path = "crates/konduit-data" }

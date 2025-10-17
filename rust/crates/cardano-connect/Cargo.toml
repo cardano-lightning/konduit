@@ -15,4 +15,4 @@ release = false
 
 [dependencies]
 anyhow.workspace = true
-cardano-tx-builder = { path = "../cardano-tx-builder" }
+cardano-tx-builder.workspace = true

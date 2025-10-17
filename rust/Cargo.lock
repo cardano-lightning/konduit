@@ -96,12 +96,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
 
 [[package]]
-name = "bech32"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d965446196e3b7decd44aa7ee49e31d630118f90ef12f97900f262eb915c951d"
-
-[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -214,7 +208,6 @@ dependencies = [
  "cardano-tx-builder",
  "futures",
  "hex",
- "num",
  "reqwest",
  "serde",
  "tokio",
@@ -225,8 +218,6 @@ name = "cardano-tx-builder"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bech32 0.11.0",
- "cryptoxide 0.5.1",
  "hex",
  "itertools 0.14.0",
  "minicbor",
@@ -347,12 +338,6 @@ name = "cryptoxide"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "382ce8820a5bb815055d3553a610e8cb542b2d767bbacea99038afda96cd760d"
-
-[[package]]
-name = "cryptoxide"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "facfae029ec4373769eb4bd936bcf537de1052abaee9f246e667c9443be6aa95"
 
 [[package]]
 name = "darling"
@@ -1446,9 +1431,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18f5f4dd205316335bf8eef77227e01a8a00b1fd60503d807520e93dd0362d0e"
 dependencies = [
  "base58",
- "bech32 0.9.1",
+ "bech32",
  "crc",
- "cryptoxide 0.4.4",
+ "cryptoxide",
  "hex",
  "pallas-codec",
  "pallas-crypto",
@@ -1474,7 +1459,7 @@ version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0368945cd093e550febe36aef085431b1611c2e9196297cd70f4b21a4add054c"
 dependencies = [
- "cryptoxide 0.4.4",
+ "cryptoxide",
  "hex",
  "pallas-codec",
  "rand_core 0.6.4",
@@ -1490,7 +1475,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb2acde8875c43446194d387c60fe2d6a127e4f8384bef3dcabd5a04e9422429"
 dependencies = [
  "base58",
- "bech32 0.9.1",
+ "bech32",
  "hex",
  "log",
  "pallas-codec",
@@ -2500,7 +2485,7 @@ checksum = "ca1fd5d08135f05ad3e19b72f0596c908c66d4879002ae4fa02ff36959338e2a"
 dependencies = [
  "bitvec",
  "blst",
- "cryptoxide 0.4.4",
+ "cryptoxide",
  "hamming",
  "hex",
  "indexmap 1.9.3",
