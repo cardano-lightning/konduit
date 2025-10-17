@@ -32,4 +32,5 @@ proptest = { workspace = true, optional = true }
 uplc.workspace = true
 
 [dev-dependencies]
+indoc.workspace = true
 proptest.workspace = true

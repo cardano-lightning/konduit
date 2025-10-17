@@ -25,9 +25,12 @@ anyhow = "1.0.100"
 bech32 = "0.11.0"
 blockfrost = "1.1.0"
 blockfrost-openapi = "0.1.75"
+clap = { version = "4.5.49", features = ["derive"] }
 cryptoxide = "0.5.1"
+dotenv = "0.15.0"
 futures = "0.3.31"
 hex = "0.4.3"
+indoc = "2.0.6"
 itertools = "0.14.0"
 minicbor = { version = "0.25.1", features = ["alloc", "derive"] }
 num = "0.4.3"
@@ -39,10 +42,11 @@ pallas-primitives = "0.33.0"
 proptest = "1.8.0"
 reqwest = "0.12.23"
 serde = "1.0.228"
-tokio = { version = "1.47.1", features = ["rt-multi-thread"] }
+tokio = { version = "1.47.1", features = ["full"] }
 uplc = "1.1.19"
 
 cardano-tx-builder = { path = "crates/cardano-tx-builder" }
 cardano-connect = { path = "crates/cardano-connect" }
 cardano-connect-blockfrost = { path = "crates/cardano-connect-blockfrost" }
 konduit-data = { path = "crates/konduit-data" }
+konduit-cli = { path = "crates/konduit-cli" }
