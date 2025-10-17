@@ -1,9 +1,7 @@
 use anyhow::{Error, Result};
 use cardano_tx_builder::PlutusData;
 
-use crate::base::ScriptHash;
-use crate::constants::Constants;
-use crate::stage::Stage;
+use crate::{base::ScriptHash, constants::Constants, stage::Stage};
 
 #[derive(Debug, Clone)]
 pub struct Datum {

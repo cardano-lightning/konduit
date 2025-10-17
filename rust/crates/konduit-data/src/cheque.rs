@@ -1,8 +1,7 @@
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
 
-use crate::base::Signature;
-use crate::cheque_body::ChequeBody;
+use crate::{base::Signature, cheque_body::ChequeBody};
 
 #[derive(Debug, Clone)]
 pub struct Cheque {
