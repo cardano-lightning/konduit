@@ -6,7 +6,7 @@ use blockfrost_openapi::models::{
 };
 use cardano_connect::{CardanoConnect, Network};
 use cardano_tx_builder::{
-    Address, Credential, Input, Output, PlutusData, PlutusScript, PlutusVersion,
+    Address, Credential, Hash, Input, Output, PlutusData, PlutusScript, PlutusVersion,
     ProtocolParameters, Transaction, Value, address::kind, cbor, cbor::ToCbor, transaction::state,
 };
 use futures::stream::{self, StreamExt};
@@ -60,21 +60,26 @@ impl Blockfrost {
             try_into_array(hex::decode(&bf_utxo.tx_hash)?)?.into(),
             bf_utxo.tx_index as u64,
         );
+
         let address = <Address<kind::Shelley>>::try_from(bf_utxo.address.as_str())?;
+
         let mut output = Output::new(
             address.into(),
             from_tx_content_output_amounts(&bf_utxo.amount[..])?,
         );
+
         if let Some(inline_datum) = &bf_utxo.inline_datum {
             output = output.with_datum(plutus_data_from_inline(inline_datum)?);
         } else if let Some(datum_hash) = &bf_utxo.data_hash {
             let datum = self.resolve_datum_hash(datum_hash).await?;
             output = output.with_datum(datum);
         }
+
         if let Some(script_hash) = &bf_utxo.reference_script_hash {
             let script = self.resolve_script(script_hash).await?;
             output = output.with_plutus_script(script);
         };
+
         Ok((input, output))
     }
 
@@ -201,18 +206,22 @@ impl CardanoConnect for Blockfrost {
         delegation: Option<&Credential>,
     ) -> anyhow::Result<BTreeMap<Input, Output>> {
         let mut addr = Address::new(self.network().into(), payment.clone());
+
         if let Some(delegation) = delegation {
             addr = addr.with_delegation(delegation.clone());
         }
+
         let response = self
             .api
             .addresses_utxos(&format!("{}", addr), Pagination::all())
             .await?;
+
         let s = stream::iter(response)
             .map(move |bf_utxo| self.resolve_utxo(bf_utxo))
             .buffer_unordered(10)
             .collect::<Vec<anyhow::Result<(Input, Output)>>>()
             .await;
+
         s.into_iter()
             .collect::<anyhow::Result<BTreeMap<Input, Output>>>()
     }
@@ -221,16 +230,6 @@ impl CardanoConnect for Blockfrost {
         let bytes = tx.to_cbor();
         Ok(self.api.transactions_submit(bytes).await?)
     }
-}
-
-pub fn plutus_data_from_inline(inline_datum: &str) -> anyhow::Result<PlutusData<'static>> {
-    Ok(cbor::decode(&hex::decode(inline_datum)?)?)
-}
-
-/// Handles the map error
-fn try_into_array<T, const N: usize>(v: Vec<T>) -> anyhow::Result<[T; N]> {
-    <[T; N]>::try_from(v)
-        .map_err(|v: Vec<T>| anyhow!("Expected a Vec of length {}, but got {}", N, v.len()))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -247,16 +246,37 @@ struct ResponseScript {
 }
 
 fn from_tx_content_output_amounts(xs: &[TxContentOutputAmountInner]) -> anyhow::Result<Value<u64>> {
-    let mut v = Value::default();
+    let mut lovelace = None;
+    let mut assets = Vec::new();
+
     for asset in xs {
         let amount: u64 = asset.quantity.parse()?;
         if asset.unit == UNIT_LOVELACE {
-            v.add(&Value::new(amount));
+            lovelace = Some(amount);
         } else {
-            let hash: [u8; 28] = try_into_array(hex::decode(&asset.unit[0..56])?)?;
-            let name: Vec<u8> = hex::decode(&asset.unit[56..])?;
-            v.add(&Value::default().with_assets([(hash.into(), [(name, amount)])]));
+            let (script_hash, asset_name) = from_blockfrost_asset_unit(&asset.unit)?;
+            assets.push((script_hash, [(asset_name, amount)]));
         }
     }
-    Ok(v)
+
+    Ok(Value::new(lovelace.unwrap_or_default()).with_assets(assets))
+}
+
+fn from_blockfrost_asset_unit(unit: &str) -> anyhow::Result<(Hash<28>, Vec<u8>)> {
+    let script_hash: [u8; Credential::DIGEST_SIZE] =
+        try_into_array(hex::decode(&unit[0..2 * Credential::DIGEST_SIZE])?)?;
+
+    let asset_name: Vec<u8> = hex::decode(&unit[2 * Credential::DIGEST_SIZE..])?;
+
+    Ok((Hash::from(script_hash), asset_name))
+}
+
+pub fn plutus_data_from_inline(inline_datum: &str) -> anyhow::Result<PlutusData<'static>> {
+    Ok(cbor::decode(&hex::decode(inline_datum)?)?)
+}
+
+/// Handles the map error
+fn try_into_array<T, const N: usize>(v: Vec<T>) -> anyhow::Result<[T; N]> {
+    <[T; N]>::try_from(v)
+        .map_err(|v: Vec<T>| anyhow!("Expected a Vec of length {}, but got {}", N, v.len()))
 }

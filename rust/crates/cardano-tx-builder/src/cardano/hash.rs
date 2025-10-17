@@ -60,6 +60,12 @@ impl<const SIZE: usize> fmt::Display for Hash<SIZE> {
     }
 }
 
+// ------------------------------------------------------------------ Inspecting
+
+impl<const SIZE: usize> Hash<SIZE> {
+    pub const SIZE: usize = SIZE;
+}
+
 // ----------------------------------------------------------- Converting (from)
 
 impl<const SIZE: usize> TryFrom<&str> for Hash<SIZE> {

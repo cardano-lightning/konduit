@@ -46,6 +46,8 @@ impl Default for Credential {
 }
 
 impl Credential {
+    pub const DIGEST_SIZE: usize = 28;
+
     /// Construct a credential from a key.
     ///
     /// See also [`key_credential!`](crate::key_credential).
