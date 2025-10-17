@@ -1,25 +1,18 @@
-use anyhow::{Result, anyhow};
-use futures::stream::{self, StreamExt};
-use std::collections::BTreeMap;
-
-use cardano_tx_builder::{
-    Address, Credential, Input, Output, PlutusData, PlutusScript, PlutusVersion,
-    ProtocolParameters, Value, address::kind, cbor,
-};
-
-use cardano_connect::{CardanoConnect, Network};
-
+use anyhow::anyhow;
 use blockfrost::{BlockfrostAPI, Pagination};
 use blockfrost_openapi::models::{
     address_utxo_content_inner::AddressUtxoContentInner,
     tx_content_output_amount_inner::TxContentOutputAmountInner,
 };
+use cardano_connect::{CardanoConnect, Network};
+use cardano_tx_builder::{
+    Address, Credential, Input, Output, PlutusData, PlutusScript, PlutusVersion,
+    ProtocolParameters, Transaction, Value, address::kind, cbor, cbor::ToCbor, transaction::state,
+};
+use futures::stream::{self, StreamExt};
+use std::collections::BTreeMap;
 
 const UNIT_LOVELACE: &str = "lovelace";
-
-const MAINNET_PREFIX: &str = "mainnet";
-const PREPROD_PREFIX: &str = "preprod";
-const PREVIEW_PREFIX: &str = "preview";
 
 pub struct Blockfrost {
     api: BlockfrostAPI,
@@ -31,14 +24,9 @@ pub struct Blockfrost {
 
 impl Blockfrost {
     pub fn new(project_id: String) -> Self {
-        let network_prefix = &project_id[0..7];
-        let network = match network_prefix {
-            MAINNET_PREFIX => Network::mainnet(),
-            PREVIEW_PREFIX => Network::preview(),
-            PREPROD_PREFIX => Network::preprod(),
-            _ => panic!("Unknown network not yet supported"),
-        };
-        let base_url = format!("https://cardano-{}.blockfrost.io/api/v0", network_prefix,);
+        let network = Network::try_from(&project_id[0..7])
+            .unwrap_or_else(|e| panic!("failed to infer network from Blockfrost's id: {e}"));
+        let base_url = format!("https://cardano-{}.blockfrost.io/api/v0", network);
         let api = BlockfrostAPI::new(project_id.as_str(), Default::default());
         Self {
             api,
@@ -49,7 +37,10 @@ impl Blockfrost {
         }
     }
 
-    pub async fn resolve_datum_hash(&self, datum_hash: &str) -> Result<PlutusData<'static>> {
+    pub async fn resolve_datum_hash(
+        &self,
+        datum_hash: &str,
+    ) -> anyhow::Result<PlutusData<'static>> {
         let x = self.api.scripts_datum_hash_cbor(datum_hash).await?;
         let data = x
             .as_object()
@@ -61,9 +52,12 @@ impl Blockfrost {
         Ok(cbor::decode(&hex::decode(data)?)?)
     }
 
-    pub async fn resolve_utxo(&self, bf_utxo: AddressUtxoContentInner) -> Result<(Input, Output)> {
+    pub async fn resolve_utxo(
+        &self,
+        bf_utxo: AddressUtxoContentInner,
+    ) -> anyhow::Result<(Input, Output)> {
         let input = Input::new(
-            v2a(hex::decode(&bf_utxo.tx_hash)?)?.into(),
+            try_into_array(hex::decode(&bf_utxo.tx_hash)?)?.into(),
             bf_utxo.tx_index as u64,
         );
         let address = <Address<kind::Shelley>>::try_from(bf_utxo.address.as_str())?;
@@ -85,14 +79,14 @@ impl Blockfrost {
     }
 
     /// Blockfrost client has the wrong type.
-    pub async fn resolve_script(&self, script_hash: &str) -> Result<PlutusScript> {
+    pub async fn resolve_script(&self, script_hash: &str) -> anyhow::Result<PlutusScript> {
         let version = self.plutus_version(script_hash);
         let bytes = self.scripts_hash_cbor(script_hash);
         Ok(PlutusScript::new(version.await?, bytes.await?))
     }
 
     /// Blockfrost client has the wrong type.
-    pub async fn scripts_hash_cbor(&self, script_hash: &str) -> Result<Vec<u8>> {
+    pub async fn scripts_hash_cbor(&self, script_hash: &str) -> anyhow::Result<Vec<u8>> {
         let response = self
             .client
             .get(format!("{}/scripts/{}", self.base_url, script_hash))
@@ -112,7 +106,7 @@ impl Blockfrost {
     }
 
     /// Blockfrost client has incomplete type
-    pub async fn plutus_version(&self, script_hash: &str) -> Result<PlutusVersion> {
+    pub async fn plutus_version(&self, script_hash: &str) -> anyhow::Result<PlutusVersion> {
         let response = self
             .client
             .get(format!("{}/scripts/{}/cbor", self.base_url, script_hash))
@@ -140,17 +134,17 @@ impl Blockfrost {
 
 impl CardanoConnect for Blockfrost {
     fn network(&self) -> Network {
-        self.network.clone()
+        self.network
     }
 
-    async fn health(&self) -> Result<String> {
+    async fn health(&self) -> anyhow::Result<String> {
         match self.api.health().await {
             Ok(x) => Ok(format!("{:?}", x)),
             Err(y) => Err(anyhow!(y.to_string())),
         }
     }
 
-    async fn protocol_parameters(&self) -> Result<ProtocolParameters> {
+    async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
         // FIXME :: The api does not expose all the required values.
         // Until this is fixed use the precompiled values.
         // let x = self.api.epochs_latest_parameters().await?;
@@ -188,7 +182,7 @@ impl CardanoConnect for Blockfrost {
         //                     .ok_or(anyhow!("Expect Number"))
         //                     .and_then(|x| x.as_i64().ok_or(anyhow!("Expect i64")))
         //             })
-        //             .collect::<Result<Vec<i64>>>()?,
+        //             .collect::<anyhow::Result<Vec<i64>>>()?,
         //     );
         let pp = match self.network() {
             Network::Mainnet => ProtocolParameters::mainnet(),
@@ -204,8 +198,8 @@ impl CardanoConnect for Blockfrost {
     async fn utxos_at(
         &self,
         payment: &Credential,
-        delegation: &Option<Credential>,
-    ) -> Result<BTreeMap<Input, Output>> {
+        delegation: Option<&Credential>,
+    ) -> anyhow::Result<BTreeMap<Input, Output>> {
         let mut addr = Address::new(self.network().into(), payment.clone());
         if let Some(delegation) = delegation {
             addr = addr.with_delegation(delegation.clone());
@@ -217,22 +211,24 @@ impl CardanoConnect for Blockfrost {
         let s = stream::iter(response)
             .map(move |bf_utxo| self.resolve_utxo(bf_utxo))
             .buffer_unordered(10)
-            .collect::<Vec<Result<(Input, Output)>>>()
+            .collect::<Vec<anyhow::Result<(Input, Output)>>>()
             .await;
-        s.into_iter().collect::<Result<BTreeMap<Input, Output>>>()
+        s.into_iter()
+            .collect::<anyhow::Result<BTreeMap<Input, Output>>>()
     }
 
-    async fn submit(&self, tx: Vec<u8>) -> Result<String> {
-        Ok(self.api.transactions_submit(tx).await?)
+    async fn submit(&self, tx: &Transaction<state::ReadyForSigning>) -> anyhow::Result<String> {
+        let bytes = tx.to_cbor();
+        Ok(self.api.transactions_submit(bytes).await?)
     }
 }
 
-pub fn plutus_data_from_inline(inline_datum: &str) -> Result<PlutusData<'static>> {
+pub fn plutus_data_from_inline(inline_datum: &str) -> anyhow::Result<PlutusData<'static>> {
     Ok(cbor::decode(&hex::decode(inline_datum)?)?)
 }
 
 /// Handles the map error
-fn v2a<T, const N: usize>(v: Vec<T>) -> Result<[T; N]> {
+fn try_into_array<T, const N: usize>(v: Vec<T>) -> anyhow::Result<[T; N]> {
     <[T; N]>::try_from(v)
         .map_err(|v: Vec<T>| anyhow!("Expected a Vec of length {}, but got {}", N, v.len()))
 }
@@ -250,14 +246,14 @@ struct ResponseScript {
     serialised_size: u64,
 }
 
-fn from_tx_content_output_amounts(xs: &[TxContentOutputAmountInner]) -> Result<Value<u64>> {
+fn from_tx_content_output_amounts(xs: &[TxContentOutputAmountInner]) -> anyhow::Result<Value<u64>> {
     let mut v = Value::default();
     for asset in xs {
         let amount: u64 = asset.quantity.parse()?;
         if asset.unit == UNIT_LOVELACE {
             v.add(&Value::new(amount));
         } else {
-            let hash: [u8; 28] = v2a(hex::decode(&asset.unit[0..56])?)?;
+            let hash: [u8; 28] = try_into_array(hex::decode(&asset.unit[0..56])?)?;
             let name: Vec<u8> = hex::decode(&asset.unit[56..])?;
             v.add(&Value::default().with_assets([(hash.into(), [(name, amount)])]));
         }

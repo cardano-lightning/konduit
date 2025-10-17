@@ -11,7 +11,7 @@ fn main() {
     rt.block_on(async {
         println!(
             "{:?}",
-            conn.utxos_at(&address.as_shelley().unwrap().payment(), &None,)
+            conn.utxos_at(&address.as_shelley().unwrap().payment(), None)
                 .await
         );
     })

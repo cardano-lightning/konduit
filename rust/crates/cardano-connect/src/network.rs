@@ -1,7 +1,8 @@
+use anyhow::anyhow;
 use cardano_tx_builder::NetworkId;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum Network {
     Mainnet,
     Preview,
@@ -26,6 +27,19 @@ impl fmt::Display for Network {
             Network::Preprod => "preprod",
             Network::Other(_n) => "other",
         })
+    }
+}
+
+impl TryFrom<&str> for Network {
+    type Error = anyhow::Error;
+
+    fn try_from(text: &str) -> anyhow::Result<Self> {
+        match text {
+            mainnet if mainnet == Network::Mainnet.to_string() => Ok(Network::mainnet()),
+            preview if preview == Network::Preview.to_string() => Ok(Network::preview()),
+            preprod if preprod == Network::Preprod.to_string() => Ok(Network::preprod()),
+            _ => Err(anyhow!("Unknown network not yet supported")),
+        }
     }
 }
 
