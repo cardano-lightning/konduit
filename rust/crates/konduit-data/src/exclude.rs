@@ -11,10 +11,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Exclude {
 
     fn try_from(data: &PlutusData<'a>) -> Result<Self> {
         let list = data.as_list().ok_or(anyhow!("Expect list"))?;
-        let inner = list
-            .into_iter()
-            .map(Index::try_from)
-            .collect::<Result<Vec<Index>>>()?;
+        let inner = list.map(Index::try_from).collect::<Result<Vec<Index>>>()?;
         Ok(Exclude(inner))
     }
 }

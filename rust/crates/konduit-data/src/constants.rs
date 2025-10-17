@@ -1,18 +1,23 @@
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
 
-use crate::base::{Tag, TimeDelta, Vkey};
+use crate::base::{Tag, TimeDelta, VerificationKey};
 
 #[derive(Debug, Clone)]
 pub struct Constants {
     pub tag: Tag,
-    pub add_vkey: Vkey,
-    pub sub_vkey: Vkey,
+    pub add_vkey: VerificationKey,
+    pub sub_vkey: VerificationKey,
     pub close_period: TimeDelta,
 }
 
 impl Constants {
-    pub fn new(tag: Tag, add_vkey: Vkey, sub_vkey: Vkey, close_period: TimeDelta) -> Self {
+    pub fn new(
+        tag: Tag,
+        add_vkey: VerificationKey,
+        sub_vkey: VerificationKey,
+        close_period: TimeDelta,
+    ) -> Self {
         Self {
             tag,
             add_vkey,
@@ -37,8 +42,8 @@ impl<'a> TryFrom<[PlutusData<'a>; 4]> for Constants {
         let [a, b, c, d] = value;
         Ok(Self::new(
             Tag::try_from(a)?,
-            Vkey::try_from(b)?,
-            Vkey::try_from(c)?,
+            VerificationKey::try_from(b)?,
+            VerificationKey::try_from(c)?,
             TimeDelta::try_from(d)?,
         ))
     }
