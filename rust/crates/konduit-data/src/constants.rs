@@ -70,6 +70,6 @@ impl<'a> From<Constants> for [PlutusData<'a>; 4] {
 
 impl<'a> From<Constants> for PlutusData<'a> {
     fn from(value: Constants) -> Self {
-        Self::list(<[PlutusData; 4]>::from(value).to_vec())
+        Self::list(<[PlutusData; 4]>::from(value))
     }
 }

@@ -21,6 +21,6 @@ impl<'a> TryFrom<&PlutusData<'a>> for MixedCheques {
 
 impl<'a> From<MixedCheques> for PlutusData<'a> {
     fn from(value: MixedCheques) -> Self {
-        Self::list(value.0.into_iter().map(|x| x.into()))
+        Self::list(value.0)
     }
 }

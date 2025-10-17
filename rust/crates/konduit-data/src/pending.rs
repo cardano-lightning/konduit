@@ -20,11 +20,12 @@ impl Pending {
     }
 }
 
-impl<'a> TryFrom<[PlutusData<'a>; 3]> for Pending {
+impl<'a> TryFrom<Vec<PlutusData<'a>>> for Pending {
     type Error = Error;
 
-    fn try_from(value: [PlutusData<'a>; 3]) -> Result<Self> {
-        let [a, b, c] = value;
+    fn try_from(list: Vec<PlutusData<'a>>) -> Result<Self> {
+        let [a, b, c] =
+            <[PlutusData; 3]>::try_from(list).map_err(|_| anyhow!("invalid 'Pending'"))?;
         Ok(Self::new(
             Amount::try_from(a)?,
             Timestamp::try_from(b)?,
@@ -37,24 +38,23 @@ impl<'a> TryFrom<&PlutusData<'a>> for Pending {
     type Error = Error;
 
     fn try_from(data: &PlutusData<'a>) -> Result<Self> {
-        Self::try_from(<[PlutusData; 3]>::try_from(data)?)
+        let list = Vec::try_from(data)?;
+        Self::try_from(list)
+    }
+}
+
+impl<'a> From<Pending> for Vec<PlutusData<'a>> {
+    fn from(pending: Pending) -> Self {
+        vec![
+            PlutusData::from(pending.amount),
+            PlutusData::from(pending.timeout),
+            PlutusData::from(pending.lock),
+        ]
     }
 }
 
 impl<'a> From<Pending> for PlutusData<'a> {
-    fn from(value: Pending) -> Self {
-        Self::list(vec![
-            PlutusData::from(value.amount),
-            PlutusData::from(value.timeout),
-            PlutusData::from(value.lock),
-        ])
-    }
-}
-
-impl<'a> TryFrom<Vec<PlutusData<'a>>> for Pending {
-    type Error = Error;
-
-    fn try_from(value: Vec<PlutusData<'a>>) -> Result<Self> {
-        Self::try_from(<[PlutusData; 3]>::try_from(value).map_err(|_| anyhow!("Bad length"))?)
+    fn from(pending: Pending) -> Self {
+        Self::list(Vec::from(pending))
     }
 }

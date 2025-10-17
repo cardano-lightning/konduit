@@ -131,7 +131,7 @@ impl Transaction<state::InConstruction> {
     ///         "bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777",
     ///         "7768617465766572",
     ///         100_i64,
-    ///         PlutusData::list(vec![]),
+    ///         PlutusData::list::<PlutusData>([]),
     ///       ),
     ///     ))
     ///     .with_plutus_scripts(vec![
@@ -483,7 +483,7 @@ mod tests {
                 tx.with_inputs(vec![input!(
                     "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
                     0,
-                    PlutusData::list([]),
+                    PlutusData::list::<PlutusData>([]),
                 )])
                 .with_collaterals(vec![input!(
                     "0000000000000000000000000000000000000000000000000000000000000000",
@@ -512,7 +512,7 @@ mod tests {
                 tx.with_inputs(vec![input!(
                     "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
                     0,
-                    PlutusData::list([]),
+                    PlutusData::list::<PlutusData>([]),
                 )])
                 .with_collaterals(vec![input!(
                     "0000000000000000000000000000000000000000000000000000000000000000",
@@ -695,7 +695,7 @@ mod tests {
             Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
                 tx.with_inputs(vec![(
                     Input::new(pay_to_script.id(), 0),
-                    Some(PlutusData::list(vec![])),
+                    Some(PlutusData::list::<PlutusData>([])),
                 )])
                 .with_reference_inputs(vec![(Input::new(deploy_script.id(), 0))])
                 .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
@@ -728,7 +728,7 @@ mod tests {
                 tx.with_inputs(vec![
                     (
                         Input::new(spend_from_script.id(), 0),
-                        Some(PlutusData::list(vec![])),
+                        Some(PlutusData::list::<PlutusData>([])),
                     ),
                     (Input::new(deploy_script.id(), 0), None),
                     (Input::new(pay_to_script.id(), 1), None),

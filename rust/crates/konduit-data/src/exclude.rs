@@ -18,6 +18,6 @@ impl<'a> TryFrom<&PlutusData<'a>> for Exclude {
 
 impl<'a> From<Exclude> for PlutusData<'a> {
     fn from(value: Exclude) -> Self {
-        Self::list(value.0.into_iter().map(|x| x.into()))
+        Self::list(value.0)
     }
 }

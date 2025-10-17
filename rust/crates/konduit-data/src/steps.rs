@@ -21,6 +21,6 @@ impl<'a> TryFrom<&PlutusData<'a>> for Steps {
 
 impl<'a> From<Steps> for PlutusData<'a> {
     fn from(value: Steps) -> Self {
-        Self::list(value.0.into_iter().map(|x| x.into()))
+        Self::list(value.0)
     }
 }

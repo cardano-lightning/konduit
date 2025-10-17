@@ -18,42 +18,35 @@ impl Cheque {
     }
 }
 
-impl<'a> TryFrom<Vec<PlutusData<'a>>> for Cheque {
-    type Error = Error;
-
-    fn try_from(value: Vec<PlutusData<'a>>) -> Result<Self> {
-        Self::try_from(<[PlutusData; 2]>::try_from(value).map_err(|_| anyhow!("Bad length"))?)
-    }
-}
-
-impl<'a> TryFrom<[PlutusData<'a>; 2]> for Cheque {
-    type Error = Error;
-
-    fn try_from(value: [PlutusData<'a>; 2]) -> Result<Self> {
-        let [a, b] = value;
-        Ok(Self::new(ChequeBody::try_from(a)?, Signature::try_from(b)?))
-    }
-}
-
 impl<'a> TryFrom<&PlutusData<'a>> for Cheque {
     type Error = Error;
 
     fn try_from(data: &PlutusData<'a>) -> Result<Self> {
-        Self::try_from(<[PlutusData; 2]>::try_from(data)?)
+        let fields: Vec<PlutusData<'_>> = Vec::try_from(data)?;
+        Cheque::try_from(fields)
     }
 }
 
-impl<'a> From<Cheque> for [PlutusData<'a>; 2] {
-    fn from(value: Cheque) -> Self {
-        [
-            PlutusData::from(value.cheque_body),
-            PlutusData::from(value.signature),
-        ]
+impl<'a> TryFrom<Vec<PlutusData<'a>>> for Cheque {
+    type Error = Error;
+
+    fn try_from(list: Vec<PlutusData<'a>>) -> Result<Self> {
+        let [a, b] = <[PlutusData; 2]>::try_from(list).map_err(|_| anyhow!("invalid 'Cheque'"))?;
+        Ok(Self::new(ChequeBody::try_from(a)?, Signature::try_from(b)?))
     }
 }
 
 impl<'a> From<Cheque> for PlutusData<'a> {
-    fn from(value: Cheque) -> Self {
-        Self::list(<[PlutusData; 2]>::from(value).to_vec())
+    fn from(cheque: Cheque) -> Self {
+        PlutusData::list(Vec::from(cheque))
+    }
+}
+
+impl<'a> From<Cheque> for Vec<PlutusData<'a>> {
+    fn from(cheque: Cheque) -> Self {
+        vec![
+            PlutusData::from(cheque.cheque_body),
+            PlutusData::from(cheque.signature),
+        ]
     }
 }

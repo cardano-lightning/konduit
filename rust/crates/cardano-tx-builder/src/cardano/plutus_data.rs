@@ -107,32 +107,27 @@ impl<'a> PlutusData<'a> {
     /// # use cardano_tx_builder::PlutusData;
     ///
     /// assert_eq!(
-    ///     format!("{}", PlutusData::list([])),
+    ///     format!("{}", PlutusData::list::<PlutusData>([])),
     ///     "CBOR(80)"
     /// );
     ///
     /// assert_eq!(
-    ///     format!("{}", PlutusData::list([
-    ///         PlutusData::bytes(b"foo"),
-    ///         PlutusData::bytes(b"bar"),
-    ///     ])),
+    ///     format!("{}", PlutusData::list([b"foo", b"bar"])),
     ///     "CBOR(9f43666f6f43626172ff)"
     /// );
     ///
     /// assert_eq!(
     ///     format!("{}", PlutusData::list([
     ///         PlutusData::bytes(b"foo"),
-    ///         PlutusData::list([
-    ///             PlutusData::integer(1),
-    ///             PlutusData::integer(2),
-    ///         ]),
+    ///         PlutusData::list([1, 2]),
     ///     ])),
     ///     "CBOR(9f43666f6f9f0102ffff)"
     /// );
     /// ```
-    pub fn list(elems: impl IntoIterator<Item = Self>) -> Self {
+    pub fn list<T: Into<Self>>(elems: impl IntoIterator<Item = T>) -> Self {
         let elems = elems
             .into_iter()
+            .map(Into::<Self>::into)
             .map(pallas::PlutusData::from)
             .collect::<Vec<_>>();
 
@@ -151,7 +146,7 @@ impl<'a> PlutusData<'a> {
     /// # use cardano_tx_builder::PlutusData;
     ///
     /// assert_eq!(
-    ///     format!("{}", PlutusData::map([])),
+    ///     format!("{}", PlutusData::map::<PlutusData, PlutusData>([])),
     ///     "CBOR(a0)"
     /// );
     ///
@@ -159,16 +154,21 @@ impl<'a> PlutusData<'a> {
     ///     format!(
     ///         "{}",
     ///         PlutusData::map([
-    ///             (PlutusData::bytes(b"FOO"), PlutusData::integer(1)),
-    ///             (PlutusData::bytes(b"BAR"), PlutusData::integer(2)),
+    ///             (b"FOO", 1),
+    ///             (b"BAR", 2),
     ///         ]),
     ///     ),
     ///     "CBOR(a243464f4f014342415202)"
     /// );
-    pub fn map(kvs: impl IntoIterator<Item = (Self, Self)>) -> Self {
+    pub fn map<K: Into<Self>, V: Into<Self>>(kvs: impl IntoIterator<Item = (K, V)>) -> Self {
         let kvs = kvs
             .into_iter()
-            .map(|(k, v)| (pallas::PlutusData::from(k), pallas::PlutusData::from(v)))
+            .map(|(k, v)| {
+                (
+                    pallas::PlutusData::from(Into::<Self>::into(k)),
+                    pallas::PlutusData::from(Into::<Self>::into(v)),
+                )
+            })
             .collect::<Vec<_>>();
 
         Self(Cow::Owned(pallas::PlutusData::Map(
@@ -188,7 +188,7 @@ impl<'a> PlutusData<'a> {
     /// # use cardano_tx_builder::PlutusData;
     ///
     /// assert_eq!(
-    ///     format!("{}", PlutusData::constr(0, [])),
+    ///     format!("{}", PlutusData::constr::<PlutusData>(0, [])),
     ///     "CBOR(d87980)"
     /// );
     ///
@@ -196,16 +196,17 @@ impl<'a> PlutusData<'a> {
     ///     format!(
     ///         "{}",
     ///         PlutusData::constr(0, [
-    ///             PlutusData::constr(1, []),
+    ///             PlutusData::constr::<PlutusData>(1, []),
     ///             PlutusData::integer(1337),
     ///         ]),
     ///     ),
     ///     "CBOR(d8799fd87a80190539ff)"
     /// );
     /// ```
-    pub fn constr(ix: u64, fields: impl IntoIterator<Item = Self>) -> Self {
+    pub fn constr<T: Into<Self>>(ix: u64, fields: impl IntoIterator<Item = T>) -> Self {
         let fields = fields
             .into_iter()
+            .map(Into::<Self>::into)
             .map(pallas::PlutusData::from)
             .collect::<Vec<_>>();
 
@@ -236,6 +237,48 @@ impl<'a> PlutusData<'a> {
             })
         }))
     }
+}
+
+// ---------------------------------------------------------------------- Macros
+
+#[macro_export]
+/// A handy macro for constructing [`PlutusData`](crate::PlutusData) constructors from a known set
+/// of fields. The macro is variadic. The first argument refers to the constructor variant index,
+/// while other arguments indicates the constructor fields.
+///
+/// ```rust
+/// use cardano_tx_builder::{PlutusData, constr};
+/// assert_eq!(
+///   constr!(1),
+///   PlutusData::constr::<PlutusData>(1, []),
+/// );
+/// ```
+///
+/// ```rust
+/// use cardano_tx_builder::{PlutusData, constr};
+/// assert_eq!(
+///   constr!(0, b"foo"),
+///   PlutusData::constr(0, [b"foo"]),
+/// );
+/// ```
+///
+/// ```rust
+/// use cardano_tx_builder::{PlutusData, constr};
+/// assert_eq!(
+///   constr!(0, 42, b"foo"),
+///   PlutusData::constr::<PlutusData>(0, [42.into(), b"foo".into()]),
+/// );
+/// ```
+///
+macro_rules! constr {
+    ($ix:expr $(,)?) => {
+        $crate::PlutusData::constr::<$crate::PlutusData>($ix, [])
+    };
+
+    // comma-separated arguments: constr!(ix, a, b, c)
+    ($ix:expr $(, $field:expr)+ $(,)?) => {
+        $crate::PlutusData::constr($ix, [ $( ::core::convert::Into::<$crate::PlutusData>::into($field) ),* ])
+    };
 }
 
 // ------------------------------------------------------------------ Inspecting
@@ -347,6 +390,60 @@ impl From<pallas::PlutusData> for PlutusData<'static> {
     }
 }
 
+#[macro_export]
+macro_rules! impl_from_int {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl From<$t> for PlutusData<'static> {
+                #[inline]
+                fn from(int: $t) -> Self {
+                    Self::integer(int)
+                }
+            }
+        )+
+    };
+}
+
+impl_from_int!(
+    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, BigInt
+);
+
+impl From<&str> for PlutusData<'static> {
+    fn from(bytes: &str) -> Self {
+        Self::bytes(bytes.as_bytes())
+    }
+}
+
+impl From<String> for PlutusData<'static> {
+    fn from(bytes: String) -> Self {
+        Self::bytes(bytes.as_bytes())
+    }
+}
+
+impl From<Vec<u8>> for PlutusData<'static> {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::bytes(bytes)
+    }
+}
+
+impl From<&[u8]> for PlutusData<'static> {
+    fn from(bytes: &[u8]) -> Self {
+        Self::bytes(bytes)
+    }
+}
+
+impl<const T: usize> From<[u8; T]> for PlutusData<'static> {
+    fn from(bytes: [u8; T]) -> Self {
+        Self::bytes(bytes)
+    }
+}
+
+impl<const T: usize> From<&[u8; T]> for PlutusData<'static> {
+    fn from(bytes: &[u8; T]) -> Self {
+        Self::bytes(bytes)
+    }
+}
+
 // ------------------------------------------------------------- Converting (to)
 
 impl From<PlutusData<'_>> for pallas::PlutusData {
@@ -355,109 +452,25 @@ impl From<PlutusData<'_>> for pallas::PlutusData {
     }
 }
 
-impl<'a> TryFrom<&'a PlutusData<'a>> for u8 {
-    type Error = anyhow::Error;
+#[macro_export]
+macro_rules! impl_try_into_int {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl<'a> TryFrom<&'a PlutusData<'a>> for $t {
+                type Error = anyhow::Error;
 
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
+                            #[inline]
+                fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+                    data.as_integer().ok_or(anyhow!("expected an integer"))
+                }
+            }
+        )+
+    };
 }
 
-impl<'a> TryFrom<&'a PlutusData<'a>> for u16 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for u32 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for u64 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for u128 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for usize {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for i8 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for i16 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for i32 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for i64 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for i128 {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for isize {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for BigInt {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
-        data.as_integer().ok_or(anyhow!("expected an integer"))
-    }
-}
+impl_try_into_int!(
+    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, BigInt,
+);
 
 impl<'a> TryFrom<&'a PlutusData<'a>> for &'a [u8] {
     type Error = anyhow::Error;
@@ -509,6 +522,23 @@ impl<'a> TryFrom<&'a PlutusData<'a>> for (u64, Vec<PlutusData<'a>>) {
     fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
         let (ix, fields) = data.as_constr().ok_or(anyhow!("expected a constr"))?;
         Ok((ix, fields.collect()))
+    }
+}
+
+impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for (u64, [PlutusData<'a>; T]) {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &'a PlutusData<'a>) -> anyhow::Result<Self> {
+        let (ix, fields) = data.as_constr().ok_or(anyhow!("expected a constr"))?;
+        Ok((
+            ix,
+            <[PlutusData<'a>; T]>::try_from(fields.collect::<Vec<_>>()).map_err(|vec| {
+                anyhow!(
+                    "expected a constr with {T} field(s), but found {} field(s)",
+                    vec.len()
+                )
+            })?,
+        ))
     }
 }
 

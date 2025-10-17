@@ -1,5 +1,5 @@
 use anyhow::{Error, Result, anyhow};
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, constr};
 
 use crate::steps::Steps;
 
@@ -28,19 +28,35 @@ impl<'a> TryFrom<PlutusData<'a>> for Redeemer {
     type Error = Error;
 
     fn try_from(data: PlutusData<'a>) -> Result<Self> {
-        let (xi, fields) = data.as_constr().ok_or(anyhow!("Expect constr"))?;
-        let fields = fields.collect::<Vec<PlutusData>>();
-        if xi == 0 {
-            let [] = <[PlutusData; 0]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
-            Ok(Self::new_batch())
-        } else if xi == 1 {
-            let [a] = <[PlutusData; 1]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
-            Ok(Self::new_main(Steps::try_from(&a)?))
-        } else if xi == 2 {
-            let [] = <[PlutusData; 0]>::try_from(fields).map_err(|_| anyhow!("Bad length"))?;
-            Ok(Self::new_mutual())
-        } else {
-            Err(anyhow!("Bad tag"))
+        let (variant, fields): (u64, Vec<PlutusData<'_>>) = (&data).try_into()?;
+
+        return match variant {
+            _ if variant == 0 => {
+                try_batch(fields).map_err(|e| e.context("invalid 'Batch' variant"))
+            }
+            _ if variant == 1 => try_main(fields).map_err(|e| e.context("invalid 'Main' variant")),
+            _ if variant == 2 => {
+                try_mutual(fields).map_err(|e| e.context("invalid 'Mutual' variant"))
+            }
+            _ => Err(anyhow!("unknown variant: {variant}")),
+        };
+
+        fn try_batch(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Redeemer> {
+            let [] = <[PlutusData; 0]>::try_from(fields)
+                .map_err(|vec| anyhow!("expected no fields, found {}", vec.len()))?;
+            Ok(Redeemer::new_batch())
+        }
+
+        fn try_main(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Redeemer> {
+            let [a] = <[PlutusData; 1]>::try_from(fields)
+                .map_err(|vec| anyhow!("expected 1 field, found {}", vec.len()))?;
+            Ok(Redeemer::new_main(Steps::try_from(&a)?))
+        }
+
+        fn try_mutual(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Redeemer> {
+            let [] = <[PlutusData; 0]>::try_from(fields)
+                .map_err(|vec| anyhow!("expected no fields, found {}", vec.len()))?;
+            Ok(Redeemer::new_mutual())
         }
     }
 }
@@ -48,9 +64,9 @@ impl<'a> TryFrom<PlutusData<'a>> for Redeemer {
 impl<'a> From<Redeemer> for PlutusData<'a> {
     fn from(value: Redeemer) -> Self {
         match value {
-            Redeemer::Batch => PlutusData::constr(0, vec![]),
-            Redeemer::Main(steps) => PlutusData::constr(0, vec![PlutusData::from(steps)]),
-            Redeemer::Mutual => PlutusData::constr(0, vec![]),
+            Redeemer::Batch => constr!(0),
+            Redeemer::Main(steps) => constr!(1, steps),
+            Redeemer::Mutual => constr!(2),
         }
     }
 }

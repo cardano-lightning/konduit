@@ -1,5 +1,5 @@
 use anyhow::{Error, Result, anyhow};
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, constr};
 
 use crate::{mixed_cheques::MixedCheques, squash::Squash, unlockeds::Unlockeds, unpends::Unpends};
 
@@ -40,8 +40,8 @@ impl<'a> TryFrom<PlutusData<'a>> for Step {
 impl<'a> From<Step> for PlutusData<'a> {
     fn from(value: Step) -> Self {
         match value {
-            Step::Cont(x) => PlutusData::constr(0, vec![PlutusData::from(x)]),
-            Step::Eol(x) => PlutusData::constr(1, vec![PlutusData::from(x)]),
+            Step::Cont(x) => constr!(0, x),
+            Step::Eol(x) => constr!(1, x),
         }
     }
 }
@@ -121,18 +121,12 @@ impl<'a> TryFrom<PlutusData<'a>> for Cont {
 impl<'a> From<Cont> for PlutusData<'a> {
     fn from(value: Cont) -> Self {
         match value {
-            Cont::Add => PlutusData::constr(0, vec![]),
-            Cont::Sub(squash, unlockeds) => PlutusData::constr(
-                0,
-                vec![PlutusData::from(squash), PlutusData::from(unlockeds)],
-            ),
-            Cont::Close => PlutusData::constr(0, vec![]),
-            Cont::Respond(squash, mixed_cheques) => PlutusData::constr(
-                0,
-                vec![PlutusData::from(squash), PlutusData::from(mixed_cheques)],
-            ),
-            Cont::Unlock(unpends) => PlutusData::constr(0, vec![PlutusData::from(unpends)]),
-            Cont::Expire(unpends) => PlutusData::constr(0, vec![PlutusData::from(unpends)]),
+            Cont::Add => constr!(0),
+            Cont::Sub(squash, unlockeds) => constr!(1, squash, unlockeds),
+            Cont::Close => constr!(2),
+            Cont::Respond(squash, mixed_cheques) => constr!(3, squash, mixed_cheques),
+            Cont::Unlock(unpends) => constr!(4, unpends),
+            Cont::Expire(unpends) => constr!(5, unpends),
         }
     }
 }
@@ -174,8 +168,8 @@ impl<'a> TryFrom<PlutusData<'a>> for Eol {
 impl<'a> From<Eol> for PlutusData<'a> {
     fn from(value: Eol) -> Self {
         match value {
-            Eol::End => PlutusData::constr(0, vec![]),
-            Eol::Elapse => PlutusData::constr(1, vec![]),
+            Eol::End => constr!(0),
+            Eol::Elapse => constr!(1),
         }
     }
 }

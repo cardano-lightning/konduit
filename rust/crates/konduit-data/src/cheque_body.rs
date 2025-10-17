@@ -38,7 +38,7 @@ impl<'a> TryFrom<PlutusData<'a>> for ChequeBody {
 
 impl<'a> From<ChequeBody> for PlutusData<'a> {
     fn from(value: ChequeBody) -> Self {
-        Self::list(vec![
+        Self::list([
             PlutusData::from(value.index),
             PlutusData::from(value.amount),
             PlutusData::from(value.timeout),

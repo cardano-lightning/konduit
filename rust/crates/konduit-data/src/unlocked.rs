@@ -1,8 +1,10 @@
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
 
-use crate::base::{Secret, Signature};
-use crate::cheque_body::ChequeBody;
+use crate::{
+    base::{Secret, Signature},
+    cheque_body::ChequeBody,
+};
 
 #[derive(Debug, Clone)]
 pub struct Unlocked {
@@ -21,19 +23,21 @@ impl Unlocked {
     }
 }
 
-impl<'a> TryFrom<Vec<PlutusData<'a>>> for Unlocked {
+impl<'a> TryFrom<&PlutusData<'a>> for Unlocked {
     type Error = Error;
 
-    fn try_from(value: Vec<PlutusData<'a>>) -> Result<Self> {
-        Self::try_from(<[PlutusData; 3]>::try_from(value).map_err(|_| anyhow!("Bad length"))?)
+    fn try_from(data: &PlutusData<'a>) -> Result<Self> {
+        let fields: Vec<PlutusData<'_>> = Vec::try_from(data)?;
+        Unlocked::try_from(fields)
     }
 }
 
-impl<'a> TryFrom<[PlutusData<'a>; 3]> for Unlocked {
+impl<'a> TryFrom<Vec<PlutusData<'a>>> for Unlocked {
     type Error = Error;
 
-    fn try_from(value: [PlutusData<'a>; 3]) -> Result<Self> {
-        let [a, b, c] = value;
+    fn try_from(list: Vec<PlutusData<'a>>) -> Result<Self> {
+        let [a, b, c] =
+            <[PlutusData; 3]>::try_from(list).map_err(|_| anyhow!("invalid 'Unlocked'"))?;
         Ok(Self::new(
             ChequeBody::try_from(a)?,
             Signature::try_from(b)?,
@@ -42,26 +46,18 @@ impl<'a> TryFrom<[PlutusData<'a>; 3]> for Unlocked {
     }
 }
 
-impl<'a> TryFrom<&PlutusData<'a>> for Unlocked {
-    type Error = Error;
-
-    fn try_from(data: &PlutusData<'a>) -> Result<Self> {
-        Self::try_from(<[PlutusData; 3]>::try_from(data)?)
-    }
-}
-
-impl<'a> From<Unlocked> for [PlutusData<'a>; 3] {
-    fn from(value: Unlocked) -> Self {
-        [
-            PlutusData::from(value.cheque_body),
-            PlutusData::from(value.signature),
-            PlutusData::from(value.secret),
-        ]
-    }
-}
-
 impl<'a> From<Unlocked> for PlutusData<'a> {
-    fn from(value: Unlocked) -> Self {
-        Self::list(<[PlutusData; 3]>::from(value).to_vec())
+    fn from(unlocked: Unlocked) -> Self {
+        PlutusData::list(Vec::from(unlocked))
+    }
+}
+
+impl<'a> From<Unlocked> for Vec<PlutusData<'a>> {
+    fn from(unlocked: Unlocked) -> Self {
+        vec![
+            PlutusData::from(unlocked.cheque_body),
+            PlutusData::from(unlocked.signature),
+            PlutusData::from(unlocked.secret),
+        ]
     }
 }
