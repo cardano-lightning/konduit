@@ -277,6 +277,7 @@ name = "cardano-tx-builder"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "cryptoxide 0.5.1",
  "hex",
  "indoc",
  "itertools 0.14.0",
@@ -444,6 +445,12 @@ name = "cryptoxide"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "382ce8820a5bb815055d3553a610e8cb542b2d767bbacea99038afda96cd760d"
+
+[[package]]
+name = "cryptoxide"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "facfae029ec4373769eb4bd936bcf537de1052abaee9f246e667c9443be6aa95"
 
 [[package]]
 name = "darling"
@@ -1271,7 +1278,6 @@ dependencies = [
  "dotenv",
  "hex",
  "konduit-data",
- "rand",
  "tokio",
 ]
 
@@ -1599,7 +1605,7 @@ dependencies = [
  "base58",
  "bech32",
  "crc",
- "cryptoxide",
+ "cryptoxide 0.4.4",
  "hex",
  "pallas-codec",
  "pallas-crypto",
@@ -1625,7 +1631,7 @@ version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0368945cd093e550febe36aef085431b1611c2e9196297cd70f4b21a4add054c"
 dependencies = [
- "cryptoxide",
+ "cryptoxide 0.4.4",
  "hex",
  "pallas-codec",
  "rand_core 0.6.4",
@@ -2712,7 +2718,7 @@ checksum = "ca1fd5d08135f05ad3e19b72f0596c908c66d4879002ae4fa02ff36959338e2a"
 dependencies = [
  "bitvec",
  "blst",
- "cryptoxide",
+ "cryptoxide 0.4.4",
  "hamming",
  "hex",
  "indexmap 1.9.3",

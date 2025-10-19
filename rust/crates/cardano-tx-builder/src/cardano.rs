@@ -8,6 +8,7 @@ pub mod datum;
 pub mod execution_units;
 pub mod hash;
 pub mod input;
+pub mod key;
 pub mod macros;
 pub mod network_id;
 pub mod output;
