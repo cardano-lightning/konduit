@@ -1,5 +1,7 @@
 use anyhow::{Result, anyhow};
-use konduit_data::{base::Amount, constants::Constants, step::Step};
+use konduit_data::{
+    base::Amount, constants::Constants, redeemer::Redeemer, stage::Stage, step::Step, steps::Steps,
+};
 use std::collections::BTreeMap;
 
 use cardano_tx_builder::{
@@ -54,39 +56,68 @@ pub fn batch(
         })
         .collect::<Vec<(Input, Result<CanStep>)>>();
 
-    let good_channels = all_channels
+    let (good_inputs, good_channels) = all_channels
         .into_iter()
-        .filter_map(|(i, ro)| match ro {
-            Ok(active) => Some((i.clone(), active.clone())),
+        .filter_map(|(i, res)| match res {
+            Ok(can_step) => match can_step {
+                CanStep::Yes(_, _) => Some((i.clone(), can_step.clone())),
+                _ => None,
+            },
             _ => None,
         })
-        .collect::<Vec<(Input, CanStep)>>();
+        .collect::<(Vec<Input>, Vec<CanStep>)>();
 
-    let inputs = good_channels
+    let steps = good_channels
         .iter()
-        .filter_map(|(i, cs)| {
-            cs.as_step()
-                .map(|step| (i.clone(), Some(PlutusData::from(step))))
-        })
-        .collect::<Vec<(Input, Option<PlutusData>)>>();
+        .filter_map(|cs| cs.as_step())
+        .collect::<Vec<Step>>();
 
-    let outputs = good_channels
+    let main_redeemer = Redeemer::new_main(Steps(steps));
+    let mut inputs: Vec<(Input, Option<PlutusData<'static>>)> = good_inputs
         .iter()
-        .filter_map(|(_, cs)| {
+        .map(|i| (i.clone(), Some(PlutusData::from(Redeemer::Batch))))
+        .collect();
+
+    // Set main redeemer
+    if let Some(main_input) = inputs.first_mut() {
+        main_input.1 = Some(PlutusData::from(main_redeemer))
+    } else {
+        Err(anyhow!("No good inputs"))?;
+    }
+
+    // Add all the fuel
+    let mut fuel_inputs = available_fuel
+        .iter()
+        .map(|(i, _)| (i.clone(), None))
+        .collect();
+    inputs.append(&mut fuel_inputs);
+
+    let mut outputs = good_channels
+        .iter()
+        .filter_map(|cs| {
             cs.as_channel()
                 .map(|channel| channel.to_output(network_id.clone(), script_hash))
         })
         .collect::<Vec<Output>>();
 
-    let constraints =
-        good_channels
-            .iter()
-            .fold(Constraints::default(), |acc, (_, curr)| {
-                match curr.as_constraints() {
-                    Some(c) => acc.merge(c),
-                    None => acc,
-                }
-            });
+    let mut open_outputs = opens
+        .into_iter()
+        .map(|(delegation, amount, constants, subbed)| {
+            Channel::new(delegation, amount, constants, Stage::Opened(subbed))
+                .to_output(network_id.clone(), script_hash)
+        })
+        .collect::<Vec<Output>>();
+
+    outputs.append(&mut open_outputs);
+
+    let constraints = good_channels
+        .iter()
+        .fold(Constraints::default(), |acc, curr| {
+            match curr.as_constraints() {
+                Some(c) => acc.merge(c),
+                None => acc,
+            }
+        });
 
     // Gather all utxos
     let mut utxos = channels.clone();

@@ -12,12 +12,25 @@ use konduit_data::{
 #[derive(Debug, Clone)]
 pub struct Channel {
     pub delegation: Option<Credential>,
-    pub constants: Constants,
     pub amount: Amount,
+    pub constants: Constants,
     pub stage: Stage,
 }
 
 impl Channel {
+    pub fn new(
+        delegation: Option<Credential>,
+        amount: Amount,
+        constants: Constants,
+        stage: Stage,
+    ) -> Self {
+        Self {
+            delegation,
+            amount,
+            constants,
+            stage,
+        }
+    }
     pub fn try_from_output(script_hash: Hash<28>, output: Output) -> Result<Self> {
         let delegation = as_channel_delegation(script_hash.clone(), output.address())?;
         let amount = as_channel_amount(output.value())?;
