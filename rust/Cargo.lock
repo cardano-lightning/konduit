@@ -1271,6 +1271,7 @@ dependencies = [
  "dotenv",
  "hex",
  "konduit-data",
+ "rand",
  "tokio",
 ]
 

@@ -1,18 +1,29 @@
-mod open;
+// mod tx;
+mod cardano;
+mod metavar;
+mod data;
+mod wallet;
 
-/// A utility for constructing and driving Konduit's stages
-#[derive(clap::Parser)]
-#[clap(version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
-#[clap(propagate_version = true)]
-pub(crate) enum Cmd {
-    Open(open::Args),
+#[derive(clap::Subcommand)]
+pub enum Cmd {
+    /// Txs
+    // #[command(subcommand)]
+    // Tx(tx::Cmd),
+    #[command(subcommand)]
+    Data(data::Cmd),
+    #[command(subcommand)]
+    Cardano(cardano::Cmd),
+    #[command(subcommand)]
+    Wallet(wallet::Cmd),
 }
 
 impl Cmd {
-    pub(crate) async fn execute(self) -> anyhow::Result<()> {
-        let connector = crate::connector::new()?;
+    pub fn run(self: Self) {
         match self {
-            Self::Open(args) => open::execute(connector, args).await,
-        }
+            // Cmd::Tx(cmd) => cmd.run(),
+            Cmd::Data(cmp) => cmd.run(),
+            Cmd::Cardano(cmd) => cmd.run(),
+            Cmd::Wallet(cmd) => cmd.run(),
+        };
     }
 }

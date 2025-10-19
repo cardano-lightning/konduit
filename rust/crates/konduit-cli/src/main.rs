@@ -1,13 +1,21 @@
-use anyhow::anyhow;
 use clap::Parser;
 
 mod cmd;
 mod connector;
 mod env;
-mod metavar;
+mod wallet;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv().map_err(|e| anyhow!(e).context("fail to parse .env"))?;
-    cmd::Cmd::parse().execute().await
+#[derive(clap::Parser)]
+#[command(arg_required_else_help(true), version, about)]
+struct Cli {
+    #[command(subcommand)]
+    cmd: Option<cmd::Cmd>,
+}
+
+fn main() {
+    dotenv::dotenv().ok();
+    match Cli::parse().cmd {
+        Some(cmd) => cmd.run(),
+        None => println!("See help"),
+    };
 }
