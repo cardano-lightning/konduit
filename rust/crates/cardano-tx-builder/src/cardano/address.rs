@@ -303,6 +303,17 @@ where
     }
 }
 
+impl<T: IsAddressKind> std::str::FromStr for Address<T>
+where
+    Address<T>: for<'a> TryFrom<&'a str, Error = anyhow::Error>,
+{
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Address<T>> {
+        Self::try_from(s)
+    }
+}
+
 impl<T: IsAddressKind> TryFrom<&[u8]> for Address<T>
 where
     Address<T>: TryFrom<pallas::Address, Error = anyhow::Error>,

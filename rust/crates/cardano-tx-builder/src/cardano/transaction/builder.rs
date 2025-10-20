@@ -55,6 +55,7 @@ impl Transaction<state::InConstruction> {
     /// ```rust
     /// # use cardano_tx_builder::{ChangeStrategy, ProtocolParameters, Transaction, input, output, value, address};
     /// # use std::collections::btree_map::BTreeMap;
+    /// # use indoc::indoc;
     /// // The available UTxO, typically fetched from a blockchain provider or an indexer.
     /// let resolved_inputs = BTreeMap::from([
     ///   (
@@ -81,20 +82,28 @@ impl Transaction<state::InConstruction> {
     ///     ))
     ///     .ok()
     ///   ).unwrap().to_string(),
-    ///   "Transaction (id = 6f8e53f61fe0a709e1c895c1bd9487e555779de0902ad25377d4de1df48f08b8) { \
-    ///      inputs: [Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1)], \
-    ///      outputs: [\
-    ///        Output { \
-    ///          address: addr1wyhcwt6h7mf6rlaqadmhh5awnyd44t7v4lju5ur430fk4xczzq8aw, \
-    ///          value: Value { lovelace: 857690 } \
-    ///        }, \
-    ///        Output { \
-    ///          address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47, \
-    ///          value: Value { lovelace: 8976061 } \
-    ///        }\
-    ///      ], \
-    ///      fee: 166249 \
-    ///    }"
+    ///   indoc!{"
+    ///     Transaction (id = 6f8e53f61fe0a709e1c895c1bd9487e555779de0902ad25377d4de1df48f08b8) {
+    ///         inputs: [
+    ///             Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1),
+    ///         ],
+    ///         outputs: [
+    ///             Output {
+    ///                 address: addr1wyhcwt6h7mf6rlaqadmhh5awnyd44t7v4lju5ur430fk4xczzq8aw,
+    ///                 value: Value {
+    ///                     lovelace: 857690,
+    ///                 },
+    ///             },
+    ///             Output {
+    ///                 address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47,
+    ///                 value: Value {
+    ///                     lovelace: 8976061,
+    ///                 },
+    ///             },
+    ///         ],
+    ///         fee: 166249,
+    ///     }"
+    ///   }
     /// );
     /// ```
     ///
@@ -104,6 +113,7 @@ impl Transaction<state::InConstruction> {
     /// ```rust
     /// # use cardano_tx_builder::{ChangeStrategy, PlutusData, PlutusVersion, ProtocolParameters, Transaction, address, assets, input, output, plutus_script, value};
     /// # use std::collections::btree_map::BTreeMap;
+    /// # use indoc::indoc;
     /// let resolved_inputs = BTreeMap::from([
     ///   (
     ///     input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1),
@@ -131,7 +141,7 @@ impl Transaction<state::InConstruction> {
     ///         "bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777",
     ///         "7768617465766572",
     ///         100_i64,
-    ///         PlutusData::list(vec![]),
+    ///         PlutusData::list::<PlutusData>([]),
     ///       ),
     ///     ))
     ///     .with_plutus_scripts(vec![
@@ -139,34 +149,58 @@ impl Transaction<state::InConstruction> {
     ///     ])
     ///     .ok()
     ///   ).unwrap().to_string(),
-    ///   "Transaction (id = 4b61e0fb18523e5c28f124b98c87de7b6d6cb7d049d2c75c94327e357bbbd54d) { \
-    ///      inputs: [Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1)], \
-    ///      outputs: [\
-    ///        Output { \
-    ///          address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47, \
-    ///          value: Value { \
-    ///            lovelace: 9824351, \
-    ///            assets: {bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777: {whatever: 100}} \
-    ///          } \
-    ///        }\
-    ///      ], \
-    ///      fee: 175649, \
-    ///      mint: Value { \
-    ///        lovelace: 0, \
-    ///        assets: {bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777: {whatever: 100}} \
-    ///      }, \
-    ///      script_integrity_hash: b5a66ea46c7628f9b151d6e029f322058d9dff3793a98f3cfed6e21ed7064c4f, \
-    ///      collaterals: [Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1)], \
-    ///      collateral_return: Output { \
-    ///        address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47, \
-    ///        value: Value { lovelace: 9736526 } \
-    ///       }, \
-    ///       total_collateral: 263474, \
-    ///       scripts: [v3(bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777)], \
-    ///       redeemers: {\
-    ///         Mint(0): Redeemer(CBOR(80), ExecutionUnits { mem: 1601, cpu: 316149 })\
-    ///       } \
-    ///    }",
+    ///   indoc!{"
+    ///     Transaction (id = 4b61e0fb18523e5c28f124b98c87de7b6d6cb7d049d2c75c94327e357bbbd54d) {
+    ///         inputs: [
+    ///             Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1),
+    ///         ],
+    ///         outputs: [
+    ///             Output {
+    ///                 address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47,
+    ///                 value: Value {
+    ///                     lovelace: 9824351,
+    ///                     assets: {
+    ///                         bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777: {
+    ///                             whatever: 100,
+    ///                         },
+    ///                     },
+    ///                 },
+    ///             },
+    ///         ],
+    ///         fee: 175649,
+    ///         mint: Value {
+    ///             lovelace: 0,
+    ///             assets: {
+    ///                 bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777: {
+    ///                     whatever: 100,
+    ///                 },
+    ///             },
+    ///         },
+    ///         script_integrity_hash: b5a66ea46c7628f9b151d6e029f322058d9dff3793a98f3cfed6e21ed7064c4f,
+    ///         collaterals: [
+    ///             Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1),
+    ///         ],
+    ///         collateral_return: Output {
+    ///             address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47,
+    ///             value: Value {
+    ///                 lovelace: 9736526,
+    ///             },
+    ///         },
+    ///         total_collateral: 263474,
+    ///         scripts: [
+    ///             v3(bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777),
+    ///         ],
+    ///         redeemers: {
+    ///             Mint(0): Redeemer(
+    ///                 CBOR(80),
+    ///                 ExecutionUnits {
+    ///                     mem: 1601,
+    ///                     cpu: 316149,
+    ///                 },
+    ///             ),
+    ///         },
+    ///     }"
+    ///   },
     /// );
     pub fn build<F>(
         params: &ProtocolParameters,
@@ -431,6 +465,7 @@ mod tests {
         ProtocolParameters, Transaction, address, address::kind::*, address_test, assets,
         cbor::ToCbor, hash, input, output, plutus_data, plutus_script, script_credential, value,
     };
+    use indoc::indoc;
     use std::{cell::LazyCell, collections::BTreeMap, sync::LazyLock};
 
     /// Some fixture parameters, simply mimicking PreProd's parameters.
@@ -483,7 +518,7 @@ mod tests {
                 tx.with_inputs(vec![input!(
                     "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
                     0,
-                    PlutusData::list([]),
+                    PlutusData::list::<PlutusData>([]),
                 )])
                 .with_collaterals(vec![input!(
                     "0000000000000000000000000000000000000000000000000000000000000000",
@@ -512,7 +547,7 @@ mod tests {
                 tx.with_inputs(vec![input!(
                     "d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50",
                     0,
-                    PlutusData::list([]),
+                    PlutusData::list::<PlutusData>([]),
                 )])
                 .with_collaterals(vec![input!(
                     "0000000000000000000000000000000000000000000000000000000000000000",
@@ -539,31 +574,48 @@ mod tests {
             result
                 .map(|tx| tx.to_string())
                 .unwrap_or_else(|e| e.to_string()),
-            "Transaction (id = 3bd44ee7393607ab23ac97bc0928cce42edf7316195d301308fc346877d8a55d) { \
-                inputs: [Input(d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50#0)], \
-                outputs: [\
-                    Output { \
-                        address: addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c, \
-                        value: Value { lovelace: 101870870 } \
-                    }\
-                ], \
-                fee: 178509, \
-                script_integrity_hash: 3b2ff5d0ea6d2fa720d12f01d71e015306d77524c750df84b2106bbe0919a4e2, \
-                collaterals: [Input(0000000000000000000000000000000000000000000000000000000000000000#1)], \
-                collateral_return: Output { address: addr1vxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytckt7nh9, value: Value { lovelace: 9732236 } }, \
-                total_collateral: 267764, \
-                scripts: [v3(bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777)], \
-                datums: [\
-                    CBOR(d8799fd8799fd87a9f581c1eae96baf29e27682ea3f815aba361a0c\
-                         6059d45e4bfbe95bbd2f44affffd8799f4040ffd8799f581cf66d78\
-                         b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b6988044694\
-                         55448ff1a9deac9cb1b00000033accac2401a02311bec18641864d8\
-                         799f190e52ffd87980ff)\
-                ], \
-                redeemers: {\
-                    Spend(0): Redeemer(CBOR(80), ExecutionUnits { mem: 1601, cpu: 316149 })\
-                } \
-            }"
+            indoc! {"
+                Transaction (id = 3bd44ee7393607ab23ac97bc0928cce42edf7316195d301308fc346877d8a55d) {
+                    inputs: [
+                        Input(d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50#0),
+                    ],
+                    outputs: [
+                        Output {
+                            address: addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c,
+                            value: Value {
+                                lovelace: 101870870,
+                            },
+                        },
+                    ],
+                    fee: 178509,
+                    script_integrity_hash: 3b2ff5d0ea6d2fa720d12f01d71e015306d77524c750df84b2106bbe0919a4e2,
+                    collaterals: [
+                        Input(0000000000000000000000000000000000000000000000000000000000000000#1),
+                    ],
+                    collateral_return: Output {
+                        address: addr1vxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytckt7nh9,
+                        value: Value {
+                            lovelace: 9732236,
+                        },
+                    },
+                    total_collateral: 267764,
+                    scripts: [
+                        v3(bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777),
+                    ],
+                    datums: [
+                        CBOR(d8799fd8799fd87a9f581c1eae96baf29e27682ea3f815aba361a0c6059d45e4bfbe95bbd2f44affffd8799f4040ffd8799f581cf66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b698804469455448ff1a9deac9cb1b00000033accac2401a02311bec18641864d8799f190e52ffd87980ff),
+                    ],
+                    redeemers: {
+                        Spend(0): Redeemer(
+                            CBOR(80),
+                            ExecutionUnits {
+                                mem: 1601,
+                                cpu: 316149,
+                            },
+                        ),
+                    },
+                }"
+            },
         );
     }
 
@@ -695,7 +747,7 @@ mod tests {
             Transaction::build(&FIXTURE_PROTOCOL_PARAMETERS, &resolved_inputs, |tx| {
                 tx.with_inputs(vec![(
                     Input::new(pay_to_script.id(), 0),
-                    Some(PlutusData::list(vec![])),
+                    Some(PlutusData::list::<PlutusData>([])),
                 )])
                 .with_reference_inputs(vec![(Input::new(deploy_script.id(), 0))])
                 .with_collaterals(vec![Input::new(pay_to_script.id(), 1)])
@@ -728,7 +780,7 @@ mod tests {
                 tx.with_inputs(vec![
                     (
                         Input::new(spend_from_script.id(), 0),
-                        Some(PlutusData::list(vec![])),
+                        Some(PlutusData::list::<PlutusData>([])),
                     ),
                     (Input::new(deploy_script.id(), 0), None),
                     (Input::new(pay_to_script.id(), 1), None),

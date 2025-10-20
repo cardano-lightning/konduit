@@ -120,6 +120,18 @@ impl ProtocolParameters {
             .with_first_shelley_slot(86400)
     }
 
+    /// _Current_ PreProd protocol parameters.
+    ///
+    /// <div class="warning">This may drift from actual parameters based on protocol updates. Ideally, parameters should be
+    /// reconstructed from a blockchain provider.</div>
+    ///
+    /// FIXME :: This has not been verified.
+    pub fn preview() -> Self {
+        Self::mainnet()
+            .with_start_time(1666656000)
+            .with_first_shelley_slot(0)
+    }
+
     /// Specify the multiplier fee coefficient on the size of transactions, in lovelace/bytes
     pub fn with_fee_per_byte(mut self, fee_per_byte: u64) -> Self {
         self.fee_per_byte = fee_per_byte;

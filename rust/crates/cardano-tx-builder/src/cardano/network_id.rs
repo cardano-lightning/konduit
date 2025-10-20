@@ -22,7 +22,7 @@ use std::fmt;
 /// assert!(NetworkId::try_from(0_u8).is_ok_and(|network| network.is_testnet()));
 /// assert!(NetworkId::try_from(1_u8).is_ok_and(|network| network.is_mainnet()));
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
 pub struct NetworkId(#[n(0)] pallas::NetworkId);
