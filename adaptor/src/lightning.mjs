@@ -55,8 +55,6 @@ export default class LightningClient {
     if (res.status >= 400) {
       throw new Error(`unable to GET ${path}`, { cause: await res.json() });
     }
-    const json = res.json();
-    await json.then(console.log);
-    return json;
+    return res.json();
   }
 }

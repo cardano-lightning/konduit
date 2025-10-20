@@ -11,7 +11,5 @@ export function get_env(key, defaults) {
 }
 
 export function get_env_option(key, defaults = {}) {
-  const env_var = process.env[`${ENV_PREFIX}_${key}`] ?? defaults[key];
-
-  return env_var;
+  return process.env[`${ENV_PREFIX}_${key}`] ?? defaults[key];
 }
