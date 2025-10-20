@@ -4,7 +4,7 @@
 
 use crate::{Credential, NetworkId, pallas};
 use anyhow::anyhow;
-use std::{cmp::Ordering, fmt, marker::PhantomData, rc::Rc, str::FromStr};
+use std::{cmp::Ordering, fmt, marker::PhantomData, str::FromStr, sync::Arc};
 
 pub mod kind;
 pub use kind::IsAddressKind;
@@ -69,7 +69,7 @@ pub use kind::IsAddressKind;
 ///    );
 ///    ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Address<T: IsAddressKind>(Rc<AddressKind>, PhantomData<T>);
+pub struct Address<T: IsAddressKind>(Arc<AddressKind>, PhantomData<T>);
 
 impl<T: IsAddressKind + Eq> PartialOrd for Address<T> {
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
@@ -234,13 +234,13 @@ impl<T: IsAddressKind> Address<T> {
 
 impl From<pallas::ByronAddress> for Address<kind::Byron> {
     fn from(byron_address: pallas::ByronAddress) -> Self {
-        Self(Rc::new(AddressKind::Byron(byron_address)), PhantomData)
+        Self(Arc::new(AddressKind::Byron(byron_address)), PhantomData)
     }
 }
 
 impl From<pallas::ShelleyAddress> for Address<kind::Shelley> {
     fn from(shelley_address: pallas::ShelleyAddress) -> Self {
-        Self(Rc::new(AddressKind::Shelley(shelley_address)), PhantomData)
+        Self(Arc::new(AddressKind::Shelley(shelley_address)), PhantomData)
     }
 }
 
@@ -262,11 +262,11 @@ impl TryFrom<pallas::Address> for Address<kind::Any> {
     fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
         match address {
             pallas_addresses::Address::Byron(byron) => Ok(Address::<kind::Any>(
-                Rc::new(AddressKind::Byron(byron)),
+                Arc::new(AddressKind::Byron(byron)),
                 PhantomData,
             )),
             pallas_addresses::Address::Shelley(shelley) => Ok(Address::<kind::Any>(
-                Rc::new(AddressKind::Shelley(shelley)),
+                Arc::new(AddressKind::Shelley(shelley)),
                 PhantomData,
             )),
             pallas_addresses::Address::Stake(_) => {
@@ -282,7 +282,7 @@ impl TryFrom<pallas::Address> for Address<kind::Shelley> {
     fn try_from(address: pallas::Address) -> anyhow::Result<Self> {
         match address {
             pallas_addresses::Address::Shelley(shelley) => Ok(Address::<kind::Shelley>(
-                Rc::new(AddressKind::Shelley(shelley)),
+                Arc::new(AddressKind::Shelley(shelley)),
                 PhantomData,
             )),
             pallas_addresses::Address::Byron(_) | pallas_addresses::Address::Stake(_) => {
