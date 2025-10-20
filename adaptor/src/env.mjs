@@ -9,7 +9,3 @@ export function get_env(key, defaults) {
 
   return env_var;
 }
-
-export function get_env_option(key, defaults = {}) {
-  return process.env[`${ENV_PREFIX}_${key}`] ?? defaults[key];
-}

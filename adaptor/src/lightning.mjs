@@ -12,10 +12,6 @@ export default class LightningClient {
       typeof base_url === "string",
       "missing/invalid lightning base url",
     );
-    // assert.ok(
-    //   tls_certificate instanceof Buffer,
-    //   `missing/invalid tls_certificate`,
-    // );
     assert.ok(macaroon instanceof Buffer, "missing/invalid macaroon");
 
     this.#base_url = base_url;

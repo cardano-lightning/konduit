@@ -1,4 +1,4 @@
-import { get_env_option, get_env } from "./env.mjs";
+import { get_env } from "./env.mjs";
 import * as fs from "node:fs";
 
 const DEFAULTS = {
@@ -7,6 +7,7 @@ const DEFAULTS = {
 
   /** Fixed amount charged by the Adaptor for routing payments, in milli-satoshis */
   FEE: 42n,
+  LN_TLS_CERT: null,
 };
 
 export default {
@@ -18,19 +19,14 @@ export default {
 };
 
 function getMacaroon() {
-  const maybeMacaroonHex = get_env_option("LN_MACAROON_HEX");
-  if (maybeMacaroonHex) {
-    console.log(Buffer.from(maybeMacaroonHex, "hex"));
-    return Buffer.from(maybeMacaroonHex, "hex");
+  try {
+    return Buffer.from(get_env("LN_MACAROON_HEX", DEFAULTS), "hex");
+  } catch (_err) {
+    return fs.readFileSync(get_env("LN_MACAROON", DEFAULTS));
   }
-  return fs.readFileSync(get_env("LN_MACAROON", DEFAULTS));
 }
 
 function getTlsCert() {
-  const maybeTlsCertPath = get_env_option("LN_TLS_CERT", DEFAULTS);
-  if (maybeTlsCertPath) {
-    return fs.readFileSync(maybeTlsCertPath);
-  } else {
-    return null;
-  }
+  let path = get_env("LN_TLS_CERT", DEFAULTS);
+  return path ? fs.readFileSync(path) : null;
 }
