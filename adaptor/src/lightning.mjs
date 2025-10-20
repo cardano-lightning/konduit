@@ -12,17 +12,19 @@ export default class LightningClient {
       typeof base_url === "string",
       "missing/invalid lightning base url",
     );
-    assert.ok(
-      tls_certificate instanceof Buffer,
-      `missing/invalid tls_certificate`,
-    );
+    // assert.ok(
+    //   tls_certificate instanceof Buffer,
+    //   `missing/invalid tls_certificate`,
+    // );
     assert.ok(macaroon instanceof Buffer, "missing/invalid macaroon");
 
     this.#base_url = base_url;
 
     this.#dispatcher = new Agent({
       connect: {
-        ca: tls_certificate,
+        ...(tls_certificate
+          ? { ca: tls_certificate }
+          : { rejectUnauthorized: false }),
         keepAlive: true,
       },
     });
@@ -53,7 +55,8 @@ export default class LightningClient {
     if (res.status >= 400) {
       throw new Error(`unable to GET ${path}`, { cause: await res.json() });
     }
-
-    return res.json();
+    const json = res.json();
+    await json.then(console.log);
+    return json;
   }
 }
