@@ -75,7 +75,7 @@ impl From<&PlutusScript> for Hash<28> {
     fn from(PlutusScript(version, script): &PlutusScript) -> Self {
         let mut buffer: Vec<u8> = vec![u8::from(*version)];
         buffer.extend_from_slice(script.as_slice());
-        Hash::from(pallas::hash::Hasher::<224>::hash(&buffer))
+        Hash::from(pallas::Hasher::<224>::hash(&buffer))
     }
 }
 

@@ -11,6 +11,7 @@ pub use cardano::{
     // line in the following import list; making diffs and extensions easier.
     address::{Address, IsAddressKind},
     credential::Credential,
+    crypto::ed25519::{Signature, SigningKey, VerificationKey},
     datum::Datum,
     execution_units::ExecutionUnits,
     hash::Hash,
@@ -34,8 +35,6 @@ pub use cardano::address;
 pub use cardano::transaction;
 
 pub use cardano::macros;
-
-pub use pallas_crypto::key::ed25519;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod any {

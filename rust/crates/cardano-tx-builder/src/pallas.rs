@@ -4,5 +4,5 @@
 
 pub use pallas_addresses::*;
 pub use pallas_codec::utils::*;
-pub use pallas_crypto::*;
+pub use pallas_crypto::{hash::*, key::*};
 pub use pallas_primitives::{alonzo::BigInt, conway::*, *};

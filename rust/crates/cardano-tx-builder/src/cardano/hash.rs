@@ -60,6 +60,26 @@ impl<const SIZE: usize> fmt::Display for Hash<SIZE> {
     }
 }
 
+// ---------------------------------------------------------------- Constructing
+
+impl Hash<28> {
+    pub fn new<T: AsRef<[u8]>>(preimage: T) -> Self {
+        Self(pallas::Hasher::<224>::hash(preimage.as_ref()))
+    }
+}
+
+impl Hash<32> {
+    pub fn new<T: AsRef<[u8]>>(preimage: T) -> Self {
+        Self(pallas::Hasher::<256>::hash(preimage.as_ref()))
+    }
+}
+
+// ------------------------------------------------------------------ Inspecting
+
+impl<const SIZE: usize> Hash<SIZE> {
+    pub const SIZE: usize = SIZE;
+}
+
 // ----------------------------------------------------------- Converting (from)
 
 impl<const SIZE: usize> TryFrom<&str> for Hash<SIZE> {

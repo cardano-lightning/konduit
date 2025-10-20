@@ -4,6 +4,7 @@
 
 pub mod address;
 pub mod credential;
+pub mod crypto;
 pub mod datum;
 pub mod execution_units;
 pub mod hash;

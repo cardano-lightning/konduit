@@ -4,8 +4,8 @@
 
 use crate::{
     Address, BoxedIterator, ChangeStrategy, ExecutionUnits, Hash, Input, NetworkId, Output,
-    PlutusData, PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, Value, cbor,
-    ed25519, pallas, pretty,
+    PlutusData, PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, SigningKey,
+    Value, VerificationKey, cbor, pallas, pretty,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -245,14 +245,14 @@ impl Transaction<state::InConstruction> {
 // -------------------------------------------------------------------- Signing
 
 impl Transaction<state::ReadyForSigning> {
-    pub fn sign(&mut self, secret_key: ed25519::SecretKey) -> &mut Self {
-        let public_key = pallas::Bytes::from(Vec::from(<[u8; ed25519::PublicKey::SIZE]>::from(
-            secret_key.public_key(),
+    pub fn sign(&mut self, signing_key: SigningKey) -> &mut Self {
+        let public_key = pallas::Bytes::from(Vec::from(<[u8; VerificationKey::SIZE]>::from(
+            VerificationKey::from(&signing_key),
         )));
 
         let witness = pallas::VKeyWitness {
             vkey: public_key.clone(),
-            signature: pallas::Bytes::from(Vec::from(secret_key.sign(self.id()).as_ref())),
+            signature: pallas::Bytes::from(Vec::from(signing_key.sign(self.id()).as_ref())),
         };
 
         if let Some(signatures) = mem::take(&mut self.inner.transaction_witness_set.vkeywitness) {
@@ -549,7 +549,7 @@ impl<State: IsTransactionBodyState> Transaction<State> {
     pub fn id(&self) -> Hash<32> {
         let mut bytes = Vec::new();
         let _ = cbor::encode(&self.inner.transaction_body, &mut bytes);
-        Hash::from(pallas::hash::Hasher::<256>::hash(&bytes))
+        Hash::from(pallas::Hasher::<256>::hash(&bytes))
     }
 
     pub fn fee(&self) -> u64 {
@@ -832,7 +832,7 @@ impl<State: IsTransactionBodyState> Transaction<State> {
         )
         .unwrap();
 
-        Some(Hash::from(pallas::hash::Hasher::<256>::hash(&preimage)))
+        Some(Hash::from(pallas::Hasher::<256>::hash(&preimage)))
     }
 }
 
@@ -1153,7 +1153,8 @@ impl<'d, C, State: IsTransactionBodyState> cbor::Decode<'d, C> for Transaction<S
 
 #[cfg(test)]
 mod tests {
-    use crate::{Transaction, cbor, ed25519, transaction::state::*};
+    use crate::{SigningKey, Transaction, cbor, transaction::state::*};
+    use indoc::indoc;
 
     #[test]
     fn display_transaction_1() {

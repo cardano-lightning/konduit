@@ -2,7 +2,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Hash, cbor, pallas};
+use crate::{Hash, VerificationKey, cbor, pallas};
 use anyhow::anyhow;
 use std::fmt;
 
@@ -46,6 +46,8 @@ impl Default for Credential {
 }
 
 impl Credential {
+    pub const DIGEST_SIZE: usize = 28;
+
     /// Construct a credential from a key.
     ///
     /// See also [`key_credential!`](crate::key_credential).
@@ -138,6 +140,12 @@ impl From<&pallas::ShelleyPaymentPart> for Credential {
     }
 }
 
+impl From<VerificationKey> for Credential {
+    fn from(key: VerificationKey) -> Self {
+        Self::from_key(Hash::<28>::new(key))
+    }
+}
+
 impl TryFrom<&pallas::ShelleyDelegationPart> for Credential {
     type Error = anyhow::Error;
 
@@ -182,6 +190,18 @@ impl From<Credential> for pallas::ShelleyDelegationPart {
             pallas::StakeCredential::ScriptHash(hash) => {
                 pallas::ShelleyDelegationPart::Script(hash)
             }
+        }
+    }
+}
+
+impl From<Credential> for [u8; 28] {
+    fn from(credential: Credential) -> Self {
+        match credential.0 {
+            pallas::StakeCredential::AddrKeyhash(hash)
+            | pallas::StakeCredential::ScriptHash(hash) => <[u8; 28]>::try_from(hash.to_vec())
+                .unwrap_or_else(|e| {
+                    unreachable!("Hash<28> held something else than 28 bytes: {e:?}")
+                }),
         }
     }
 }
