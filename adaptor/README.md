@@ -8,7 +8,7 @@ yarn
 
 ## Configuring
 
-See `./env.example` for configuration options.
+See [`./env.example`](.env.example) for configuration options.
 
 ## Running
 

@@ -7,6 +7,8 @@ const DEFAULTS = {
 
   /** Fixed amount charged by the Adaptor for routing payments, in milli-satoshis */
   FEE: 42n,
+
+  /** TLS certificate (PEM format) to *securily* connect to the BLN node. */
   LN_TLS_CERT: null,
 };
 
