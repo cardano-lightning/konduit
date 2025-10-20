@@ -4,6 +4,8 @@ pub mod cheque;
 pub mod cheque_body;
 pub mod constants;
 pub mod evidence;
+pub mod mixed_cheque;
+pub mod mixed_receipt;
 pub mod receipt;
 pub mod squash;
 pub mod squash_body;
@@ -11,7 +13,7 @@ pub mod unlocked;
 
 pub const MAX_TAG_LENGTH: usize = 32;
 pub const MAX_EXCLUDE_LENGTH: usize = 30;
-pub const MAX_UNLOCKEDS_LENGTH: usize = 30;
+pub const MAX_UNSQUASHED: usize = 30;
 
 pub fn signature_to_plutus_data(signature: Signature) -> PlutusData<'static> {
     PlutusData::from(&<[u8; 64]>::from(signature))

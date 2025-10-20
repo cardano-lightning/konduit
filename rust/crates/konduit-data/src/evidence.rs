@@ -3,7 +3,8 @@ use cardano_tx_builder::VerificationKey;
 use cryptoxide::hashing::sha256;
 
 use crate::{
-    MAX_TAG_LENGTH, MAX_UNLOCKEDS_LENGTH, cheque::Cheque, squash::Squash, unlocked::Unlocked,
+    MAX_TAG_LENGTH, MAX_UNSQUASHED, cheque::Cheque, mixed_cheque::MixedCheque,
+    mixed_receipt::MixedReceipt, receipt::Receipt, squash::Squash, unlocked::Unlocked,
 };
 
 /// This represents the adaptors state associated to a channel.
@@ -15,6 +16,7 @@ pub struct Evidence {
     squash: Squash,
     cheques: Vec<Cheque>,
     unlockeds: Vec<Unlocked>,
+    underwritten: u64,
 }
 
 impl Evidence {
@@ -22,6 +24,7 @@ impl Evidence {
         tag: Vec<u8>,
         verification_key: VerificationKey,
         squash: Squash,
+        underwritten: u64,
     ) -> anyhow::Result<Self> {
         if tag.len() > MAX_TAG_LENGTH {
             Err(anyhow!("Tag too long"))?;
@@ -32,6 +35,7 @@ impl Evidence {
             squash,
             cheques: vec![],
             unlockeds: vec![],
+            underwritten,
         })
     }
 
@@ -49,17 +53,40 @@ impl Evidence {
         {
             Err(anyhow!("Index already squashed"))?;
         }
-        if self.cheques.len() + self.unlockeds.len() > MAX_UNLOCKEDS_LENGTH {
+        if self.cheques.len() + self.unlockeds.len() > MAX_UNSQUASHED {
             Err(anyhow!("Too many cheques"))?;
         }
         // FIXME:
         // - Cheque index already in self.cheques
         // - Cheque index already in self.unlockeds
+        // - Cheque is underwritten
         self.cheques.push(cheque);
         Ok(())
     }
 
-    pub fn timeout_cheque(&mut self) {
+    pub fn available_amount(&self) -> u64 {
+        // Total amount committed.
+        // Amount available is then underwitten - commited
+        self.underwritten - self.committed()
+    }
+
+    pub fn committed(&self) -> u64 {
+        // Total amount committed.
+        // Amount available is then underwitten - commited
+        self.squash.amount()
+            + self
+                .cheques
+                .iter()
+                .map(|x| x.cheque_body.amount)
+                .sum::<u64>()
+            + self
+                .unlockeds
+                .iter()
+                .map(|x| x.cheque_body.amount)
+                .sum::<u64>()
+    }
+
+    pub fn timeout_cheque(&mut self, _timeout: u64) -> anyhow::Result<Vec<u64>> {
         // Drop cheques that have timed out.
         todo!()
     }
@@ -88,11 +115,22 @@ impl Evidence {
         Ok(())
     }
 
-    pub fn squash_request(&self) -> (Squash, Vec<Unlocked>) {
-        (self.squash.clone(), self.unlockeds.clone())
+    pub fn receipt(&self) -> anyhow::Result<Receipt> {
+        Receipt::new(self.squash.clone(), self.unlockeds.clone())
     }
 
-    pub fn add_squash(&mut self, squash: Squash) -> anyhow::Result<()> {
+    pub fn mixed_receipt(&self) -> anyhow::Result<MixedReceipt> {
+        MixedReceipt::new(
+            self.squash.clone(),
+            self.unlockeds
+                .iter()
+                .map(|x| MixedCheque::from(x.clone()))
+                .chain(self.cheques.iter().map(|x| MixedCheque::from(x.clone())))
+                .collect(),
+        )
+    }
+
+    pub fn add_squash(&mut self, _squash: Squash) -> anyhow::Result<()> {
         // FIXME :: Cases to verify
         // - verify squash
         // - squash is strictly ahead of current squash

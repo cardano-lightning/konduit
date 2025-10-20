@@ -3,7 +3,7 @@ use cardano_tx_builder::{PlutusData, Signature, SigningKey, VerificationKey};
 
 use crate::{cheque_body::ChequeBody, signature_from_plutus_data, signature_to_plutus_data};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cheque {
     pub cheque_body: ChequeBody,
     pub signature: Signature,

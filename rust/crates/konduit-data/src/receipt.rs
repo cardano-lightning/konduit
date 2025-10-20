@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 
-use crate::{MAX_UNLOCKEDS_LENGTH, squash::Squash, unlocked::Unlocked};
+use crate::{MAX_UNSQUASHED, squash::Squash, unlocked::Unlocked};
 
 #[derive(Debug, Clone)]
 pub struct Receipt {
@@ -11,7 +11,7 @@ pub struct Receipt {
 
 impl Receipt {
     pub fn new(squash: Squash, unlockeds: Vec<Unlocked>) -> anyhow::Result<Self> {
-        if unlockeds.len() > MAX_UNLOCKEDS_LENGTH {
+        if unlockeds.len() > MAX_UNSQUASHED {
             Err(anyhow!("Too many unlockeds"))?;
         }
         let mut sorted: Vec<Unlocked> = vec![];
