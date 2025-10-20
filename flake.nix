@@ -67,6 +67,7 @@
               inputs'.aiken.packages.aiken
               pkgs.yarn
               pkgs.nodePackages_latest.nodejs
+              pkgs.typescript-language-server
               pkgs.openssl
               config.rust-project.toolchain
             ]
