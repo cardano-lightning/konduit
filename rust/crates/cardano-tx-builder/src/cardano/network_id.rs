@@ -4,7 +4,7 @@
 
 use crate::{cbor, pallas};
 use anyhow::anyhow;
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 /// A network identifier to protect misuses of addresses or transactions on a wrong network.
 ///
@@ -56,6 +56,20 @@ impl NetworkId {
 }
 
 // ----------------------------------------------------------- Converting (from)
+
+impl FromStr for NetworkId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        match s {
+            _ if s == Self::MAINNET.to_string() => Ok(Self::MAINNET),
+            _ if s == Self::TESTNET.to_string() => Ok(Self::TESTNET),
+            _ => Err(anyhow!(
+                "unrecognised network id: must be either 'mainnet' or 'testnet'"
+            )),
+        }
+    }
+}
 
 impl From<pallas::NetworkId> for NetworkId {
     fn from(network_id: pallas::NetworkId) -> Self {

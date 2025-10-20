@@ -1,0 +1,32 @@
+[package]
+name = "konduit-cli"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[features]
+default = [ "blockfrost" ]
+blockfrost = [ "dep:cardano-connect-blockfrost" ]
+
+[dependencies]
+anyhow.workspace = true
+cardano-connect-blockfrost = { workspace = true, optional = true }
+cardano-connect.workspace = true
+cardano-tx-builder.workspace = true
+clap.workspace = true
+dotenv.workspace = true
+hex.workspace = true
+konduit-data.workspace = true
+konduit-tx.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

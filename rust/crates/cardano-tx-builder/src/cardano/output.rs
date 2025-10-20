@@ -39,21 +39,27 @@ pub struct Output {
 
 impl fmt::Display for Output {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug_struct = f.debug_struct("Output");
+        write!(
+            f,
+            "{:#?}",
+            pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                let mut debug_struct = f.debug_struct("Output");
 
-        debug_struct.field("address", &pretty::ViaDisplayNoAlloc(self.address()));
+                debug_struct.field("address", &pretty::ViaDisplayNoAlloc(self.address()));
 
-        debug_struct.field("value", &pretty::ViaDisplayNoAlloc(self.value()));
+                debug_struct.field("value", &pretty::ViaDisplayNoAlloc(self.value()));
 
-        if let Some(datum) = self.datum() {
-            debug_struct.field("datum", &pretty::ViaDisplayNoAlloc(datum));
-        }
+                if let Some(datum) = self.datum() {
+                    debug_struct.field("datum", &pretty::ViaDisplayNoAlloc(datum));
+                }
 
-        if let Some(script) = self.script() {
-            debug_struct.field("script", &pretty::ViaDisplayNoAlloc(script));
-        }
+                if let Some(script) = self.script() {
+                    debug_struct.field("script", &pretty::ViaDisplayNoAlloc(script));
+                }
 
-        debug_struct.finish()
+                debug_struct.finish()
+            })
+        )
     }
 }
 
