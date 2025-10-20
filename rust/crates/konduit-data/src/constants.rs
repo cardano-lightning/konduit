@@ -1,22 +1,20 @@
 use anyhow::{Error, Result, anyhow};
-use cardano_tx_builder::PlutusData;
-
-use crate::base::{Tag, TimeDelta, VerificationKey};
+use cardano_tx_builder::{PlutusData, VerificationKey};
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Constants {
-    pub tag: Tag,
+    pub tag: Vec<u8>,
     pub add_vkey: VerificationKey,
     pub sub_vkey: VerificationKey,
-    pub close_period: TimeDelta,
+    pub close_period: u64,
 }
 
 impl Constants {
     pub fn new(
-        tag: Tag,
+        tag: Vec<u8>,
         add_vkey: VerificationKey,
         sub_vkey: VerificationKey,
-        close_period: TimeDelta,
+        close_period: u64,
     ) -> Self {
         Self {
             tag,
@@ -24,6 +22,10 @@ impl Constants {
             sub_vkey,
             close_period,
         }
+    }
+
+    pub fn verify(&self, max_tag_length: usize, min_close_period: u64) -> bool {
+        self.tag.len() <= max_tag_length && self.close_period >= min_close_period
     }
 }
 
@@ -41,10 +43,10 @@ impl<'a> TryFrom<[PlutusData<'a>; 4]> for Constants {
     fn try_from(value: [PlutusData<'a>; 4]) -> Result<Self> {
         let [a, b, c, d] = value;
         Ok(Self::new(
-            Tag::try_from(a)?,
-            VerificationKey::try_from(b)?,
-            VerificationKey::try_from(c)?,
-            TimeDelta::try_from(d)?,
+            <&[u8]>::try_from(&a)?.to_vec(),
+            VerificationKey::from(<&[u8; 32]>::try_from(&b)?.clone()),
+            VerificationKey::from(<&[u8; 32]>::try_from(&c)?.clone()),
+            <u64>::try_from(&d)?,
         ))
     }
 }
@@ -61,8 +63,8 @@ impl<'a> From<Constants> for [PlutusData<'a>; 4] {
     fn from(value: Constants) -> Self {
         [
             PlutusData::from(value.tag),
-            PlutusData::from(value.add_vkey),
-            PlutusData::from(value.sub_vkey),
+            PlutusData::from(<[u8; 32]>::from(value.add_vkey)),
+            PlutusData::from(<[u8; 32]>::from(value.sub_vkey)),
             PlutusData::from(value.close_period),
         ]
     }

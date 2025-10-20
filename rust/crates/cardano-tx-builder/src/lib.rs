@@ -15,6 +15,7 @@ pub use cardano::{
     execution_units::ExecutionUnits,
     hash::Hash,
     input::Input,
+    key::ed25519::{Signature, SigningKey, VerificationKey},
     network_id::NetworkId,
     output::Output,
     output::change_strategy::ChangeStrategy,

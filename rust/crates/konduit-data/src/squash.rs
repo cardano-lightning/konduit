@@ -1,8 +1,7 @@
-use anyhow::{Error, Result, anyhow};
-use cardano_tx_builder::PlutusData;
+use anyhow::anyhow;
+use cardano_tx_builder::{PlutusData, Signature, SigningKey, VerificationKey};
 
-use crate::base::{Amount, Signature};
-use crate::squash_body::SquashBody;
+use crate::{signature_from_plutus_data, signature_to_plutus_data, squash_body::SquashBody};
 
 #[derive(Debug, Clone)]
 pub struct Squash {
@@ -18,32 +17,44 @@ impl Squash {
         }
     }
 
-    pub fn amount(&self) -> Amount {
-        self.squash_body.amount.clone()
+    pub fn amount(&self) -> u64 {
+        self.squash_body.amount
+    }
+
+    pub fn make(signing_key: SigningKey, tag: Vec<u8>, squash_body: SquashBody) -> Self {
+        let signature = signing_key.sign(squash_body.tagged_bytes(tag));
+        Self::new(squash_body, signature)
+    }
+
+    pub fn verify(&self, verification_key: VerificationKey, tag: Vec<u8>) -> bool {
+        verification_key.verify(self.squash_body.tagged_bytes(tag), &self.signature)
     }
 }
 
 impl<'a> TryFrom<Vec<PlutusData<'a>>> for Squash {
-    type Error = Error;
+    type Error = anyhow::Error;
 
-    fn try_from(value: Vec<PlutusData<'a>>) -> Result<Self> {
+    fn try_from(value: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
         Self::try_from(<[PlutusData; 2]>::try_from(value).map_err(|_| anyhow!("Bad length"))?)
     }
 }
 
 impl<'a> TryFrom<[PlutusData<'a>; 2]> for Squash {
-    type Error = Error;
+    type Error = anyhow::Error;
 
-    fn try_from(value: [PlutusData<'a>; 2]) -> Result<Self> {
+    fn try_from(value: [PlutusData<'a>; 2]) -> anyhow::Result<Self> {
         let [a, b] = value;
-        Ok(Self::new(SquashBody::try_from(a)?, Signature::try_from(b)?))
+        Ok(Self::new(
+            SquashBody::try_from(a)?,
+            signature_from_plutus_data(&b)?,
+        ))
     }
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Squash {
-    type Error = Error;
+    type Error = anyhow::Error;
 
-    fn try_from(data: &PlutusData<'a>) -> Result<Self> {
+    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         Self::try_from(<[PlutusData; 2]>::try_from(data)?)
     }
 }
@@ -51,8 +62,8 @@ impl<'a> TryFrom<&PlutusData<'a>> for Squash {
 impl<'a> From<Squash> for [PlutusData<'a>; 2] {
     fn from(value: Squash) -> Self {
         [
-            PlutusData::from(value.squash_body),
-            PlutusData::from(value.signature),
+            PlutusData::from(&value.squash_body),
+            signature_to_plutus_data(value.signature),
         ]
     }
 }

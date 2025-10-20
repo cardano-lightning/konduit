@@ -1,7 +1,7 @@
 use anyhow::{Error, Result, anyhow};
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, Signature, SigningKey, VerificationKey};
 
-use crate::{base::Signature, cheque_body::ChequeBody};
+use crate::{cheque_body::ChequeBody, signature_from_plutus_data, signature_to_plutus_data};
 
 #[derive(Debug, Clone)]
 pub struct Cheque {
@@ -15,6 +15,15 @@ impl Cheque {
             cheque_body,
             signature,
         }
+    }
+
+    pub fn make(signing_key: SigningKey, tag: Vec<u8>, cheque_body: ChequeBody) -> Self {
+        let signature = signing_key.sign(cheque_body.tagged_bytes(tag));
+        Self::new(cheque_body, signature)
+    }
+
+    pub fn verify(&self, verification_key: &VerificationKey, tag: Vec<u8>) -> bool {
+        verification_key.verify(self.cheque_body.tagged_bytes(tag), &self.signature)
     }
 }
 
@@ -32,7 +41,10 @@ impl<'a> TryFrom<Vec<PlutusData<'a>>> for Cheque {
 
     fn try_from(list: Vec<PlutusData<'a>>) -> Result<Self> {
         let [a, b] = <[PlutusData; 2]>::try_from(list).map_err(|_| anyhow!("invalid 'Cheque'"))?;
-        Ok(Self::new(ChequeBody::try_from(a)?, Signature::try_from(b)?))
+        Ok(Self::new(
+            ChequeBody::try_from(a)?,
+            signature_from_plutus_data(&b)?,
+        ))
     }
 }
 
@@ -46,7 +58,7 @@ impl<'a> From<Cheque> for Vec<PlutusData<'a>> {
     fn from(cheque: Cheque) -> Self {
         vec![
             PlutusData::from(cheque.cheque_body),
-            PlutusData::from(cheque.signature),
+            signature_to_plutus_data(cheque.signature),
         ]
     }
 }
