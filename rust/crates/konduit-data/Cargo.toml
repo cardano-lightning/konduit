@@ -1,0 +1,22 @@
+[package]
+name = "konduit-data"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+anyhow.workspace = true
+blake2.workspace = true
+cardano-tx-builder.workspace = true
+cryptoxide.workspace = true
+hex.workspace = true
+sha2.workspace = true
