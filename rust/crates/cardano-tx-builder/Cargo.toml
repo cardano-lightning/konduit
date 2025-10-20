@@ -19,7 +19,6 @@ test-utils = ["dep:proptest"]
 
 [dependencies]
 anyhow.workspace = true
-cryptoxide.workspace = true
 hex.workspace = true
 itertools.workspace = true
 minicbor.workspace = true
