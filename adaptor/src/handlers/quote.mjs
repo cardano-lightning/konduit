@@ -33,6 +33,7 @@ export function get_quote(lightning) {
       amount,
       recipient,
       payment_hash: quote.payment_hash,
+      payment_addr: quote.payment_addr,
       routing_fee: BigInt(first_route.total_fees_msat) + config.ADAPTOR_FEE,
       expiry: expiry.toISOString(),
     });
