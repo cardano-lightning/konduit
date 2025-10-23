@@ -251,17 +251,23 @@ macro_rules! key_credential {
 ///
 /// ```rust
 /// # use cardano_tx_builder::{address, output};
+/// # use indoc::indoc;
 /// assert_eq!(
 ///   output!("addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h").to_string(),
-///   "Output { \
-///      address: addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h, \
-///      value: Value { lovelace: 857690 } \
-///   }"
+///   indoc!{"
+///     Output {
+///         address: addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h,
+///         value: Value {
+///             lovelace: 857690,
+///         },
+///     }"
+///   },
 /// );
 /// ```
 ///
 /// ```rust
 /// # use cardano_tx_builder::{address, output, value};
+/// # use indoc::indoc;
 /// assert_eq!(
 ///   output!(
 ///     "addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h",
@@ -274,13 +280,19 @@ macro_rules! key_credential {
 ///         ),
 ///     ),
 ///   ).to_string(),
-///   "Output { \
-///      address: addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h, \
-///      value: Value { \
-///        lovelace: 123456789, \
-///        assets: {279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f: {SNEK: 1}} \
-///      } \
-///   }"
+///   indoc!{"
+///     Output {
+///         address: addr1v83gkkw3nqzakg5xynlurqcfqhgd65vkfvf5xv8tx25ufds2yvy2h,
+///         value: Value {
+///             lovelace: 123456789,
+///             assets: {
+///                 279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f: {
+///                     SNEK: 1,
+///                 },
+///             },
+///         },
+///     }"
+///   },
 /// );
 /// ```
 #[macro_export]
