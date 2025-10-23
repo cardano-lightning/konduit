@@ -17,5 +17,6 @@ pub mod plutus_script;
 pub mod plutus_version;
 pub mod protocol_parameters;
 pub mod redeemer_pointer;
+pub mod slot_bound;
 pub mod transaction;
 pub mod value;

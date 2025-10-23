@@ -102,6 +102,7 @@ impl Transaction<state::InConstruction> {
     ///             },
     ///         ],
     ///         fee: 166249,
+    ///         validity: ]-∞; +∞[,
     ///     }"
     ///   }
     /// );
@@ -111,7 +112,8 @@ impl Transaction<state::InConstruction> {
     ///
     ///
     /// ```rust
-    /// # use cardano_tx_builder::{ChangeStrategy, PlutusData, PlutusVersion, ProtocolParameters, Transaction, address, assets, input, output, plutus_script, value};
+    /// # use cardano_tx_builder::{ChangeStrategy, PlutusData, PlutusVersion, ProtocolParameters, SlotBound, Transaction};
+    /// # use cardano_tx_builder::{address, assets, input, output, plutus_script, value};
     /// # use std::collections::btree_map::BTreeMap;
     /// # use indoc::indoc;
     /// let resolved_inputs = BTreeMap::from([
@@ -144,13 +146,14 @@ impl Transaction<state::InConstruction> {
     ///         PlutusData::list::<PlutusData>([]),
     ///       ),
     ///     ))
+    ///     .with_validity_interval(SlotBound::None, SlotBound::Exclusive(123456789))
     ///     .with_plutus_scripts(vec![
     ///       plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69")
     ///     ])
     ///     .ok()
     ///   ).unwrap().to_string(),
     ///   indoc!{"
-    ///     Transaction (id = 4b61e0fb18523e5c28f124b98c87de7b6d6cb7d049d2c75c94327e357bbbd54d) {
+    ///     Transaction (id = 07fbde0af6eaceb28a59f764e442002382181af756707e0ce0325354d2b26fac) {
     ///         inputs: [
     ///             Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1),
     ///         ],
@@ -158,7 +161,7 @@ impl Transaction<state::InConstruction> {
     ///             Output {
     ///                 address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47,
     ///                 value: Value {
-    ///                     lovelace: 9824351,
+    ///                     lovelace: 9824087,
     ///                     assets: {
     ///                         bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777: {
     ///                             whatever: 100,
@@ -167,7 +170,8 @@ impl Transaction<state::InConstruction> {
     ///                 },
     ///             },
     ///         ],
-    ///         fee: 175649,
+    ///         fee: 175913,
+    ///         validity: ]-∞; 123456789[,
     ///         mint: Value {
     ///             lovelace: 0,
     ///             assets: {
@@ -183,10 +187,10 @@ impl Transaction<state::InConstruction> {
     ///         collateral_return: Output {
     ///             address: addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47,
     ///             value: Value {
-    ///                 lovelace: 9736526,
+    ///                 lovelace: 9736130,
     ///             },
     ///         },
-    ///         total_collateral: 263474,
+    ///         total_collateral: 263870,
     ///         scripts: [
     ///             v3(bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777),
     ///         ],
@@ -462,8 +466,9 @@ fn evaluate_plutus_scripts(
 mod tests {
     use crate::{
         Address, ChangeStrategy, Input, Output, PlutusData, PlutusScript, PlutusVersion,
-        ProtocolParameters, Transaction, address, address::kind::*, address_test, assets,
-        cbor::ToCbor, hash, input, output, plutus_data, plutus_script, script_credential, value,
+        ProtocolParameters, SlotBound, Transaction, address, address::kind::*, address_test,
+        assets, cbor::ToCbor, hash, input, output, plutus_data, plutus_script, script_credential,
+        value,
     };
     use indoc::indoc;
     use std::{cell::LazyCell, collections::BTreeMap, sync::LazyLock};
@@ -482,6 +487,72 @@ mod tests {
     #[allow(clippy::declare_interior_mutable_const)]
     const ALWAYS_SUCCEED_SCRIPT: LazyCell<PlutusScript> =
         LazyCell::new(|| plutus_script!(PlutusVersion::V3, "5101010023259800a518a4d136564004ae69"));
+
+    #[test]
+    fn with_validity_interval() {
+        let resolved_inputs = [(
+            input!(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+                0,
+            ),
+            output!(
+                "addr1vx7n46v3kk40ejh7tjnswk9ax65m97rj74lk6wsllg8twacak3e47",
+                value!(10_000_000),
+            ),
+        )];
+
+        // With a missing datum hash.
+        let result = Transaction::build(
+            &FIXTURE_PROTOCOL_PARAMETERS,
+            &BTreeMap::from(resolved_inputs.clone()),
+            |tx| {
+                tx.with_inputs(vec![input!(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                    0,
+                    PlutusData::list::<PlutusData>([]),
+                )])
+                .with_validity_interval(
+                    SlotBound::Inclusive(14),
+                    SlotBound::Inclusive(42),
+                )
+                .with_change_strategy(ChangeStrategy::as_last_output(
+                    address!("addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c")
+                ))
+                .ok()
+            },
+        ).unwrap_or_else(|e| panic!("{e:?}"));
+
+        assert_eq!(
+            result.to_string(),
+            indoc! {
+                "Transaction (id = 454f5ca4f75209540851329deb6d08cb759836f5bbec0b11d3de38b4030aaf76) {
+                     inputs: [
+                         Input(0000000000000000000000000000000000000000000000000000000000000000#0),
+                     ],
+                     outputs: [
+                         Output {
+                             address: addr1qxu84ftxpzh3zd8p9awp2ytwzk5exj0fxcj7paur4kd4ytun36yuhgl049rxhhuckm2lpq3rmz5dcraddyl45d6xgvqqsp504c,
+                             value: Value {
+                                 lovelace: 9832035,
+                             },
+                         },
+                     ],
+                     fee: 167965,
+                     validity: [14; 43[,
+                     script_integrity_hash: 6bdd58f9ba5f3134e0c9509063c3292110582042096294d394c9913301b2dc5e,
+                     redeemers: {
+                         Spend(0): Redeemer(
+                             CBOR(80),
+                             ExecutionUnits {
+                                 mem: 0,
+                                 cpu: 0,
+                             },
+                         ),
+                     },
+                 }"
+            }
+        );
+    }
 
     #[test]
     fn spend_from_datum_hash() {
@@ -588,6 +659,7 @@ mod tests {
                         },
                     ],
                     fee: 178509,
+                    validity: ]-∞; +∞[,
                     script_integrity_hash: 3b2ff5d0ea6d2fa720d12f01d71e015306d77524c750df84b2106bbe0919a4e2,
                     collaterals: [
                         Input(0000000000000000000000000000000000000000000000000000000000000000#1),

@@ -24,6 +24,7 @@ pub use cardano::{
     plutus_version::PlutusVersion,
     protocol_parameters::ProtocolParameters,
     redeemer_pointer::RedeemerPointer,
+    slot_bound::SlotBound,
     transaction::{IsTransactionBodyState, Transaction},
     value::Value,
 };
