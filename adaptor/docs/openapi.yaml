@@ -23,9 +23,9 @@ components:
       type: object
       description: |
         A decoded (partial) view of the payment request's information, including a quote for routing the payment from the adaptor to the destination.
-      required: ["key", "close_period"]
+      required: ["adaptor_key", "close_period"]
       properties:
-        key:
+        adaptor_key:
           type: string
           format: base16
           minLength: 64
@@ -46,9 +46,9 @@ components:
       type: object
       description: |
         A decoded (partial) view of the payment request's information, including a quote for routing the payment from the adaptor to the destination.
-      required: ["key", "tag", "invoice"]
+      required: ["consumer_key", "tag", "invoice"]
       properties:
-        key:
+        consumer_key:
           type: string
           format: base16
           minLength: 64
@@ -159,7 +159,7 @@ components:
         as well as the information required to satisfy the recipient.
       required:
         [
-          "key",
+          "consumer_key",
           "tag",
           "cheque_body",
           "signature",
@@ -168,7 +168,7 @@ components:
           "payment_addr",
         ]
       properties:
-        key:
+        consumer_key:
           type: string
           format: base16
           minLength: 64
@@ -293,9 +293,9 @@ components:
         Evidence that the adaptor can use to redeem funds on the L1.
         After a successful route, the consumer should squash the cheque promptly.
         Failure to do so will casue the adaptor to stop service provision.
-      required: ["key", "tag", "squash_body", "signature"]
+      required: ["consumer_key", "tag", "squash_body", "signature"]
       properties:
-        key:
+        consumer_key:
           type: string
           format: base16
           minLength: 64
