@@ -17,3 +17,4 @@ release = false
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
 hex.workspace = true
+cryptoxide.workspace = true
