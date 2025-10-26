@@ -588,8 +588,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link 0.2.1",
 ]
 
@@ -1758,12 +1760,18 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "base64",
  "cardano-tx-builder",
+ "chrono",
  "clap",
  "dotenvy",
  "env_logger",
+ "futures",
  "hex",
+ "konduit-data",
  "log",
+ "proptest",
+ "proptest-derive",
  "reqwest",
  "serde",
  "serde-hex",
@@ -1799,6 +1807,9 @@ dependencies = [
  "cardano-tx-builder",
  "cryptoxide 0.5.1",
  "hex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -2398,6 +2409,17 @@ dependencies = [
  "rusty-fork",
  "tempfile",
  "unarray",
+]
+
+[[package]]
+name = "proptest-derive"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb6dc647500e84a25a85b100e76c85b8ace114c209432dc174f20aac11d4ed6c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

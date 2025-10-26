@@ -17,17 +17,25 @@ release = false
 actix = "0.13.5"
 actix-web = "4.11.0"
 anyhow.workspace = true
-async-trait = "0.1.89"
+async-trait.workspace = true
+base64 = "0.22.1"
 cardano-tx-builder.workspace = true
-clap.workspace = true
+chrono = "0.4.42"
+clap = { workspace = true, features = ["env"] }
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
+futures.workspace = true
 hex = { workspace = true, features = ["serde"] }
+konduit-data.workspace = true
 log = "0.4.28"
 reqwest = { workspace = true, features = ["json"] }
-serde.workspace = true
 serde-hex = "0.1.0"
+serde.workspace = true
 serde_json.workspace = true
 sled = "0.34.7"
 thiserror = "2.0.17"
 tokio.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+proptest-derive = "0.7.0"

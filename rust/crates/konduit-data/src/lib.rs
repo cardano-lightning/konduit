@@ -19,6 +19,9 @@ pub use cheque::*;
 mod unlocked;
 pub use unlocked::*;
 
+mod indexes;
+pub use indexes::*;
+
 mod squash_body;
 pub use squash_body::*;
 
@@ -36,6 +39,11 @@ pub use mixed_receipt::*;
 
 mod pending;
 pub use pending::*;
+
+mod hex_serde;
+pub use hex_serde::*;
+
+mod plutus_data_serde;
 
 mod utils;
 

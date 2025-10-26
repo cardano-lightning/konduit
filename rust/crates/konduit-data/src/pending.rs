@@ -1,8 +1,9 @@
 use crate::{Duration, Lock};
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pending {
     pub amount: u64,
     pub timeout: Duration,

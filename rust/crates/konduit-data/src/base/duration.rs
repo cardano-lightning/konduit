@@ -1,8 +1,9 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
+use serde::{Deserialize, Serialize};
 use std::{ops::Deref, str::FromStr, time};
 
-#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Duration(pub time::Duration);
 

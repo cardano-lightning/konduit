@@ -18,3 +18,6 @@ anyhow.workspace = true
 cardano-tx-builder.workspace = true
 hex.workspace = true
 cryptoxide.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

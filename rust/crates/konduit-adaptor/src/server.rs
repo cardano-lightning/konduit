@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 use crate::config::AppState;
 use crate::db::DbInterface;
 use crate::env;
@@ -39,5 +40,72 @@ pub async fn init_on_new(db: &impl DbInterface) -> Result<(), std::io::Error> {
             Ok(())
         }
         Ok(_) => Ok(()),
+=======
+use crate::keytag_middleware::KeytagAuth;
+use crate::{Cmd, app_state::AppState};
+use crate::{bln, db, fx, handlers};
+use actix_web::{App, HttpServer, middleware::Logger, web};
+
+#[derive(Debug, Clone)]
+pub enum CliError {
+    BadConfig,
+}
+
+pub struct Server {
+    app_state: AppState,
+    bind_address: String,
+}
+
+impl Server {
+    pub async fn from_cmd(cmd: Cmd) -> Result<Self, CliError> {
+        let bind_address = format!("{}:{}", cmd.host.host, cmd.host.port);
+        let info = cmd.info;
+        let db = cmd.db.into().expect("Failed to open database");
+        let bln = cmd.bln.into().expect("Failed to setup bln");
+        let fx = cmd.fx.into();
+        // Bln
+        // let macaroon = hex::decode(cmd.lnd_macaroon).unwrap();
+        // , None, &macaroon).unwrap();
+
+        // FX
+        // let fx = Arc::new(RwLock::new(None));
+        // tokio::spawn(cron_fx(15 * 60, fx.clone()));
+        // APP
+        let app_state = AppState::new(info, db, bln, None);
+        Ok(Self {
+            app_state,
+            bind_address,
+        })
+    }
+
+    pub async fn run(self) -> std::io::Result<()> {
+        // FIXME :: Handle error
+        let app_state = web::Data::new(self.app_state);
+        log::info!("Starting server on http://{}...", self.bind_address);
+        HttpServer::new(move || {
+            App::new()
+                .wrap(Logger::default())
+                .app_data(app_state.clone())
+                .route("/info", web::get().to(handlers::info))
+                .service(
+                    // FIXME : Implement auth
+                    web::scope("/ch")
+                        .wrap(KeytagAuth::new("KONDUIT"))
+                        .route("/squash", web::post().to(handlers::squash))
+                        .route("/quote", web::post().to(handlers::quote))
+                        // .route("/pay", web::post().to(handlers::pay))
+                        .route("/fx", web::get().to(handlers::fx)),
+                )
+                .service(
+                    // THIS SHOULD BE EXPOSED ONLY TO TRUSTED SOURCES.
+                    web::scope("/admin")
+                        .route("/tip", web::post().to(handlers::tip))
+                        .route("/show", web::get().to(handlers::show)),
+                )
+        })
+        .bind(self.bind_address)?
+        .run()
+        .await
+>>>>>>> e3cb13e (Updates to konduit data.)
     }
 }

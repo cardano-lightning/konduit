@@ -1,4 +1,5 @@
 use clap::Parser;
+<<<<<<< HEAD
 use std::sync::Arc;
 
 use konduit_adaptor::db::{DbInterface, open};
@@ -14,11 +15,16 @@ pub struct Cli {
     #[arg(long, env = "PORT", default_value = "4444")]
     pub port: u16,
 }
+=======
+
+use konduit_adaptor::{Cmd, Server};
+>>>>>>> e3cb13e (Updates to konduit data.)
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenvy::dotenv().ok();
+<<<<<<< HEAD
     let cli = Cli::parse();
     let db = open(cli.db_path).expect("Failed to open database");
     init_on_new(&db).await?;
@@ -26,3 +32,24 @@ async fn main() -> std::io::Result<()> {
     let bind_address = format!("{}:{}", cli.host, cli.port);
     run(db, bind_address).await
 }
+=======
+    let cmd = Cmd::parse();
+    println!("hello! {:?}", cmd);
+    Server::from_cmd(cmd)
+        .await
+        .expect("Failed to parse cmd")
+        .run()
+        .await
+}
+
+// async fn cron_fx(period_seconds: u64, fx_data: Arc<RwLock<Option<Fx>>>) {
+//     let mut interval = interval(Duration::from_secs(period_seconds));
+//     loop {
+//         interval.tick().await;
+//         let new_data = get_fx(BaseCurrency::Eur).await.ok();
+//         log::info!("FX CALLED");
+//         let mut data_guard = fx_data.write().await;
+//         *data_guard = new_data;
+//     }
+// }
+>>>>>>> e3cb13e (Updates to konduit data.)

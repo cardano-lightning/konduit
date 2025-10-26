@@ -1,7 +1,6 @@
 use anyhow::{Error, Result};
 use cardano_tx_builder::{PlutusData, cbor::ToCbor};
-
-use crate::{Duration, Lock, Secret};
+use crate::{Duration, Lock, Secret, Tag};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ChequeBody {
@@ -21,9 +20,9 @@ impl ChequeBody {
         }
     }
 
-    pub fn tagged_bytes(&self, tag: Vec<u8>) -> Vec<u8> {
+    pub fn tagged_bytes(&self, tag: &Tag) -> Vec<u8> {
         let mut data = PlutusData::from(self.clone()).to_cbor();
-        let mut x = tag.clone();
+        let mut x = tag.0.clone();
         x.append(&mut data);
         x
     }
