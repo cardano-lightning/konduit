@@ -34,6 +34,9 @@ pub use mixed_cheque::*;
 mod mixed_receipt;
 pub use mixed_receipt::*;
 
+mod pending;
+pub use pending::*;
+
 mod utils;
 
 pub const MAX_UNSQUASHED: usize = 10;

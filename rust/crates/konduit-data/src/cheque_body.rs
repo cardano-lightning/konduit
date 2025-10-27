@@ -1,18 +1,18 @@
 use anyhow::{Error, Result};
 use cardano_tx_builder::{PlutusData, cbor::ToCbor};
 
-use crate::{Lock, Secret};
+use crate::{Duration, Lock, Secret};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ChequeBody {
     pub index: u64,
     pub amount: u64,
-    pub timeout: u64,
+    pub timeout: Duration,
     pub lock: Lock,
 }
 
 impl ChequeBody {
-    pub fn new(index: u64, amount: u64, timeout: u64, lock: Lock) -> Self {
+    pub fn new(index: u64, amount: u64, timeout: Duration, lock: Lock) -> Self {
         Self {
             index,
             amount,
@@ -41,7 +41,7 @@ impl<'a> TryFrom<PlutusData<'a>> for ChequeBody {
         Ok(Self::new(
             <u64>::try_from(&a)?,
             <u64>::try_from(&b)?,
-            <u64>::try_from(&c)?,
+            Duration::try_from(&c)?,
             Lock::try_from(&d)?,
         ))
     }

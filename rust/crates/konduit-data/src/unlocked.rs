@@ -2,7 +2,7 @@ use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::{PlutusData, Signature, VerificationKey};
 
 use crate::{
-    Secret,
+    Duration, Secret,
     cheque::Cheque,
     cheque_body::ChequeBody,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
@@ -39,7 +39,12 @@ impl Unlocked {
         Cheque::new(self.cheque_body.clone(), self.signature.clone())
     }
 
-    pub fn verify(&self, timeout: u64, verification_key: VerificationKey, tag: Vec<u8>) -> bool {
+    pub fn verify(
+        &self,
+        timeout: Duration,
+        verification_key: VerificationKey,
+        tag: Vec<u8>,
+    ) -> bool {
         // Assume secret is verified in constructor
         self.cheque().verify(&verification_key, tag) && self.cheque_body.timeout < timeout
     }
