@@ -28,8 +28,8 @@ impl ChequeBody {
         x
     }
 
-    pub fn is_secret(&self, secret: Secret) -> bool {
-        self.lock == Lock::from(secret)
+    pub fn is_secret(&self, secret: &Secret) -> bool {
+        self.lock == Lock::from(secret.clone())
     }
 }
 
