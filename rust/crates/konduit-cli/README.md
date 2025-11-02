@@ -4,7 +4,8 @@
 
 ## Configuring
 
-See [.env.example](.env.example). Replace environment variables by their corresponding values, and rename as `.env`.
+See [.env.example](.env.example). Replace environment variables by their
+corresponding values, and rename as `.env`.
 
 ## Using
 
