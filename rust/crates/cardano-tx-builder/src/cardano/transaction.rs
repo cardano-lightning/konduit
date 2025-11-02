@@ -5,7 +5,7 @@
 use crate::{
     Address, BoxedIterator, ChangeStrategy, ExecutionUnits, Hash, Input, NetworkId, Output,
     PlutusData, PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, SigningKey,
-    Value, VerificationKey, cbor, pallas, pretty,
+    SlotBound, Value, VerificationKey, cbor, pallas, pretty,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -192,6 +192,28 @@ impl Transaction<state::InConstruction> {
         self
     }
 
+    pub fn with_validity_interval(&mut self, from: SlotBound, until: SlotBound) -> &mut Self {
+        // In Conway, the lower-bound is *inclusive* while the upper-bound is *exclusive*; so we
+        // must match what the user set to get the right serialisation.
+
+        let from_inclusive = match from {
+            SlotBound::None => None,
+            SlotBound::Inclusive(bound) => Some(bound),
+            SlotBound::Exclusive(bound) => Some(bound + 1),
+        };
+
+        let until_exclusive = match until {
+            SlotBound::None => None,
+            SlotBound::Inclusive(bound) => Some(bound + 1),
+            SlotBound::Exclusive(bound) => Some(bound),
+        };
+
+        self.inner.transaction_body.validity_interval_start = from_inclusive;
+        self.inner.transaction_body.ttl = until_exclusive;
+
+        self
+    }
+
     pub fn with_fee(&mut self, fee: u64) -> &mut Self {
         self.inner.transaction_body.fee = fee;
         self
@@ -334,6 +356,21 @@ impl<State: IsTransactionBodyState> fmt::Display for Transaction<State> {
                 }
 
                 debug_struct.field("fee", &self.fee());
+
+                let valid_from = match body.validity_interval_start {
+                    None => "]-∞".to_string(),
+                    Some(i) => format!("[{i}"),
+                };
+
+                let valid_until = match body.ttl {
+                    None => "+∞[".to_string(),
+                    Some(i) => format!("{i}["),
+                };
+
+                debug_struct.field(
+                    "validity",
+                    &pretty::ViaDisplay(format!("{valid_from}; {valid_until}")),
+                );
 
                 debug_assert!(
                     body.certificates.is_none(),
@@ -531,32 +568,32 @@ impl<State: IsTransactionBodyState> fmt::Display for Transaction<State> {
 
                 if let Some(redeemers) = witness_set.redeemer.as_ref() {
                     debug_struct.field(
-                "redeemers",
-                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| match redeemers {
-                    pallas::Redeemers::List(_) => panic!(
-                        "found redeemers encoded as list; shouldn't be possible with this builder."
-                    ),
-                    pallas::Redeemers::Map(map) => {
-                        let mut redeemers = f.debug_map();
-                        for (key, value) in map.iter() {
-                            redeemers.entry(
-                                &pretty::ViaDisplay(RedeemerPointer::from(key.clone())),
-                                &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
-                                    f.debug_tuple("Redeemer")
-                                        .field(&pretty::ViaDisplay(PlutusData::from(
-                                            value.data.clone(),
-                                        )))
-                                        .field(&pretty::ViaDisplay(ExecutionUnits::from(
-                                            value.ex_units,
-                                        )))
-                                        .finish()
-                                }),
-                            );
-                        }
-                        redeemers.finish()
-                    }
-                }),
-            );
+                        "redeemers",
+                        &pretty::Fmt(|f: &mut fmt::Formatter<'_>| match redeemers {
+                            pallas::Redeemers::List(_) => panic!(
+                                "found redeemers encoded as list; shouldn't be possible with this builder."
+                            ),
+                            pallas::Redeemers::Map(map) => {
+                                let mut redeemers = f.debug_map();
+                                for (key, value) in map.iter() {
+                                    redeemers.entry(
+                                        &pretty::ViaDisplay(RedeemerPointer::from(key.clone())),
+                                        &pretty::Fmt(|f: &mut fmt::Formatter<'_>| {
+                                            f.debug_tuple("Redeemer")
+                                                .field(&pretty::ViaDisplay(PlutusData::from(
+                                                    value.data.clone(),
+                                                )))
+                                                .field(&pretty::ViaDisplay(ExecutionUnits::from(
+                                                    value.ex_units,
+                                                )))
+                                                .finish()
+                                        }),
+                                    );
+                                }
+                                redeemers.finish()
+                            }
+                        }),
+                    );
                 }
 
                 debug_struct.finish()
@@ -1227,6 +1264,7 @@ mod tests {
                         },
                     ],
                     fee: 169813,
+                    validity: ]-∞; +∞[,
                     signatures: {
                         3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29: d739204915ea986ce309662cadfab44f8ffb9b0c10c6ade3839e2c5b11a6ba738ee2cbb1365ab714312fb79af0effb98c54ec92c88c99967e1e6cc87b56dc90e,
                     },
@@ -1274,6 +1312,7 @@ mod tests {
                         },
                     ],
                     fee: 176623,
+                    validity: ]-∞; +∞[,
                     script_integrity_hash: d37acc9c984616d9d15825afeaf7d266e5bde38fdd4df4f8b2312703022d474d,
                     collaterals: [
                         Input(8d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40#1),
