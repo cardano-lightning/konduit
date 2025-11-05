@@ -4,7 +4,7 @@
 
 use crate::{cbor, pallas};
 use anyhow::anyhow;
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 /// A _blake2b_ hash digest; typically 28 or 32 bytes long.
 ///
@@ -96,6 +96,14 @@ impl<const SIZE: usize> TryFrom<&str> for Hash<SIZE> {
         })?;
 
         Ok(Hash(pallas::Hash::new(fixed_sized_bytes)))
+    }
+}
+
+impl<const SIZE: usize> FromStr for Hash<SIZE> {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_from(s).map_err(|e| e.to_string())
     }
 }
 

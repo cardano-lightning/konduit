@@ -45,7 +45,11 @@ pub use hex_serde::*;
 
 mod plutus_data_serde;
 
+mod redeemer;
+pub use redeemer::*;
+
 mod utils;
 
+pub const MAX_TAG_LENGTH: usize = 32;
 pub const MAX_UNSQUASHED: usize = 10;
 pub const MAX_EXCLUDE_LENGTH: usize = 10;

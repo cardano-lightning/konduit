@@ -10,6 +10,7 @@
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     aiken.url = "github:aiken-lang/aiken";
     rust-flake.url = "github:juspay/rust-flake/";
+    capkgs.url = "github:input-output-hk/capkgs";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -64,6 +65,7 @@
           '';
           packages =
             [
+              inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f
               inputs'.aiken.packages.aiken
               pkgs.yarn
               pkgs.nodePackages_latest.nodejs

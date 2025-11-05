@@ -22,3 +22,6 @@ pub const CHANNEL_TAG: &str = "KONDUIT_CHANNEL_TAG";
 
 /// Minimum time between the 'close' and 'elapse' states.
 pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";
+
+/// Script hash of the Konduit validator if other than the default embedded one.
+pub const SCRIPT_HASH: &str = "KONDUIT_SCRIPT_HASH";

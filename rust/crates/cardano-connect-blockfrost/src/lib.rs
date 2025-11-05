@@ -94,7 +94,7 @@ impl Blockfrost {
     pub async fn scripts_hash_cbor(&self, script_hash: &str) -> anyhow::Result<Vec<u8>> {
         let response = self
             .client
-            .get(format!("{}/scripts/{}", self.base_url, script_hash))
+            .get(format!("{}/scripts/{}/cbor", self.base_url, script_hash))
             .header("Accept", "application/json")
             .header("project_id", self.project_id.as_str())
             .send()
@@ -114,7 +114,7 @@ impl Blockfrost {
     pub async fn plutus_version(&self, script_hash: &str) -> anyhow::Result<PlutusVersion> {
         let response = self
             .client
-            .get(format!("{}/scripts/{}/cbor", self.base_url, script_hash))
+            .get(format!("{}/scripts/{}", self.base_url, script_hash))
             .header("Accept", "application/json")
             .header("project_id", self.project_id.as_str())
             .send()
@@ -215,6 +215,9 @@ impl CardanoConnect for Blockfrost {
             .api
             .addresses_utxos(&format!("{}", addr), Pagination::all())
             .await?;
+
+        // Let's print the JSON back
+        println!("UTxOs at address {}: {:#?}", addr, response);
 
         let s = stream::iter(response)
             .map(move |bf_utxo| self.resolve_utxo(bf_utxo))
