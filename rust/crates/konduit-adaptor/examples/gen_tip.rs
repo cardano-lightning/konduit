@@ -328,6 +328,9 @@ async fn lifecycle() {
     let r = join_all(futures).await.into_iter().collect::<Vec<_>>();
 
     let invoice = "lntb10u1p5sn3mspp5my0azm6ax3gzaz5nkfrhrj6535a52zxpsgqzltv8725atte8ge6qdqqcqzzsxqyz5vqsp5fsv5m4whjhr48t4tf4an4y5k9ytl83vxqhtd5elqyvdwqeqpeyhq9qxpqysgqzw04z5sezf7arhrcfa3qgp7g90j4dl34yskmdwwxv7c2arwzmhn35z4yt77pp2hnksz0f5gk2ke4y4cs93x3whq4yyytffff2menz7sp9kekj6".to_string();
+    let invoice = "lntb10p1p5sk9n9pp5pwsce6yzalwwpjpzja7zwjes9edjjrqd6934yfkm258zv0lp24sqdqqcqzzsxqrrsssp5m8vjzugfqk6fgga4y5zz85agpxnzepvr5zm4jt3zxepjv4kcxcns9qxpqysgqemkg65rgtem9xxdcfg90q5ckczxd7wh2f3xrw5p4rr0c4r647yjy4lujzyqkd34zvdy7yazdpdh76h4glt86rpcvw238lrk0qfa6twcpx0sxl6".to_string();
+    let invoice = "lntb100u1p5sk7pepp5tg45c0urdh3xxnrwjrclykyqn9crdhdcxraqucahxytuc2euzn5qdqqcqzzsxqrrsssp56qpv0a9wqhp5808sm7adqfs5ehp03trmllx6fdn8yudy0jru25sq9qxpqysgq7wa835ypjjju2clt9g4ldvxm0pmn9xfwh3qgvfnthsh5xmd7l9lphmvctwskrvm5tud36srtsz8qet3pap6dhagzgtzlmst5yevg8tcqckl7x7".to_string();
+    let invoice = "lntb123450n1p5sh2fspp57pqutvc6q9d30kh6qyxvpx07qrqrrut8czk45wvut8trluqxnpqsdqdfahhqumfv5sjzcqzzsxqr3jssp5qpntdg40qcxeh3xy43us0zk3djqh5v2peldrtdp70gd7vpcy6wes9qxpqysgqa54uah5f9sw065t9unereh0vm0jjqwq6tulnd42pnxa6yl8e92xpkpgz5tpw0fx7v05lfkl93qumr80dk4xrnakkgh57xxk53e3kccqp5kwles".to_string();
     let quote_body: QuoteBody = QuoteBody::Bolt11(invoice);
     let futures = consumer
         .channels

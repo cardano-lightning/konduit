@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use thiserror::Error;
 
@@ -38,12 +40,8 @@ pub enum QuoteRequest {
 #[derive(Debug, Clone)]
 pub struct QuoteResponse {
     pub amount_msat: u64,
-    pub recipient: [u8; 33],
-    pub payment_hash: [u8; 32],
-    // The name as it appears in bolt11
-    pub payment_secret: [u8; 32],
-    pub routing_fee: u64,
-    pub expiry: u64,
+    pub estimated_timeout: Duration,
+    pub fee_msat: u64,
 }
 
 #[derive(Debug, Clone)]

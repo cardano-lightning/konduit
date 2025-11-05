@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::app_state::AppState;
 use crate::cbor::decode_from_cbor;
 use crate::db::DbError;
@@ -115,7 +117,7 @@ pub async fn quote(
         return Ok(HttpResponse::BadRequest().body("No channel found"));
     };
     if l2_channel.available() == 0 {
-        return Ok(HttpResponse::InternalServerError().body("No funds"));
+        return Ok(HttpResponse::BadRequest().body("No channel funds"));
     };
     let quote_request = match body.into_inner() {
         QuoteBody::Bolt11(s) => {
@@ -125,100 +127,21 @@ pub async fn quote(
             bln::QuoteRequest::Bolt11(invoice)
         }
     };
-    let bln_quote = data.bln.quote(quote_request).await.unwrap();
+    let Ok(bln_quote) = data.bln.quote(quote_request).await else {
+        return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
+    };
+
+    // TODO :: MOVE TO CONFIG
+    // This is ~ the same as the default on bitcoin
+    let adaptor_margin = Duration::from_secs(40 * 10 * 60);
 
     log::info!("{:?}", bln_quote);
-    let amount =
-        ((bln_quote.amount_msat as f64) * fx.bitcoin / fx.ada * 1_000_000_000.0) as u64 + 1;
-    let timeout = 0;
+    let amount = fx.msat_to_lovelace(bln_quote.amount_msat) + data.info.fee;
+    let timeout = (adaptor_margin + bln_quote.estimated_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
         amount: amount,
         timeout: timeout,
-        lock: [0; 32],
-        recipient: bln_quote.recipient,
-        amount_msat: bln_quote.amount_msat,
-        payment_secret: [0; 32],
-        routing_fee: 0,
+        routing_fee: bln_quote.fee_msat,
     };
     Ok(HttpResponse::Ok().json(response_body))
 }
-
-// let bln_quote = data.bln.quote(body.into_inner().invoice).await.unwrap();
-// todo!()
-//     // 1. Verify key_tag
-//     let amount_available = match data.db.get_available(keytag).await {
-//         Ok(amount) => amount,
-//         Err(err) => todo!(),
-//     };
-//
-//     // 2. Request quote from BLN
-//     //
-//     //
-//     // 3. Get price data
-//     //
-//     //
-//     //
-//     // FIXME :: Not yet implemented
-//     data.db.put_quote_request(&body).await?;
-//     let stub_response = QuoteResponse {
-//         amount: 100000,
-//         timeout: 3600000,
-//         lock: [1; 32],
-//         recipient: [2; 33],
-//         amount_msat: 99000,
-//         payment_addr: [3; 32],
-//         routing_fee: 1000,
-//     };
-//     data.db
-//         .put_quote_response(&body.consumer_key, &body.tag, &stub_response)
-//         .await?;
-//
-//     Ok(HttpResponse::Ok().json(stub_response))
-//
-// pub async fn pay(
-//     data: web::Data<AppState>,
-//     body: web::Json<PayBody>,
-// ) -> Result<HttpResponse, DbError> {
-//     log::info!("POST /pay: {:?}", body);
-//     // FIXME :: Not yet implemented
-//     data.db.put_pay_request(&body).await?;
-//     let stub_receipt = Receipt {
-//         squash_body: vec![1, 2, 3],
-//         signature: [4; 64],
-//         unlockeds: vec![UnlockedCheque {
-//             cheque_body: vec![5, 6, 7],
-//             signature: [8; 64],
-//             secret: vec![9, 10, 11],
-//         }],
-//         expire: None,
-//     };
-//     data.db
-//         .put_receipt(&body.consumer_key, &body.tag, &stub_receipt)
-//         .await?;
-//
-//     Ok(HttpResponse::Ok().json(stub_receipt))
-// }
-//
-// pub async fn squash(
-//     data: web::Data<AppState>,
-//     body: web::Json<SquashBody>,
-// ) -> Result<HttpResponse, DbError> {
-//     log::info!("POST /squash: {:?}", body);
-//     // FIXME :: Not yet implemented
-//     data.db.put_squash_request(&body).await?;
-//     match data.db.get_receipt(&body.consumer_key, &body.tag).await {
-//         Ok(receipt) => {
-//             // 200 OK - but this does not squash latest receipt
-//             log::warn!(
-//                 "Squash request for channel that already has a receipt. Returning existing."
-//             );
-//             Ok(HttpResponse::Ok().json(receipt))
-//         }
-//         Err(DbError::NotFound(_)) => {
-//             // 202 Accepted - this squashes latest
-//             log::info!("Squash request accepted for channel.");
-//             Ok(HttpResponse::Accepted().finish())
-//         }
-//         Err(e) => Err(e), // Propagate other errors
-//     }
-// }

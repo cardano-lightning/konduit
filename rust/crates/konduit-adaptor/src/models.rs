@@ -76,13 +76,13 @@ pub enum QuoteBody {
 pub struct QuoteResponse {
     pub amount: u64,
     pub timeout: u64,
-    #[serde(with = "hex")]
-    pub lock: [u8; 32],
-    #[serde(with = "hex")]
-    pub recipient: [u8; 33],
-    pub amount_msat: u64,
-    #[serde(with = "hex")]
-    pub payment_secret: [u8; 32],
+    // #[serde(with = "hex")]
+    // pub lock: [u8; 32],
+    // #[serde(with = "hex")]
+    // pub recipient: [u8; 33],
+    // pub amount_msat: u64,
+    // #[serde(with = "hex")]
+    // pub payment_secret: [u8; 32],
     pub routing_fee: u64,
 }
 

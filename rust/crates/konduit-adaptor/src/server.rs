@@ -45,10 +45,9 @@ impl Server {
                     web::scope("/ch")
                         .wrap(KeytagAuth::new("KONDUIT"))
                         .route("/squash", web::post().to(handlers::squash))
-                        .route("/quote", web::post().to(handlers::quote))
-                        // .route("/pay", web::post().to(handlers::pay))
-                        .route("/fx", web::get().to(handlers::fx)),
+                        .route("/quote", web::post().to(handlers::quote)), // .route("/pay", web::post().to(handlers::pay))
                 )
+                .service(web::scope("/opt").route("/fx", web::get().to(handlers::fx)))
                 .service(
                     // THIS SHOULD BE EXPOSED ONLY TO TRUSTED SOURCES.
                     web::scope("/admin")

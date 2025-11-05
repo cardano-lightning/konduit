@@ -3,6 +3,7 @@ use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_aux::prelude::deserialize_number_from_string;
 use serde_json::json;
 use std::time::Duration;
 
@@ -137,11 +138,18 @@ impl BlnInterface for WithLnd {
                 (hex::encode(invoice.payee_compressed), invoice.amount_msat)
             }
         };
+        let info_json = self.get(&format!("v1/getinfo")).await?;
+
+        let info: GetInfo = serde_json::from_value(info_json)
+            .map_err(|e| BlnError::Parse(format!("Failed to parse info: {}", e)))?;
+        log::info!("INFO : {:?}", info);
+
         let route_json = self
             .get(&format!("v1/graph/routes/{}/0?amt_msat={}", dest, amt_msat))
             .await?;
+        log::info!("{:?}", route_json);
 
-        let routes: RouteResponse = serde_json::from_value(route_json)
+        let routes: LndRoutes = serde_json::from_value(route_json)
             .map_err(|e| BlnError::Parse(format!("Failed to parse route: {}", e)))?;
 
         let route = routes.routes.get(0).ok_or_else(|| BlnError::ApiError {
@@ -149,22 +157,21 @@ impl BlnInterface for WithLnd {
             message: "No route found".to_string(),
         })?;
 
-        let routing_fee = route
-            .total_fees_msat
-            .parse::<u64>()
-            .map_err(|e| BlnError::Parse(format!("Failed to parse routing_fee: {}", e)))?;
+        log::info!("{:?}", routes);
+
+        let fee_msat = route.total_fees_msat;
+        // FIXME:
+        // The average block is ~10 minutes = 600seconds.
+        // However, this is probablistic, and is subject to parameters that change every 2016 blocks.
+        // if final ctlv is 80 and each hop is 40 this is a very long hold period.
+        let estimated_timeout =
+            Duration::from_secs((route.total_time_lock - info.block_height) * 10 * 60);
 
         match quote_request {
             QuoteRequest::Bolt11(invoice) => Ok(QuoteResponse {
                 amount_msat: invoice.amount_msat,
-                recipient: invoice.payee_compressed,
-                payment_hash: invoice.payment_hash,
-                payment_secret: invoice.payment_hash,
-                routing_fee: routing_fee,
-                expiry: invoice
-                    .expiry_time
-                    .map(|x| x.as_millis() as u64)
-                    .unwrap_or(0),
+                fee_msat,
+                estimated_timeout,
             }),
         }
     }
@@ -228,17 +235,66 @@ struct PayReqResponse {
 }
 
 #[derive(Deserialize)]
-struct RouteResponse {
-    routes: Vec<Route>,
-}
-
-#[derive(Deserialize)]
-struct Route {
-    total_fees_msat: String,
-}
-
-#[derive(Deserialize)]
 struct PayApiResponse {
     payment_preimage: String,
     payment_error: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetInfo {
+    block_height: u64,
+}
+
+#[derive(Deserialize, Debug)]
+struct LndRoutes {
+    routes: Vec<LndRoute>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct LndRoute {
+    pub custom_channel_data: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub first_hop_amount_msat: u64,
+    pub hops: Vec<Hop>,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub total_amt: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub total_amt_msat: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub total_fees: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub total_fees_msat: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub total_time_lock: u64,
+}
+
+/// Represents a single hop in a route.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Hop {
+    //pub amp_record: Option<Value>,
+    //pub mpp_record: Option<Value>,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub amt_to_forward: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub amt_to_forward_msat: u64,
+    pub blinding_point: String,
+    pub encrypted_data: String,
+    pub metadata: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub chan_capacity: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub chan_id: u64,
+    //pub custom_records: HashMap<String, Value>,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub expiry: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub fee: u64,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub fee_msat: u64,
+    #[serde(with = "hex")]
+    pub pub_key: [u8; 33],
+    pub tlv_payload: bool,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub total_amt_msat: u64,
 }

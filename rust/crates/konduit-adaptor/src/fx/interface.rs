@@ -60,6 +60,10 @@ impl Fx {
             bitcoin,
         }
     }
+
+    pub fn msat_to_lovelace(&self, amount: u64) -> u64 {
+        ((amount as f64) * self.bitcoin / (self.ada * 100_000.0)) as u64 + 1
+    }
 }
 
 #[async_trait]
