@@ -1,7 +1,10 @@
 use thiserror::Error;
 
 mod interface;
-pub use interface::{BlnError, BlnInterface};
+pub use interface::{BlnError, BlnInterface, QuoteRequest};
+
+mod invoice;
+pub use invoice::Invoice;
 
 mod with_lnd;
 
@@ -21,8 +24,8 @@ pub enum BlnInitError {
 }
 
 impl BlnArgs {
-    pub fn into(self) -> Result<impl BlnInterface, BlnInitError> {
-        if let Some(args) = self.lnd {
+    pub fn build(self) -> Result<impl BlnInterface, BlnInitError> {
+        if let Some(args) = &self.lnd {
             let db = with_lnd::WithLnd::try_from(args).expect("oops");
             Ok(db)
         } else {

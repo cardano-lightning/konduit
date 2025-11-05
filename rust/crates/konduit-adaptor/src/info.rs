@@ -13,7 +13,7 @@ fn parse_hex_key(s: &str) -> Result<[u8; KEY_LEN], String> {
         .map_err(|_| "Internal length error".to_string())
 }
 
-#[derive(Debug, Serialize, Deserialize, Args)]
+#[derive(Debug, Clone, Serialize, Deserialize, Args)]
 pub struct Info {
     #[arg(long, env = "KONDUIT_INFO_FEE", default_value = "1000")]
     pub fee: u64,

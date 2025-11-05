@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::Invoice;
+
 #[derive(Debug, Error)]
 pub enum BlnError {
     #[error("Initialization failed: {0}")]
@@ -28,13 +30,17 @@ pub enum BlnError {
     Conversion(#[from] std::array::TryFromSliceError),
 }
 
-pub type InvoiceLike = String;
+#[derive(Debug, Clone)]
+pub enum QuoteRequest {
+    Bolt11(Invoice),
+}
 
 #[derive(Debug, Clone)]
 pub struct QuoteResponse {
-    pub amount_msats: u64,
+    pub amount_msat: u64,
     pub recipient: [u8; 33],
     pub payment_hash: [u8; 32],
+    // The name as it appears in bolt11
     pub payment_secret: [u8; 32],
     pub routing_fee: u64,
     pub expiry: u64,
@@ -42,7 +48,7 @@ pub struct QuoteResponse {
 
 #[derive(Debug, Clone)]
 pub struct PayRequest {
-    pub amount_msats: u64,
+    pub amount_msat: u64,
     pub recipient: [u8; 33],
     pub payment_hash: [u8; 32],
     pub payment_secret: [u8; 32],
@@ -58,7 +64,7 @@ pub struct PayResponse {
 #[async_trait]
 pub trait BlnInterface: Send + Sync {
     /// Get a quote for paying an invoice.
-    async fn quote(&self, invoice_like: InvoiceLike) -> Result<QuoteResponse, BlnError>;
+    async fn quote(&self, quote_request: QuoteRequest) -> Result<QuoteResponse, BlnError>;
 
     /// Pay based on a previous quote.
     async fn pay(&self, req: PayRequest) -> Result<PayResponse, BlnError>;

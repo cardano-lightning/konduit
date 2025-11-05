@@ -6,9 +6,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;
 
-use crate::bln::{
-    BlnError, BlnInterface,
-    interface::{InvoiceLike, PayRequest, PayResponse, QuoteResponse},
+use crate::{
+    QuoteRequest,
+    bln::{
+        BlnError, BlnInterface,
+        interface::{PayRequest, PayResponse, QuoteResponse},
+    },
 };
 
 #[derive(Debug, Clone, clap::Args)]
@@ -28,11 +31,15 @@ pub struct WithLnd {
     client: Client,
 }
 
-impl TryFrom<LndArgs> for WithLnd {
+impl TryFrom<&LndArgs> for WithLnd {
     type Error = BlnError;
 
-    fn try_from(value: LndArgs) -> Result<Self, Self::Error> {
-        Self::new(value.bln_url, value.bln_tls.as_deref(), value.bln_macaroon)
+    fn try_from(value: &LndArgs) -> Result<Self, Self::Error> {
+        Self::new(
+            value.bln_url.clone(),
+            value.bln_tls.as_deref(),
+            value.bln_macaroon.clone(),
+        )
     }
 }
 
@@ -82,16 +89,11 @@ impl WithLnd {
         if response.status().is_success() {
             return Ok(response.json().await?);
         }
-
         let status = response.status().as_u16();
-        let error_body: serde_json::Value = response.json().await.unwrap_or(json!({}));
-
-        let message = error_body
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown API error")
-            .to_string();
-
+        let message = response
+            .text()
+            .await
+            .unwrap_or("No message given".to_string());
         Err(BlnError::ApiError { status, message })
     }
 
@@ -129,22 +131,14 @@ impl WithLnd {
 
 #[async_trait]
 impl BlnInterface for WithLnd {
-    async fn quote(&self, invoice_like: InvoiceLike) -> Result<QuoteResponse, BlnError> {
-        let pay_req_json = self.get(&format!("v1/payreq/{}", invoice_like)).await?;
-        log::info!("PAYREQ :: {:?}", pay_req_json);
-        let pay_req: PayReqResponse = serde_json::from_value(pay_req_json)
-            .map_err(|e| BlnError::Parse(format!("Failed to parse payreq: {}", e)))?;
-
-        let amount_msats = pay_req
-            .num_msat
-            .parse::<u64>()
-            .map_err(|e| BlnError::Parse(format!("Failed to parse num_msat: {}", e)))?;
-
+    async fn quote(&self, quote_request: QuoteRequest) -> Result<QuoteResponse, BlnError> {
+        let (dest, amt_msat) = match quote_request.clone() {
+            QuoteRequest::Bolt11(invoice) => {
+                (hex::encode(invoice.payee_compressed), invoice.amount_msat)
+            }
+        };
         let route_json = self
-            .get(&format!(
-                "v1/graph/routes/{}/0?amt_msat={}",
-                pay_req.destination, amount_msats
-            ))
+            .get(&format!("v1/graph/routes/{}/0?amt_msat={}", dest, amt_msat))
             .await?;
 
         let routes: RouteResponse = serde_json::from_value(route_json)
@@ -160,29 +154,26 @@ impl BlnInterface for WithLnd {
             .parse::<u64>()
             .map_err(|e| BlnError::Parse(format!("Failed to parse routing_fee: {}", e)))?;
 
-        let recipient = hex::decode(&pay_req.destination)?;
-        let payment_hash = hex::decode(&pay_req.payment_hash)?;
-        let payement_addr = BASE64_STANDARD.decode(&pay_req.payment_addr)?;
-        let expiry = pay_req
-            .cltv_expiry
-            .parse::<u64>()
-            .map_err(|e| BlnError::Parse(format!("Failed to parse cltv_expiry: {}", e)))?;
-
-        Ok(QuoteResponse {
-            amount_msats,
-            recipient: recipient.as_slice().try_into()?,
-            payment_hash: payment_hash.as_slice().try_into()?,
-            payment_secret: payement_addr.as_slice().try_into()?,
-            routing_fee,
-            expiry,
-        })
+        match quote_request {
+            QuoteRequest::Bolt11(invoice) => Ok(QuoteResponse {
+                amount_msat: invoice.amount_msat,
+                recipient: invoice.payee_compressed,
+                payment_hash: invoice.payment_hash,
+                payment_secret: invoice.payment_hash,
+                routing_fee: routing_fee,
+                expiry: invoice
+                    .expiry_time
+                    .map(|x| x.as_millis() as u64)
+                    .unwrap_or(0),
+            }),
+        }
     }
 
     async fn pay(&self, req: PayRequest) -> Result<PayResponse, BlnError> {
         let request_body = PayRequestBody {
             dest: base64::engine::general_purpose::STANDARD.encode(req.recipient),
             payment_hash: base64::engine::general_purpose::STANDARD.encode(req.payment_hash),
-            amt_msat: req.amount_msats.to_string(),
+            amt_msat: req.amount_msat.to_string(),
             // **Assumption**: Trait's `expiry` is the `final_cltv_delta`
             final_cltv_delta: req.expiry,
             // **Assumption**: Trait's `routing_fee` is the `fee_limit` in msat

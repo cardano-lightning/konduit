@@ -2,7 +2,7 @@ use clap::{Args, Parser};
 
 use crate::info;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Cmd {
     /// ## Host
@@ -25,7 +25,7 @@ pub struct Cmd {
     pub fx: crate::fx::FxArgs,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 pub struct Host {
     #[arg(long, env = "KONDUIT_HOST", default_value = "127.0.0.1")]
     pub host: String,

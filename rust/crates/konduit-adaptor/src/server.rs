@@ -1,50 +1,8 @@
-<<<<<<< HEAD
-use crate::config::AppState;
-use crate::db::DbInterface;
-use crate::env;
-use crate::handlers::{constants, pay, quote, squash};
-use actix_web::{App, HttpServer, middleware::Logger, web};
-use std::sync::Arc; // Import the trait
-
-/// Configures and starts the Actix Web server.
-/// Now takes the `DbInterface` trait object.
-pub async fn run(
-    db: Arc<dyn DbInterface + Send + Sync>,
-    bind_address: String,
-) -> std::io::Result<()> {
-    // Create shared state using the trait object
-    let app_state = web::Data::new(AppState { db });
-
-    log::info!("Starting server on http://{}...", bind_address);
-
-    // Start HTTP server
-    HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default()) // Add logging middleware
-            .app_data(app_state.clone()) // Share the database state
-            .service(web::resource("/constants").route(web::get().to(constants)))
-            .service(web::resource("/quote").route(web::post().to(quote)))
-            .service(web::resource("/pay").route(web::post().to(pay)))
-            .service(web::resource("/squash").route(web::post().to(squash)))
-    })
-    .bind(bind_address)?
-    .run()
-    .await
-}
-
-pub async fn init_on_new(db: &impl DbInterface) -> Result<(), std::io::Error> {
-    match db.get_constants().await {
-        Err(_) => {
-            let constants = env::constants()?;
-            db.init(&constants).await.unwrap();
-            Ok(())
-        }
-        Ok(_) => Ok(()),
-=======
+use crate::handlers;
 use crate::keytag_middleware::KeytagAuth;
 use crate::{Cmd, app_state::AppState};
-use crate::{bln, db, fx, handlers};
 use actix_web::{App, HttpServer, middleware::Logger, web};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum CliError {
@@ -57,20 +15,15 @@ pub struct Server {
 }
 
 impl Server {
+    pub fn fx(&self) -> Arc<tokio::sync::RwLock<Option<crate::Fx>>> {
+        self.app_state.fx.clone()
+    }
+
     pub async fn from_cmd(cmd: Cmd) -> Result<Self, CliError> {
         let bind_address = format!("{}:{}", cmd.host.host, cmd.host.port);
         let info = cmd.info;
-        let db = cmd.db.into().expect("Failed to open database");
-        let bln = cmd.bln.into().expect("Failed to setup bln");
-        let fx = cmd.fx.into();
-        // Bln
-        // let macaroon = hex::decode(cmd.lnd_macaroon).unwrap();
-        // , None, &macaroon).unwrap();
-
-        // FX
-        // let fx = Arc::new(RwLock::new(None));
-        // tokio::spawn(cron_fx(15 * 60, fx.clone()));
-        // APP
+        let db = cmd.db.build().expect("Failed to open database");
+        let bln = cmd.bln.build().expect("Failed to setup bln");
         let app_state = AppState::new(info, db, bln, None);
         Ok(Self {
             app_state,
@@ -106,6 +59,5 @@ impl Server {
         .bind(self.bind_address)?
         .run()
         .await
->>>>>>> e3cb13e (Updates to konduit data.)
     }
 }

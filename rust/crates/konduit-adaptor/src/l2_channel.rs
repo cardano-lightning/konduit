@@ -8,41 +8,6 @@ use thiserror::Error;
 
 use crate::models::L1Channel;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct L2Channel {
-    pub keytag: Keytag,
-    /// L1Channel with greatest available funds.
-    pub l1_channel: Option<L1Channel>,
-    /// Current evidence of funds owed.
-    pub mixed_receipt: Option<MixedReceipt>,
-    /// L2 channel can be de-activated.
-    pub is_served: bool,
-}
-
-impl L2Channel {
-    fn new(keytag: Keytag, l1_channel: L1Channel) -> Self {
-        L2Channel {
-            keytag,
-            l1_channel: Some(l1_channel),
-            mixed_receipt: None,
-            is_served: true,
-        }
-    }
-
-    pub fn from_channels(keytag: Keytag, l1_channels: Vec<L1Channel>) -> Self {
-        let l1_channel = l1_channels.into_iter().max_by_key(|item| match item.stage {
-            konduit_data::Stage::Opened(_) => item.amount,
-            _ => 0,
-        });
-        L2Channel {
-            keytag,
-            l1_channel,
-            mixed_receipt: None,
-            is_served: true,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Error)]
 pub enum ChequeError {
     #[error("Channel not served")]
@@ -85,6 +50,41 @@ pub enum L2ChannelUpdateSquashError {
     MixedReceipt(MixedReceiptUpdateError),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct L2Channel {
+    pub keytag: Keytag,
+    /// L1Channel with greatest available funds.
+    pub l1_channel: Option<L1Channel>,
+    /// Current evidence of funds owed.
+    pub mixed_receipt: Option<MixedReceipt>,
+    /// L2 channel can be de-activated.
+    pub is_served: bool,
+}
+
+impl L2Channel {
+    pub fn new(keytag: Keytag, l1_channel: L1Channel) -> Self {
+        L2Channel {
+            keytag,
+            l1_channel: Some(l1_channel),
+            mixed_receipt: None,
+            is_served: true,
+        }
+    }
+
+    pub fn from_channels(keytag: Keytag, l1_channels: Vec<L1Channel>) -> Self {
+        let l1_channel = l1_channels.into_iter().max_by_key(|item| match item.stage {
+            konduit_data::Stage::Opened(_) => item.amount,
+            _ => 0,
+        });
+        L2Channel {
+            keytag,
+            l1_channel,
+            mixed_receipt: None,
+            is_served: true,
+        }
+    }
+}
+
 impl L2Channel {
     /// Squash + Unlockeds
     pub fn owed(&self) -> u64 {
@@ -117,13 +117,18 @@ impl L2Channel {
         let konduit_data::Stage::Opened(subbed) = l1_channel.stage else {
             return 0;
         };
-
         let committed = self.committed();
-        if committed > subbed {
-            std::cmp::max(committed - subbed, l1_channel.amount)
-        } else {
-            0
+        if committed < subbed {
+            // This should happen only if there exists mimics
+            return 0;
         }
+        let rel_committed = committed - subbed;
+        let held = l1_channel.amount;
+        if rel_committed > held {
+            // This should happen only if there exists mimics
+            return 0;
+        }
+        held - rel_committed
     }
 
     /// Find the L1 with max claimable amount, max avaliable amount
@@ -173,7 +178,8 @@ impl L2Channel {
         if available > cheque.cheque_body.amount {
             return Err(ChequeError::AmountUnavailable);
         }
-        mixed_receipt.insert(cheque);
+        // FIXME :: HANDLE ERROR
+        mixed_receipt.insert(cheque).unwrap();
         Ok(())
     }
 
@@ -182,7 +188,7 @@ impl L2Channel {
             return Err(L2ChannelUpdateSquashError::NotServed);
         };
         let (key, tag) = self.keytag.split();
-        if squash.verify(&key, &tag) {
+        if !squash.verify(&key, &tag) {
             return Err(L2ChannelUpdateSquashError::BadSignature);
         }
         let Some(l1_channel) = self.l1_channel.as_ref() else {

@@ -27,14 +27,17 @@ env_logger = "0.11.8"
 futures.workspace = true
 hex = { workspace = true, features = ["serde"] }
 konduit-data.workspace = true
+lightning-invoice = { version = "0.33.2", features = ["serde"] }
 log = "0.4.28"
 reqwest = { workspace = true, features = ["json"] }
 serde-hex = "0.1.0"
 serde.workspace = true
 serde_json.workspace = true
 sled = "0.34.7"
-thiserror = "2.0.17"
+thiserror.workspace = true
 tokio.workspace = true
+bitcoin_hashes = "=0.14.0"
+lightning-types = "0.2.0"
 
 [dev-dependencies]
 proptest.workspace = true

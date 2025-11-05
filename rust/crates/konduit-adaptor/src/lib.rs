@@ -19,6 +19,7 @@ mod server;
 pub use server::*;
 
 pub mod cbor;
+pub mod cron;
 pub mod handlers;
 pub mod keytag_middleware;
 pub mod l2_channel;
