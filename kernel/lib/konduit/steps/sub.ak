@@ -23,7 +23,7 @@ pub fn do(
   expect t.Opened(subbed_out) = stage_out
   expect subbed_out - subbed_in == amount_in(value_in) - amount_out(value_out)
   let amount, upper_bound <-
-    account(tag, add_vkey, squash, unlockeds, _)
+    account(add_vkey, tag, squash, unlockeds, _)
   expect subbed_out <= amount
   return(sub_vkey, None, upper_bound)
 }
