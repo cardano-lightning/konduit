@@ -1,0 +1,20 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "konduit-connector",
+  "main": "src/index.mjs",
+  "compatibility_date": "2025-11-06",
+  "observability": {
+    "enabled": true
+  },
+  "secrets_store_secrets": [
+    {
+      "binding": "BLOCKFROST_PROJECT_ID",
+      "store_id": "453bb3faa4fd4a97b2b34e1c19b6c545",
+      "secret_name": "blockfrost-project-id"
+    }
+  ]
+}
