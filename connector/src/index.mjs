@@ -7,6 +7,7 @@ const app = new Hono();
 
 app.use(blockfrost);
 app.get("/network", endpointNetwork);
+app.get("/health", (ctx) => ctx.json({ status: "ok" }));
 app.get("/utxos_at/:address", endpointUtxosAt);
 
 export default app;
