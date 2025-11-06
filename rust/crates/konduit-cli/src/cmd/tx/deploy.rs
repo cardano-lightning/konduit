@@ -4,14 +4,10 @@ use konduit_tx::deploy;
 
 use crate::{env, metavar};
 
-// pub struct Output {
-//     tx_id:
-//     tx:
-// }
-
 #[derive(Debug, clap::Args)]
 #[clap(disable_version_flag(true))]
 pub(crate) struct Args {
+    // The publisher wallet's signing key
     #[clap(
         long,
         value_name = metavar::ED25519_SIGNING_KEY,

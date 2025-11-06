@@ -1,38 +1,12 @@
-use cardano_tx_builder::SigningKey;
+use std::io::{self, Write};
+
+use cardano_tx_builder::cbor::ToCbor;
+use cardano_tx_builder::{PlutusData, SigningKey};
+use konduit_data::Indexes;
 use konduit_tx::Lovelace;
 
 use crate::{env, metavar};
 
-// konduit_data which we want to build
-// pub struct ChequeBody {
-//     pub index: u64,
-//     pub amount: u64,
-//     pub timeout: Duration,
-//     pub lock: Lock,
-// }
-//
-// pub struct Cheque {
-//     pub cheque_body: ChequeBody,
-//     pub signature: Signature,
-// }
-//
-// pub struct SquashBody {
-//     pub amount: u64,
-//     pub index: u64,
-//     pub exclude: Vec<u64>,
-// }
-//
-// Now the pieces needed to build a Squash
-// pub struct SquashBody {
-//     pub amount: u64,
-//     pub index: u64,
-//     pub exclude: Vec<u64>,
-// }
-// pub struct Squash {
-//     pub squash_body: SquashBody,
-//     pub signature: Signature,
-// }
-//
 fn parse_exclude_list(s: &str) -> anyhow::Result<Vec<u64>> {
     s.split(',')
         .map(|part| part.trim().parse::<u64>().map_err(|e| anyhow::anyhow!(e)))
@@ -65,7 +39,7 @@ pub(crate) struct Args {
         help = "Comma separated list of indexes to exclude",
         value_parser = parse_exclude_list
     )]
-    exclude: Vec<u64>,
+    exclude: Option<Indexes>,
 }
 
 impl Args {
@@ -76,11 +50,18 @@ impl Args {
         let squash_body = konduit_data::SquashBody {
             amount: self.amount,
             index: self.index,
-            exclude: self.exclude,
+            exclude: match self.exclude {
+                Some(exclude_list) => exclude_list,
+                None => konduit_data::Indexes::new(vec![])?,
+            },
         };
-        let squash =
-            konduit_data::Squash::make(self.signing_key, self.channel_tag.0.to_vec(), squash_body);
-        println!("{:?}", squash);
+        let squash = konduit_data::Squash::make(&self.signing_key, &self.channel_tag, squash_body);
+
+        let bytes = PlutusData::from(squash).to_cbor();
+        let mut stdout = io::stdout();
+        stdout.write_all(&bytes)?;
+        stdout.flush()?;
+
         Ok(())
     }
 }

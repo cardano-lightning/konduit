@@ -60,21 +60,21 @@ impl Args {
                 "missing both --signing-key and --verification-key; please provide at least one"
             ))?;
         let script_credential = Credential::from_script(self.konduit_script_hash);
-        let staking_credential: Option<Credential> = match &self.role {
-            Role::Consumer(args) => {
-                if !args.ignore_staking_key {
-                    Some(Credential::from_key(Hash::<28>::new(
-                        verification_key.clone(),
-                    )))
-                } else {
-                    None
-                }
-            }
-            Role::Adaptor => None,
-        };
+        // let staking_credential: Option<Credential> = match &self.role {
+        //     Role::Consumer(args) => {
+        //         if !args.ignore_staking_key {
+        //             Some(Credential::from_key(Hash::<28>::new(
+        //                 verification_key.clone(),
+        //             )))
+        //         } else {
+        //             None
+        //         }
+        //     }
+        //     Role::Adaptor => None,
+        // };
 
         let utxos = connector
-            .utxos_at(&script_credential, staking_credential.as_ref())
+            .utxos_at(&script_credential, None) // , staking_credential.as_ref())
             .await?;
 
         let channels = utxos
@@ -83,14 +83,16 @@ impl Args {
                 let datum_rc: &Datum = output.datum()?;
                 match datum_rc {
                     Datum::Inline(plutus_data) => {
-                        let konduit_datum =
-                            konduit_data::Datum::try_from(plutus_data.clone()).ok()?;
+                        let konduit_datum = konduit_data::Datum::try_from(plutus_data).ok()?;
                         Some((input, konduit_datum))
                     }
                     Datum::Hash(_) => None,
                 }
             })
             .filter(|(_, datum)| {
+                println!("Found channel datum with tag: {:?}", datum.constants.tag);
+                println!("Looking for channel: {:?}", self.channel_tag);
+                println!("Datum: {:?}", datum);
                 if let Some(tag) = &self.channel_tag {
                     &datum.constants.tag == tag
                 } else {

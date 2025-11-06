@@ -1,7 +1,7 @@
 //! Command-line metavar specifying the type/semantic of arguments and/or options.
 
 /// Lovelace amounts
-pub const LOVELACE: &str = "U64";
+pub const LOVELACE: &str = "LOVELACE";
 
 /// Ed25519 Public key
 pub const ED25519_VERIFICATION_KEY: &str = "ED25519_PUB";
@@ -17,3 +17,6 @@ pub const DURATION: &str = "DURATION";
 
 /// A script hash
 pub const SCRIPT_HASH: &str = "SCRIPT_HASH";
+
+/// A CBOR file which contains Plutus data
+pub const PLUTUS_CBOR_FILE: &str = "PLUTUS_DATA_CBOR_FILE";

@@ -1034,7 +1034,6 @@ impl Transaction<state::InConstruction> {
                 anyhow!("unknown input, not present in resolved set")
                     .context(format!("input={input}"))
             })?;
-
             Ok::<_, anyhow::Error>(total_input.add(output.value()))
         })?;
 
@@ -1076,6 +1075,7 @@ impl Transaction<state::InConstruction> {
         // Subtract all outputs from the change balance
         self.outputs()
             .try_fold(&mut change, |total_output, output| {
+                println!("Subtracting output: {}", output.value().lovelace());
                 total_output.checked_sub(output.value())
             })
             .map_err(|e| e.context("insufficient balance; spending more than available"))?;

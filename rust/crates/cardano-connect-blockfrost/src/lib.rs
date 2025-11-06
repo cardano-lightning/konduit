@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use blockfrost::{BlockfrostAPI, Pagination};
+use blockfrost::{BlockfrostAPI, BlockfrostError, Pagination};
 use blockfrost_openapi::models::{
     address_utxo_content_inner::AddressUtxoContentInner,
     tx_content_output_amount_inner::TxContentOutputAmountInner,
@@ -214,10 +214,15 @@ impl CardanoConnect for Blockfrost {
         let response = self
             .api
             .addresses_utxos(&format!("{}", addr), Pagination::all())
-            .await?;
+            .await;
 
-        // Let's print the JSON back
-        println!("UTxOs at address {}: {:#?}", addr, response);
+        let response = match response {
+            Err(BlockfrostError::Response { url: _, reason }) if reason.status_code == 404 => {
+                return Ok(BTreeMap::new()); // No UTxOs at this address, return
+            }
+            err @ Err(_) => err?,
+            Ok(response) => response,
+        };
 
         let s = stream::iter(response)
             .map(move |bf_utxo| self.resolve_utxo(bf_utxo))

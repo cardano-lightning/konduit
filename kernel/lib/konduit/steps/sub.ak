@@ -18,6 +18,7 @@ pub fn do(
   unlockeds: List<t.Unlocked>,
   return: Return<result>,
 ) -> result {
+  trace @"sub.do": @"starting sub step"
   let t.Constants { tag, add_vkey, sub_vkey, .. } = constants
   expect t.Opened(subbed_in) = stage_in
   expect t.Opened(subbed_out) = stage_out

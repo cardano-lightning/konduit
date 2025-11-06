@@ -1,6 +1,6 @@
 use crate::{Duration, Tag};
 use anyhow::anyhow;
-use cardano_tx_builder::{PlutusData, VerificationKey};
+use cardano_tx_builder::{PlutusData, VerificationKey, constr};
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Constants {
@@ -17,19 +17,16 @@ impl Constants {
     }
 }
 
-impl<'a> TryFrom<Vec<PlutusData<'a>>> for Constants {
+impl<'a> TryFrom<&PlutusData<'a>> for Constants {
     type Error = anyhow::Error;
 
-    fn try_from(value: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
-        Self::try_from(<[PlutusData; 4]>::try_from(value).map_err(|_| anyhow!("Bad length"))?)
-    }
-}
-
-impl<'a> TryFrom<[PlutusData<'a>; 4]> for Constants {
-    type Error = anyhow::Error;
-
-    fn try_from(value: [PlutusData<'a>; 4]) -> anyhow::Result<Self> {
-        let [a, b, c, d] = value;
+    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+        let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
+        if tag != 0 {
+            return Err(anyhow!("Bad constructor tag"));
+        }
+        let [a, b, c, d] = <[PlutusData; 4]>::try_from(fields.collect::<Vec<_>>())
+            .map_err(|_| anyhow!("invalid 'Cheque'"))?;
         Ok(Self {
             tag: Tag::try_from(&a)?,
             add_vkey: VerificationKey::from(*<&[u8; 32]>::try_from(&b)?),
@@ -39,27 +36,14 @@ impl<'a> TryFrom<[PlutusData<'a>; 4]> for Constants {
     }
 }
 
-impl<'a> TryFrom<&PlutusData<'a>> for Constants {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(<[PlutusData; 4]>::try_from(data)?)
-    }
-}
-
-impl<'a> From<Constants> for [PlutusData<'a>; 4] {
+impl<'a> From<Constants> for PlutusData<'a> {
     fn from(value: Constants) -> Self {
-        [
+        constr!(
+            0,
             PlutusData::from(value.tag),
             PlutusData::from(<[u8; 32]>::from(value.add_vkey)),
             PlutusData::from(<[u8; 32]>::from(value.sub_vkey)),
             PlutusData::from(value.close_period),
-        ]
-    }
-}
-
-impl<'a> From<Constants> for PlutusData<'a> {
-    fn from(value: Constants) -> Self {
-        Self::list(<[PlutusData; 4]>::from(value))
+        )
     }
 }

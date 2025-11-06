@@ -12,10 +12,7 @@ pub(crate) struct Args {
     #[clap(long, value_name = metavar::LOVELACE)]
     amount: Lovelace,
 
-    /// Consumer's verification key, allowed to *add* funds.
-    ///
     /// We also assume that the consumer is opening that channel and paying for it.
-    #[clap(long, value_name = metavar::ED25519_VERIFICATION_KEY, env = env::CONSUMER, long_help = "We use consumer's verification key as the stake credential which can speed up channel UTXO discovery.")]
     #[clap(
         long,
         value_name = metavar::ED25519_SIGNING_KEY,

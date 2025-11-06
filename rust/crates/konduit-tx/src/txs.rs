@@ -1,3 +1,4 @@
+use cardano_tx_builder::cbor::ToCbor;
 use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,7 +9,7 @@ use cardano_tx_builder::{
     ProtocolParameters, Transaction, Value, VerificationKey, address,
     transaction::state::ReadyForSigning,
 };
-use konduit_data::{Constants, Datum, Duration, Receipt, Redeemer, Stage, Tag};
+use konduit_data::{Constants, Datum, Duration, Receipt, Redeemer, Stage, Tag, hex};
 
 pub type Lovelace = u64;
 
@@ -39,6 +40,9 @@ pub fn deploy(
 }
 
 pub fn select_utxos(utxos: &Utxos, amount: Lovelace) -> anyhow::Result<Vec<&Input>> {
+    if amount == 0 {
+        return Ok(vec![]);
+    }
     // Filter out utxos which hold reference scripts
     let mut sorted_utxos: Vec<(&Input, &Output)> = utxos
         .into_iter()
@@ -83,14 +87,16 @@ pub fn open(
     close_period: Duration,
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let consumer_payment_credential = Credential::from_key(Hash::<28>::new(consumer));
-    let consumer_staking_credential = Credential::from_key(Hash::<28>::new(consumer));
+    // TODO: It is impossible to ignore staking part in the future queries
+    // so let's not use them till Blockfrost fixes the issue.
+    // let consumer_staking_credential = Credential::from_key(Hash::<28>::new(consumer));
     let contract_address = Address::from(
-        Address::new(network_id, Credential::from_script(validator))
-            .with_delegation(consumer_staking_credential.clone()),
+        Address::new(network_id, Credential::from_script(validator)),
+        // .with_delegation(consumer_staking_credential.clone()),
     );
     let consumer_change_address = Address::from(
-        Address::new(network_id, consumer_payment_credential)
-            .with_delegation(consumer_staking_credential),
+        Address::new(network_id, consumer_payment_credential),
+        // .with_delegation(consumer_staking_credential),
     );
 
     let datum = PlutusData::from(Datum {
@@ -101,7 +107,7 @@ pub fn open(
             sub_vkey: adaptor,
             close_period,
         },
-        stage: Stage::Opened(amount),
+        stage: Stage::Opened(0),
     });
 
     let funding_inputs: Vec<&Input> = select_utxos(utxos, amount + FEE_BUFFER)?;
@@ -158,12 +164,14 @@ pub fn parse_output_datum(channel_output: &Output) -> anyhow::Result<konduit_dat
 
 pub fn mk_sub_step(receipt: &Receipt, channel_in: &Output) -> Option<(Lovelace, Output)> {
     let datum_in: Datum = parse_output_datum(channel_in).ok()?;
+    println!("mk_sub_step: datum_in: {:?}", datum_in);
     let value_in: Value<u64> = channel_in.value().clone();
+    println!("mk_sub_step: value_in: {:?}", value_in.lovelace());
     let available = value_in.lovelace() - MIN_ADA;
     if let Stage::Opened(subbed_in) = datum_in.stage {
         let to_sub = {
             let owed = receipt.amount();
-            min(available, owed - subbed_in)
+            min(available, owed - min(subbed_in, owed))
         };
         let stage_out = Stage::Opened(subbed_in + to_sub);
         let datum_out = Datum {
@@ -188,14 +196,6 @@ pub fn mk_sub_step(receipt: &Receipt, channel_in: &Output) -> Option<(Lovelace, 
     } else {
         None
     }
-}
-
-fn output_signatory(output: &Output) -> Option<Hash<28>> {
-    output
-        .address()
-        .as_shelley()
-        .map(|addr| addr.payment())
-        .and_then(|payment_credential| payment_credential.as_key())
 }
 
 // Used by a pure sub transaction
@@ -242,6 +242,22 @@ pub fn sub(
         .collect::<Vec<(&Input, Output)>>();
     tx_steps.sort_by_key(|&(txout_ref, _)| txout_ref.clone());
 
+    println!("\n\nConstructed sub tx steps:");
+    tx_steps
+        .iter()
+        .enumerate()
+        .for_each(|(i, &(_, ref channel_out))| {
+            println!(
+                "tx_step[{}]: output datum: {:?}",
+                i,
+                parse_output_datum(channel_out)
+            );
+            println!(
+                "txout_ref: {:?}",
+                hex::encode(tx_steps[i].0.transaction_id())
+            );
+        });
+
     let main_redeemer: Redeemer = {
         let cont = konduit_data::Cont::Sub(receipt.squash.clone(), receipt.unlockeds.clone());
         let sub = konduit_data::Step::Cont(cont);
@@ -255,6 +271,14 @@ pub fn sub(
             .iter()
             .enumerate()
             .map(|(idx, &(txout_ref, _))| {
+                println!(
+                    "sub: main_redeemer: {:?}",
+                    hex::encode(PlutusData::from(main_redeemer.clone()).to_cbor())
+                );
+                println!(
+                    "sub: defer: {:?}",
+                    hex::encode(PlutusData::from(defer.clone()).to_cbor())
+                );
                 if idx == 0 {
                     (txout_ref, Some(PlutusData::from(main_redeemer.clone())))
                 } else {
@@ -262,7 +286,7 @@ pub fn sub(
                 }
             })
             .collect::<Vec<(&Input, Option<PlutusData>)>>();
-        let selected_utxos = select_utxos(&funding_utxos, FEE_BUFFER - to_sub)?;
+        let selected_utxos = select_utxos(&funding_utxos, FEE_BUFFER - min(to_sub, FEE_BUFFER))?;
         let funding_inputs = selected_utxos
             .iter()
             .map(|&i| (i, None))
@@ -279,7 +303,7 @@ pub fn sub(
         let mut base = funding_utxos.clone();
         // add script utxo
         base.insert(script_utxo.0.clone(), script_utxo.1.clone());
-        for &(txout_ref, ref channel_out) in tx_steps.iter() {
+        for (txout_ref, channel_out) in channels_in.iter() {
             base.insert(txout_ref.clone(), channel_out.clone());
         }
         base
@@ -289,314 +313,34 @@ pub fn sub(
         Address::new(
             network_id,
             Credential::from_key(Hash::<28>::new(adaptor.clone())),
-        )
-        .with_delegation(Credential::from_key(Hash::<28>::new(adaptor.clone()))),
+        ), // .with_delegation(Credential::from_key(Hash::<28>::new(adaptor.clone()))),
     );
 
     let specified_signatories = {
-        // signatories implied by the inputs
-        let ledger_signatories = inputs
-            .iter()
-            .filter_map(|(input, _)| utxos.get(input).and_then(|output| output_signatory(output)))
-            .collect::<BTreeSet<Hash<28>>>();
         let key_hash = Hash::<28>::new(adaptor.clone());
-        // Check if the adaptor is among them, if it is not then we have to specify it explicitly
-        if !ledger_signatories.contains(&key_hash) {
-            vec![key_hash]
-        } else {
-            vec![]
-        }
+        vec![key_hash]
     };
     let inputs = inputs
         .into_iter()
         .map(|(i, redeemer)| (i.clone(), redeemer))
         .collect::<Vec<(Input, Option<PlutusData>)>>();
 
+    let collateral_inputs: Vec<Input> = {
+        let selected = select_utxos(funding_utxos, FEE_BUFFER)?;
+        selected
+            .into_iter()
+            .map(|i| i.clone())
+            .collect::<Vec<Input>>()
+    };
+
     let transaction = Transaction::build(&protocol_parameters, &utxos, |tx| {
         tx.with_inputs(inputs.to_owned())
             .with_outputs(outputs.to_owned())
+            .with_collaterals(collateral_inputs.to_owned())
             .with_reference_inputs(vec![script_utxo.0.clone()])
-            .with_change_strategy(ChangeStrategy::as_last_output(change_address.to_owned()))
             .with_specified_signatories(specified_signatories.to_owned())
+            .with_change_strategy(ChangeStrategy::as_last_output(change_address.to_owned()))
             .ok()
     })?;
     Ok(Some(transaction))
 }
-
-// pub struct TxStep<'a> {
-//     input: Utxo,
-//     output: Option<Output>,
-//     redeemer: PlutusData<'a>,
-// }
-//
-// pub struct TxSteps<'a> {
-//     steps: Vec<TxStep<'a>>,
-//     signatories: BTreeSet<VerificationKey>,
-// }
-//
-// // inputs has to be sorted and payout should be added
-// pub fn mappend_txsteps<'a>(tx1: TxSteps<'a>, tx2: TxSteps<'a>) -> TxSteps<'a> {
-//     let mut steps = tx1.steps;
-//     steps.extend(tx2.steps);
-//     steps.sort_by_key(|step| step.input.0.clone());
-//
-//     let mut signatories = tx1.signatories;
-//     signatories.extend(tx2.signatories);
-//     TxSteps { steps, signatories }
-// }
-//
-// // Singleton steps tx
-// pub fn mk_tx_steps(
-//     input: Utxo,
-//     output: Option<Output>,
-//     redeemer: PlutusData,
-//     signatory: VerificationKey,
-// ) -> TxSteps {
-//     let step = TxStep {
-//         input,
-//         output,
-//         redeemer,
-//     };
-//     let mut signatories = BTreeSet::new();
-//     signatories.insert(signatory);
-//     TxSteps {
-//         steps: vec![step],
-//         signatories,
-//     }
-// }
-//
-// // pub fn with_validity_interval(&mut self, from: SlotBound, until: SlotBound) -> &mut Self {
-//
-// // Simplified Konduit specific transaction input/output:
-// // * We keep inputs around so we can shuffle them as we go.
-// // * We preserve redeemer in the `Intent` form so we can
-// //  build the final redeemer(s) in a structured way at the end.
-// // * We ignore here Konduit script reference input - it will be added later.
-// // * We do not account for change outputs here - they will be added by the tx builder.
-// enum InputOutput<'a> {
-//     // Either funding input or eol script step.
-//     InputOnly(Input, Option<Intent>),
-//     // New channel output - change output will be added later.
-//     OutputOnly(Output),
-//     InputOutput(Input, Intent, Output),
-// }
-// // We want to have ord:
-// // `OutputOnly` is
-// // impl
-//
-// struct TxBody<'a> {
-//     // We do not preserve order here. It is executed once at the end
-//     inputs_outputs: Vec<InputOutput<'a>>,
-//     // signatories are stripped away from here
-//     extra_signatories: BTreeSet<VerificationKey>,
-//     // Regular spend input implied signatories
-//     signatories: BTreeSet<VerificationKey>,
-//     // `inputs - outputs` for rough founding requirements
-//     balance: Lovelace,
-//
-// }
-//
-// impl TxBody<'a> {
-//     fn new() -> Self {
-//         TxBody {
-//             inputs_outputs: Vec::new(),
-//             signatories: BTreeSet::new(),
-//             extra_signatories: BTreeSet::new(),
-//             balance: 0
-//         }
-//     }
-//
-//     // pub struct Address<T: IsAddressKind>(Arc<AddressKind>, PhantomData<T>);
-//     // enum AddressKind {
-//     //     Byron(pallas::ByronAddress),
-//     //     Shelley(pallas::ShelleyAddress),
-//     // }
-//     // pub enum ShelleyPaymentPart {
-//     //     Key(PaymentKeyHash),
-//     //     Script(ScriptHash),
-//     // }
-//     //
-//     // pub fn as_shelley(&self) -> Option<Address<kind::Shelley>> {
-//     //     if self.is_shelley() {
-//     //         return Some(Address(self.0.clone(), PhantomData));
-//     //     }
-//
-//     //     None
-//     // }
-//     // Address<Shelley>
-//     // pub fn payment(&self) -> Credential {
-//     //     Credential::from(self.cast().payment())
-//     // }
-//     // Credential::pub fn as_key(&self) -> Option<Hash<28>> {
-//     //     self.select(Some, |_| None)
-//     // }
-//     fn with_input(
-//         &mut self,
-//         utxo: &Utxo,
-//         // redeemer and extra signatory - all the actions
-//         // which we have require a signatory
-//         script_extras: Option<(PlutusData<'_>, VerificationKey)>,
-//     ) -> {
-//         let (input_ref, input) = utxo;
-//         let input_only = match script_extras {
-//             Some((redeemer, extra_signatory)) => {
-//                 // If extra_signatory is not present in the sets we add it to the extra_signatories
-//                 if(!self.signatories.contains(&extra_signatory) && !self.extra_signatories.contains(&extra_signatory)) {
-//                     self.extra_signatories.insert(extra_signatory);
-//                 }
-//                 self.balance = self.balance + input.value().lovelace();
-//                 InputOnly(input_ref.clone(), Some(redeemer.clone()))
-//
-//             }
-//             None => {
-//                 let signatory = output
-//                     .address()
-//                     .as_shelley()
-//                     .and_then(|addr| addr.payment())
-//                     .and_then(|payment_credential| payment_credential.as_key())
-//                     .map(|key_hash| VerificationKey::from(&key_hash))
-//                     .expect("Expected payment key credential for input which has no redeemer and extra signatory");
-//                 self.signatories.extend(signatory.into_iter());
-//                 self.extra_signatories.remove(&signatory);
-//                 InputOutput::InputOnly(input_ref.clone(), None)
-//             }
-//         }
-//         self.inputs_outputs.push(input_only)
-//     }
-// }
-//
-// pub mk_tx(
-//     funding_utxos: &BTreeMap<Input, Output>,
-//     script_utxo: &Utxo,
-//     tx_steps: &TxSteps,
-//     change_address: Address<address::kind::Any>,
-//     protocol_parameters: &ProtocolParameters,
-// ) -> anyhow::Result<Transaction<ReadyForSigning>> {
-//     // Let's add all the utxos involved
-//     // OLD CODE:
-//     // let utxos = {
-//     //     let mut base = funding_utxos.clone();
-//     //     for ((input, output), _) in tx_steps.iter() {
-//     //         base.insert(input.clone(), output.clone());
-//     //     }
-//     //     // add script utxo
-//     //     base.insert(script_utxo.0.clone(), script_utxo.1.clone());
-//     //     base
-//     // };
-//
-//     // *
-
-// pub fn batch(
-//     network_id: &NetworkId,
-//     protocol_parameters: &ProtocolParameters,
-//     available_fuel: Utxos,
-//     script_utxo: &(Input, Output),
-//     channels: &Utxos,
-//     intents: BTreeMap<Constants, Intent>,
-//     opens: Vec<(Option<Credential>, Amount, Constants, Amount)>,
-//schannel_sub_     change_address: Address<address::kind::Any>,
-// ) -> Result<Transaction<ReadyForSigning>> {
-//     let script_hash = Hash::from(script_utxo.1.script().ok_or(anyhow!("expect script"))?);
-//     let all_channels = channels
-//         .iter()
-//         .map(|(i, o)| {
-//             let res = match Channel::try_from_output(script_hash, o.clone()) {
-//                 Err(err) => Err(anyhow!("Not a channel")),
-//                 Ok(channel) => match intents.get(&channel.constants) {
-//                     Some(intent) => Ok(CanStep::from_channel_intent(
-//                         channel.clone(),
-//                         intent.clone(),
-//                     )),
-//                     None => Err(anyhow!("No intent found. This could be fine")),
-//                 },
-//             };
-//             (i.clone(), res)
-//         })
-//         .collect::<Vec<(Input, Result<CanStep>)>>();
-//
-//     let (good_inputs, good_channels) = all_channels
-//         .into_iter()
-//         .filter_map(|(i, res)| match res {
-//             Ok(can_step) => match can_step {
-//                 CanStep::Yes(_, _) => Some((i.clone(), can_step.clone())),
-//                 _ => None,
-//             },
-//             _ => None,
-//         })
-//         .collect::<(Vec<Input>, Vec<CanStep>)>();
-//
-//     let steps = good_channels
-//         .iter()
-//         .filter_map(|cs| cs.as_step())
-//         .collect::<Vec<Step>>();
-//
-//     let main_redeemer = Redeemer::new_main(Steps(steps));
-//     let mut inputs: Vec<(Input, Option<PlutusData<'static>>)> = good_inputs
-//         .iter()
-//         .map(|i| (i.clone(), Some(PlutusData::from(Redeemer::Batch))))
-//         .collect();
-//
-//     // Set main redeemer
-//     if let Some(main_input) = inputs.first_mut() {
-//         main_input.1 = Some(PlutusData::from(main_redeemer))
-//     } else {
-//         Err(anyhow!("No good inputs"))?;
-//     }
-//
-//     // Add all the fuel
-//     let mut fuel_inputs = available_fuel
-//         .iter()
-//         .map(|(i, _)| (i.clone(), None))
-//         .collect();
-//     inputs.append(&mut fuel_inputs);
-//
-//     let mut outputs = good_channels
-//         .iter()
-//         .filter_map(|cs| {
-//             cs.as_channel()
-//                 .map(|channel| channel.to_output(network_id.clone(), script_hash))
-//         })
-//         .collect::<Vec<Output>>();
-//
-//     let mut open_outputs = opens
-//         .into_iter()
-//         .map(|(delegation, amount, constants, subbed)| {
-//             Channel::new(delegation, amount, constants, Stage::Opened(subbed))
-//                 .to_output(network_id.clone(), script_hash)
-//         })
-//         .collect::<Vec<Output>>();
-//
-//     outputs.append(&mut open_outputs);
-//
-//     let constraints = good_channels
-//         .iter()
-//         .fold(Constraints::default(), |acc, curr| {
-//             match curr.as_constraints() {
-//                 Some(c) => acc.merge(c),
-//                 None => acc,
-//             }
-//         });
-//
-//     // Gather all utxos
-//     let mut utxos = channels.clone();
-//     utxos.append(&mut available_fuel.clone());
-//     utxos.insert(script_utxo.0.clone(), script_utxo.1.clone());
-//
-//     // FIXME :: These need to be added to the tx.
-//     let lower_bound = constraints.lower_bound;
-//     let upper_bound = constraints.upper_bound;
-//     let specified_signatories: Vec<Hash<28>> = constraints
-//         .required_signers
-//         .iter()
-//         .map(|x| <Hash<28>>::from(x.hash()))
-//         .collect();
-//
-//     Transaction::build(&protocol_parameters, &utxos, |tx| {
-//         tx.with_inputs(inputs.to_owned())
-//             .with_outputs(outputs.to_owned())
-//             .with_reference_inputs(vec![script_utxo.0.clone()])
-//             .with_change_strategy(ChangeStrategy::as_last_output(change_address.to_owned()))
-//             .with_specified_signatories(specified_signatories.to_owned())
-//             .ok()
-//     })
-// }
