@@ -91,7 +91,6 @@ impl Args {
                         konduit_data::Datum::try_from(plutus_data)
                             .ok()
                             .map(|konduit_datum| {
-                                println!("Found channel datum with tag: {:?}", konduit_datum);
                                 konduit_datum.constants.tag == self.channel_tag
                                     && konduit_datum.constants.sub_vkey == adaptor_verification_key
                             })

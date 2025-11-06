@@ -90,9 +90,6 @@ impl Args {
                 }
             })
             .filter(|(_, datum)| {
-                println!("Found channel datum with tag: {:?}", datum.constants.tag);
-                println!("Looking for channel: {:?}", self.channel_tag);
-                println!("Datum: {:?}", datum);
                 if let Some(tag) = &self.channel_tag {
                     &datum.constants.tag == tag
                 } else {
@@ -101,7 +98,6 @@ impl Args {
             })
             .collect::<Vec<_>>();
 
-        // TODO: Provide a way to use JSON as an output format
         for (input, datum) in channels {
             println!("Channel UTxO: {}", input);
             println!("Datum: {datum:#?}");

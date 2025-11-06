@@ -87,9 +87,8 @@ pub fn open(
     close_period: Duration,
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let consumer_payment_credential = Credential::from_key(Hash::<28>::new(consumer));
-    // TODO: It is impossible to ignore staking part in the future queries
-    // so let's not use them till Blockfrost fixes the issue.
-    // let consumer_staking_credential = Credential::from_key(Hash::<28>::new(consumer));
+    // TODO: We will reintroduce staking credential later on when it won't
+    // cause UTxOs filtering issues.
     let contract_address = Address::from(
         Address::new(network_id, Credential::from_script(validator)),
         // .with_delegation(consumer_staking_credential.clone()),
@@ -125,29 +124,6 @@ pub fn open(
     })
 }
 
-// pub type Step {
-//   StepCont(Cont)
-//   StepEol(Eol)
-// }
-//
-// pub type Unpend =
-//   ByteArray
-//
-// pub type Cont {
-//   Add
-//   Sub(Squash, List<Unlocked>)
-//   Close
-//   Respond(Squash, List<MixedCheque>)
-//   Unlock(List<Unpend>)
-//   Expire(List<Unpend>)
-// }
-//
-// pub type Redeemer {
-//   Defer
-//   Main(List<Step>)
-//   Mutual
-// }
-//
 pub fn parse_output_datum(channel_output: &Output) -> anyhow::Result<konduit_data::Datum> {
     let datum_rc = channel_output
         .datum()
@@ -164,9 +140,7 @@ pub fn parse_output_datum(channel_output: &Output) -> anyhow::Result<konduit_dat
 
 pub fn mk_sub_step(receipt: &Receipt, channel_in: &Output) -> Option<(Lovelace, Output)> {
     let datum_in: Datum = parse_output_datum(channel_in).ok()?;
-    println!("mk_sub_step: datum_in: {:?}", datum_in);
     let value_in: Value<u64> = channel_in.value().clone();
-    println!("mk_sub_step: value_in: {:?}", value_in.lovelace());
     let available = value_in.lovelace() - MIN_ADA;
     if let Stage::Opened(subbed_in) = datum_in.stage {
         let to_sub = {
@@ -198,7 +172,6 @@ pub fn mk_sub_step(receipt: &Receipt, channel_in: &Output) -> Option<(Lovelace, 
     }
 }
 
-// Used by a pure sub transaction
 pub const SUB_THRESHOLD: Lovelace = 0;
 
 pub fn sub(
@@ -207,12 +180,12 @@ pub fn sub(
     // Utxo holding the konduit script
     script_utxo: &Utxo,
     // Utxos representing the channels to be subtracted from
+    // We assume that the channels where already filtered by tag and sub_vkey.
     channels_in: &Vec<Utxo>,
     // Receipt which authorizes the subtraction
     receipt: &konduit_data::Receipt,
     // Adaptor's verification key, allowed to *sub* funds
-    // For now we use it as a baseline for the change and cash out address
-    // We use that key for both parts of the change address.
+    // For now we use it as a baseline for the change and cash out address.
     adaptor: VerificationKey,
     // Network information: params and id
     protocol_parameters: &ProtocolParameters,
@@ -242,22 +215,6 @@ pub fn sub(
         .collect::<Vec<(&Input, Output)>>();
     tx_steps.sort_by_key(|&(txout_ref, _)| txout_ref.clone());
 
-    println!("\n\nConstructed sub tx steps:");
-    tx_steps
-        .iter()
-        .enumerate()
-        .for_each(|(i, &(_, ref channel_out))| {
-            println!(
-                "tx_step[{}]: output datum: {:?}",
-                i,
-                parse_output_datum(channel_out)
-            );
-            println!(
-                "txout_ref: {:?}",
-                hex::encode(tx_steps[i].0.transaction_id())
-            );
-        });
-
     let main_redeemer: Redeemer = {
         let cont = konduit_data::Cont::Sub(receipt.squash.clone(), receipt.unlockeds.clone());
         let sub = konduit_data::Step::Cont(cont);
@@ -271,14 +228,6 @@ pub fn sub(
             .iter()
             .enumerate()
             .map(|(idx, &(txout_ref, _))| {
-                println!(
-                    "sub: main_redeemer: {:?}",
-                    hex::encode(PlutusData::from(main_redeemer.clone()).to_cbor())
-                );
-                println!(
-                    "sub: defer: {:?}",
-                    hex::encode(PlutusData::from(defer.clone()).to_cbor())
-                );
                 if idx == 0 {
                     (txout_ref, Some(PlutusData::from(main_redeemer.clone())))
                 } else {
@@ -313,7 +262,9 @@ pub fn sub(
         Address::new(
             network_id,
             Credential::from_key(Hash::<28>::new(adaptor.clone())),
-        ), // .with_delegation(Credential::from_key(Hash::<28>::new(adaptor.clone()))),
+        ), // TODO: this would break the Blockfrost UTxO selection which ignores staking part
+           // We chose for now to not use staking credentials at all.
+           // .with_delegation(Credential::from_key(Hash::<28>::new(adaptor.clone()))),
     );
 
     let specified_signatories = {
