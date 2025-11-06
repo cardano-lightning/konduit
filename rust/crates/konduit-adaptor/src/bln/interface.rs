@@ -3,8 +3,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::Invoice;
-
 #[derive(Debug, Error)]
 pub enum BlnError {
     #[error("Initialization failed: {0}")]
@@ -12,6 +10,9 @@ pub enum BlnError {
 
     #[error("Network or HTTP error: {0}")]
     Network(#[from] reqwest::Error),
+
+    #[error("Failed to find the time")]
+    Time,
 
     #[error("Failed to parse API response: {0}")]
     Parse(String),
@@ -33,25 +34,31 @@ pub enum BlnError {
 }
 
 #[derive(Debug, Clone)]
-pub enum QuoteRequest {
-    Bolt11(Invoice),
+pub struct QuoteRequest {
+    pub amount_msat: u64,
+    pub payee: [u8; 33],
 }
 
 #[derive(Debug, Clone)]
 pub struct QuoteResponse {
-    pub amount_msat: u64,
     pub estimated_timeout: Duration,
     pub fee_msat: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct PayRequest {
+    // Max routing fee (msat) that the adaptor is willing to pay
+    pub routing_fee: u64,
+    /// The max timeout (cltv limit). The adaptor should have accounted for their margin
+    /// prioir to this. In other words, this is not the same value as on the cheque.
+    /// This is cheque timeout - adaptor_margin.
+    pub timeout: Duration,
+    /// The following fields are derived from the inovice
     pub amount_msat: u64,
-    pub recipient: [u8; 33],
+    pub payee: [u8; 33],
     pub payment_hash: [u8; 32],
     pub payment_secret: [u8; 32],
-    pub routing_fee: u64,
-    pub expiry: u64, // FIXME :: What is this?!
+    pub final_cltv_delta: u64,
 }
 
 #[derive(Debug, Clone)]

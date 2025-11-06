@@ -4,13 +4,15 @@ pub use konduit_data::Keytag;
 use konduit_data::MixedReceipt;
 pub use konduit_data::Stage;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::l2_channel::L2Channel;
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Info {
     pub fee: u64,
-    #[serde(with = "hex")]
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub adaptor_key: [u8; 32],
     pub close_period: u64,
 }
@@ -69,7 +71,16 @@ pub struct Secrets(Vec<[u8; 32]>);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum QuoteBody {
+    Simple(SimpleQuote),
     Bolt11(String),
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SimpleQuote {
+    pub amount_msat: u64,
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub payee: [u8; 33],
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

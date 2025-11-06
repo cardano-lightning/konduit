@@ -120,14 +120,21 @@ pub async fn quote(
         return Ok(HttpResponse::BadRequest().body("No channel funds"));
     };
     let quote_request = match body.into_inner() {
+        QuoteBody::Simple(simple_quote) => bln::QuoteRequest {
+            amount_msat: simple_quote.amount_msat,
+            payee: simple_quote.payee,
+        },
         QuoteBody::Bolt11(s) => {
             let Ok(invoice) = Invoice::try_from(s.as_str()) else {
                 return Ok(HttpResponse::BadRequest().body("Bad invoice"));
             };
-            bln::QuoteRequest::Bolt11(invoice)
+            bln::QuoteRequest {
+                amount_msat: invoice.amount_msat,
+                payee: invoice.payee_compressed,
+            }
         }
     };
-    let Ok(bln_quote) = data.bln.quote(quote_request).await else {
+    let Ok(bln_quote) = data.bln.quote(quote_request.clone()).await else {
         return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
     };
 
@@ -136,7 +143,8 @@ pub async fn quote(
     let adaptor_margin = Duration::from_secs(40 * 10 * 60);
 
     log::info!("{:?}", bln_quote);
-    let amount = fx.msat_to_lovelace(bln_quote.amount_msat) + data.info.fee;
+    let amount =
+        fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info.fee;
     let timeout = (adaptor_margin + bln_quote.estimated_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
         amount: amount,
