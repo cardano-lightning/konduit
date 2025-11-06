@@ -4,22 +4,33 @@ A WASM-friendly API for Konduit.
 
 ## Pre-requisite
 
+### cargo make
+
+```console
+cargo install cargo-make
+```
+
+### wasm32 rustool target
+
 ```console
 rustup target add wasm32-unknown-unknown
-cargo install wasm-pack
 ```
+
+### WebAssembly/binaryen
+
+For optimized release builds: see [WebAssembly/binaryen](https://github.com/WebAssembly/binaryen).
 
 ## Compiling
 
 ```console
-wasm-pack build --target web
+cargo make dev
 
-# or alternatively
+# or for release
 
-wasm-pack build --target nodejs
+cargo make release
 ```
 
-This produces javascript files under `./pkg`
+This produces JavaScript & WASM files under `./pkg`
 
 ## Example
 

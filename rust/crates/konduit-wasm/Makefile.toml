@@ -1,0 +1,26 @@
+[tasks.wasm]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build", "--target", "web"]
+
+[tasks.wasm-release]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build", "--target", "web", "--release"]
+
+[tasks.optimize]
+dependencies = ["wasm-release"]
+script.pre = '''
+if ! type "wasp-opt" > /dev/null; then
+  echo "wasm-opt not available; please install the WebAssembly/binaryen toolkit: <https://github.com/WebAssembly/binaryen>"
+  exit 1
+fi
+'''
+script.main = "wasm-opt -Oz -o pkg/konduit_wasm_bg_opt.wasm pkg/konduit_wasm_bg.wasm"
+script.post = "mv pkg/konduit_wasm_bg_opt.wasm pkg/konduit_wasm_bg.wasm"
+
+[tasks.dev]
+dependencies = ["wasm"]
+
+[tasks.release]
+dependencies = ["optimize"]
