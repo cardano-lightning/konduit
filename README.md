@@ -19,3 +19,17 @@ See the [requirements](./docs/design/requirements.md) for full details.
 ## Contributing
 
 TBC.
+
+## Developing
+
+For the base devel:
+
+```
+$ nix develop
+```
+
+For something extra, e.g. cardano-cli, use:
+
+```
+$ nix develop .#extras
+```
