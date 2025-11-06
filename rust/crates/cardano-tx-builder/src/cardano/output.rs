@@ -7,7 +7,12 @@ use crate::{
     pallas, pretty,
 };
 use anyhow::anyhow;
-use std::{fmt, rc::Rc};
+use std::{fmt, rc::Rc, str::FromStr};
+
+#[cfg(feature = "wasm")]
+use crate::cardano::value::OutputAssets;
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
 
 pub mod change_strategy;
 
@@ -30,6 +35,7 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 /// <div class="warning">Native scripts as reference scripts aren't yet supported. Only Plutus
 /// scripts are.</div>
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Output {
     address: Address<Any>,
     value: DeferredValue,
@@ -362,5 +368,34 @@ impl<'d, C> cbor::Decode<'d, C> for Output {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         let output: pallas::TransactionOutput = d.decode_with(ctx)?;
         Self::try_from(output).map_err(cbor::decode::Error::message)
+    }
+}
+
+// ------------------------------------------------------------------------ WASM
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl Output {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "new"))]
+    pub fn _wasm_new(address: &str, amount: u64) -> Self {
+        Self::new(
+            Address::from_str(address).expect("invalid address"),
+            Value::new(amount),
+        )
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "to"))]
+    pub fn _wasm_to(address: &str) -> Self {
+        Self::to(Address::from_str(address).expect("invalid address"))
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withAssets"))]
+    pub fn _wasm_with_assets(&mut self, assets: &OutputAssets) {
+        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets.clone())));
+        self.set_minimum_utxo_value();
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        self.to_string()
     }
 }

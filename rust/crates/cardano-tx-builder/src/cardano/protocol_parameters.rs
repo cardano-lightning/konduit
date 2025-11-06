@@ -4,8 +4,12 @@
 
 use num::rational::Ratio;
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 /// Protocol parameters restricted to the set immediately useful to this library.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct ProtocolParameters {
     /// Multiplier fee coefficient on the size of transactions
     fee_per_byte: u64,
@@ -262,5 +266,36 @@ impl From<&ProtocolParameters> for uplc::tx::SlotConfig {
             zero_slot: params.first_shelley_slot,
             zero_time: (params.start_time + byron_slot_length * params.first_shelley_slot) * 1000,
         }
+    }
+}
+
+// ------------------------------------------------------------------------ WASM
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl ProtocolParameters {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        format!("{self:#?}")
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "mainnet"))]
+    pub fn _wasm_mainnet() -> Self {
+        Self::mainnet()
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "preprod"))]
+    pub fn _wasm_preprod() -> Self {
+        Self::preprod()
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "preview"))]
+    pub fn _wasm_preview() -> Self {
+        Self::preview()
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withPlutusV3CostModel"))]
+    pub fn _wasm_with_plutus_v3_cost_model(mut self, cost_model: &[i64]) -> Self {
+        self.plutus_v3_cost_model = Vec::from(cost_model);
+        self
     }
 }

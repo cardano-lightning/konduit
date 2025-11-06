@@ -17,6 +17,9 @@ use std::{
     ops::Deref,
 };
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 mod builder;
 pub mod state;
 pub use state::IsTransactionBodyState;
@@ -1210,6 +1213,26 @@ impl<'d, C, State: IsTransactionBodyState> cbor::Decode<'d, C> for Transaction<S
             state: PhantomData,
             change_strategy: ChangeStrategy::default(),
         })
+    }
+}
+
+// ------------------------------------------------------------------------ WASM
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub struct TransactionReadyForSigning(Transaction<state::ReadyForSigning>);
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl TransactionReadyForSigning {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+impl From<Transaction<state::ReadyForSigning>> for TransactionReadyForSigning {
+    fn from(tx: Transaction<state::ReadyForSigning>) -> Self {
+        Self(tx)
     }
 }
 

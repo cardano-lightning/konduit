@@ -5,9 +5,13 @@
 use crate::{Hash, cbor, pallas};
 use std::{fmt, rc::Rc};
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 /// A reference to a past transaction output.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Input(Rc<pallas::TransactionInput>);
 
 impl fmt::Display for Input {
@@ -72,6 +76,24 @@ impl<C> cbor::Encode<C> for Input {
 impl<'d, C> cbor::Decode<'d, C> for Input {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         Ok(Self(Rc::new(d.decode_with(ctx)?)))
+    }
+}
+
+// ------------------------------------------------------------------------ WASM
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl Input {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
+    pub fn _wasm_new(transaction_id: &[u8], output_index: u64) -> Self {
+        Self::new(
+            Hash::try_from(Vec::from(transaction_id)).unwrap(),
+            output_index,
+        )
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        self.to_string()
     }
 }
 
