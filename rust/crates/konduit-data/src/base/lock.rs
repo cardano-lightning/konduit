@@ -1,8 +1,9 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 use cryptoxide::hashing::sha256;
+use serde::{Deserialize, Serialize};
 
-use crate::{Secret, utils::try_into_array};
+use crate::{Secret, impl_hex_serde_for_wrapper, utils::try_into_array};
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
@@ -17,6 +18,8 @@ impl std::str::FromStr for Lock {
         )?))
     }
 }
+
+impl_hex_serde_for_wrapper!(Lock, [u8; 32]);
 
 impl From<Secret> for Lock {
     fn from(value: Secret) -> Self {

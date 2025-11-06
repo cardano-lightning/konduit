@@ -1,12 +1,32 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 
-use crate::{MAX_UNSQUASHED, Squash, Unlocked};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::{MAX_UNSQUASHED, Squash, Unlocked, plutus_data_serde};
 
 #[derive(Debug, Clone)]
 pub struct Receipt {
     pub squash: Squash,
     pub unlockeds: Vec<Unlocked>,
+}
+
+impl Serialize for Receipt {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        plutus_data_serde::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Receipt {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        plutus_data_serde::deserialize::<D, Self>(deserializer)
+    }
 }
 
 impl Receipt {
@@ -17,7 +37,7 @@ impl Receipt {
         let mut sorted: Vec<Unlocked> = vec![];
         for unlocked in unlockeds {
             let index = unlocked.cheque_body.index;
-            if squash.squash_body.index_squashed(index) {
+            if squash.squash_body.is_index_squashed(index) {
                 Err(anyhow!("Index {} is already squashed", index))?;
             }
             match sorted.binary_search_by(|probe| probe.cheque_body.index.cmp(&index)) {

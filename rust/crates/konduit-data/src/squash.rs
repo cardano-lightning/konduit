@@ -1,15 +1,34 @@
 use anyhow::anyhow;
 use cardano_tx_builder::{PlutusData, Signature, SigningKey, VerificationKey};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
-    SquashBody,
+    SquashBody, Tag, plutus_data_serde,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Squash {
     pub squash_body: SquashBody,
     pub signature: Signature,
+}
+
+impl Serialize for Squash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        plutus_data_serde::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Squash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        plutus_data_serde::deserialize::<D, Self>(deserializer)
+    }
 }
 
 impl Squash {
@@ -24,12 +43,12 @@ impl Squash {
         self.squash_body.amount
     }
 
-    pub fn make(signing_key: SigningKey, tag: Vec<u8>, squash_body: SquashBody) -> Self {
+    pub fn make(signing_key: &SigningKey, tag: &Tag, squash_body: SquashBody) -> Self {
         let signature = signing_key.sign(squash_body.tagged_bytes(tag));
         Self::new(squash_body, signature)
     }
 
-    pub fn verify(&self, verification_key: VerificationKey, tag: Vec<u8>) -> bool {
+    pub fn verify(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
         verification_key.verify(self.squash_body.tagged_bytes(tag), &self.signature)
     }
 }
@@ -51,6 +70,14 @@ impl<'a> TryFrom<[PlutusData<'a>; 2]> for Squash {
             SquashBody::try_from(a)?,
             signature_from_plutus_data(&b)?,
         ))
+    }
+}
+
+impl<'a> TryFrom<PlutusData<'a>> for Squash {
+    type Error = anyhow::Error;
+
+    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+        Self::try_from(<[PlutusData; 2]>::try_from(&data)?)
     }
 }
 

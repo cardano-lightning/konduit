@@ -1,7 +1,9 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 
-use crate::utils::try_into_array;
+use serde::{Deserialize, Serialize};
+
+use crate::{impl_hex_serde_for_wrapper, utils::try_into_array};
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
@@ -16,6 +18,8 @@ impl std::str::FromStr for Secret {
         )?))
     }
 }
+
+impl_hex_serde_for_wrapper!(Secret, [u8; 32]);
 
 impl<'a> TryFrom<&PlutusData<'a>> for Secret {
     type Error = anyhow::Error;

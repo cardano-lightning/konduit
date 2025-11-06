@@ -1,6 +1,6 @@
-use crate::{cheque::Cheque, unlocked::Unlocked};
+use crate::{Tag, cheque::Cheque, unlocked::Unlocked};
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, VerificationKey};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MixedCheque {
@@ -47,6 +47,13 @@ impl MixedCheque {
         }
     }
 
+    pub fn amount(&self) -> u64 {
+        match self {
+            Self::Unlocked(unlocked) => unlocked.cheque_body.amount,
+            Self::Cheque(cheque) => cheque.cheque_body.amount,
+        }
+    }
+
     pub fn as_unlocked(&self) -> Option<Unlocked> {
         match self {
             MixedCheque::Unlocked(unlocked) => Some(unlocked.clone()),
@@ -58,6 +65,13 @@ impl MixedCheque {
         match self {
             MixedCheque::Unlocked(_) => None,
             MixedCheque::Cheque(cheque) => Some(cheque.clone()),
+        }
+    }
+
+    pub fn verify(&self, key: &VerificationKey, tag: &Tag) -> bool {
+        match self {
+            MixedCheque::Unlocked(unlocked) => unlocked.verify_no_time(key, tag),
+            MixedCheque::Cheque(cheque) => cheque.verify(key, tag),
         }
     }
 }

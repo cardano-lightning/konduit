@@ -1,6 +1,7 @@
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::{PlutusData, Signature, SigningKey, VerificationKey};
 
+use crate::Tag;
 use crate::cheque_body::ChequeBody;
 use crate::utils::{signature_from_plutus_data, signature_to_plutus_data};
 
@@ -18,12 +19,12 @@ impl Cheque {
         }
     }
 
-    pub fn make(signing_key: SigningKey, tag: Vec<u8>, cheque_body: ChequeBody) -> Self {
+    pub fn make(signing_key: &SigningKey, tag: &Tag, cheque_body: ChequeBody) -> Self {
         let signature = signing_key.sign(cheque_body.tagged_bytes(tag));
         Self::new(cheque_body, signature)
     }
 
-    pub fn verify(&self, verification_key: &VerificationKey, tag: Vec<u8>) -> bool {
+    pub fn verify(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
         verification_key.verify(self.cheque_body.tagged_bytes(tag), &self.signature)
     }
 }
