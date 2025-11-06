@@ -1,17 +1,17 @@
 use async_trait::async_trait;
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use serde_aux::prelude::deserialize_number_from_string;
-use serde_json::json;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+mod models;
 
 use crate::{
-    QuoteRequest,
+    BlnInterface, QuoteRequest,
     bln::{
-        BlnError, BlnInterface,
+        BlnError,
         interface::{PayRequest, PayResponse, QuoteResponse},
+        with_lnd::models::{
+            FeeLimit, GetInfo, Route, Routes, SendPaymentRequest, SendPaymentResponse,
+        },
     },
 };
 
@@ -82,6 +82,34 @@ impl WithLnd {
         })
     }
 
+    async fn find_route(&self, payee: [u8; 33], amount_msat: u64) -> Result<Route, BlnError> {
+        let route_json = self
+            .get(&format!(
+                "v1/graph/routes/{}/0?amt_msat={}",
+                hex::encode(payee),
+                amount_msat
+            ))
+            .await?;
+
+        let routes: Routes = serde_json::from_value(route_json)
+            .map_err(|e| BlnError::Parse(format!("Failed to parse route: {}", e)))?;
+
+        // FIXME :: Take first route. We have no knowledge of what to do when there are multiple
+        let route = routes.routes.get(0).ok_or_else(|| BlnError::ApiError {
+            status: 404,
+            message: "No route found".to_string(),
+        })?;
+        Ok(route.clone())
+    }
+
+    async fn block_height(&self) -> Result<u64, BlnError> {
+        let info_json = self.get(&format!("v1/getinfo")).await?;
+
+        let info: GetInfo = serde_json::from_value(info_json)
+            .map_err(|e| BlnError::Parse(format!("Failed to parse info: {}", e)))?;
+        Ok(info.block_height)
+    }
+
     /// Helper to handle API errors
     async fn handle_response(
         &self,
@@ -133,66 +161,50 @@ impl WithLnd {
 #[async_trait]
 impl BlnInterface for WithLnd {
     async fn quote(&self, quote_request: QuoteRequest) -> Result<QuoteResponse, BlnError> {
-        let (dest, amt_msat) = match quote_request.clone() {
-            QuoteRequest::Bolt11(invoice) => {
-                (hex::encode(invoice.payee_compressed), invoice.amount_msat)
-            }
-        };
-        let info_json = self.get(&format!("v1/getinfo")).await?;
-
-        let info: GetInfo = serde_json::from_value(info_json)
-            .map_err(|e| BlnError::Parse(format!("Failed to parse info: {}", e)))?;
-        log::info!("INFO : {:?}", info);
-
-        let route_json = self
-            .get(&format!("v1/graph/routes/{}/0?amt_msat={}", dest, amt_msat))
+        let route = self
+            .find_route(quote_request.payee, quote_request.amount_msat)
             .await?;
-        log::info!("{:?}", route_json);
-
-        let routes: LndRoutes = serde_json::from_value(route_json)
-            .map_err(|e| BlnError::Parse(format!("Failed to parse route: {}", e)))?;
-
-        let route = routes.routes.get(0).ok_or_else(|| BlnError::ApiError {
-            status: 404,
-            message: "No route found".to_string(),
-        })?;
-
-        log::info!("{:?}", routes);
-
         let fee_msat = route.total_fees_msat;
-        // FIXME:
+
+        // FIXME :: [NOTE ON TIME]
         // The average block is ~10 minutes = 600seconds.
         // However, this is probablistic, and is subject to parameters that change every 2016 blocks.
         // if final ctlv is 80 and each hop is 40 this is a very long hold period.
         let estimated_timeout =
-            Duration::from_secs((route.total_time_lock - info.block_height) * 10 * 60);
+            Duration::from_secs((route.total_time_lock - self.block_height().await?) * 10 * 60);
 
-        match quote_request {
-            QuoteRequest::Bolt11(invoice) => Ok(QuoteResponse {
-                amount_msat: invoice.amount_msat,
-                fee_msat,
-                estimated_timeout,
-            }),
-        }
+        Ok(QuoteResponse {
+            fee_msat,
+            estimated_timeout,
+        })
     }
 
     async fn pay(&self, req: PayRequest) -> Result<PayResponse, BlnError> {
-        let request_body = PayRequestBody {
-            dest: base64::engine::general_purpose::STANDARD.encode(req.recipient),
-            payment_hash: base64::engine::general_purpose::STANDARD.encode(req.payment_hash),
-            amt_msat: req.amount_msat.to_string(),
-            // **Assumption**: Trait's `expiry` is the `final_cltv_delta`
-            final_cltv_delta: req.expiry,
-            // **Assumption**: Trait's `routing_fee` is the `fee_limit` in msat
-            fee_limit: FeeLimit {
-                fixed_msat: req.routing_fee.to_string(),
-            },
-            payment_addr: BASE64_STANDARD.encode(req.payment_secret),
+        let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+            return Err(BlnError::Time);
+        };
+        // FIXME :: See [NOTE ON TIME]
+        let estimate_relative_timeout_blocks = (req.timeout.as_secs() - now.as_secs()) / (10 * 60);
+        let cltv_limit = self.block_height().await? + estimate_relative_timeout_blocks;
+        let fee_limit = FeeLimit {
+            fixed_msat: Some(req.routing_fee),
+            ..FeeLimit::default()
+        };
+
+        let request_body = SendPaymentRequest {
+            amt_msat: Some(req.amount_msat),
+            cltv_limit: Some(cltv_limit),
+            fee_limit: Some(fee_limit),
+            dest: Some(req.payee),
+            payment_hash: Some(req.payment_hash),
+            payment_addr: Some(req.payment_secret),
+            final_cltv_delta: Some(req.final_cltv_delta),
+            ..SendPaymentRequest::default()
         };
 
         let response_json = self.post("v1/channels/transactions", &request_body).await?;
 
-        let pay_res: PayApiResponse = serde_json::from_value(response_json)
+        let pay_res: SendPaymentResponse = serde_json::from_value(response_json)
             .map_err(|e| BlnError::Parse(format!("Failed to parse pay response: {}", e)))?;
 
         if !pay_res.payment_error.is_empty() {
@@ -202,99 +214,10 @@ impl BlnInterface for WithLnd {
             });
         }
 
-        let secret = base64::engine::general_purpose::STANDARD.decode(&pay_res.payment_preimage)?;
+        let secret = &pay_res.payment_preimage;
 
         Ok(PayResponse {
             secret: secret.as_slice().try_into()?,
         })
     }
-}
-
-#[derive(Serialize)]
-struct FeeLimit {
-    fixed_msat: String,
-}
-
-#[derive(Serialize)]
-struct PayRequestBody {
-    dest: String,
-    payment_hash: String,
-    amt_msat: String,
-    final_cltv_delta: u64,
-    fee_limit: FeeLimit,
-    payment_addr: String,
-}
-
-#[derive(Deserialize)]
-struct PayReqResponse {
-    destination: String,
-    payment_hash: String,
-    num_msat: String,
-    cltv_expiry: String,
-    payment_addr: String,
-}
-
-#[derive(Deserialize)]
-struct PayApiResponse {
-    payment_preimage: String,
-    payment_error: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct GetInfo {
-    block_height: u64,
-}
-
-#[derive(Deserialize, Debug)]
-struct LndRoutes {
-    routes: Vec<LndRoute>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub struct LndRoute {
-    pub custom_channel_data: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub first_hop_amount_msat: u64,
-    pub hops: Vec<Hop>,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub total_amt: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub total_amt_msat: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub total_fees: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub total_fees_msat: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub total_time_lock: u64,
-}
-
-/// Represents a single hop in a route.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Hop {
-    //pub amp_record: Option<Value>,
-    //pub mpp_record: Option<Value>,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub amt_to_forward: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub amt_to_forward_msat: u64,
-    pub blinding_point: String,
-    pub encrypted_data: String,
-    pub metadata: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub chan_capacity: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub chan_id: u64,
-    //pub custom_records: HashMap<String, Value>,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub expiry: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub fee: u64,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub fee_msat: u64,
-    #[serde(with = "hex")]
-    pub pub_key: [u8; 33],
-    pub tlv_payload: bool,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub total_amt_msat: u64,
 }
