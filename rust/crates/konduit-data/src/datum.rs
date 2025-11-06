@@ -8,17 +8,22 @@ pub struct Datum {
     pub stage: Stage,
 }
 
-impl<'a> TryFrom<PlutusData<'a>> for Datum {
+impl<'a> TryFrom<&PlutusData<'a>> for Datum {
     type Error = anyhow::Error;
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        let [a, b, c] = <[PlutusData; 3]>::try_from(&data)?;
+    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+        let [a, b, c] = <[PlutusData; 3]>::try_from(data)?;
         let a = <&[u8; 28]>::try_from(&a)?;
         Ok(Self {
             own_hash: Hash::from(*a),
             constants: Constants::try_from(&b)?,
             stage: Stage::try_from(c)?,
         })
+    }
+}
+impl<'a> From<PlutusData<'a>> for Datum {
+    fn from(value: PlutusData<'a>) -> Self {
+        Self::try_from(&value).expect("invalid datum structure")
     }
 }
 

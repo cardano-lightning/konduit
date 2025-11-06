@@ -12,3 +12,9 @@ pub use lock::*;
 
 mod secret;
 pub use secret::*;
+
+mod unpend;
+pub use unpend::*;
+
+mod posix_seconds;
+pub use posix_seconds::*;

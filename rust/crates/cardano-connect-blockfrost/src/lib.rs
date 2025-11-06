@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use blockfrost::{BlockfrostAPI, Pagination};
+use blockfrost::{BlockfrostAPI, BlockfrostError, Pagination};
 use blockfrost_openapi::models::{
     address_utxo_content_inner::AddressUtxoContentInner,
     tx_content_output_amount_inner::TxContentOutputAmountInner,
@@ -94,7 +94,7 @@ impl Blockfrost {
     pub async fn scripts_hash_cbor(&self, script_hash: &str) -> anyhow::Result<Vec<u8>> {
         let response = self
             .client
-            .get(format!("{}/scripts/{}", self.base_url, script_hash))
+            .get(format!("{}/scripts/{}/cbor", self.base_url, script_hash))
             .header("Accept", "application/json")
             .header("project_id", self.project_id.as_str())
             .send()
@@ -114,7 +114,7 @@ impl Blockfrost {
     pub async fn plutus_version(&self, script_hash: &str) -> anyhow::Result<PlutusVersion> {
         let response = self
             .client
-            .get(format!("{}/scripts/{}/cbor", self.base_url, script_hash))
+            .get(format!("{}/scripts/{}", self.base_url, script_hash))
             .header("Accept", "application/json")
             .header("project_id", self.project_id.as_str())
             .send()
@@ -214,7 +214,15 @@ impl CardanoConnect for Blockfrost {
         let response = self
             .api
             .addresses_utxos(&format!("{}", addr), Pagination::all())
-            .await?;
+            .await;
+
+        let response = match response {
+            Err(BlockfrostError::Response { url: _, reason }) if reason.status_code == 404 => {
+                return Ok(BTreeMap::new()); // No UTxOs at this address, return
+            }
+            err @ Err(_) => err?,
+            Ok(response) => response,
+        };
 
         let s = stream::iter(response)
             .map(move |bf_utxo| self.resolve_utxo(bf_utxo))

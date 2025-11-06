@@ -25,6 +25,7 @@ anyhow = "1.0.100"
 async-trait = "0.1.89"
 blockfrost = "1.1.0"
 blockfrost-openapi = "0.1.75"
+chrono = { version = "0.4.42", features = ["serde"] }
 clap = { version = "4.5.49", features = ["derive", "env"] }
 cryptoxide = "0.5.1"
 dotenv = "0.15.0"

@@ -20,6 +20,21 @@
         "type": "github"
       }
     },
+    "capkgs": {
+      "locked": {
+        "lastModified": 1761920709,
+        "narHash": "sha256-PUMIKFkDcCeb8A0E4/r2XknZ8xUPK+KS8/dqkht9umM=",
+        "owner": "input-output-hk",
+        "repo": "capkgs",
+        "rev": "ce1f374078e087210975c37e6e43f7e07c5939d9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "capkgs",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1759511609,
@@ -212,6 +227,7 @@
     "root": {
       "inputs": {
         "aiken": "aiken",
+        "capkgs": "capkgs",
         "flake-parts": "flake-parts",
         "git-hooks-nix": "git-hooks-nix",
         "nixpkgs": "nixpkgs_3",

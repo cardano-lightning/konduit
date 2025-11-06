@@ -10,6 +10,7 @@
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     aiken.url = "github:aiken-lang/aiken";
     rust-flake.url = "github:juspay/rust-flake/";
+    capkgs.url = "github:input-output-hk/capkgs";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -30,7 +31,48 @@
         pkgs,
         system,
         ...
-      }: {
+      }: let
+        devShellBase = {
+          shellHook = ''
+            ${config.pre-commit.installationScript}
+            echo 1>&2 "Welcome to the development shell!"
+            export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
+          '';
+          packages =
+            [
+              inputs'.aiken.packages.aiken
+              pkgs.yarn
+              pkgs.nodePackages_latest.nodejs
+              pkgs.typescript-language-server
+              pkgs.openssl
+              config.rust-project.toolchain
+            ]
+            ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
+          buildInputs =
+            [
+              pkgs.libiconv
+            ]
+            ++ lib.mapAttrsToList (_: crate: crate.crane.args.buildInputs) config.rust-project.crates;
+          nativeBuildInputs = [
+            config.treefmt.build.wrapper
+          ];
+        };
+        devShell =
+          devShellBase
+          // {
+            name = "konduit-shell";
+          };
+        devShellExtra =
+          devShellBase
+          // {
+            name = "konduit-shell-with-extras";
+            packages =
+              devShellBase.packages
+              ++ [
+                inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f
+              ];
+          };
+      in {
         rust-project = {
           src = ./rust;
           cargoToml = builtins.fromTOML (builtins.readFile ./rust/Cargo.toml);
@@ -55,31 +97,9 @@
         pre-commit.settings.hooks = {
           treefmt.enable = true;
         };
-        devShells.default = pkgs.mkShell {
-          name = "konduit-shell";
-          shellHook = ''
-            ${config.pre-commit.installationScript}
-            echo 1>&2 "Welcome to the development shell!"
-            export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
-          '';
-          packages =
-            [
-              inputs'.aiken.packages.aiken
-              pkgs.yarn
-              pkgs.nodePackages_latest.nodejs
-              pkgs.typescript-language-server
-              pkgs.openssl
-              config.rust-project.toolchain
-            ]
-            ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
-          buildInputs =
-            [
-              pkgs.libiconv
-            ]
-            ++ lib.mapAttrsToList (_: crate: crate.crane.args.buildInputs) config.rust-project.crates;
-          nativeBuildInputs = [
-            config.treefmt.build.wrapper
-          ];
+        devShells = {
+          default = pkgs.mkShell devShell;
+          extras = pkgs.mkShell devShellExtra;
         };
       };
       flake = {};
