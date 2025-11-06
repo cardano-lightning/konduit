@@ -23,7 +23,7 @@ pub fn do(
   expect t.Responded(pends_amount, pends) = stage_out
   let subbed_out = subbed_in - amount_in(value_in) + amount_out(value_out)
   let amount, upper_bound <-
-    account(tag, add_vkey, squash, mixeds, pends_amount, pends, _)
+    account(add_vkey, tag, squash, mixeds, pends_amount, pends, _)
   expect amount >= subbed_out
   return(sub_vkey, None, upper_bound)
 }
