@@ -6,6 +6,9 @@ use crate::{cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 /// A network identifier to protect misuses of addresses or transactions on a wrong network.
 ///
 /// Note that you can convert to and from [`u8`] using [`u8::from`] and [`Self::try_from`]
@@ -25,6 +28,7 @@ use std::{fmt, str::FromStr};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct NetworkId(#[n(0)] pallas::NetworkId);
 
 impl fmt::Display for NetworkId {
@@ -118,6 +122,26 @@ impl From<NetworkId> for pallas::Network {
 impl From<NetworkId> for u8 {
     fn from(network_id: NetworkId) -> u8 {
         u8::from(network_id.0)
+    }
+}
+
+// -------------------------------------------------------------------- WASM
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl NetworkId {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "mainnet"))]
+    pub fn _wasm_mainnet() -> Self {
+        Self::MAINNET
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "testnet"))]
+    pub fn _wasm_testnet() -> Self {
+        Self::TESTNET
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        format!("{self:#?}")
     }
 }
 

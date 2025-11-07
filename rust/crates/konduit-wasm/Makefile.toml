@@ -1,0 +1,15 @@
+[tasks.wasm]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build", "--target", "web"]
+
+[tasks.wasm-release]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build", "--target", "web", "--release"]
+
+[tasks.dev]
+dependencies = ["wasm"]
+
+[tasks.release]
+dependencies = ["wasm-release"]
