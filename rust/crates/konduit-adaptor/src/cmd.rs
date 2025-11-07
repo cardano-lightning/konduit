@@ -1,6 +1,8 @@
+use crate::info;
 use clap::{Args, Parser};
 
-use crate::info;
+pub mod metavar;
+pub use metavar::*;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]

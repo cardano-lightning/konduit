@@ -1,25 +1,31 @@
+use crate::cmd::metavar;
+use cardano_tx_builder::{Hash, VerificationKey};
 use clap::Args;
-use serde::{Deserialize, Serialize};
+use konduit_data::Duration;
 
-const KEY_LEN: usize = 32;
-
-fn parse_hex_key(s: &str) -> Result<[u8; KEY_LEN], String> {
+fn parse_hex<const LEN: usize>(s: &str) -> Result<[u8; LEN], String> {
     let s = s.strip_prefix("0x").unwrap_or(s);
-    if s.len() != KEY_LEN * 2 {
-        return Err(format!("Expected {} hex chars", KEY_LEN * 2));
-    }
-    let vec = hex::decode(s).map_err(|e| e.to_string())?;
-    vec.try_into()
-        .map_err(|_| "Internal length error".to_string())
+    let bytes = hex::decode(s).map_err(|e| e.to_string())?;
+    <[u8; LEN]>::try_from(bytes).map_err(|_| format!("Invalid length"))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Args)]
+fn parse_script_hash(s: &str) -> Result<Hash<28>, String> {
+    let arr: [u8; 28] = parse_hex(s)?;
+    Ok(Hash::from(arr))
+}
+
+#[derive(Debug, Clone, Args)]
 pub struct Info {
     #[arg(long, env = "KONDUIT_INFO_FEE", default_value = "1000")]
     pub fee: u64,
-    #[arg(long, env = "KONDUIT_INFO_ADAPTOR", value_parser = parse_hex_key)]
-    #[serde(with = "hex")]
-    pub adaptor_key: [u8; 32],
-    #[arg(long, env = "KONDUIT_INFO_CLOSE_PERIOD", default_value = "86400000")]
-    pub close_period: u64,
+    #[arg(long, env = "KONDUIT_INFO_ADAPTOR")]
+    pub adaptor_key: VerificationKey,
+    #[arg(long, env = "KONDUIT_INFO_CLOSE_PERIOD", value_name=metavar::DURATION_MS, default_value="86400000")]
+    pub close_period: Duration,
+    #[arg(long, env = "KONDUIT_INFO_PUBLISHER_VKEY", value_name=metavar::ED25519_VERIFICATION_KEY)]
+    pub publisher_vkey: VerificationKey,
+    #[arg(long, env = "KONDUIT_INFO_SCRIPT_HASH", value_name=metavar::SCRIPT_HASH, value_parser = parse_script_hash)]
+    pub script_hash: Hash<28>,
+    #[arg(long, env = "KONDUIT_INFO_MAX_TAG_LENGTH", default_value = "32")]
+    pub max_tag_length: usize,
 }

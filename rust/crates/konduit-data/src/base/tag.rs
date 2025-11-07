@@ -37,3 +37,21 @@ impl<'a> From<Tag> for PlutusData<'a> {
         Self::bytes(value.0)
     }
 }
+
+impl<'a> From<&Vec<u8>> for Tag {
+    fn from(value: &Vec<u8>) -> Self {
+        Self(value.clone())
+    }
+}
+
+impl From<Tag> for Vec<u8> {
+    fn from(value: Tag) -> Self {
+        value.0
+    }
+}
+
+impl From<&Tag> for Vec<u8> {
+    fn from(value: &Tag) -> Self {
+        value.0.clone()
+    }
+}

@@ -1,12 +1,15 @@
-use crate::handlers;
+use crate::connector;
 use crate::keytag_middleware::KeytagAuth;
 use crate::{Cmd, app_state::AppState};
+use crate::{db, handlers};
 use actix_web::{App, HttpServer, middleware::Logger, web};
+use cardano_connect_blockfrost::Blockfrost;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum CliError {
     BadConfig,
+    BlockfrostInitFailed(String),
 }
 
 pub struct Server {
@@ -19,12 +22,28 @@ impl Server {
         self.app_state.fx.clone()
     }
 
+    pub fn db(&self) -> Arc<dyn db::DbInterface + Send + Sync + 'static> {
+        self.app_state.db.clone()
+    }
+
+    pub fn connector(&self) -> Arc<Blockfrost> {
+        self.app_state.connector.clone()
+    }
+
+    pub fn info(&self) -> Arc<crate::info::Info> {
+        self.app_state.info.clone()
+    }
+
     pub async fn from_cmd(cmd: Cmd) -> Result<Self, CliError> {
         let bind_address = format!("{}:{}", cmd.host.host, cmd.host.port);
-        let info = cmd.info;
         let db = cmd.db.build().expect("Failed to open database");
         let bln = cmd.bln.build().expect("Failed to setup bln");
-        let app_state = AppState::new(info, db, bln, None);
+        let connector = {
+            let res = connector::new().await;
+            res.map_err(|e| CliError::BlockfrostInitFailed(e.to_string()))?
+        };
+        let info = cmd.info.clone();
+        let app_state = AppState::new(info, db, bln, None, connector);
         Ok(Self {
             app_state,
             bind_address,

@@ -2,8 +2,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Hash, cbor, pallas};
-use std::{fmt, rc::Rc};
+use crate::{cbor, pallas, Hash};
+use std::{fmt, sync::Arc};
 
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub struct Input(Rc<pallas::TransactionInput>);
+pub struct Input(Arc<pallas::TransactionInput>);
 
 impl fmt::Display for Input {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -25,7 +25,7 @@ impl fmt::Display for Input {
 impl Input {
     /// See also [`input!`](crate::input).
     pub fn new(transaction_id: Hash<32>, output_index: u64) -> Self {
-        Self(Rc::new(pallas::TransactionInput {
+        Self(Arc::new(pallas::TransactionInput {
             transaction_id: pallas::Hash::from(transaction_id),
             index: output_index,
         }))
@@ -48,7 +48,7 @@ impl Input {
 
 impl From<pallas::TransactionInput> for Input {
     fn from(i: pallas::TransactionInput) -> Self {
-        Input(Rc::new(i))
+        Input(Arc::new(i))
     }
 }
 
@@ -56,7 +56,7 @@ impl From<pallas::TransactionInput> for Input {
 
 impl From<Input> for pallas::TransactionInput {
     fn from(i: Input) -> Self {
-        Rc::unwrap_or_clone(i.0)
+        Arc::unwrap_or_clone(i.0)
     }
 }
 
@@ -75,7 +75,7 @@ impl<C> cbor::Encode<C> for Input {
 
 impl<'d, C> cbor::Decode<'d, C> for Input {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
-        Ok(Self(Rc::new(d.decode_with(ctx)?)))
+        Ok(Self(Arc::new(d.decode_with(ctx)?)))
     }
 }
 
@@ -99,7 +99,7 @@ impl Input {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{Input, any, hash};
+    use crate::{any, hash, Input};
     use proptest::prelude::*;
 
     // -------------------------------------------------------------- Unit tests

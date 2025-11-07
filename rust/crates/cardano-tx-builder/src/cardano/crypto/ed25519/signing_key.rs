@@ -56,6 +56,16 @@ impl From<[u8; 32]> for SigningKey {
     }
 }
 
+impl TryFrom<Vec<u8>> for SigningKey {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes: Vec<u8>) -> anyhow::Result<Self> {
+        let array = <[u8; 32]>::try_from(bytes).map_err(|_| anyhow!("invalid signing key"))?;
+
+        Ok(Self::from(array))
+    }
+}
+
 impl FromStr for SigningKey {
     type Err = anyhow::Error;
 

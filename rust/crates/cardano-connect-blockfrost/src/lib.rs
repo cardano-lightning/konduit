@@ -22,8 +22,10 @@ pub struct Blockfrost {
     project_id: String,
 }
 
+pub type ProjectId = String;
+
 impl Blockfrost {
-    pub fn new(project_id: String) -> Self {
+    pub fn new(project_id: ProjectId) -> Self {
         let network = Network::try_from(&project_id[0..7])
             .unwrap_or_else(|e| panic!("failed to infer network from Blockfrost's id: {e}"));
         let base_url = format!("https://cardano-{}.blockfrost.io/api/v0", network);

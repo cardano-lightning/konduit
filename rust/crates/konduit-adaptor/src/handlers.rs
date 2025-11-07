@@ -8,6 +8,7 @@ use crate::{Invoice, bln};
 use actix_web::http::StatusCode;
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, web};
 use konduit_data::{Keytag, Squash};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HandlerError {
@@ -43,9 +44,29 @@ impl ResponseError for HandlerError {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Info {
+    #[serde(with = "hex")]
+    pub adaptor_key: [u8; 32],
+    pub close_period: u64,
+    pub fee: u64,
+    pub max_tag_length: usize,
+    #[serde(with = "hex")]
+    pub publisher_vkey: [u8; 32],
+    #[serde(with = "hex")]
+    pub script_hash: [u8; 28],
+}
+
 pub async fn info(data: web::Data<AppState>) -> HttpResponse {
-    log::info!("INFO");
-    HttpResponse::Ok().json(&data.info)
+    let info = Info {
+        adaptor_key: data.info.adaptor_key.into(),
+        close_period: data.info.close_period.into(),
+        fee: data.info.fee,
+        max_tag_length: data.info.max_tag_length,
+        publisher_vkey: data.info.publisher_vkey.into(),
+        script_hash: data.info.script_hash.into(),
+    };
+    HttpResponse::Ok().json(&info)
 }
 
 pub async fn fx(data: web::Data<AppState>) -> HttpResponse {
