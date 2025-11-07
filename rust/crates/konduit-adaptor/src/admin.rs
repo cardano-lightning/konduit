@@ -13,7 +13,7 @@ pub struct Admin {
     connector: Arc<Blockfrost>,
     db: Arc<dyn db::DbInterface + Send + Sync + 'static>,
     max_tag_length: usize,
-    published_by: Credential,
+    script_utxo: (Input, Output),
     script_hash: Hash<28>,
     skey: SigningKey,
 }
@@ -22,38 +22,42 @@ fn guard(cond: bool) -> Option<()> {
     if cond { Some(()) } else { None }
 }
 
+async fn fetch_script_utxo(
+    connector: Arc<Blockfrost>,
+    deployer_vkey: VerificationKey,
+    script_hash: Hash<28>,
+) -> anyhow::Result<(Input, Output)> {
+    let deployed_by = Credential::from_key(Hash::<28>::new(deployer_vkey));
+    let deployer_utxos = connector.utxos_at(&deployed_by, None).await?;
+    deployer_utxos
+        .into_iter()
+        .find(|(_input, output)| {
+            let output_script_hash = output.script().map(|script| Hash::<28>::from(script));
+            output_script_hash == Some(script_hash)
+        })
+        .ok_or_else(|| anyhow::anyhow!("could not find konduit script UTXO"))
+}
+
 impl Admin {
-    pub fn new(
+    pub async fn new(
         connector: Arc<Blockfrost>,
         db: Arc<dyn db::DbInterface + Send + Sync + 'static>,
         info: Arc<Info>,
         skey: SigningKey,
-    ) -> Self {
-        let publisher_vkey = info.publisher_vkey.clone();
-        let published_by = Credential::from_key(Hash::<28>::new(publisher_vkey));
-
-        Self {
+    ) -> anyhow::Result<Admin> {
+        let deployer_vkey = info.deployer_vkey.clone();
+        let script_hash = info.script_hash.clone();
+        let script_utxo =
+            fetch_script_utxo(connector.clone(), deployer_vkey, script_hash.clone()).await?;
+        Ok(Self {
             close_period: info.close_period.clone(),
             connector,
             db,
             max_tag_length: info.max_tag_length,
-            published_by,
+            script_utxo,
             script_hash: info.script_hash.clone(),
             skey,
-        }
-    }
-
-    // I can not pre cache that because Output contains Rc which I had problem moving into async
-    // closure which we want to do.
-    async fn fetch_script_utxo(&self) -> anyhow::Result<(Input, Output)> {
-        let publisher_utxos = self.connector.utxos_at(&self.published_by, None).await?;
-        publisher_utxos
-            .into_iter()
-            .find(|(_input, output)| {
-                let script_hash = output.script().map(|script| Hash::<28>::from(script));
-                script_hash == Some(self.script_hash)
-            })
-            .ok_or_else(|| anyhow::anyhow!("could not find konduit script UTXO"))
+        })
     }
 
     fn parse_channel_output(&self, output: Output) -> Option<(Keytag, L1Channel)> {

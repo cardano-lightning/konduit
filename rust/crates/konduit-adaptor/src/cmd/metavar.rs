@@ -4,7 +4,7 @@
 pub const DURATION_MS: &str = "DURATION_MS";
 
 /// Ed25519 Public key
-pub const ED25519_VERIFICATION_KEY: &str = "ED25519_PUB";
+pub const ED25519_VERIFICATION_KEY: &str = "ED25519_VERIFICATION_KEY";
 
 /// A blake2b_224 script hash
 pub const SCRIPT_HASH: &str = "SCRIPT_HASH<28>";

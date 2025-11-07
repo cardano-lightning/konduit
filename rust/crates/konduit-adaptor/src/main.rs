@@ -40,6 +40,8 @@ async fn main() -> std::io::Result<()> {
             SigningKey::try_from(bytes).expect("failed to create signing key from bytes")
         };
         admin::Admin::new(server.connector(), server.db(), server.info(), skey)
+            .await
+            .expect("failed to create admin instance")
     };
     cron(
         move || {

@@ -52,7 +52,7 @@ pub struct Info {
     pub fee: u64,
     pub max_tag_length: usize,
     #[serde(with = "hex")]
-    pub publisher_vkey: [u8; 32],
+    pub deployer_vkey: [u8; 32],
     #[serde(with = "hex")]
     pub script_hash: [u8; 28],
 }
@@ -63,7 +63,7 @@ pub async fn info(data: web::Data<AppState>) -> HttpResponse {
         close_period: data.info.close_period.into(),
         fee: data.info.fee,
         max_tag_length: data.info.max_tag_length,
-        publisher_vkey: data.info.publisher_vkey.into(),
+        deployer_vkey: data.info.deployer_vkey.into(),
         script_hash: data.info.script_hash.into(),
     };
     HttpResponse::Ok().json(&info)
