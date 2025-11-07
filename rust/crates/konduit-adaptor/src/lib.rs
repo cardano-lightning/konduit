@@ -17,7 +17,7 @@ pub use bln::*;
 mod db;
 pub use db::*;
 
-mod env;
+pub mod env;
 pub use env::*;
 
 pub mod fx;

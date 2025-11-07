@@ -5,9 +5,9 @@ use crate::fx::interface::{BaseCurrency, Fx, FxError, FxInterface};
 #[derive(Debug, Clone, clap::Args)]
 pub struct WithStaticArgs {
     /// The path to the database file
-    #[clap(long, env = "KONDUIT_FX_BITCOIN")]
+    #[clap(long, env = crate::env::FX_BITCOIN)]
     pub bitcoin: f64,
-    #[clap(long, env = "KONDUIT_FX_ADA")]
+    #[clap(long, env = crate::env::FX_ADA)]
     pub ada: f64,
 }
 

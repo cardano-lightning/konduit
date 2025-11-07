@@ -16,16 +16,16 @@ fn parse_script_hash(s: &str) -> Result<Hash<28>, String> {
 
 #[derive(Debug, Clone, Args)]
 pub struct Info {
-    #[arg(long, env = "KONDUIT_INFO_FEE", default_value = "1000")]
+    #[arg(long, env = crate::env::FEE, default_value = "1000")]
     pub fee: u64,
-    #[arg(long, env = "KONDUIT_INFO_ADAPTOR")]
+    #[arg(long, env = crate::env::ADAPTOR_VKEY)]
     pub adaptor_key: VerificationKey,
-    #[arg(long, env = "KONDUIT_INFO_CLOSE_PERIOD", value_name=metavar::DURATION_MS, default_value="86400000")]
+    #[arg(long, env = crate::env::CLOSE_PERIOD, value_name=metavar::DURATION_MS, default_value="86400000")]
     pub close_period: Duration,
-    #[arg(long, env = "KONDUIT_INFO_DEPLOYER_VKEY", value_name=metavar::ED25519_VERIFICATION_KEY)]
+    #[arg(long, env = crate::env::DEPLOYER_VKEY, value_name=metavar::ED25519_VERIFICATION_KEY)]
     pub deployer_vkey: VerificationKey,
-    #[arg(long, env = "KONDUIT_INFO_SCRIPT_HASH", value_name=metavar::SCRIPT_HASH, value_parser = parse_script_hash)]
+    #[arg(long, env = crate::env::SCRIPT_HASH, value_name=metavar::SCRIPT_HASH, value_parser = parse_script_hash)]
     pub script_hash: Hash<28>,
-    #[arg(long, env = "KONDUIT_INFO_MAX_TAG_LENGTH", default_value = "32")]
+    #[arg(long, env = crate::env::MAX_TAG_LENGTH, default_value = "32")]
     pub max_tag_length: usize,
 }

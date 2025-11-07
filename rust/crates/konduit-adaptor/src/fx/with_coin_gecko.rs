@@ -9,7 +9,7 @@ use crate::fx::interface::{BaseCurrency, Fx, FxError, FxInterface};
 #[derive(Debug, Clone, clap::Args)]
 pub struct CoinGeckoArgs {
     /// The path to the database file
-    #[clap(long, env = "KONDUIT_FX_TOKEN")]
+    #[clap(long, env = crate::env::FX_TOKEN)]
     pub coin_gecko_token: Option<String>,
 }
 

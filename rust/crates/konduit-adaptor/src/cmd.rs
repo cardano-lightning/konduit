@@ -2,7 +2,6 @@ use crate::info;
 use clap::{Args, Parser};
 
 pub mod metavar;
-pub use metavar::*;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
@@ -29,8 +28,8 @@ pub struct Cmd {
 
 #[derive(Debug, Clone, Args)]
 pub struct Host {
-    #[arg(long, env = "KONDUIT_HOST", default_value = "127.0.0.1")]
+    #[arg(long, env = crate::env::HOST, default_value = "127.0.0.1")]
     pub host: String,
-    #[arg(long, env = "KONDUIT_PORT", default_value = "4444")]
+    #[arg(long, env = crate::env::PORT, default_value = "4444")]
     pub port: u16,
 }

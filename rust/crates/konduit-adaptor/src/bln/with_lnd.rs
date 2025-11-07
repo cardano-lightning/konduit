@@ -17,11 +17,11 @@ use crate::{
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct LndArgs {
-    #[arg(long, env = "KONDUIT_BLN_URL")]
+    #[arg(long, env = crate::env::BLN_URL)]
     pub bln_url: String,
-    #[arg(long, env = "KONDUIT_BLN_TLS")]
+    #[arg(long, env = crate::env::BLN_TLS)]
     pub bln_tls: Option<Vec<u8>>,
-    #[arg(long, env = "KONDUIT_BLN_MACAROON")]
+    #[arg(long, env = crate::env::BLN_MACAROON)]
     pub bln_macaroon: String,
 }
 
