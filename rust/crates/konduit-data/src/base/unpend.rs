@@ -50,8 +50,8 @@ impl<'a> TryFrom<PlutusData<'a>> for Unpend {
 impl<'a> From<Unpend> for PlutusData<'a> {
     fn from(value: Unpend) -> Self {
         match value {
-            Unpend::Continue => PlutusData::bytes(&[]),
-            Unpend::Unlock(arr) => PlutusData::bytes(&arr),
+            Unpend::Continue => PlutusData::bytes([]),
+            Unpend::Unlock(arr) => PlutusData::bytes(arr),
         }
     }
 }

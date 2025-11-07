@@ -10,5 +10,5 @@ pub fn signature_to_plutus_data(signature: Signature) -> PlutusData<'static> {
 }
 
 pub fn signature_from_plutus_data(plutus_data: &PlutusData) -> anyhow::Result<Signature> {
-    Ok(Signature::from(<&[u8; 64]>::try_from(plutus_data)?.clone()))
+    Ok(Signature::from(*<&[u8; 64]>::try_from(plutus_data)?))
 }

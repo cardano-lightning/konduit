@@ -17,11 +17,11 @@ use crate::{
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct LndArgs {
-    #[arg(long, env = "KONDUIT_BLN_URL")]
+    #[arg(long, env = crate::env::BLN_URL)]
     pub bln_url: String,
-    #[arg(long, env = "KONDUIT_BLN_TLS")]
+    #[arg(long, env = crate::env::BLN_TLS)]
     pub bln_tls: Option<Vec<u8>>,
-    #[arg(long, env = "KONDUIT_BLN_MACAROON")]
+    #[arg(long, env = crate::env::BLN_MACAROON)]
     pub bln_macaroon: String,
 }
 
@@ -95,7 +95,7 @@ impl WithLnd {
             .map_err(|e| BlnError::Parse(format!("Failed to parse route: {}", e)))?;
 
         // FIXME :: Take first route. We have no knowledge of what to do when there are multiple
-        let route = routes.routes.get(0).ok_or_else(|| BlnError::ApiError {
+        let route = routes.routes.first().ok_or_else(|| BlnError::ApiError {
             status: 404,
             message: "No route found".to_string(),
         })?;
@@ -103,7 +103,7 @@ impl WithLnd {
     }
 
     async fn block_height(&self) -> Result<u64, BlnError> {
-        let info_json = self.get(&format!("v1/getinfo")).await?;
+        let info_json = self.get("v1/getinfo").await?;
 
         let info: GetInfo = serde_json::from_value(info_json)
             .map_err(|e| BlnError::Parse(format!("Failed to parse info: {}", e)))?;

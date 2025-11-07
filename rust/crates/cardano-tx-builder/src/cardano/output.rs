@@ -3,14 +3,16 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    address::kind::*, cbor, cbor::ToCbor, pallas, pretty, Address, Datum, Hash, PlutusData,
-    PlutusScript, Value,
+    Address, Datum, Hash, PlutusData, PlutusScript, Value, address::kind::*, cbor, cbor::ToCbor,
+    pallas, pretty,
 };
 use anyhow::anyhow;
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, sync::Arc};
 
 #[cfg(feature = "wasm")]
 use crate::cardano::value::OutputAssets;
+#[cfg(feature = "wasm")]
+use std::str::FromStr;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
@@ -373,8 +375,10 @@ impl<'d, C> cbor::Decode<'d, C> for Output {
 
 // ------------------------------------------------------------------------ WASM
 
+#[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Output {
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "new"))]
     pub fn _wasm_new(address: &str, amount: u64) -> Self {
         Self::new(
@@ -383,17 +387,20 @@ impl Output {
         )
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "to"))]
     pub fn _wasm_to(address: &str) -> Self {
         Self::to(Address::from_str(address).expect("invalid address"))
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withAssets"))]
     pub fn _wasm_with_assets(&mut self, assets: &OutputAssets) {
         self.value = DeferredValue::Minimum(Arc::new(Value::default().with_assets(assets.clone())));
         self.set_minimum_utxo_value();
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         self.to_string()

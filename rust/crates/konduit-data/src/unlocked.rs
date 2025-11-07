@@ -36,7 +36,7 @@ impl Unlocked {
     }
 
     pub fn cheque(&self) -> Cheque {
-        Cheque::new(self.cheque_body.clone(), self.signature.clone())
+        Cheque::new(self.cheque_body.clone(), self.signature)
     }
 
     pub fn verify(
@@ -46,13 +46,13 @@ impl Unlocked {
         tag: &Tag,
     ) -> bool {
         // Assume secret is verified in constructor
-        self.cheque().verify(&verification_key, tag) && &self.cheque_body.timeout < timeout
+        self.cheque().verify(verification_key, tag) && &self.cheque_body.timeout < timeout
     }
 
     pub fn verify_no_time(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
         // Assume secret is verified in constructor
         let cheque = self.cheque();
-        cheque.verify(&verification_key, tag) && cheque.cheque_body.is_secret(&self.secret)
+        cheque.verify(verification_key, tag) && cheque.cheque_body.is_secret(&self.secret)
     }
 }
 
@@ -72,7 +72,7 @@ impl<'a> TryFrom<Vec<PlutusData<'a>>> for Unlocked {
         let [a, b, c] =
             <[PlutusData; 3]>::try_from(list).map_err(|_| anyhow!("invalid 'Unlocked'"))?;
         let cheque = Cheque::new(ChequeBody::try_from(a)?, signature_from_plutus_data(&b)?);
-        Ok(Self::new(cheque, Secret::try_from(&c)?)?)
+        Self::new(cheque, Secret::try_from(&c)?)
     }
 }
 

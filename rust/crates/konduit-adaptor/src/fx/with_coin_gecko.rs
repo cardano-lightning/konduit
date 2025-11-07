@@ -9,7 +9,7 @@ use crate::fx::interface::{BaseCurrency, Fx, FxError, FxInterface};
 #[derive(Debug, Clone, clap::Args)]
 pub struct CoinGeckoArgs {
     /// The path to the database file
-    #[clap(long, env = "KONDUIT_FX_TOKEN")]
+    #[clap(long, env = crate::env::FX_TOKEN)]
     pub coin_gecko_token: Option<String>,
 }
 
@@ -43,14 +43,12 @@ impl FxInterface for WithCoinGecko {
             .map(|coin| (coin.id, coin.current_price))
             .collect();
 
-        let ada = price_map
+        let ada = *price_map
             .get("cardano")
-            .ok_or(FxError::InvalidData("Expect cardano".to_string()))?
-            .clone();
-        let bitcoin = price_map
+            .ok_or(FxError::InvalidData("Expect cardano".to_string()))?;
+        let bitcoin = *price_map
             .get("bitcoin")
-            .ok_or(FxError::InvalidData("Expect bitcoin".to_string()))?
-            .clone();
+            .ok_or(FxError::InvalidData("Expect bitcoin".to_string()))?;
 
         let response = Fx::new(base, ada, bitcoin);
 
@@ -95,6 +93,7 @@ async fn with_curl(
 }
 
 // THIS CODE IS IMMEDIATELY RATE LIMITED
+#[allow(dead_code)]
 async fn with_reqwest(base: BaseCurrency) -> Result<Vec<CoinMarket>, FxError> {
     let params = [
         ("vs_currency", base.to_string()),

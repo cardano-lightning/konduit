@@ -74,7 +74,7 @@ impl<'a> From<Duration> for PlutusData<'a> {
 }
 
 /// Converting to `u64`, assuming milliseconds.
-impl<'a> From<&Duration> for u64 {
+impl From<&Duration> for u64 {
     fn from(value: &Duration) -> Self {
         value.0.as_millis() as u64
     }

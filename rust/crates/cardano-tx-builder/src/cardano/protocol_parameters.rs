@@ -271,28 +271,34 @@ impl From<&ProtocolParameters> for uplc::tx::SlotConfig {
 
 // ------------------------------------------------------------------------ WASM
 
+#[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl ProtocolParameters {
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         format!("{self:#?}")
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "mainnet"))]
     pub fn _wasm_mainnet() -> Self {
         Self::mainnet()
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "preprod"))]
     pub fn _wasm_preprod() -> Self {
         Self::preprod()
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "preview"))]
     pub fn _wasm_preview() -> Self {
         Self::preview()
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withPlutusV3CostModel"))]
     pub fn _wasm_with_plutus_v3_cost_model(mut self, cost_model: &[i64]) -> Self {
         self.plutus_v3_cost_model = Vec::from(cost_model);

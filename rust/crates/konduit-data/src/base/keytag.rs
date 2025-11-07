@@ -15,7 +15,7 @@ impl Keytag {
                 .as_ref()
                 .to_vec()
                 .into_iter()
-                .chain(tag.0.clone().into_iter())
+                .chain(tag.0.clone())
                 .collect::<Vec<u8>>(),
         )
     }
@@ -66,7 +66,6 @@ impl<'a> From<Keytag> for PlutusData<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     #[test]
     fn test_hex_vec_serializes_to_hex_string() {

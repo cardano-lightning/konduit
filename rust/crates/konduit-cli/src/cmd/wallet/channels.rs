@@ -2,22 +2,6 @@ use crate::{env, metavar};
 use anyhow::anyhow;
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{Credential, Datum, Hash, SigningKey, VerificationKey};
-use konduit_data;
-
-#[derive(Debug, Clone, clap::Subcommand)]
-pub(crate) enum Role {
-    Adaptor,
-    Consumer(ConsumerArgs),
-}
-
-#[derive(Debug, Clone, clap::Args)]
-pub(crate) struct ConsumerArgs {
-    #[clap(
-        long,
-        long_help = "By default we use consumer verification key to filter channel UTxOs which are delegated to that staking key."
-    )]
-    ignore_staking_key: bool,
-}
 
 /// Fetch UTxO entries at the wallet's address; requires `Cardano` connection
 #[derive(Debug, clap::Args)]
@@ -44,13 +28,11 @@ pub(crate) struct Args {
 
     #[clap(long, value_name = metavar::BYTES_32, env = env::CHANNEL_TAG)]
     channel_tag: Option<konduit_data::Tag>,
-
-    #[clap(subcommand)]
-    role: Role,
 }
 
 impl Args {
     pub(crate) async fn execute(self, connector: impl CardanoConnect) -> anyhow::Result<()> {
+        let script_credential = Credential::from_script(self.konduit_script_hash);
         let verification_key = self
             .signing_key
             .as_ref()
@@ -59,23 +41,8 @@ impl Args {
             .ok_or(anyhow!(
                 "missing both --signing-key and --verification-key; please provide at least one"
             ))?;
-        let script_credential = Credential::from_script(self.konduit_script_hash);
-        // let staking_credential: Option<Credential> = match &self.role {
-        //     Role::Consumer(args) => {
-        //         if !args.ignore_staking_key {
-        //             Some(Credential::from_key(Hash::<28>::new(
-        //                 verification_key.clone(),
-        //             )))
-        //         } else {
-        //             None
-        //         }
-        //     }
-        //     Role::Adaptor => None,
-        // };
 
-        let utxos = connector
-            .utxos_at(&script_credential, None) // , staking_credential.as_ref())
-            .await?;
+        let utxos = connector.utxos_at(&script_credential, None).await?;
 
         let channels = utxos
             .into_iter()
@@ -92,6 +59,8 @@ impl Args {
             .filter(|(_, datum)| {
                 if let Some(tag) = &self.channel_tag {
                     &datum.constants.tag == tag
+                        && (datum.constants.sub_vkey == verification_key
+                            || datum.constants.add_vkey == verification_key)
                 } else {
                     true
                 }

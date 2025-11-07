@@ -21,7 +21,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Redeemer {
                     .map_err(|_| anyhow!("invalid 'Cheque'"))?;
                 let steps = <Vec<PlutusData>>::try_from(&steps)?
                     .into_iter()
-                    .map(|x| Step::try_from(x))
+                    .map(Step::try_from)
                     .collect::<anyhow::Result<Vec<Step>>>()?;
                 Ok(Redeemer::Main(steps))
             }
@@ -48,7 +48,7 @@ impl<'a> From<Redeemer> for PlutusData<'a> {
                 PlutusData::list(
                     steps
                         .into_iter()
-                        .map(|x| PlutusData::from(x))
+                        .map(PlutusData::from)
                         .collect::<Vec<PlutusData>>(),
                 ),
             ),
@@ -135,7 +135,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Cont {
                 let squash = Squash::try_from(&a)?;
                 let mixed_cheques = <Vec<PlutusData>>::try_from(&b)?
                     .into_iter()
-                    .map(|x| MixedCheque::try_from(x))
+                    .map(MixedCheque::try_from)
                     .collect::<anyhow::Result<Vec<MixedCheque>>>()?;
                 Ok(Cont::Respond(squash, mixed_cheques))
             }
@@ -186,7 +186,7 @@ impl<'a> From<Cont> for PlutusData<'a> {
                 PlutusData::list(
                     unlocked
                         .into_iter()
-                        .map(|x| PlutusData::from(x))
+                        .map(PlutusData::from)
                         .collect::<Vec<PlutusData>>(),
                 )
             ),
@@ -197,7 +197,7 @@ impl<'a> From<Cont> for PlutusData<'a> {
                 PlutusData::list(
                     mixed_cheques
                         .into_iter()
-                        .map(|x| PlutusData::from(x))
+                        .map(PlutusData::from)
                         .collect::<Vec<PlutusData>>(),
                 ),
             ),
@@ -206,7 +206,7 @@ impl<'a> From<Cont> for PlutusData<'a> {
                 PlutusData::list(
                     unpends
                         .into_iter()
-                        .map(|x| PlutusData::from(x))
+                        .map(PlutusData::from)
                         .collect::<Vec<PlutusData>>(),
                 ),
             ),
@@ -215,7 +215,7 @@ impl<'a> From<Cont> for PlutusData<'a> {
                 PlutusData::list(
                     unpends
                         .into_iter()
-                        .map(|x| PlutusData::from(x))
+                        .map(PlutusData::from)
                         .collect::<Vec<PlutusData>>(),
                 ),
             ),

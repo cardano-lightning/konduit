@@ -107,15 +107,12 @@ impl MixedReceipt {
 
     pub fn unlock(&mut self, secret: Secret) {
         let lock = Lock::from(secret.clone());
-        self.mixed_cheques.iter_mut().for_each(|i| match i {
-            MixedCheque::Cheque(cheque) => {
-                if lock == cheque.cheque_body.lock {
-                    *i = MixedCheque::Unlocked(
-                        Unlocked::new(cheque.clone(), secret.clone()).unwrap(),
-                    );
-                }
+        self.mixed_cheques.iter_mut().for_each(|i| {
+            if let MixedCheque::Cheque(cheque) = i
+                && lock == cheque.cheque_body.lock
+            {
+                *i = MixedCheque::Unlocked(Unlocked::new(cheque.clone(), secret.clone()).unwrap());
             }
-            _ => {}
         })
     }
 
@@ -138,7 +135,7 @@ impl MixedReceipt {
 
     /// Time and signature must already be verified
     pub fn insert(&mut self, cheque: Cheque) -> anyhow::Result<()> {
-        let index = cheque.cheque_body.index.clone();
+        let index = cheque.cheque_body.index;
         let mixed_cheque = MixedCheque::from(cheque);
         match self
             .mixed_cheques
@@ -179,7 +176,7 @@ impl MixedReceipt {
                 .map(|x| x.cheque_body.index)
                 .collect::<Vec<u64>>(),
         )?;
-        if !(curr < indexes) {
+        if curr >= indexes {
             Err(anyhow!("Indexes must be a subset of cheque indexes"))
         } else {
             self.mixed_cheques
@@ -257,13 +254,13 @@ impl<'a> TryFrom<[PlutusData<'a>; 2]> for MixedReceipt {
 
     fn try_from(value: [PlutusData<'a>; 2]) -> anyhow::Result<Self> {
         let [a, b] = value;
-        Ok(Self::new(
+        Self::new(
             Squash::try_from(&a)?,
             <Vec<PlutusData>>::try_from(&b)?
                 .into_iter()
-                .map(|x| MixedCheque::try_from(x))
+                .map(MixedCheque::try_from)
                 .collect::<anyhow::Result<Vec<MixedCheque>>>()?,
-        )?)
+        )
     }
 }
 
@@ -283,7 +280,7 @@ impl<'a> From<MixedReceipt> for [PlutusData<'a>; 2] {
                 value
                     .mixed_cheques
                     .into_iter()
-                    .map(|x| PlutusData::from(x))
+                    .map(PlutusData::from)
                     .collect::<Vec<PlutusData>>(),
             ),
         ]

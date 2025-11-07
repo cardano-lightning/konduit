@@ -40,8 +40,11 @@ impl Indexes {
         let range = from..until;
         if let Some(last) = self.0.last() {
             match last < &from {
-                true => Ok(self.0.extend(range)),
-                false => return Err(IndexesExtendError::LessThanLast),
+                true => {
+                    let _: () = self.0.extend(range);
+                    Ok(())
+                }
+                false => Err(IndexesExtendError::LessThanLast),
             }
         } else {
             self.0.extend(range);
@@ -93,7 +96,7 @@ impl PartialOrd for Indexes {
     }
 }
 
-fn is_superset_of(a: &Vec<u64>, b: &Vec<u64>) -> bool {
+fn is_superset_of(a: &[u64], b: &[u64]) -> bool {
     let mut b_iter = b.iter().peekable();
     for a_item in a {
         let Some(b_item) = b_iter.peek() else {
@@ -115,7 +118,6 @@ impl<'a> TryFrom<PlutusData<'a>> for Indexes {
         let l = data
             .as_list()
             .ok_or(anyhow!("Expected list"))?
-            .into_iter()
             .map(|x| x.as_integer().ok_or(anyhow!("Expected integer")))
             .collect::<anyhow::Result<Vec<u64>>>()?;
         Self::new(l)
@@ -124,7 +126,7 @@ impl<'a> TryFrom<PlutusData<'a>> for Indexes {
 
 impl<'a> From<&Indexes> for PlutusData<'a> {
     fn from(value: &Indexes) -> Self {
-        Self::list(value.0.iter().map(|x| PlutusData::from(x.clone())))
+        Self::list(value.0.iter().map(|x| PlutusData::from(*x)))
     }
 }
 

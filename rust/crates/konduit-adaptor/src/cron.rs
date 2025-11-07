@@ -14,7 +14,7 @@ where
         loop {
             ticker.tick().await;
             update_fn().await;
-            ()
+            
         }
     })
 }

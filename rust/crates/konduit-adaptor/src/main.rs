@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use cardano_tx_builder::SigningKey;
 use clap::Parser;
+use konduit_adaptor::env;
 use konduit_adaptor::{Cmd, Server, admin, cron::cron};
 
 #[actix_web::main]
@@ -33,9 +34,8 @@ async fn main() -> std::io::Result<()> {
 
     let admin = {
         let skey = {
-            let var_name = "KONDUIT_SIGNING_KEY";
-            let skey_hex = std::env::var(var_name)
-                .expect(&format!("missing {} environment variable", var_name));
+            let skey_hex = std::env::var(env::ADAPTOR_SKEY).unwrap_or_else(|_| panic!("missing {} environment variable",
+                env::ADAPTOR_SKEY));
             let bytes = hex::decode(skey_hex).expect("failed to decode signing key from hex");
             SigningKey::try_from(bytes).expect("failed to create signing key from bytes")
         };

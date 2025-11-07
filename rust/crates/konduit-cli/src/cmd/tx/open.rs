@@ -41,7 +41,7 @@ impl Args {
     pub(crate) async fn execute(self, connector: impl CardanoConnect) -> anyhow::Result<()> {
         let consumer_verification_key = VerificationKey::from(&self.consumer_signing_key);
         let consumer_payment_credential = cardano::Credential::from_key(cardano::Hash::<28>::new(
-            consumer_verification_key.clone(),
+            consumer_verification_key,
         ));
         let utxos = connector
             .utxos_at(&consumer_payment_credential, None)
