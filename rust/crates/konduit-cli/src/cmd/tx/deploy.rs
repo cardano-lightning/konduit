@@ -1,8 +1,7 @@
+use crate::{env, metavar};
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{Address, Credential, Hash, SigningKey, VerificationKey, address};
-use konduit_tx::deploy;
-
-use crate::{env, metavar};
+use konduit_tx::{KONDUIT_VALIDATOR, deploy};
 
 #[derive(Debug, clap::Args)]
 #[clap(disable_version_flag(true))]
@@ -25,7 +24,7 @@ impl Args {
         let payment_credential = Credential::from_key(Hash::<28>::new(verification_key));
         let utxo = connector.utxos_at(&payment_credential, None).await?;
         let protocol_parameters = connector.protocol_parameters().await?;
-        let konduit_script = crate::KONDUIT_VALIDATOR.script.clone();
+        let konduit_script = KONDUIT_VALIDATOR.script.clone();
         let network = connector.network();
         let addr: Address<address::kind::Any> =
             Address::new(network.into(), payment_credential.clone()).into();

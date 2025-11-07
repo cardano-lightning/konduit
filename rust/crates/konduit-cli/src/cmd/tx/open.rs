@@ -2,7 +2,7 @@ use crate::{env, metavar};
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{self as cardano, SigningKey, VerificationKey};
 use konduit_data as konduit;
-use konduit_tx::{Lovelace, open};
+use konduit_tx::{KONDUIT_VALIDATOR, Lovelace, open};
 
 /// Open a channel with an adaptor and deposit some funds into it.
 #[derive(Debug, clap::Args)]
@@ -40,9 +40,8 @@ pub(crate) struct Args {
 impl Args {
     pub(crate) async fn execute(self, connector: impl CardanoConnect) -> anyhow::Result<()> {
         let consumer_verification_key = VerificationKey::from(&self.consumer_signing_key);
-        let consumer_payment_credential = cardano::Credential::from_key(cardano::Hash::<28>::new(
-            consumer_verification_key,
-        ));
+        let consumer_payment_credential =
+            cardano::Credential::from_key(cardano::Hash::<28>::new(consumer_verification_key));
         let utxos = connector
             .utxos_at(&consumer_payment_credential, None)
             .await?;
@@ -53,7 +52,7 @@ impl Args {
             &utxos,
             &protocol_parameters,
             network_id,
-            crate::KONDUIT_VALIDATOR.hash,
+            KONDUIT_VALIDATOR.hash,
             self.amount,
             consumer_verification_key,
             self.adaptor_verification_key,

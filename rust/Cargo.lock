@@ -1982,7 +1982,9 @@ dependencies = [
  "anyhow",
  "cardano-connect",
  "cardano-tx-builder",
+ "hex",
  "konduit-data",
+ "serde_json",
 ]
 
 [[package]]
