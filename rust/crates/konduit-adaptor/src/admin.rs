@@ -13,6 +13,7 @@ pub struct Admin {
     connector: Arc<Blockfrost>,
     db: Arc<dyn db::DbInterface + Send + Sync + 'static>,
     max_tag_length: usize,
+    #[allow(dead_code)]
     script_utxo: (Input, Output),
     script_hash: Hash<28>,
     skey: SigningKey,

@@ -167,6 +167,7 @@ async fn update_from_l1(
     )
 }
 
+#[allow(dead_code)]
 async fn add_cheque(
     db: &sled::Db,
     keytag: Keytag,

@@ -1,6 +1,5 @@
-use cardano_tx_builder::cbor::ToCbor;
 use std::cmp::min;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use anyhow::anyhow;
 use cardano_tx_builder as cardano;
@@ -9,7 +8,7 @@ use cardano_tx_builder::{
     ProtocolParameters, Transaction, Value, VerificationKey, address,
     transaction::state::ReadyForSigning,
 };
-use konduit_data::{Constants, Datum, Duration, Receipt, Redeemer, Stage, Tag, hex};
+use konduit_data::{Constants, Datum, Duration, Receipt, Redeemer, Stage, Tag};
 
 pub type Lovelace = u64;
 

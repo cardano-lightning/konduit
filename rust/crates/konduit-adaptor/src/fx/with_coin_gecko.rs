@@ -95,6 +95,7 @@ async fn with_curl(
 }
 
 // THIS CODE IS IMMEDIATELY RATE LIMITED
+#[allow(dead_code)]
 async fn with_reqwest(base: BaseCurrency) -> Result<Vec<CoinMarket>, FxError> {
     let params = [
         ("vs_currency", base.to_string()),
