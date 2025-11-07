@@ -1,5 +1,10 @@
 mod info;
 
+pub mod admin;
+pub use admin::*;
+
+pub mod connector;
+
 pub mod cmd;
 pub use cmd::*;
 

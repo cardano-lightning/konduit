@@ -52,16 +52,13 @@ impl Args {
             adaptor_verification_key.clone(),
         ));
 
-        let publisher_credential = {
+        let deployer_credential = {
             let vk = match self.published_by {
                 Some(vk) => vk,
                 None => adaptor_verification_key,
             };
             cardano::Credential::from_key(cardano::Hash::<28>::new(vk))
         };
-        println!("Publisher credential: {}", publisher_credential);
-        println!("Adaptor credential: {}", adaptor_payment_credential);
-
         let funding_utxos = connector
             .utxos_at(&adaptor_payment_credential, None)
             .await?;
@@ -69,8 +66,8 @@ impl Args {
         let protocol_parameters = connector.protocol_parameters().await?;
         let network_id = cardano::NetworkId::from(connector.network());
         let script_utxo = {
-            let publisher_utxos = connector.utxos_at(&publisher_credential, None).await?;
-            publisher_utxos
+            let deployer_utxos = connector.utxos_at(&deployer_credential, None).await?;
+            deployer_utxos
                 .into_iter()
                 .find(|(_input, output)| {
                     output_reference_script_hash(output) == Some(crate::KONDUIT_VALIDATOR.hash)

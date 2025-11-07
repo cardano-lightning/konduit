@@ -1,7 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
+use cardano_tx_builder::SigningKey;
 use clap::Parser;
-use konduit_adaptor::{Cmd, FxInterface, Server, cron::cron};
+use konduit_adaptor::{Cmd, Server, admin, cron::cron};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -13,15 +14,45 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to parse cmd");
 
+    // Fire off fx updater
     let fx_data = server.fx();
     let fx = Arc::new(cmd.fx.build().expect("Failed to setup fx"));
     cron(
-        fx_data,
         move || {
-            let fx_clone = fx.clone();
-            async move { fx_clone.as_ref().get().await.ok() }
+            let fx = fx.clone();
+            let fx_data = fx_data.clone();
+            async move {
+                let new_value = fx.as_ref().get().await.ok();
+                let mut data_guard = fx_data.write().await;
+                *data_guard = new_value;
+                Some(())
+            }
         },
         Duration::from_secs(60),
+    );
+
+    let admin = {
+        let skey = {
+            let var_name = "KONDUIT_SIGNING_KEY";
+            let skey_hex = std::env::var(var_name)
+                .expect(&format!("missing {} environment variable", var_name));
+            let bytes = hex::decode(skey_hex).expect("failed to decode signing key from hex");
+            SigningKey::try_from(bytes).expect("failed to create signing key from bytes")
+        };
+        admin::Admin::new(server.connector(), server.db(), server.info(), skey)
+            .await
+            .expect("failed to create admin instance")
+    };
+    cron(
+        move || {
+            let admin = admin.clone();
+            async move {
+                // TODO: We should log and panic in here.
+                let _ = admin.sync().await;
+                Some(())
+            }
+        },
+        Duration::from_secs(300),
     );
 
     server.run().await

@@ -1917,6 +1917,8 @@ dependencies = [
  "async-trait",
  "base64",
  "bitcoin_hashes",
+ "cardano-connect",
+ "cardano-connect-blockfrost",
  "cardano-tx-builder",
  "chrono",
  "clap",

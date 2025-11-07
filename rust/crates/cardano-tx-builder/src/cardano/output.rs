@@ -3,11 +3,11 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    Address, Datum, Hash, PlutusData, PlutusScript, Value, address::kind::*, cbor, cbor::ToCbor,
-    pallas, pretty,
+    address::kind::*, cbor, cbor::ToCbor, pallas, pretty, Address, Datum, Hash, PlutusData,
+    PlutusScript, Value,
 };
 use anyhow::anyhow;
-use std::{fmt, rc::Rc, str::FromStr};
+use std::{fmt, str::FromStr, sync::Arc};
 
 #[cfg(feature = "wasm")]
 use crate::cardano::value::OutputAssets;
@@ -39,8 +39,8 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 pub struct Output {
     address: Address<Any>,
     value: DeferredValue,
-    datum: Option<Rc<Datum>>,
-    script: Option<Rc<PlutusScript>>,
+    datum: Option<Arc<Datum>>,
+    script: Option<Arc<PlutusScript>>,
 }
 
 impl fmt::Display for Output {
@@ -71,8 +71,8 @@ impl fmt::Display for Output {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum DeferredValue {
-    Minimum(Rc<Value<u64>>),
-    Explicit(Rc<Value<u64>>),
+    Minimum(Arc<Value<u64>>),
+    Explicit(Arc<Value<u64>>),
 }
 
 // -------------------------------------------------------------------- Building
@@ -83,7 +83,7 @@ impl Output {
     pub fn new(address: Address<Any>, value: Value<u64>) -> Self {
         Self {
             address,
-            value: DeferredValue::Explicit(Rc::new(value)),
+            value: DeferredValue::Explicit(Arc::new(value)),
             datum: None,
             script: None,
         }
@@ -94,7 +94,7 @@ impl Output {
     pub fn to(address: Address<Any>) -> Self {
         let mut output = Self {
             address,
-            value: DeferredValue::Minimum(Rc::new(Value::default())),
+            value: DeferredValue::Minimum(Arc::new(Value::default())),
             datum: None,
             script: None,
         };
@@ -112,28 +112,28 @@ impl Output {
     where
         AssetName: AsRef<[u8]>,
     {
-        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets)));
+        self.value = DeferredValue::Minimum(Arc::new(Value::default().with_assets(assets)));
         self.set_minimum_utxo_value();
         self
     }
 
     /// Attach a reference script to the output.
     pub fn with_plutus_script(mut self, plutus_script: PlutusScript) -> Self {
-        self.script = Some(Rc::new(plutus_script));
+        self.script = Some(Arc::new(plutus_script));
         self.set_minimum_utxo_value();
         self
     }
 
     /// Attach a datum reference as [`struct@Hash<32>`] to the output.
     pub fn with_datum_hash(mut self, hash: Hash<32>) -> Self {
-        self.datum = Some(Rc::new(Datum::Hash(hash)));
+        self.datum = Some(Arc::new(Datum::Hash(hash)));
         self.set_minimum_utxo_value();
         self
     }
 
     /// Attach a plain [`PlutusData`] datum to the output.
     pub fn with_datum(mut self, data: PlutusData<'static>) -> Self {
-        self.datum = Some(Rc::new(Datum::Inline(data)));
+        self.datum = Some(Arc::new(Datum::Inline(data)));
         self.set_minimum_utxo_value();
         self
     }
@@ -150,7 +150,7 @@ impl Output {
         };
 
         if let DeferredValue::Minimum(rc) = &mut self.value {
-            let value: &mut Value<u64> = Rc::make_mut(rc);
+            let value: &mut Value<u64> = Arc::make_mut(rc);
             value.with_lovelace(min_acceptable_value);
         }
     }
@@ -390,7 +390,7 @@ impl Output {
 
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withAssets"))]
     pub fn _wasm_with_assets(&mut self, assets: &OutputAssets) {
-        self.value = DeferredValue::Minimum(Rc::new(Value::default().with_assets(assets.clone())));
+        self.value = DeferredValue::Minimum(Arc::new(Value::default().with_assets(assets.clone())));
         self.set_minimum_utxo_value();
     }
 
