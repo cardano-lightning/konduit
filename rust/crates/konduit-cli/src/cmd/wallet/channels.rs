@@ -2,7 +2,6 @@ use crate::{env, metavar};
 use anyhow::anyhow;
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{Credential, Datum, Hash, SigningKey, VerificationKey};
-use konduit_data;
 
 /// Fetch UTxO entries at the wallet's address; requires `Cardano` connection
 #[derive(Debug, clap::Args)]

@@ -42,14 +42,14 @@ pub(crate) struct Args {
 fn output_reference_script_hash(output: &Output) -> Option<Hash<28>> {
     output
         .script()
-        .map(|script| cardano::Hash::<28>::from(script))
+        .map(cardano::Hash::<28>::from)
 }
 
 impl Args {
     pub(crate) async fn execute(self, connector: impl CardanoConnect) -> anyhow::Result<()> {
         let adaptor_verification_key = VerificationKey::from(&self.adaptor_signing_key);
         let adaptor_payment_credential = cardano::Credential::from_key(cardano::Hash::<28>::new(
-            adaptor_verification_key.clone(),
+            adaptor_verification_key,
         ));
 
         let deployer_credential = {
@@ -111,8 +111,8 @@ impl Args {
         let receipt = {
             let unlockeds = vec![];
             konduit_data::Receipt {
-                squash: squash,
-                unlockeds: unlockeds,
+                squash,
+                unlockeds,
             }
         };
 
@@ -129,7 +129,7 @@ impl Args {
             Some(ref mut tx) => {
                 tx.sign(self.adaptor_signing_key);
                 if !self.dry_run {
-                    let tx_id = connector.submit(&tx).await?;
+                    let tx_id = connector.submit(tx).await?;
                     println!("Transaction submitted with ID: {}", tx_id);
                 } else {
                     println!("Dry run, transaction not submitted.");

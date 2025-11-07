@@ -95,7 +95,7 @@ impl WithLnd {
             .map_err(|e| BlnError::Parse(format!("Failed to parse route: {}", e)))?;
 
         // FIXME :: Take first route. We have no knowledge of what to do when there are multiple
-        let route = routes.routes.get(0).ok_or_else(|| BlnError::ApiError {
+        let route = routes.routes.first().ok_or_else(|| BlnError::ApiError {
             status: 404,
             message: "No route found".to_string(),
         })?;
@@ -103,7 +103,7 @@ impl WithLnd {
     }
 
     async fn block_height(&self) -> Result<u64, BlnError> {
-        let info_json = self.get(&format!("v1/getinfo")).await?;
+        let info_json = self.get("v1/getinfo").await?;
 
         let info: GetInfo = serde_json::from_value(info_json)
             .map_err(|e| BlnError::Parse(format!("Failed to parse info: {}", e)))?;

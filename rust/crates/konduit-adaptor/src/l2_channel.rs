@@ -144,7 +144,7 @@ impl L2Channel {
             }
             _ => (0, 0),
         });
-        self.l1_channel = l1_channel.map(|x| x.clone());
+        self.l1_channel = l1_channel.cloned();
     }
 
     pub fn add_cheque(&mut self, cheque: Cheque, timeout: Duration) -> Result<(), ChequeError> {

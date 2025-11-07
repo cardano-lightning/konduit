@@ -1,12 +1,14 @@
 use std::time::Duration;
 
-use crate::app_state::AppState;
-use crate::cbor::decode_from_cbor;
-use crate::db::DbError;
-use crate::models::{IncompleteSquashResponse, QuoteBody, SquashResponse, TipBody};
-use crate::{Invoice, bln};
-use actix_web::http::StatusCode;
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, web};
+use crate::{
+    Invoice,
+    app_state::AppState,
+    bln,
+    cbor::decode_from_cbor,
+    db::DbError,
+    models::{IncompleteSquashResponse, QuoteBody, SquashResponse, TipBody},
+};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use konduit_data::{Keytag, Squash};
 use serde::{Deserialize, Serialize};
 
@@ -95,8 +97,7 @@ pub async fn squash(
     data: web::Data<AppState>,
     body: web::Bytes,
 ) -> Result<HttpResponse, HandlerError> {
-    let extensions = req.extensions();
-    let Some(keytag) = extensions.get::<Keytag>() else {
+    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
     let Ok(squash): Result<Squash, _> = decode_from_cbor(body.as_ref()) else {
@@ -104,12 +105,12 @@ pub async fn squash(
     };
     let (key, tag) = keytag.split();
     log::info!("squash {:?}", squash.verify(&key, &tag));
-    let l2_channel = data.db.update_squash(keytag.clone(), squash).await?;
+    let l2_channel = data.db.update_squash(keytag, squash).await?;
     let Some(mixed_receipt) = l2_channel.mixed_receipt else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
     };
     // FIXME :: This should be moved to a single method eg `squashable` on mixed receipt
-    let response_body = if mixed_receipt.unlockeds().len() > 0 {
+    let response_body = if !mixed_receipt.unlockeds().is_empty() {
         // FIXME :: Should include possible expire
         SquashResponse::Incomplete(IncompleteSquashResponse {
             mixed_receipt,
@@ -126,15 +127,14 @@ pub async fn quote(
     data: web::Data<AppState>,
     body: web::Json<QuoteBody>,
 ) -> Result<HttpResponse, HandlerError> {
-    let extensions = req.extensions();
-    let Some(keytag) = extensions.get::<Keytag>() else {
+    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
     let Some(fx) = data.fx.read().await.clone() else {
         log::info!("FX : {:?}", data.fx);
         return Ok(HttpResponse::InternalServerError().body("Error: Fx unavailable"));
     };
-    let Some(l2_channel) = data.db.get_channel(keytag).await? else {
+    let Some(l2_channel) = data.db.get_channel(&keytag).await? else {
         return Ok(HttpResponse::BadRequest().body("No channel found"));
     };
     if l2_channel.available() == 0 {
@@ -168,8 +168,8 @@ pub async fn quote(
         fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info.fee;
     let timeout = (adaptor_margin + bln_quote.estimated_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
-        amount: amount,
-        timeout: timeout,
+        amount,
+        timeout,
         routing_fee: bln_quote.fee_msat,
     };
     Ok(HttpResponse::Ok().json(response_body))

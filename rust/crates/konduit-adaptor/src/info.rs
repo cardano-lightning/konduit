@@ -6,7 +6,7 @@ use konduit_data::Duration;
 fn parse_hex<const LEN: usize>(s: &str) -> Result<[u8; LEN], String> {
     let s = s.strip_prefix("0x").unwrap_or(s);
     let bytes = hex::decode(s).map_err(|e| e.to_string())?;
-    <[u8; LEN]>::try_from(bytes).map_err(|_| format!("Invalid length"))
+    <[u8; LEN]>::try_from(bytes).map_err(|_| "Invalid length".to_string())
 }
 
 fn parse_script_hash(s: &str) -> Result<Hash<28>, String> {

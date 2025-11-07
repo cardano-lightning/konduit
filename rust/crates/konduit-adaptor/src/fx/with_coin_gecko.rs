@@ -43,14 +43,12 @@ impl FxInterface for WithCoinGecko {
             .map(|coin| (coin.id, coin.current_price))
             .collect();
 
-        let ada = price_map
+        let ada = *price_map
             .get("cardano")
-            .ok_or(FxError::InvalidData("Expect cardano".to_string()))?
-            .clone();
-        let bitcoin = price_map
+            .ok_or(FxError::InvalidData("Expect cardano".to_string()))?;
+        let bitcoin = *price_map
             .get("bitcoin")
-            .ok_or(FxError::InvalidData("Expect bitcoin".to_string()))?
-            .clone();
+            .ok_or(FxError::InvalidData("Expect bitcoin".to_string()))?;
 
         let response = Fx::new(base, ada, bitcoin);
 

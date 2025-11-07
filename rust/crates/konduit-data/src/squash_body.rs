@@ -89,11 +89,11 @@ impl<'a> TryFrom<PlutusData<'a>> for SquashBody {
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         let [a, b, c] = <[PlutusData; 3]>::try_from(&data)?;
-        Ok(Self::new(
+        Self::new(
             <u64>::try_from(&a)?,
             <u64>::try_from(&b)?,
             Indexes::try_from(c)?,
-        )?)
+        )
     }
 }
 

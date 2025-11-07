@@ -127,18 +127,22 @@ impl From<NetworkId> for u8 {
 
 // -------------------------------------------------------------------- WASM
 
+#[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl NetworkId {
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "mainnet"))]
     pub fn _wasm_mainnet() -> Self {
         Self::MAINNET
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "testnet"))]
     pub fn _wasm_testnet() -> Self {
         Self::TESTNET
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         format!("{self:#?}")

@@ -1,21 +1,15 @@
+use cardano_tx_builder::{PlutusData, SigningKey, VerificationKey, cbor::ToCbor};
 use futures::future::join_all;
 use konduit_adaptor::{
     l2_channel::L2Channel,
     models::{Info, L1Channel, QuoteBody},
 };
 use konduit_data::{
-    Cheque, ChequeBody, Duration, Indexes, Keytag, Lock, MixedReceipt, Secret, Squash, SquashBody,
-    Stage, Tag,
+    Cheque, ChequeBody, Duration, Indexes, Keytag, Lock, MixedReceipt, Squash, SquashBody, Stage,
+    Tag,
 };
 use proptest::prelude::*;
-use proptest::test_runner::TestRunner;
-use std::{cell::RefCell, collections::BTreeMap, fmt::Display};
-
-use cardano_tx_builder::{
-    PlutusData, SigningKey, VerificationKey,
-    cbor::{self, ToCbor},
-};
-use serde_json::json;
+use std::{collections::BTreeMap, fmt::Display};
 
 pub struct Client {
     base_url: String,
@@ -34,7 +28,7 @@ fn group_maps<X: Ord, Y>(input: impl Iterator<Item = BTreeMap<X, Y>>) -> BTreeMa
 impl Default for Client {
     fn default() -> Self {
         let base_url = "http://localhost:4445".to_string();
-        let mut client_builder = reqwest::Client::builder();
+        let client_builder = reqwest::Client::builder();
         let client = client_builder.build().unwrap();
         Self { base_url, client }
     }

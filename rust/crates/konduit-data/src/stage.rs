@@ -50,7 +50,6 @@ impl<'a> TryFrom<PlutusData<'a>> for Stage {
             let pendings: Vec<Pending> = b
                 .as_list()
                 .ok_or(anyhow!("Expected list"))?
-                .into_iter()
                 .map(|x| Pending::try_from(&x))
                 .collect::<anyhow::Result<Vec<Pending>>>()?;
             Ok(Stage::Responded(u64::try_from(&a)?, pendings))

@@ -1,5 +1,4 @@
-use std::cmp::min;
-use std::collections::BTreeMap;
+use std::{cmp::min, collections::BTreeMap};
 
 use anyhow::anyhow;
 use cardano_tx_builder as cardano;
@@ -29,8 +28,8 @@ pub fn deploy(
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let outputs = vec![Output::to(host_address).with_plutus_script(script)];
 
-    let inputs = utxos.iter().map(|(input, _)| (input.clone(), None));
-    Transaction::build(&protocol_parameters, &utxos, |tx| {
+    let inputs = utxos.keys().map(|input| (input.clone(), None));
+    Transaction::build(protocol_parameters, utxos, |tx| {
         tx.with_inputs(inputs.to_owned())
             .with_outputs(outputs.to_owned())
             .with_change_strategy(ChangeStrategy::as_last_output(change_address.to_owned()))
@@ -44,7 +43,7 @@ pub fn select_utxos(utxos: &Utxos, amount: Lovelace) -> anyhow::Result<Vec<&Inpu
     }
     // Filter out utxos which hold reference scripts
     let mut sorted_utxos: Vec<(&Input, &Output)> = utxos
-        .into_iter()
+        .iter()
         .filter(|(_, output)| output.script().is_none())
         .collect();
     sorted_utxos.sort_by_key(|(_, output)| std::cmp::Reverse(output.value().lovelace()));
@@ -66,6 +65,7 @@ pub fn select_utxos(utxos: &Utxos, amount: Lovelace) -> anyhow::Result<Vec<&Inpu
     Ok(selected_inputs)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn open(
     // A backend to Cardano
     // connector: impl CardanoConnect,
@@ -110,7 +110,7 @@ pub fn open(
 
     let funding_inputs: Vec<&Input> = select_utxos(utxos, amount + FEE_BUFFER)?;
 
-    Transaction::build(&protocol_parameters, &utxos, |transaction| {
+    Transaction::build(protocol_parameters, utxos, |transaction| {
         transaction
             .with_inputs(funding_inputs.iter().map(|&i| (i.clone(), None)))
             .with_outputs([
@@ -128,11 +128,7 @@ pub fn parse_output_datum(channel_output: &Output) -> anyhow::Result<konduit_dat
         .datum()
         .ok_or(anyhow!("Output has no datum"))?;
     match datum_rc {
-        cardano::Datum::Inline(plutus_data) => {
-            let konduit_datum = konduit_data::Datum::try_from(plutus_data.clone())
-                .map_err(|e| anyhow!("Failed to convert output datum to konduit datum: {:?}", e))?;
-            Ok(konduit_datum)
-        }
+        cardano::Datum::Inline(plutus_data) => Ok(konduit_data::Datum::from(plutus_data.clone())),
         cardano::Datum::Hash(_) => Err(anyhow!("Datum is a hash, expected inline datum")),
     }
 }
@@ -163,7 +159,6 @@ pub fn mk_sub_step(receipt: &Receipt, channel_in: &Output) -> Option<(Lovelace, 
                 channel_out.with_plutus_script(plutus_script.clone()),
             ))
         } else {
-            let channel_out = channel_out;
             Some((to_sub, channel_out))
         }
     } else {
@@ -180,7 +175,7 @@ pub fn sub(
     script_utxo: &Utxo,
     // Utxos representing the channels to be subtracted from
     // We assume that the channels where already filtered by tag and sub_vkey.
-    channels_in: &Vec<Utxo>,
+    channels_in: &[Utxo],
     // Receipt which authorizes the subtraction
     receipt: &konduit_data::Receipt,
     // Adaptor's verification key, allowed to *sub* funds
@@ -204,6 +199,7 @@ pub fn sub(
         .sum::<Lovelace>();
 
     // if there is nothing to sub from, return None
+    #[allow(clippy::absurd_extreme_comparisons)]
     if to_sub <= SUB_THRESHOLD {
         return Ok(None);
     }
@@ -234,7 +230,7 @@ pub fn sub(
                 }
             })
             .collect::<Vec<(&Input, Option<PlutusData>)>>();
-        let selected_utxos = select_utxos(&funding_utxos, FEE_BUFFER - min(to_sub, FEE_BUFFER))?;
+        let selected_utxos = select_utxos(funding_utxos, FEE_BUFFER - min(to_sub, FEE_BUFFER))?;
         let funding_inputs = selected_utxos
             .iter()
             .map(|&i| (i, None))
@@ -258,16 +254,13 @@ pub fn sub(
     };
 
     let change_address = Address::from(
-        Address::new(
-            network_id,
-            Credential::from_key(Hash::<28>::new(adaptor.clone())),
-        ), // TODO: this would break the Blockfrost UTxO selection which ignores staking part
-           // We chose for now to not use staking credentials at all.
-           // .with_delegation(Credential::from_key(Hash::<28>::new(adaptor.clone()))),
+        Address::new(network_id, Credential::from_key(Hash::<28>::new(adaptor))), // TODO: this would break the Blockfrost UTxO selection which ignores staking part
+                                                                                  // We chose for now to not use staking credentials at all.
+                                                                                  // .with_delegation(Credential::from_key(Hash::<28>::new(adaptor.clone()))),
     );
 
     let specified_signatories = {
-        let key_hash = Hash::<28>::new(adaptor.clone());
+        let key_hash = Hash::<28>::new(adaptor);
         vec![key_hash]
     };
     let inputs = inputs
@@ -277,13 +270,10 @@ pub fn sub(
 
     let collateral_inputs: Vec<Input> = {
         let selected = select_utxos(funding_utxos, FEE_BUFFER)?;
-        selected
-            .into_iter()
-            .map(|i| i.clone())
-            .collect::<Vec<Input>>()
+        selected.into_iter().cloned().collect::<Vec<Input>>()
     };
 
-    let transaction = Transaction::build(&protocol_parameters, &utxos, |tx| {
+    let transaction = Transaction::build(protocol_parameters, &utxos, |tx| {
         tx.with_inputs(inputs.to_owned())
             .with_outputs(outputs.to_owned())
             .with_collaterals(collateral_inputs.to_owned())

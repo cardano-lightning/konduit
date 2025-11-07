@@ -66,7 +66,7 @@ impl TryFrom<SignedRawBolt11Invoice> for Invoice {
                 __raw: Some(value),
                 invoice_hash: hash,
                 amount_msat,
-                currency: currency,
+                currency,
                 payee_compressed,
                 payment_hash: tagged_fields
                     .payment_hash
@@ -149,7 +149,7 @@ impl From<Vec<RawTaggedField>> for TaggedFields {
                         tfs.description_hash = Some(sha256.0.to_byte_array())
                     }
                     TaggedField::ExpiryTime(expiry_time) => {
-                        tfs.expiry_time = Some(expiry_time.as_duration().clone())
+                        tfs.expiry_time = Some(*expiry_time.as_duration())
                     }
                     TaggedField::MinFinalCltvExpiryDelta(min_final_cltv_expiry_delta) => {
                         tfs.min_final_cltv_expiry_delta = Some(min_final_cltv_expiry_delta)

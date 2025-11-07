@@ -180,7 +180,7 @@ async fn add_cheque(
         keytag,
         |l2_channel: Option<L2Channel>| match l2_channel {
             Some(mut l2_channel) => {
-                l2_channel.add_cheque(cheque.clone(), timeout.clone())?;
+                l2_channel.add_cheque(cheque.clone(), timeout)?;
                 Ok(l2_channel)
             }
             None => Err(anyhow!("No L2 channel found")),
@@ -203,7 +203,7 @@ async fn update_squash(
                     .map_err(UpdateSquashError::Logic)?;
                 Ok(l2_channel)
             }
-            None => return Err(UpdateSquashError::NotFound),
+            None => Err(UpdateSquashError::NotFound),
         },
     )
 }
@@ -237,7 +237,7 @@ impl DbInterface for WithSled {
     }
 
     async fn get_all(&self) -> Result<BTreeMap<Keytag, L2Channel>, DbError<Infallible>> {
-        let ks = get_channel_keys(&*self.db).map_err(WithSledError::Backend)?;
+        let ks = get_channel_keys(&self.db).map_err(WithSledError::Backend)?;
         let db = self.db.clone();
         let futures = ks.into_iter().map(async |k| {
             let db = db.clone();
@@ -270,7 +270,7 @@ const CHANNEL_END: u8 = 19;
 
 fn to_db_key(keytag: Keytag) -> Vec<u8> {
     std::iter::once(CHANNEL)
-        .chain(keytag.0.into_iter())
+        .chain(keytag.0)
         .collect()
 }
 

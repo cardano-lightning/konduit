@@ -76,13 +76,13 @@ impl<'a> TryFrom<[PlutusData<'a>; 2]> for Receipt {
 
     fn try_from(value: [PlutusData<'a>; 2]) -> anyhow::Result<Self> {
         let [a, b] = value;
-        Ok(Self::new(
+        Self::new(
             Squash::try_from(&a)?,
             <Vec<PlutusData>>::try_from(&b)?
                 .iter()
-                .map(|x| Unlocked::try_from(x))
+                .map(Unlocked::try_from)
                 .collect::<anyhow::Result<Vec<Unlocked>>>()?,
-        )?)
+        )
     }
 }
 
@@ -102,7 +102,7 @@ impl<'a> From<Receipt> for [PlutusData<'a>; 2] {
                 value
                     .unlockeds
                     .into_iter()
-                    .map(|x| PlutusData::from(x))
+                    .map(PlutusData::from)
                     .collect::<Vec<PlutusData>>(),
             ),
         ]

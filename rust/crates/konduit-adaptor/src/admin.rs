@@ -33,7 +33,7 @@ async fn fetch_script_utxo(
     deployer_utxos
         .into_iter()
         .find(|(_input, output)| {
-            let output_script_hash = output.script().map(|script| Hash::<28>::from(script));
+            let output_script_hash = output.script().map(Hash::<28>::from);
             output_script_hash == Some(script_hash)
         })
         .ok_or_else(|| anyhow::anyhow!("could not find konduit script UTXO"))
@@ -46,17 +46,17 @@ impl Admin {
         info: Arc<Info>,
         skey: SigningKey,
     ) -> anyhow::Result<Admin> {
-        let deployer_vkey = info.deployer_vkey.clone();
-        let script_hash = info.script_hash.clone();
+        let deployer_vkey = info.deployer_vkey;
+        let script_hash = info.script_hash;
         let script_utxo =
-            fetch_script_utxo(connector.clone(), deployer_vkey, script_hash.clone()).await?;
+            fetch_script_utxo(connector.clone(), deployer_vkey, script_hash).await?;
         Ok(Self {
-            close_period: info.close_period.clone(),
+            close_period: info.close_period,
             connector,
             db,
             max_tag_length: info.max_tag_length,
             script_utxo,
-            script_hash: info.script_hash.clone(),
+            script_hash: info.script_hash,
             skey,
         })
     }
@@ -69,7 +69,7 @@ impl Admin {
                 guard(datum.own_hash == self.script_hash)?;
                 guard(output.value().assets().is_empty())?;
                 let adaptor_verification_key = VerificationKey::from(&self.skey);
-                guard(datum.constants.sub_vkey == adaptor_verification_key.into())?;
+                guard(datum.constants.sub_vkey == adaptor_verification_key)?;
                 guard(datum.constants.close_period <= self.close_period)?;
                 guard({
                     let bytes = <Vec<u8>>::from(&datum.constants.tag);
@@ -90,7 +90,7 @@ impl Admin {
     }
 
     async fn fetch_tip(&self) -> anyhow::Result<TipBody> {
-        let script_credential = Credential::from_script(self.script_hash.into());
+        let script_credential = Credential::from_script(self.script_hash);
         let channel_utxos = self.connector.utxos_at(&script_credential, None).await?;
         let channels = channel_utxos
             .into_iter()

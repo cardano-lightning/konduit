@@ -488,32 +488,37 @@ fn with_assets<AssetName, Quantity: Zero>(
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct OutputValue(Value<u64>);
 
+#[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl OutputValue {
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "new"))]
     pub fn _wasm_new(lovelace: u64) -> Self {
         Self(Value::new(lovelace))
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withLovelace"))]
     pub fn _wasm_with_lovelace(&mut self, lovelace: u64) {
         self.0.with_lovelace(lovelace);
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withAssets"))]
     pub fn _wasm_with_assets(&mut self, assets: &OutputAssets) {
         with_assets(&mut self.0, assets.0.clone());
     }
 }
 
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 #[derive(Debug, Clone)]
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct OutputAssets(BTreeMap<Hash<28>, BTreeMap<Vec<u8>, u64>>);
 
+#[cfg(feature = "wasm")]
 impl IntoIterator for OutputAssets {
     type Item = (Hash<28>, BTreeMap<Vec<u8>, u64>);
     type IntoIter = std::collections::btree_map::IntoIter<Hash<28>, BTreeMap<Vec<u8>, u64>>;
@@ -523,13 +528,16 @@ impl IntoIterator for OutputAssets {
     }
 }
 
+#[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl OutputAssets {
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "empty"))]
     pub fn _wasm_empty() -> Self {
         Self(BTreeMap::new())
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "insert"))]
     pub fn _wasm_insert(&mut self, script_hash: &[u8], asset_name: &[u8], quantity: u64) {
         let script_hash = <[u8; 28]>::try_from(script_hash)

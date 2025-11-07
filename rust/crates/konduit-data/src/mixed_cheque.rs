@@ -10,19 +10,17 @@ pub enum MixedCheque {
 
 impl PartialOrd for MixedCheque {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.index().cmp(&other.index()) {
-            std::cmp::Ordering::Less => Some(std::cmp::Ordering::Less),
-            std::cmp::Ordering::Equal => None,
-            std::cmp::Ordering::Greater => Some(std::cmp::Ordering::Greater),
-        }
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for MixedCheque {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.partial_cmp(other) {
-            Some(ord) => ord,
-            None => match (self, other) {
+        match self.index().cmp(&other.index()) {
+            ordering @ std::cmp::Ordering::Less | ordering @ std::cmp::Ordering::Greater => {
+                ordering
+            }
+            std::cmp::Ordering::Equal => match (self, other) {
                 (Self::Unlocked(a), Self::Unlocked(b)) => a.cmp(b),
                 (Self::Cheque(a), Self::Cheque(b)) => a.cmp(b),
                 (Self::Unlocked(_), _) => std::cmp::Ordering::Greater,
@@ -34,10 +32,7 @@ impl Ord for MixedCheque {
 
 impl MixedCheque {
     pub fn is_cheque(&self) -> bool {
-        match self {
-            &Self::Unlocked(_) => false,
-            _ => true,
-        }
+        !matches!(self, &Self::Unlocked(_))
     }
 
     pub fn index(&self) -> u64 {

@@ -2,7 +2,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{cbor, pallas, Hash};
+use crate::{Hash, cbor, pallas};
 use std::{fmt, sync::Arc};
 
 #[cfg(feature = "wasm")]
@@ -81,8 +81,10 @@ impl<'d, C> cbor::Decode<'d, C> for Input {
 
 // ------------------------------------------------------------------------ WASM
 
+#[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Input {
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
     pub fn _wasm_new(transaction_id: &[u8], output_index: u64) -> Self {
         Self::new(
@@ -91,6 +93,7 @@ impl Input {
         )
     }
 
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         self.to_string()
@@ -99,7 +102,7 @@ impl Input {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{any, hash, Input};
+    use crate::{Input, any, hash};
     use proptest::prelude::*;
 
     // -------------------------------------------------------------- Unit tests

@@ -1219,17 +1219,20 @@ impl<'d, C, State: IsTransactionBodyState> cbor::Decode<'d, C> for Transaction<S
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct TransactionReadyForSigning(Transaction<state::ReadyForSigning>);
 
+#[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl TransactionReadyForSigning {
+    #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         self.0.to_string()
     }
 }
 
+#[cfg(feature = "wasm")]
 impl From<Transaction<state::ReadyForSigning>> for TransactionReadyForSigning {
     fn from(tx: Transaction<state::ReadyForSigning>) -> Self {
         Self(tx)
