@@ -3,10 +3,16 @@ import konduit from "./konduit-wasm/konduit_wasm.js";
 // ----------------------------------------------------------------------- DEBUG
 
 // Enable some better debugging when working with the WASM bundle.
-process.on('uncaughtException', (e) => console.log(`Error: ${e.toString()}`));
-konduit.enableLogs(konduit.LogLevel.Debug);
+process.on('uncaughtException', (e) => {
+  if (e instanceof konduit.StrError) {
+    console.log(`Error: ${e.toString()}`);
+    if (e.stack) { console.log(e.stack); }
+  } else {
+    throw e
+  }
+});
 
-console.log(process.env)
+konduit.enableLogs(konduit.LogLevel.Debug);
 
 // ---------------------------------------------------------------------- CONFIG
 
