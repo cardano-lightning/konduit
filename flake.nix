@@ -33,7 +33,8 @@
         ...
       }: let
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
-        devShellBase = {
+        devShell = {
+          name = "konduit-shell";
           shellHook = ''
             ${config.pre-commit.installationScript}
             echo 1>&2 "Welcome to the development shell!"
@@ -61,17 +62,12 @@
           ];
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
-        devShell =
-          devShellBase
-          // {
-            name = "konduit-shell";
-          };
         devShellExtra =
-          devShellBase
+          devShell
           // {
             name = "konduit-shell-with-extras";
             packages =
-              devShellBase.packages
+              devShell.packages
               ++ [
                 inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f
               ];
@@ -81,6 +77,16 @@
           src = ./rust;
           cargoToml = builtins.fromTOML (builtins.readFile ./rust/Cargo.toml);
           toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust/rust-toolchain.toml;
+          crates = {
+            konduit-adaptor = {
+              crane = {
+                args = {
+                  nativeBuildInputs = [pkgs.pkg-config pkgs.openssl.dev];
+                  buildInputs = [pkgs.openssl.dev];
+                };
+              };
+            };
+          };
         };
         treefmt = {
           projectRootFile = "flake.nix";
@@ -106,6 +112,8 @@
           extras = pkgs.mkShell devShellExtra;
         };
       };
-      flake = {};
+      flake = {
+        nixosModules.default = import ./flake/nixos.nix inputs.self;
+      };
     };
 }
