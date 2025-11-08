@@ -1,15 +1,19 @@
 use anyhow::anyhow;
-use cardano_tx_builder::{Address, Credential, Hash, Input, Output, Value, address::kind};
+use cardano_tx_builder::{
+    Address, Credential, Hash, Input, Output, PlutusScript, PlutusVersion, Value, address::kind,
+    cbor,
+};
 
 #[derive(Debug, serde::Deserialize)]
 pub struct Response {
+    pub transaction_id: String,
+    pub output_index: u64,
     pub address: String,
-    pub tx_hash: String,
-    pub tx_index: u64,
-    pub amount: Vec<AssetObject>,
-    pub data_hash: Option<String>,
-    pub inline_datum: Option<String>,
-    pub reference_script_hash: Option<String>,
+    pub value: Vec<AssetObject>,
+    pub datum_hash: Option<String>,
+    pub datum_inline: Option<String>,
+    pub reference_script_version: Option<u8>,
+    pub reference_script: Option<String>,
 }
 
 impl TryFrom<Response> for (Input, Output) {
@@ -17,24 +21,33 @@ impl TryFrom<Response> for (Input, Output) {
 
     fn try_from(utxo: Response) -> anyhow::Result<Self> {
         let input = Input::new(
-            try_into_array(hex::decode(&utxo.tx_hash)?)?.into(),
-            utxo.tx_index,
+            try_into_array(hex::decode(&utxo.transaction_id)?)?.into(),
+            utxo.output_index,
         );
 
         let address = <Address<kind::Shelley>>::try_from(utxo.address.as_str())?;
 
-        let output = Output::new(address.into(), from_asset_objects(&utxo.amount[..])?);
+        let mut output = Output::new(address.into(), from_asset_objects(&utxo.value[..])?);
 
-        if utxo.inline_datum.is_some() {
-            unimplemented!("non-null inline_datum in UTxO: unimplemented")
+        if let Some(hash_str) = utxo.datum_hash.as_deref() {
+            output = output.with_datum_hash(Hash::try_from(hash_str)?);
         }
 
-        if utxo.data_hash.is_some() {
-            unimplemented!("non-null datum hash in UTxO: unimplemented")
+        if let Some(data_str) = utxo.datum_inline {
+            let plutus_data = cbor::decode(&hex::decode(data_str)?)?;
+            output = output.with_datum(plutus_data);
         }
 
-        if utxo.reference_script_hash.is_some() {
-            unimplemented!("non-null script hash in UTxO: unimplemented")
+        if let Some(script_str) = utxo.reference_script {
+            let plutus_script = hex::decode(script_str)
+                .map_err(|e| anyhow!(e).context("malformed script reference"))?;
+
+            let plutus_version = PlutusVersion::try_from(
+                utxo.reference_script_version
+                    .expect("missing version with script"),
+            )?;
+
+            output = output.with_plutus_script(PlutusScript::new(plutus_version, plutus_script));
         };
 
         Ok((input, output))

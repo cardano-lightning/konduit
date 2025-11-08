@@ -20,3 +20,6 @@ pub const SCRIPT_HASH: &str = "SCRIPT_HASH";
 
 /// A CBOR file which contains Plutus data
 pub const PLUTUS_CBOR_FILE: &str = "PLUTUS_DATA_CBOR_FILE";
+
+/// A transaction output reference in the form <tx-hash>#<index>
+pub const OUTPUT_REF: &str = "TRANSACTION_ID#OUTPUT_INDEX";

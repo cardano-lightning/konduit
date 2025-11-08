@@ -1,11 +1,25 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 use serde::{Deserialize, Serialize};
-use std::{ops::Deref, str::FromStr, time};
+use std::{
+    ops::{Deref, DerefMut},
+    str::FromStr,
+    time,
+};
 
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Duration(pub time::Duration);
+
+impl Duration {
+    pub fn from_secs(secs: u64) -> Self {
+        Self(time::Duration::from_secs(secs))
+    }
+
+    pub fn from_millis(millis: u64) -> Self {
+        Self(time::Duration::from_millis(millis))
+    }
+}
 
 /// Provide a 'Deref' instance so that we can easily call onto time::Duration methods without
 /// having to perform any explicit conversions.
@@ -14,6 +28,12 @@ impl Deref for Duration {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for Duration {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 

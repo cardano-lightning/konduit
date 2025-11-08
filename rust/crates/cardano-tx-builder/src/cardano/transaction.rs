@@ -14,9 +14,11 @@ use std::{
     fmt, iter,
     marker::PhantomData,
     mem,
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
 
+#[cfg(feature = "wasm")]
+use std::ops::DerefMut;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 

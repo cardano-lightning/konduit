@@ -40,15 +40,19 @@ pub(crate) struct Args {
 impl Args {
     pub(crate) async fn execute(self, connector: impl CardanoConnect) -> anyhow::Result<()> {
         let consumer_verification_key = VerificationKey::from(&self.consumer_signing_key);
+
         let consumer_payment_credential =
             cardano::Credential::from_key(cardano::Hash::<28>::new(consumer_verification_key));
+
         let utxos = connector
             .utxos_at(&consumer_payment_credential, None)
             .await?;
+
         let protocol_parameters = connector.protocol_parameters().await?;
+
         let network_id = cardano::NetworkId::from(connector.network());
 
-        let mut open_transaction = open(
+        let mut transaction = open(
             &utxos,
             &protocol_parameters,
             network_id,
@@ -59,13 +63,16 @@ impl Args {
             self.channel_tag,
             self.close_period,
         )?;
-        open_transaction.sign(self.consumer_signing_key);
-        if !self.dry_run {
-            connector.submit(&open_transaction).await?;
-            println!("Transaction submitted with ID: {}", open_transaction.id());
-        }
 
-        println!("{open_transaction}");
+        transaction.sign(self.consumer_signing_key);
+
+        eprintln!("{transaction}");
+
+        if !self.dry_run {
+            connector.submit(&transaction).await?;
+            eprintln!("transaction successfully submitted");
+            println!("{}", transaction.id());
+        }
 
         Ok(())
     }
