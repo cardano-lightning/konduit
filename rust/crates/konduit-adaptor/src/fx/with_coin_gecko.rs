@@ -6,24 +6,9 @@ use std::process::Command;
 
 use crate::fx::interface::{BaseCurrency, Fx, FxError, FxInterface};
 
-#[derive(Debug, Clone, clap::Args)]
-pub struct CoinGeckoArgs {
-    /// The path to the database file
-    #[clap(long, env = crate::env::FX_TOKEN)]
-    pub coin_gecko_token: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub struct WithCoinGecko {
     token: Option<String>,
-}
-
-impl TryFrom<&CoinGeckoArgs> for WithCoinGecko {
-    type Error = FxError;
-
-    fn try_from(value: &CoinGeckoArgs) -> Result<Self, Self::Error> {
-        Ok(WithCoinGecko::new(value.coin_gecko_token.clone()))
-    }
 }
 
 impl WithCoinGecko {

@@ -11,13 +11,13 @@ pub const BLN_URL: &str = "KONDUIT_BLN_URL";
 /// Blockfrost project id
 pub const BLOCKFROST_PROJECT_ID: &str = "KONDUIT_BLOCKFROST_PROJECT_ID";
 
+pub const COIN_GEKO_TOKEN: &str = "KONDUIT_COIN_GECKO_TOKEN";
+
 pub const DB_PATH: &str = "KONDUIT_DB_PATH";
 
 pub const FX_ADA: &str = "KONDUIT_FX_ADA";
 
 pub const FX_BITCOIN: &str = "KONDUIT_FX_BITCOIN";
-
-pub const FX_TOKEN: &str = "KONDUIT_FX_TOKEN";
 
 // Adaptor server host
 pub const HOST: &str = "KONDUIT_HOST";
