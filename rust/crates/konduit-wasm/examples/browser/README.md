@@ -1,0 +1,5 @@
+## Running
+
+```
+npx serve
+```
