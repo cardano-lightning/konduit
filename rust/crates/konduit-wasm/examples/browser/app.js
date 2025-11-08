@@ -7,7 +7,17 @@ wasm().then(async () => {
   let userSigningKey = localStorage.getItem("userSigningKey") ?? null;
   let userVerificationKey = localStorage.getItem("userVerificationKey") ?? null;
   let userBalance = null;
-  let channel = null;
+  let channel = localStorage.getItem("channel") ?? null;
+  if (channel !== null) {
+    const json = JSON.parse(channel);
+    channel = {
+      ...json,
+      amount: BigInt(json.amount),
+      closePeriod: BigInt(json.closePeriod),
+      adaptor: asBuffer(json.adaptor),
+      tag: asBuffer(json.tag),
+    };
+  }
 
   if (userSigningKey === null || userVerificationKey === null) {
     state = "no_user";
@@ -63,11 +73,7 @@ wasm().then(async () => {
   }
 
   async function renderNotOpened() {
-    if (userBalance === null) {
-      userBalance = await fetchBalance(connector, userVerificationKey);
-    }
-
-    const header = el("header", { text: `Balance: ${showLovelace(userBalance)}` });
+    const header = await renderHeader();
     const amount = el("input", { placeholder: "Amount (ADA)", id: "amount" });
     const adaptor = el("input", { placeholder: "Adaptor's verification key (64-hex)", id: "adaptor" });
     const period = el("input", { placeholder: "Closing period (..s / ..min / ..h)", id: "period" });
@@ -75,56 +81,69 @@ wasm().then(async () => {
     const notice = el("div", { class: "notice" });
 
     btn.onclick = async () => {
-      let a;
+      channel = {
+        amount: null,
+        adaptor: null,
+        closePeriod: null,
+        tag: null,
+        status: "pending"
+      };
+
       try {
-        a = BigInt(Number.parseInt(amount.value, 10)) * 1000000n;
+        channel.amount = BigInt(Number.parseInt(amount.value, 10)) * 1000000n;
       } catch (e) {
         notice.textContent = e.message;
         return;
       }
 
-      if (a <= 0n) {
+      if (channel.amount <= 0n) {
         notice.textContent = "malformed/missing amount";
         return;
-      } else if (a > BigInt(userBalance)) {
+      } else if (channel.amount > BigInt(userBalance)) {
         notice.textContent = "insufficient balance";
         return;
       }
 
-      let k = adaptor.value.trim();
-      if (!/^[0-9a-fA-F]{64}$/.test(k)) {
+      channel.adaptor = adaptor.value.trim();
+      if (!/^[0-9a-fA-F]{64}$/.test(channel.adaptor)) {
         notice.textContent = "malformed/missing adaptor";
         return;
       }
-      k = asBuffer(k)
+      channel.adaptor = asBuffer(channel.adaptor);
 
-      let p;
       try {
         if (period.value.endsWith("s")) {
-          p = BigInt(period.value.slice(0, -1));
+          channel.closePeriod = BigInt(period.value.slice(0, -1));
         } else if (period.value.endsWith("min")) {
-          p = 60n * BigInt(period.value.slice(0, -3))
+          channel.closePeriod = 60n * BigInt(period.value.slice(0, -3))
         } else if (period.value.endsWith("h")) {
-          p = 3600n * BigInt(period.value.slice(0, -1))
+          channel.closePeriod = 3600n * BigInt(period.value.slice(0, -1))
         } else {
-          notice.textContent = "malformed/missing closing period";
+          notice.textContent = "malformed/missing close period";
           return;
         }
       } catch(e) {
-          notice.textContent = `malformed/missing closing period: ${e.message}`;
+          notice.textContent = `malformed/missing close period: ${e.message}`;
           return;
       }
 
       state = "opening";
-      channel = { amount: a, adaptor: k, period: period.value, status: "pending" };
-
       render();
 
       try {
-        channel.tag = await openChannel(connector, userSigningKey, k, p, a);
+        await openChannel(connector, userSigningKey, channel);
         channel.status = "success";
+        console.log(channel);
         render();
         state = "opened";
+        localStorage.setItem("state", state);
+        localStorage.setItem("channel", JSON.stringify({
+          ...channel,
+          amount: channel.amount.toString(),
+          closePeriod: channel.closePeriod.toString(),
+          adaptor: asHexString(channel.adaptor),
+          tag: asHexString(channel.tag),
+        }));
       } catch (e) {
         console.log(e);
         channel.status = "failed";
@@ -140,8 +159,8 @@ wasm().then(async () => {
     app.append(header, amount, adaptor, period, btn, notice);
   }
 
-  function renderOpening() {
-    const header = el("header", { text: `Balance: ${showLovelace(userBalance)}` });
+  async function renderOpening() {
+    const header = await renderHeader();
     const tx = el("div", { class: "tx" });
     tx.append(
       el("div", { text: `pending…` }),
@@ -151,14 +170,66 @@ wasm().then(async () => {
     app.append(header, tx);
   }
 
-  function renderOpened() {
-    const header = el("header", { text: `Balance: ${showLovelace(userBalance)}` });
-    const ch = el("div", { class: "channel-info" });
+  async function renderOpened() {
+    const header = await renderHeader();
+    const ch = el("fieldset", { class: "channel-info" });
     ch.append(
-      el("div", { text: `Open Channel (${asHexString(channel.tag).slice(0, 12)})` }),
-      el("div", { class: "amount", text: `${showLovelace(channel.amount)}` }),
+      el("legend", { text: "Channel" }),
+      el("div", { text: `#${asHexString(channel.tag).slice(0, 12)} → ${asHexString(channel.adaptor).slice(0, 12)}` }),
+      el("div", { html: `<div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/battery-charging.svg"><span>${showLovelace(channel.amount)}</span></div>` }),
     );
-    app.append(header, ch);
+    const notice = el("div", { class: "notice" });
+
+    const close = el("button", { text: "Close Channel" });
+    close.onclick = async () => {
+      try {
+        await closeChannel(connector, userSigningKey, channel);
+        state = "not_opened";
+        localStorage.setItem("state", state);
+        localStorage.removeItem("channel");
+      } catch (e) {
+        console.log("CLOSE FAILED", e.toString());
+        notice.textContent = `❌ close failed: ${e.message}`;
+      }
+
+      render();
+    };
+
+    app.append(header, notice, ch, close);
+  }
+
+  async function renderHeader() {
+    if (userBalance === null) {
+      userBalance = await fetchBalance(connector, userVerificationKey);
+    }
+
+    const header = el("header");
+    header.append(el("p", { html: `<div style="display: flex; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/credit-card.svg"><span>${showLovelace(userBalance)}</span></div>` }));
+    header.append(el("p", { html: `<div style="display: flex; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/user.svg"><span>${asHexString(userVerificationKey).slice(0, 12)}</span></div>` }));
+    const exit = el("button", { html: `<img src="icons/log-out.svg" />`, class: "icon" })
+    header.append(exit);
+
+    exit.onclick = async () => {
+      const confirmed = confirm("Exit and forget everything?");
+
+      if (confirmed) {
+        localStorage.removeItem("state");
+        localStorage.removeItem("userSigningKey");
+        localStorage.removeItem("userVerificationKey");
+        localStorage.removeItem("balance");
+
+        userSigningKey = null;
+        userVerificationKey = null;
+        userBalance = null;
+        channel = null;
+
+        state = "no_user";
+
+        render();
+      }
+    };
+
+    return header;
   }
 
   // -------------------- HELPERS -------------------- //
@@ -168,6 +239,10 @@ wasm().then(async () => {
     for (attr in props) {
       if (attr === "text") {
         e.innerText = props[attr];
+      } else if (attr === "html") {
+        e.innerHTML = props[attr];
+      } else if (attr === "class") {
+        e.classList = props[attr];
       } else {
         e[attr] = props[attr];
       }
@@ -208,33 +283,45 @@ wasm().then(async () => {
 
     const balance = await connector.balance(verificationKey);
 
-    localStorage.setItem("balance", JSON.stringify({ balance: balance.toString(), timestamp: Date.now() + 60 * 1000 }));
+    localStorage.setItem("balance", JSON.stringify({ balance: balance.toString(), timestamp: Date.now() + 30 * 1000 }));
 
     return balance;
   }
 
-  async function openChannel(connector, consumer, adaptor, period, amount) {
-    const tag = crypto.getRandomValues(new Uint8Array(32));
+  async function openChannel(connector, consumer, channel) {
+    channel.tag = crypto.getRandomValues(new Uint8Array(32));
 
     const transaction = await wasm.open(
       // Cardano's connector backend
       connector,
       // tag: An (ideally) unique tag to discriminate channels and allow reuse of keys between them.
-      tag,
+      channel.tag,
       // consumer: Consumer's verification key, allowed to *add* funds.
       wasm.toVerificationKey(consumer),
       // adaptor: Adaptor's verification key, allowed to *sub* funds
-      adaptor,
+      channel.adaptor,
       // close_period: Minimum time from `close` to `elapse`, in seconds.
-      period,
+      channel.closePeriod,
       // deposit: Quantity of Lovelace to deposit into the channel
-      amount,
+      channel.amount,
     );
 
-    console.log(transaction.toString())
+    console.log('open', transaction.toString());
 
     await connector.signAndSubmit(transaction, consumer);
+  }
 
-    return tag;
+  async function closeChannel(connector, consumer, channel) {
+    const transaction = await wasm.close(
+      connector,
+      channel.tag,
+      wasm.toVerificationKey(consumer),
+      channel.adaptor,
+      document.querySelector('meta[name="script_ref"]').content,
+    );
+
+    console.log('close', transaction.toString());
+
+    await connector.signAndSubmit(transaction, consumer);
   }
 });

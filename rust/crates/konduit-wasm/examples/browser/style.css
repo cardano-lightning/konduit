@@ -23,14 +23,14 @@ img {
 }
 
 :root {
-  --bg: #0b0c10;
-  --panel: #111317;
-  --accent: #00fff0;
-  --accent-light: #33fff5;
-  --text: #e6e6e6;
+  --panel: #73BFB7;
+  --bg: #FCF9EA;
+  --accent: #FFA4A4;
+  --accent-light: #FFBDBD;
+  --text: #FCF9EA;
   --error: #ff4d4d;
   --success: #33ff88;
-  --border: #1b1d23;
+  --border: #FCF9EA;
   --radius: 8px;
   --line: 1px solid var(--border);
   font-family: 'Inter', 'Roboto Mono', monospace;
@@ -52,7 +52,6 @@ body {
   max-width: 420px;
   background: var(--panel);
   border: var(--line);
-  border-radius: var(--radius);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -61,35 +60,41 @@ body {
 }
 
 header {
-  border-bottom: var(--line);
   padding-bottom: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
   text-align: center;
   font-weight: bold;
-  color: var(--accent-light);
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 input, select, button {
   width: 100%;
   padding: 0.8rem;
-  border: var(--line);
-  border-radius: var(--radius);
-  background: transparent;
+  border: 1px solid var(--accent);
+  background: var(--accent-light);
   color: var(--text);
   font-size: 1rem;
   outline: none;
 }
 
-input:focus, button:hover {
-  border-color: var(--accent);
+input:focus {
+  border-color: var(--line);
+  background: var(--accent);
+}
+
+button:hover {
+  border-color: var(--bg);
+  background: var(--accent-light);
 }
 
 button {
   cursor: pointer;
   font-weight: bold;
-  border-color: var(--accent);
-  color: var(--accent);
-  background: transparent;
+  color: var(--bg);
+  background: var(--accent);
   transition: background 0.15s;
   font-variant: small-caps;
 }
@@ -106,7 +111,6 @@ button:active {
 
 .tx {
   border: var(--line);
-  border-radius: var(--radius);
   padding: 1rem;
   text-align: center;
 }
@@ -128,11 +132,16 @@ button:active {
 .channel-info {
   border: var(--line);
   padding: 1rem;
-  border-radius: var(--radius);
   text-align: center;
 }
 
-.amount {
-  font-size: 1.2rem;
-  color: var(--accent-light);
+.icon {
+  display: inline-block;
+  width: fit-content;
+}
+
+.icon > img {
+  width: 1rem;
+  max-width: 1rem;
+  height: auto;
 }
