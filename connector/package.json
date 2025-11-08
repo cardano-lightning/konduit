@@ -8,6 +8,7 @@
     "start": "wrangler dev"
   },
   "dependencies": {
+    "blake2b": "^2.1.4",
     "hono": "^4.6.20"
   },
   "devDependencies": {
