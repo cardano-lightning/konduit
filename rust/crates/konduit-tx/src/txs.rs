@@ -1,5 +1,3 @@
-use std::{cmp::min, collections::BTreeMap};
-
 use anyhow::anyhow;
 use cardano_tx_builder as cardano;
 use cardano_tx_builder::{
@@ -7,9 +5,17 @@ use cardano_tx_builder::{
     ProtocolParameters, Transaction, Value, VerificationKey, address,
     transaction::state::ReadyForSigning,
 };
-use konduit_data::{Constants, Datum, Duration, Receipt, Redeemer, Stage, Tag};
+use konduit_data::{Constants, Cont, Datum, Duration, Receipt, Redeemer, Stage, Step, Tag};
+use std::{cmp::min, collections::BTreeMap, ops::Add, sync::LazyLock, time::SystemTime};
 
 pub type Lovelace = u64;
+
+/// The default Time-To-Live for transactions. This impacts the upper bound of transactions and the
+/// overall 'speed' at which transitions between stages can happen.
+///
+/// While this can _in theory_ be as low as 1s... setting it too low will increase the likelihood of
+/// a transaction to fail to submit (due to blocks following a random distribution).
+pub static DEFAULT_TTL: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs(120));
 
 pub const MIN_ADA: Lovelace = 2_000_000;
 
@@ -37,7 +43,10 @@ pub fn deploy(
     })
 }
 
-pub fn select_utxos(utxos: &Utxos, amount: Lovelace) -> anyhow::Result<Vec<&Input>> {
+pub fn select_utxos(
+    utxos: &Utxos,
+    amount: Lovelace,
+) -> anyhow::Result<Vec<(Input, Option<PlutusData<'static>>)>> {
     if amount == 0 {
         return Ok(vec![]);
     }
@@ -52,23 +61,122 @@ pub fn select_utxos(utxos: &Utxos, amount: Lovelace) -> anyhow::Result<Vec<&Inpu
     let mut total_lovelace: u64 = 0;
 
     for (input, output) in sorted_utxos {
-        selected_inputs.push(input);
+        selected_inputs.push((input.clone(), None));
         total_lovelace = total_lovelace.saturating_add(output.value().lovelace());
 
         if total_lovelace >= amount {
             break;
         }
     }
+
     if total_lovelace < amount {
         return Err(anyhow!("insufficient funds in wallet to cover the amount"));
     }
+
     Ok(selected_inputs)
+}
+
+// Close a channel with the given tag & adaptor
+pub fn close_one(
+    utxos: &BTreeMap<Input, Output>,
+    protocol_parameters: &ProtocolParameters,
+    network_id: NetworkId,
+    script_ref: &Input,
+    tag: &Tag,
+    consumer: VerificationKey,
+    adaptor: VerificationKey,
+) -> anyhow::Result<Transaction<ReadyForSigning>> {
+    let channel_utxos = utxos
+        .iter()
+        .filter_map(|(input, output)| {
+            if let Some(datum) = output.datum() {
+                match datum {
+                    cardano::Datum::Hash(_) => (),
+                    cardano::Datum::Inline(plutus_data) => {
+                        let datum = konduit_data::Datum::try_from(plutus_data).ok()?;
+                        if &datum.constants.tag == tag && datum.constants.sub_vkey == adaptor {
+                            return Some((input.clone(), output.clone(), datum));
+                        }
+                    }
+                }
+            }
+
+            None
+        })
+        .collect::<Vec<_>>();
+
+    if channel_utxos.is_empty() {
+        return Err(anyhow!("no channel found for this tag and adaptor"));
+    }
+
+    if channel_utxos.len() > 1 {
+        return Err(anyhow!("more than one channel match the given criteria"));
+    }
+
+    let (channel_in, channel_out, channel_old_datum) =
+        channel_utxos.first().expect("exactly one UTxO");
+
+    let upper_bound_validity = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .add(**DEFAULT_TTL);
+
+    let elapse_at = Duration(
+        channel_old_datum
+            .constants
+            .close_period
+            .add(upper_bound_validity)
+            // TODO: The on-chain code uses strict inequality; although the upper bound is already
+            // exclusive from a ledger standpoint; So it shouldn't be required to add an extra slot
+            // here.
+            .add(*Duration::from_secs(1)),
+    );
+
+    let channel_new_datum = match channel_old_datum.stage {
+        Stage::Opened(amount) => Ok(Datum {
+            stage: Stage::Closed(amount, elapse_at),
+            ..channel_old_datum.clone()
+        }),
+        Stage::Closed(..) | Stage::Responded(..) => Err(anyhow!("channel is not closed")),
+    }?;
+
+    let consumer_key_hash = Hash::<28>::new(consumer);
+
+    let consumer_change_address = Address::from(Address::new(
+        network_id,
+        Credential::from_key(consumer_key_hash),
+    ));
+
+    Transaction::build(protocol_parameters, utxos, |transaction| {
+        let redeemer = Redeemer::Main(vec![Step::Cont(Cont::Close)]);
+
+        let mut inputs = select_utxos(utxos, transaction.fee())?;
+
+        let collaterals = inputs
+            .clone()
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect::<Vec<Input>>();
+
+        inputs.push((channel_in.clone(), Some(PlutusData::from(redeemer))));
+
+        transaction
+            .with_inputs(inputs)
+            .with_collaterals(collaterals)
+            .with_reference_inputs(vec![script_ref.clone()])
+            .with_specified_signatories(vec![consumer_key_hash])
+            .with_outputs([
+                Output::new(channel_out.address().clone(), channel_out.value().clone())
+                    .with_datum(PlutusData::from(channel_new_datum.clone())),
+            ])
+            .with_change_strategy(ChangeStrategy::as_last_output(
+                consumer_change_address.clone(),
+            ))
+            .ok()
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn open(
-    // A backend to Cardano
-    // connector: impl CardanoConnect,
     utxos: &BTreeMap<Input, Output>,
     protocol_parameters: &ProtocolParameters,
     network_id: NetworkId,
@@ -86,6 +194,7 @@ pub fn open(
     close_period: Duration,
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let consumer_payment_credential = Credential::from_key(Hash::<28>::new(consumer));
+
     // TODO: We will reintroduce staking credential later on when it won't
     // cause UTxOs filtering issues.
     let contract_address = Address::from(
@@ -108,11 +217,12 @@ pub fn open(
         stage: Stage::Opened(0),
     });
 
-    let funding_inputs: Vec<&Input> = select_utxos(utxos, amount + FEE_BUFFER)?;
+    let funding_inputs: Vec<(Input, Option<PlutusData<'static>>)> =
+        select_utxos(utxos, amount + FEE_BUFFER)?;
 
     Transaction::build(protocol_parameters, utxos, |transaction| {
         transaction
-            .with_inputs(funding_inputs.iter().map(|&i| (i.clone(), None)))
+            .with_inputs(funding_inputs.clone())
             .with_outputs([
                 Output::new(contract_address.clone(), Value::new(amount)).with_datum(datum.clone())
             ])
@@ -218,24 +328,25 @@ pub fn sub(
     };
     let defer = konduit_data::Redeemer::Defer;
 
-    let inputs: Vec<(&Input, Option<PlutusData>)> = {
-        let channel_inputs: Vec<(&Input, _)> = tx_steps
+    let inputs: Vec<(Input, Option<PlutusData<'static>>)> = {
+        let channel_inputs = tx_steps
             .iter()
             .enumerate()
             .map(|(idx, &(txout_ref, _))| {
                 if idx == 0 {
-                    (txout_ref, Some(PlutusData::from(main_redeemer.clone())))
+                    (
+                        txout_ref.clone(),
+                        Some(PlutusData::from(main_redeemer.clone())),
+                    )
                 } else {
-                    (txout_ref, Some(PlutusData::from(defer.clone())))
+                    (txout_ref.clone(), Some(PlutusData::from(defer.clone())))
                 }
             })
-            .collect::<Vec<(&Input, Option<PlutusData>)>>();
+            .collect::<Vec<(Input, Option<PlutusData<'static>>)>>();
+
         let selected_utxos = select_utxos(funding_utxos, FEE_BUFFER - min(to_sub, FEE_BUFFER))?;
-        let funding_inputs = selected_utxos
-            .iter()
-            .map(|&i| (i, None))
-            .collect::<Vec<_>>();
-        [channel_inputs, funding_inputs].concat()
+
+        [channel_inputs, selected_utxos].concat()
     };
 
     let outputs = tx_steps
@@ -263,18 +374,14 @@ pub fn sub(
         let key_hash = Hash::<28>::new(adaptor);
         vec![key_hash]
     };
-    let inputs = inputs
-        .into_iter()
-        .map(|(i, redeemer)| (i.clone(), redeemer))
-        .collect::<Vec<(Input, Option<PlutusData>)>>();
 
-    let collateral_inputs: Vec<Input> = {
-        let selected = select_utxos(funding_utxos, FEE_BUFFER)?;
-        selected.into_iter().cloned().collect::<Vec<Input>>()
-    };
+    let collateral_inputs: Vec<Input> = select_utxos(funding_utxos, FEE_BUFFER)?
+        .into_iter()
+        .map(|(i, _)| i)
+        .collect();
 
     let transaction = Transaction::build(protocol_parameters, &utxos, |tx| {
-        tx.with_inputs(inputs.to_owned())
+        tx.with_inputs(inputs.clone())
             .with_outputs(outputs.to_owned())
             .with_collaterals(collateral_inputs.to_owned())
             .with_reference_inputs(vec![script_utxo.0.clone()])

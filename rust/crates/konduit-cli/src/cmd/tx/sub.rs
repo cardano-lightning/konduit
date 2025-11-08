@@ -78,6 +78,7 @@ impl Args {
                 None,
             )
             .await?;
+
         let channel_utxos = channel_utxos.into_iter().filter(|(_, output)| {
             if let Some(datum) = output.datum() {
                 match datum {
