@@ -22,3 +22,6 @@ pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";
 
 /// Script hash of the Konduit validator if other than the default embedded one.
 pub const SCRIPT_HASH: &str = "KONDUIT_SCRIPT_HASH";
+
+/// UTxO reference carrying a version of the deployed script.
+pub const SCRIPT_REF: &str = "KONDUIT_SCRIPT_REF";

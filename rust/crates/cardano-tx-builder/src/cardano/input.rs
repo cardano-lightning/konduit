@@ -3,7 +3,8 @@
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{Hash, cbor, pallas};
-use std::{fmt, sync::Arc};
+use anyhow::anyhow;
+use std::{fmt, str::FromStr, sync::Arc};
 
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
@@ -49,6 +50,27 @@ impl Input {
 impl From<pallas::TransactionInput> for Input {
     fn from(i: pallas::TransactionInput) -> Self {
         Input(Arc::new(i))
+    }
+}
+
+impl FromStr for Input {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        let mut split = s.split("#");
+
+        let transaction_id = split.next().ok_or(anyhow!("missing transaction id"))?;
+
+        let index = split.next().ok_or(anyhow!("missing output index"))?;
+
+        if split.next().is_some() {
+            return Err(anyhow!("leftovers after output index"));
+        }
+
+        Ok(Self::new(
+            <Hash<32>>::try_from(transaction_id)?,
+            index.parse::<u64>()?,
+        ))
     }
 }
 

@@ -1,3 +1,4 @@
+mod close;
 mod deploy;
 mod open;
 mod sub;
@@ -5,9 +6,10 @@ mod sub;
 /// Create and submit Konduit transactions
 #[derive(clap::Subcommand)]
 pub enum Cmd {
-    Open(open::Args),
     Deploy(deploy::Args),
+    Open(open::Args),
     Sub(sub::Args),
+    Close(close::Args),
 }
 
 impl Cmd {
@@ -16,6 +18,7 @@ impl Cmd {
             Cmd::Open(cmd) => cmd.execute(crate::connector::new()?).await,
             Cmd::Deploy(cmd) => cmd.execute(crate::connector::new()?).await,
             Cmd::Sub(cmd) => cmd.execute(crate::connector::new()?).await,
+            Cmd::Close(cmd) => cmd.execute(crate::connector::new()?).await,
         }
     }
 }

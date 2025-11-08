@@ -137,8 +137,13 @@ impl ProtocolParameters {
     }
 
     /// Translate a posix time to a slot number for that particular network.
-    pub fn posix_to_slot(&self, posix: u64) -> u64 {
-        posix - self.start_time + self.first_shelley_slot
+    pub fn posix_to_slot(&self, posix: std::time::Duration) -> u64 {
+        let delta = posix.as_secs() - self.start_time;
+
+        let byron_duration = 20 * self.first_shelley_slot;
+        let since_shelley_duration = delta - byron_duration;
+
+        self.first_shelley_slot + since_shelley_duration
     }
 
     /// Specify the multiplier fee coefficient on the size of transactions, in lovelace/bytes
