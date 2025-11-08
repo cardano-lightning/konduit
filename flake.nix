@@ -32,6 +32,7 @@
         system,
         ...
       }: let
+        clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
         devShellBase = {
           shellHook = ''
             ${config.pre-commit.installationScript}
@@ -46,6 +47,8 @@
               pkgs.typescript-language-server
               pkgs.openssl
               config.rust-project.toolchain
+              pkgs.wasm-pack
+              clang-unwrapped
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
           buildInputs =
@@ -56,6 +59,7 @@
           nativeBuildInputs = [
             config.treefmt.build.wrapper
           ];
+          CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
         devShell =
           devShellBase
