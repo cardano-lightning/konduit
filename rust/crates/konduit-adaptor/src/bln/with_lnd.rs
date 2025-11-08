@@ -21,8 +21,6 @@ pub struct LndArgs {
     pub bln_url: String,
     #[arg(long, env = crate::env::BLN_TLS)]
     pub bln_tls: Option<Vec<u8>>,
-    #[arg(long, env = crate::env::BLN_MACAROON)]
-    pub bln_macaroon: String,
 }
 
 #[derive(Debug)]
@@ -36,11 +34,7 @@ impl TryFrom<&LndArgs> for WithLnd {
     type Error = BlnError;
 
     fn try_from(value: &LndArgs) -> Result<Self, Self::Error> {
-        Self::new(
-            value.bln_url.clone(),
-            value.bln_tls.as_deref(),
-            value.bln_macaroon.clone(),
-        )
+        Self::new(value.bln_url.clone(), value.bln_tls.as_deref(), None)
     }
 }
 
@@ -48,18 +42,19 @@ impl WithLnd {
     pub fn new(
         base_url: String,
         tls_certificate: Option<&[u8]>,
-        macaroon_hex: String,
+        macaroon_hex: Option<String>,
     ) -> Result<Self, BlnError> {
         if base_url.is_empty() {
             return Err(BlnError::Initialization(
                 "missing/invalid lightning base url".to_string(),
             ));
         }
-        if macaroon_hex.is_empty() {
-            return Err(BlnError::Initialization(
-                "missing/invalid macaroon".to_string(),
-            ));
-        }
+        let macaroon_hex = if let Some(hex) = macaroon_hex {
+            hex
+        } else {
+            std::env::var(crate::env::BLN_MACAROON)
+                .map_err(|_| BlnError::Initialization("missing/invalid macaroon".to_string()))?
+        };
 
         let mut client_builder = Client::builder().timeout(Duration::from_secs(60));
 
