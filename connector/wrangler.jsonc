@@ -7,6 +7,7 @@
   "name": "konduit-connector",
   "main": "src/index.mjs",
   "compatibility_date": "2025-11-06",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },

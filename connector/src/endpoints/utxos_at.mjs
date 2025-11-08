@@ -6,7 +6,11 @@ export async function endpointUtxosAt(ctx) {
     if (res.status === 404) {
       return ctx.json({});
     }
-    console.log(res);
+    if (res.status && res.statusText) {
+      console.log(`${res.status} ${res.statusText}: ${await res.text()}`);
+    } else {
+      console.log(res);
+    }
     throw 'unexpected error';
   }
 }
