@@ -1,7 +1,7 @@
 //! Command-line metavar specifying the type/semantic of arguments and/or options.
 
 /// A time duration in milliseconds
-pub const DURATION_MS: &str = "DURATION_MS";
+pub const DURATION: &str = "DURATION";
 
 /// Ed25519 Public key
 pub const ED25519_VERIFICATION_KEY: &str = "ED25519_VERIFICATION_KEY";

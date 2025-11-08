@@ -20,7 +20,7 @@ pub struct Info {
     pub fee: u64,
     #[arg(long, env = crate::env::ADAPTOR_VKEY)]
     pub adaptor_key: VerificationKey,
-    #[arg(long, env = crate::env::CLOSE_PERIOD, value_name=metavar::DURATION_MS, default_value="86400000")]
+    #[arg(long, env = crate::env::CLOSE_PERIOD, value_name=metavar::DURATION, default_value="24h")]
     pub close_period: Duration,
     #[arg(long, env = crate::env::DEPLOYER_VKEY, value_name=metavar::ED25519_VERIFICATION_KEY)]
     pub deployer_vkey: VerificationKey,
