@@ -152,7 +152,7 @@ impl L2Channel {
             return Err(ChequeError::NotServed);
         };
         let (key, tag) = self.keytag.split();
-        if cheque.verify(&key, &tag) {
+        if !cheque.verify(&key, &tag) {
             return Err(ChequeError::BadSignature);
         }
         if cheque.cheque_body.timeout >= timeout {
