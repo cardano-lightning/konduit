@@ -1,0 +1,138 @@
+html {
+  box-sizing: border-box;
+  font-size: 16px;
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+body, h1, h2, h3, h4, h5, h6, p, ol, ul {
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+}
+
+ol, ul {
+  list-style: none;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+:root {
+  --bg: #0b0c10;
+  --panel: #111317;
+  --accent: #00fff0;
+  --accent-light: #33fff5;
+  --text: #e6e6e6;
+  --error: #ff4d4d;
+  --success: #33ff88;
+  --border: #1b1d23;
+  --radius: 8px;
+  --line: 1px solid var(--border);
+  font-family: 'Inter', 'Roboto Mono', monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  min-height: 100vh;
+  justify-content: center;
+  align-items: center;
+}
+
+#app {
+  width: 90%;
+  max-width: 420px;
+  background: var(--panel);
+  border: var(--line);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  box-shadow: 0 0 16px rgba(0, 255, 240, 0.1);
+}
+
+header {
+  border-bottom: var(--line);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+  font-weight: bold;
+  color: var(--accent-light);
+}
+
+input, select, button {
+  width: 100%;
+  padding: 0.8rem;
+  border: var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+}
+
+input:focus, button:hover {
+  border-color: var(--accent);
+}
+
+button {
+  cursor: pointer;
+  font-weight: bold;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+  transition: background 0.15s;
+  font-variant: small-caps;
+}
+
+button:active {
+  background: rgba(0,255,240,0.1);
+}
+
+.notice {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--error);
+}
+
+.tx {
+  border: var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+}
+
+.spinner {
+  border: 2px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  margin: 8px auto;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.channel-info {
+  border: var(--line);
+  padding: 1rem;
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.amount {
+  font-size: 1.2rem;
+  color: var(--accent-light);
+}

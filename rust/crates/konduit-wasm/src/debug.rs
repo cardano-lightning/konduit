@@ -9,7 +9,7 @@ pub enum LogLevel {
     Error,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "enableLogs")]
 pub fn enable_logs(level: LogLevel) {
     let log_level = match level {
         LogLevel::Trace => log::Level::Trace,

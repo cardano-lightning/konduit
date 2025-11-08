@@ -1,8 +1,8 @@
 [package]
-name = "konduit-wasm"
+name = "cardano-connect-wasm"
+description = "A wasm-friendly Cardano connector that connects to a compatible connector backend."
 version.workspace = true
 edition.workspace = true
-description.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -15,16 +15,11 @@ release = false
 
 [dependencies]
 anyhow.workspace = true
-cardano-connect-wasm.workspace = true
 cardano-connect.workspace = true
 cardano-tx-builder = { workspace = true, features = ["wasm"] }
-console_error_panic_hook.workspace = true
-console_log.workspace = true
-futures.workspace = true
 gloo-net.workspace = true
 hex.workspace = true
-konduit-data.workspace = true
-konduit-tx.workspace = true
+js-sys.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true

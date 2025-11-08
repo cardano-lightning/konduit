@@ -236,9 +236,10 @@ impl CardanoConnect for Blockfrost {
             .collect::<anyhow::Result<BTreeMap<Input, Output>>>()
     }
 
-    async fn submit(&self, tx: &Transaction<state::ReadyForSigning>) -> anyhow::Result<String> {
+    async fn submit(&self, tx: &Transaction<state::ReadyForSigning>) -> anyhow::Result<()> {
         let bytes = tx.to_cbor();
-        Ok(self.api.transactions_submit(bytes).await?)
+        self.api.transactions_submit(bytes).await?;
+        Ok(())
     }
 }
 

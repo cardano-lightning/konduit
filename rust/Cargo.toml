@@ -27,12 +27,18 @@ blockfrost = "1.1.0"
 blockfrost-openapi = "0.1.75"
 chrono = { version = "0.4.42", features = ["serde"] }
 clap = { version = "4.5.49", features = ["derive", "env"] }
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
 cryptoxide = "0.5.1"
 dotenv = "0.15.0"
 futures = "0.3.31"
+getrandom = "0.2.16"
+gloo-net = "0.6.0"
 hex = "0.4.3"
 indoc = "2.0.6"
 itertools = "0.14.0"
+js-sys = "0.3.82"
+log = "0.4.28"
 minicbor = { version = "0.25.1", features = ["alloc", "derive"] }
 num = "0.4.3"
 num-bigint = "0.4.6"
@@ -49,9 +55,11 @@ thiserror = "2.0.17"
 tokio = { version = "1.47.1", features = ["full"] }
 uplc = "1.1.19"
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4.55"
 
 cardano-tx-builder = { path = "crates/cardano-tx-builder" }
 cardano-connect = { path = "crates/cardano-connect" }
 cardano-connect-blockfrost = { path = "crates/cardano-connect-blockfrost" }
+cardano-connect-wasm = { path = "crates/cardano-connect-wasm" }
 konduit-tx = { path = "crates/konduit-tx" }
 konduit-data = { path = "crates/konduit-data" }

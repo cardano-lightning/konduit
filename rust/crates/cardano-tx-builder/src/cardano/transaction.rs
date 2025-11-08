@@ -14,7 +14,7 @@ use std::{
     fmt, iter,
     marker::PhantomData,
     mem,
-    ops::Deref,
+    ops::{Deref, DerefMut},
 };
 
 #[cfg(feature = "wasm")]
@@ -1221,6 +1221,22 @@ impl<'d, C, State: IsTransactionBodyState> cbor::Decode<'d, C> for Transaction<S
 #[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct TransactionReadyForSigning(Transaction<state::ReadyForSigning>);
+
+#[cfg(feature = "wasm")]
+impl Deref for TransactionReadyForSigning {
+    type Target = Transaction<state::ReadyForSigning>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl DerefMut for TransactionReadyForSigning {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 #[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]

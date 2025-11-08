@@ -17,4 +17,6 @@ release = false
 anyhow.workspace = true
 cardano-connect.workspace = true
 cardano-tx-builder.workspace = true
+hex.workspace = true
 konduit-data.workspace = true
+serde_json.workspace = true

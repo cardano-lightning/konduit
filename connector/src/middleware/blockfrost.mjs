@@ -10,7 +10,7 @@ export default async function blockfrost(ctx, next) {
       ...opts,
       headers: {
         ...opts.headers,
-	project_id: blockfrostId,
+        project_id: blockfrostId,
       },
     });
 

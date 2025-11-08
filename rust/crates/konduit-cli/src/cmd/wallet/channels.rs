@@ -2,6 +2,7 @@ use crate::{env, metavar};
 use anyhow::anyhow;
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{Credential, Datum, Hash, SigningKey, VerificationKey};
+use konduit_tx::KONDUIT_VALIDATOR;
 
 /// Fetch UTxO entries at the wallet's address; requires `Cardano` connection
 #[derive(Debug, clap::Args)]
@@ -23,7 +24,7 @@ pub(crate) struct Args {
     )]
     verification_key: Option<VerificationKey>,
 
-    #[clap(long, value_name = metavar::SCRIPT_HASH, env = env::SCRIPT_HASH, default_value_t = crate::KONDUIT_VALIDATOR.hash)]
+    #[clap(long, value_name = metavar::SCRIPT_HASH, env = env::SCRIPT_HASH, default_value_t = KONDUIT_VALIDATOR.hash)]
     konduit_script_hash: Hash<28>,
 
     #[clap(long, value_name = metavar::BYTES_32, env = env::CHANNEL_TAG)]

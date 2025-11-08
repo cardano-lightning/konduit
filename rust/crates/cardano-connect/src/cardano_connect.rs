@@ -22,5 +22,5 @@ pub trait CardanoConnect {
     fn submit(
         &self,
         transaction: &Transaction<state::ReadyForSigning>,
-    ) -> impl Future<Output = anyhow::Result<String>>;
+    ) -> impl Future<Output = anyhow::Result<()>>;
 }

@@ -4,7 +4,7 @@ use cardano_tx_builder::{
     self as cardano, Hash, Input, Output, PlutusData, SigningKey, VerificationKey, cbor,
 };
 use konduit_data::{self as konduit};
-use konduit_tx::sub;
+use konduit_tx::{KONDUIT_VALIDATOR, sub};
 
 #[derive(Debug, clap::Args)]
 #[clap(disable_version_flag(true))]
@@ -40,17 +40,14 @@ pub(crate) struct Args {
 }
 
 fn output_reference_script_hash(output: &Output) -> Option<Hash<28>> {
-    output
-        .script()
-        .map(cardano::Hash::<28>::from)
+    output.script().map(cardano::Hash::<28>::from)
 }
 
 impl Args {
     pub(crate) async fn execute(self, connector: impl CardanoConnect) -> anyhow::Result<()> {
         let adaptor_verification_key = VerificationKey::from(&self.adaptor_signing_key);
-        let adaptor_payment_credential = cardano::Credential::from_key(cardano::Hash::<28>::new(
-            adaptor_verification_key,
-        ));
+        let adaptor_payment_credential =
+            cardano::Credential::from_key(cardano::Hash::<28>::new(adaptor_verification_key));
 
         let deployer_credential = {
             let vk = match self.published_by {
@@ -70,14 +67,14 @@ impl Args {
             deployer_utxos
                 .into_iter()
                 .find(|(_input, output)| {
-                    output_reference_script_hash(output) == Some(crate::KONDUIT_VALIDATOR.hash)
+                    output_reference_script_hash(output) == Some(KONDUIT_VALIDATOR.hash)
                 })
                 .ok_or_else(|| anyhow::anyhow!("could not find konduit script UTXO"))?
         };
 
         let channel_utxos = connector
             .utxos_at(
-                &cardano::Credential::from_script(crate::KONDUIT_VALIDATOR.hash),
+                &cardano::Credential::from_script(KONDUIT_VALIDATOR.hash),
                 None,
             )
             .await?;
@@ -110,10 +107,7 @@ impl Args {
 
         let receipt = {
             let unlockeds = vec![];
-            konduit_data::Receipt {
-                squash,
-                unlockeds,
-            }
+            konduit_data::Receipt { squash, unlockeds }
         };
 
         let mut sub_transaction = sub(
@@ -129,8 +123,8 @@ impl Args {
             Some(ref mut tx) => {
                 tx.sign(self.adaptor_signing_key);
                 if !self.dry_run {
-                    let tx_id = connector.submit(tx).await?;
-                    println!("Transaction submitted with ID: {}", tx_id);
+                    connector.submit(tx).await?;
+                    println!("Transaction submitted with ID: {}", tx.id());
                 } else {
                     println!("Dry run, transaction not submitted.");
                 }
