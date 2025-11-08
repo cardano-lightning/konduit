@@ -2,11 +2,11 @@ use anyhow::anyhow;
 use cardano_tx_builder as cardano;
 use cardano_tx_builder::{
     Address, ChangeStrategy, Credential, Hash, Input, NetworkId, Output, PlutusData, PlutusScript,
-    ProtocolParameters, Transaction, Value, VerificationKey, address,
+    ProtocolParameters, SlotBound, Transaction, Value, VerificationKey, address,
     transaction::state::ReadyForSigning,
 };
 use konduit_data::{Constants, Cont, Datum, Duration, Receipt, Redeemer, Stage, Step, Tag};
-use std::{cmp::min, collections::BTreeMap, ops::Add, sync::LazyLock, time::SystemTime};
+use std::{cmp::min, collections::BTreeMap, ops::Add, sync::LazyLock};
 
 pub type Lovelace = u64;
 
@@ -50,10 +50,17 @@ pub fn select_utxos(
     if amount == 0 {
         return Ok(vec![]);
     }
-    // Filter out utxos which hold reference scripts
     let mut sorted_utxos: Vec<(&Input, &Output)> = utxos
         .iter()
+        // Filter out utxos which hold reference scripts
         .filter(|(_, output)| output.script().is_none())
+        // Filter out those locked by a script
+        .filter(|(_, output)| {
+            output
+                .address()
+                .as_shelley()
+                .is_some_and(|addr| addr.payment().as_key().is_some())
+        })
         .collect();
     sorted_utxos.sort_by_key(|(_, output)| std::cmp::Reverse(output.value().lovelace()));
 
@@ -116,15 +123,12 @@ pub fn close_one(
     let (channel_in, channel_out, channel_old_datum) =
         channel_utxos.first().expect("exactly one UTxO");
 
-    let upper_bound_validity = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)?
-        .add(**DEFAULT_TTL);
+    let upper_bound_validity =
+        Duration::from_secs(chrono::Utc::now().timestamp() as u64).add(**DEFAULT_TTL);
 
     let elapse_at = Duration(
-        channel_old_datum
-            .constants
-            .close_period
-            .add(upper_bound_validity)
+        upper_bound_validity
+            .add(*channel_old_datum.constants.close_period)
             // TODO: The on-chain code uses strict inequality; although the upper bound is already
             // exclusive from a ledger standpoint; So it shouldn't be required to add an extra slot
             // here.
@@ -149,7 +153,7 @@ pub fn close_one(
     Transaction::build(protocol_parameters, utxos, |transaction| {
         let redeemer = Redeemer::Main(vec![Step::Cont(Cont::Close)]);
 
-        let mut inputs = select_utxos(utxos, transaction.fee())?;
+        let mut inputs = select_utxos(utxos, transaction.fee().max(1))?;
 
         let collaterals = inputs
             .clone()
@@ -163,11 +167,15 @@ pub fn close_one(
             .with_inputs(inputs)
             .with_collaterals(collaterals)
             .with_reference_inputs(vec![script_ref.clone()])
-            .with_specified_signatories(vec![consumer_key_hash])
             .with_outputs([
                 Output::new(channel_out.address().clone(), channel_out.value().clone())
                     .with_datum(PlutusData::from(channel_new_datum.clone())),
             ])
+            .with_validity_interval(
+                SlotBound::None,
+                SlotBound::Exclusive(protocol_parameters.posix_to_slot(upper_bound_validity)),
+            )
+            .with_specified_signatories(vec![consumer_key_hash])
             .with_change_strategy(ChangeStrategy::as_last_output(
                 consumer_change_address.clone(),
             ))
