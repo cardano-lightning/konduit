@@ -41,19 +41,20 @@ pub struct QuoteRequest {
 
 #[derive(Debug, Clone)]
 pub struct QuoteResponse {
-    pub estimated_timeout: Duration,
+    pub relative_timeout: Duration,
     pub fee_msat: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct PayRequest {
     // Max routing fee (msat) that the adaptor is willing to pay
-    pub routing_fee: u64,
-    /// The max timeout (cltv limit). The adaptor should have accounted for their margin
-    /// prioir to this. In other words, this is not the same value as on the cheque.
+    pub fee_limit: u64,
+    /// The relative timeout used to calculate an cltv limit.
+    /// The adaptor should have accounted for their margin prioir to this.
+    /// In particular, this is not the same value as on the cheque.
     /// This is cheque timeout - adaptor_margin.
-    pub timeout: Duration,
-    /// The following fields are derived from the inovice
+    pub relative_timeout: Duration,
+    /// The following fields are derived from the invoice
     pub amount_msat: u64,
     pub payee: [u8; 33],
     pub payment_hash: [u8; 32],

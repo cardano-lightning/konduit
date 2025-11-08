@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 mod interface;
-pub use interface::{BlnError, BlnInterface, QuoteRequest};
+pub use interface::{BlnError, BlnInterface, PayRequest, PayResponse, QuoteRequest, QuoteResponse};
 
 mod invoice;
 pub use invoice::Invoice;

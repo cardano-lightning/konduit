@@ -1,14 +1,33 @@
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::{PlutusData, Signature, SigningKey, VerificationKey};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::Tag;
 use crate::cheque_body::ChequeBody;
 use crate::utils::{signature_from_plutus_data, signature_to_plutus_data};
+use crate::{Tag, plutus_data_serde};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cheque {
     pub cheque_body: ChequeBody,
     pub signature: Signature,
+}
+
+impl Serialize for Cheque {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        plutus_data_serde::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Cheque {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        plutus_data_serde::deserialize::<D, Self>(deserializer)
+    }
 }
 
 impl Cheque {

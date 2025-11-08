@@ -48,8 +48,7 @@ impl Admin {
     ) -> anyhow::Result<Admin> {
         let deployer_vkey = info.deployer_vkey;
         let script_hash = info.script_hash;
-        let script_utxo =
-            fetch_script_utxo(connector.clone(), deployer_vkey, script_hash).await?;
+        let script_utxo = fetch_script_utxo(connector.clone(), deployer_vkey, script_hash).await?;
         Ok(Self {
             close_period: info.close_period,
             connector,

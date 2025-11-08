@@ -105,15 +105,21 @@ impl MixedReceipt {
             .collect::<Vec<Unlocked>>()
     }
 
-    pub fn unlock(&mut self, secret: Secret) {
+    pub fn unlock(&mut self, secret: Secret) -> Result<(), String> {
         let lock = Lock::from(secret.clone());
+        let mut none_changed = true;
         self.mixed_cheques.iter_mut().for_each(|i| {
             if let MixedCheque::Cheque(cheque) = i
                 && lock == cheque.cheque_body.lock
             {
                 *i = MixedCheque::Unlocked(Unlocked::new(cheque.clone(), secret.clone()).unwrap());
+                none_changed = true;
             }
-        })
+        });
+        match none_changed {
+            true => Ok(()),
+            false => Err("None changed".to_string()),
+        }
     }
 
     pub fn receipt(&self) -> Receipt {
