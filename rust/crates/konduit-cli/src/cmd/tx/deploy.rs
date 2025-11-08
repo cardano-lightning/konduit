@@ -38,8 +38,8 @@ impl Args {
         )?;
         deploy_transaction.sign(self.signing_key);
         if !self.dry_run {
-            let tx_id = connector.submit(&deploy_transaction).await?;
-            println!("Transaction submitted with ID: {}", tx_id);
+            connector.submit(&deploy_transaction).await?;
+            println!("Transaction submitted with ID: {}", deploy_transaction.id());
         }
 
         println!("{deploy_transaction}");

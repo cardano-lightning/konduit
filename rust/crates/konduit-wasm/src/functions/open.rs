@@ -1,26 +1,25 @@
-use crate::CardanoConnector;
 use cardano_connect::CardanoConnect;
+use cardano_connect_wasm::{self as wasm, CardanoConnector};
 use cardano_tx_builder::{Credential, Hash, NetworkId, transaction::TransactionReadyForSigning};
 use konduit_data::{Duration, Tag};
 use konduit_tx::KONDUIT_VALIDATOR;
-use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub async fn open(
     // Cardano's connector
     connector: &CardanoConnector,
-    // Quantity of Lovelace to deposit into the channel
-    amount: u64,
+    // An (ideally) unique tag to discriminate channels and allow reuse of keys between them.
+    tag: &[u8],
     // Consumer's verification key, allowed to *add* funds.
     consumer: &[u8],
     // Adaptor's verification key, allowed to *sub* funds
     adaptor: &[u8],
-    // An (ideally) unique tag to discriminate channels and allow reuse of keys between them.
-    tag: &str,
     // Minimum time from `close` to `elapse`.
     close_period: u64,
-) -> crate::Result<TransactionReadyForSigning> {
+    // Quantity of Lovelace to deposit into the channel
+    amount: u64,
+) -> wasm::Result<TransactionReadyForSigning> {
     let consumer = <[u8; 32]>::try_from(consumer)
         .expect("invalid verification key length")
         .into();
@@ -29,7 +28,7 @@ pub async fn open(
         .expect("invalid verification key length")
         .into();
 
-    let tag = Tag::from_str(tag).expect("invalid tag");
+    let tag = Tag::from(tag);
 
     let close_period = Duration(std::time::Duration::from_secs(close_period));
 

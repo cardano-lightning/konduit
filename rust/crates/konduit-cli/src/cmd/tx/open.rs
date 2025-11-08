@@ -61,8 +61,8 @@ impl Args {
         )?;
         open_transaction.sign(self.consumer_signing_key);
         if !self.dry_run {
-            let tx_id = connector.submit(&open_transaction).await?;
-            println!("Transaction submitted with ID: {}", tx_id);
+            connector.submit(&open_transaction).await?;
+            println!("Transaction submitted with ID: {}", open_transaction.id());
         }
 
         println!("{open_transaction}");

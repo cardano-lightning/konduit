@@ -123,8 +123,8 @@ impl Args {
             Some(ref mut tx) => {
                 tx.sign(self.adaptor_signing_key);
                 if !self.dry_run {
-                    let tx_id = connector.submit(tx).await?;
-                    println!("Transaction submitted with ID: {}", tx_id);
+                    connector.submit(tx).await?;
+                    println!("Transaction submitted with ID: {}", tx.id());
                 } else {
                     println!("Dry run, transaction not submitted.");
                 }

@@ -15,27 +15,24 @@ release = false
 
 [dependencies]
 anyhow.workspace = true
+cardano-connect-wasm.workspace = true
+cardano-connect.workspace = true
 cardano-tx-builder = { workspace = true, features = ["wasm"] }
-cardano-connect = { workspace = true }
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+futures.workspace = true
+gloo-net.workspace = true
+hex.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
-wasm-bindgen.workspace = true
+log.workspace = true
 serde.workspace = true
-ehttp = { version = "0.5.0", features = ["json"] }
-wasm-bindgen-futures = "0.4.55"
-futures.workspace = true
-console_log = "1.0.0"
-console_error_panic_hook = "0.1.7"
-log = "0.4.28"
-gloo-net = "0.6.0"
-hex.workspace = true
+serde_json.workspace = true
+wasm-bindgen-futures.workspace = true
+wasm-bindgen.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2.16", features = ["js"] }
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros"] }
+getrandom = { workspace = true, features = ["js"] }
