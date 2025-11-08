@@ -1,0 +1,33 @@
+[package]
+name = "cardano-connect-wasm"
+description = "A wasm-friendly Cardano connector that connects to a compatible connector backend."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+anyhow.workspace = true
+cardano-connect.workspace = true
+cardano-tx-builder = { workspace = true, features = ["wasm"] }
+gloo-net.workspace = true
+hex.workspace = true
+js-sys.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen-futures.workspace = true
+wasm-bindgen.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["js"] }
