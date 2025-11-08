@@ -41,6 +41,7 @@ tokio.workspace = true
 bitcoin_hashes = "=0.14.0"
 lightning-types = "0.2.0"
 serde_with = { version = "3.15.1", features = ["base64", "hex", "json"] }
+actix-cors = "0.7.1"
 
 [dev-dependencies]
 proptest.workspace = true
