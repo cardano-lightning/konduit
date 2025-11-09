@@ -17,6 +17,6 @@ export async function endpointSubmit(ctx) {
     } else {
       console.log(res);
     }
-    throw 'unexpected error';
+    throw "unexpected error";
   }
 }

@@ -1,6 +1,6 @@
+use crate::{Duration, Lock, Secret, Tag};
 use anyhow::{Error, Result};
 use cardano_tx_builder::{PlutusData, cbor::ToCbor};
-use crate::{Duration, Lock, Secret, Tag};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ChequeBody {
