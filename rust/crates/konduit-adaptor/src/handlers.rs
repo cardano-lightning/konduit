@@ -11,6 +11,13 @@ use crate::{
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use konduit_data::{Keytag, Secret, Squash};
 
+// TODO :: MOVE TO CONFIG
+/// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
+const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60);
+/// "Grace" is extra time between the "quoted" rel time and the time that might be allowed for in a
+/// "pay"
+const ADAPTOR_TIME_GRACE: std::time::Duration = Duration::from_secs(1 * 10 * 60);
+
 #[derive(Debug, thiserror::Error)]
 pub enum HandlerError {
     #[error("Db : {0}")]
@@ -145,17 +152,12 @@ pub async fn quote(
         return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
     };
 
-    // TODO :: MOVE TO CONFIG
-    // This is ~ the same as the default on bitcoin
-    let adaptor_margin = Duration::from_secs(40 * 10 * 60);
-
-    log::info!("{:?}", bln_quote);
     let amount =
         fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info.fee;
-    let timeout = (adaptor_margin + bln_quote.relative_timeout).as_millis() as u64;
+    let relative_timeout = (ADAPTOR_TIME_DELTA + bln_quote.relative_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
         amount,
-        timeout,
+        relative_timeout,
         routing_fee: bln_quote.fee_msat,
     };
     Ok(HttpResponse::Ok().json(response_body))
@@ -185,10 +187,9 @@ pub async fn pay(
     }
     let fee_limit = effective_amount_msat - pay_body.amount_msat;
 
-    // TODO :: MOVE TO CONFIG
-    // This is strictly less than the quote, to accommodate the possible delay.
-    // Current "grace" is 10 minutes. Seems plenty.
-    let adaptor_time_margin = Duration::from_secs(39 * 10 * 60);
+    // The cheque timeout is in posix time.
+    // We need to convert to relative posix time.
+    // And then the BLN handler can convert to blocks.
     let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
         return Ok(HttpResponse::InternalServerError().body("System time not available"));
     };
@@ -197,7 +198,7 @@ pub async fn pay(
         .cheque_body
         .timeout
         .saturating_sub(now)
-        .saturating_sub(adaptor_time_margin);
+        .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
 
     if relative_timeout.is_zero() {
         return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
@@ -216,6 +217,7 @@ pub async fn pay(
         payment_secret: pay_body.payment_secret,
         final_cltv_delta: pay_body.final_cltv_delta,
     };
+
     let pay_response = match data.bln.pay(pay_request).await {
         Ok(res) => res,
         Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),

@@ -61,7 +61,7 @@ pub struct SimpleQuote {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QuoteResponse {
     pub amount: u64,
-    pub timeout: u64,
+    pub relative_timeout: u64,
     // TODO (@waalge) TBD whether these fields are relevant.
     // #[serde(with = "hex")]
     // pub lock: [u8; 32],
