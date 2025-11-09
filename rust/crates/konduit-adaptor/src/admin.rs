@@ -3,10 +3,11 @@ use cardano_connect::CardanoConnect;
 use cardano_connect_blockfrost::Blockfrost;
 use cardano_tx_builder::{Credential, Datum, Hash, Input, Output, SigningKey, VerificationKey};
 use konduit_data::{Duration, Keytag};
-use konduit_tx;
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{db, info::Info};
+
+pub const MIN_ADA_BUFFER: u64 = 2_000_000;
 
 #[derive(Clone)]
 pub struct Admin {
@@ -83,7 +84,7 @@ impl Admin {
                         amount: output
                             .value()
                             .lovelace()
-                            .checked_sub(konduit_tx::MIN_ADA_BUFFER)
+                            .checked_sub(MIN_ADA_BUFFER)
                             .unwrap_or(0),
                     },
                 );

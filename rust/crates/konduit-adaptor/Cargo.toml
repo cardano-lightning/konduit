@@ -29,7 +29,6 @@ env_logger = "0.11.8"
 futures.workspace = true
 hex = { workspace = true, features = ["serde"] }
 konduit-data.workspace = true
-konduit-tx.workspace = true
 lightning-invoice = { version = "0.33.2", features = ["serde"] }
 log = "0.4.28"
 reqwest = { workspace = true, features = ["json"] }
