@@ -1,10 +1,12 @@
 use std::{collections::BTreeMap, convert::Infallible};
 
 use async_trait::async_trait;
-use konduit_data::{Keytag, Squash};
+use konduit_data::{Cheque, Keytag, Secret, Squash};
 
 use crate::{
-    l2_channel::{L2Channel, L2ChannelUpdateSquashError},
+    l2_channel::{
+        L2Channel, L2ChannelInsertChequeError, L2ChannelUnlockError, L2ChannelUpdateSquashError,
+    },
     models::{TipBody, TipResponse},
 };
 
@@ -39,6 +41,22 @@ pub enum UpdateSquashError {
     Logic(L2ChannelUpdateSquashError),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum InsertChequeError {
+    #[error("Channel not found")]
+    NotFound,
+    #[error("Logic : {0}")]
+    Logic(L2ChannelInsertChequeError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum UnlockError {
+    #[error("Channel not found")]
+    NotFound,
+    #[error("Logic : {0}")]
+    Logic(L2ChannelUnlockError),
+}
+
 #[async_trait]
 pub trait DbInterface: Send + Sync {
     /// Get funds available in
@@ -50,7 +68,19 @@ pub trait DbInterface: Send + Sync {
 
     async fn update_squash(
         &self,
-        keytag: Keytag,
+        keytag: &Keytag,
         squash: Squash,
     ) -> Result<L2Channel, DbError<UpdateSquashError>>;
+
+    async fn insert_cheque(
+        &self,
+        keytag: &Keytag,
+        cheque: Cheque,
+    ) -> Result<L2Channel, DbError<InsertChequeError>>;
+
+    async fn unlock(
+        &self,
+        keytag: &Keytag,
+        secret: Secret,
+    ) -> Result<L2Channel, DbError<UnlockError>>;
 }

@@ -18,7 +18,8 @@ rustup target add wasm32-unknown-unknown
 
 ### WebAssembly/binaryen
 
-For optimized release builds: see [WebAssembly/binaryen](https://github.com/WebAssembly/binaryen).
+For optimized release builds: see
+[WebAssembly/binaryen](https://github.com/WebAssembly/binaryen).
 
 ## Compiling node.js & browser
 
@@ -33,7 +34,6 @@ make browser
 ```
 
 This produces JavaScript & WASM files under `./konduit-wasm-browser`
-
 
 ### Node.js only
 

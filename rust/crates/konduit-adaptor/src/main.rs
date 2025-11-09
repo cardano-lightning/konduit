@@ -34,8 +34,8 @@ async fn main() -> std::io::Result<()> {
 
     let admin = {
         let skey = {
-            let skey_hex = std::env::var(env::ADAPTOR_SKEY).unwrap_or_else(|_| panic!("missing {} environment variable",
-                env::ADAPTOR_SKEY));
+            let skey_hex = std::env::var(env::ADAPTOR_SKEY)
+                .unwrap_or_else(|_| panic!("missing {} environment variable", env::ADAPTOR_SKEY));
             let bytes = hex::decode(skey_hex).expect("failed to decode signing key from hex");
             SigningKey::try_from(bytes).expect("failed to create signing key from bytes")
         };

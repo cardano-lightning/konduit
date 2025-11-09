@@ -18,7 +18,7 @@ export default async function blockfrost(ctx, next) {
       return res.json();
     }
 
-    throw res
+    throw res;
   };
 
   return next();

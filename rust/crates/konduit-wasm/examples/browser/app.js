@@ -48,7 +48,10 @@ wasm().then(async () => {
   // -------------------- STATES -------------------- //
 
   function renderLogin() {
-    const input = el("input", { placeholder: "Consumer's signing key (64-hex)", id: "cred" });
+    const input = el("input", {
+      placeholder: "Consumer's signing key (64-hex)",
+      id: "cred",
+    });
     const btn = el("button", { text: "Login" });
     btn.onclick = async () => {
       const val = input.value.trim();
@@ -60,23 +63,28 @@ wasm().then(async () => {
       userVerificationKey = wasm.toVerificationKey(userSigningKey);
       localStorage.setItem("state", "not_opened");
       localStorage.setItem("userSigningKey", asHexString(userSigningKey));
-      localStorage.setItem("userVerificationKey", asHexString(userVerificationKey));
+      localStorage.setItem(
+        "userVerificationKey",
+        asHexString(userVerificationKey),
+      );
       userBalance = await fetchBalance(connector, userVerificationKey);
       state = "not_opened";
       render();
     };
-    app.append(
-      el("h2", { text: "Connect Wallet" }),
-      input,
-      btn
-    );
+    app.append(el("h2", { text: "Connect Wallet" }), input, btn);
   }
 
   async function renderNotOpened() {
     const header = await renderHeader();
     const amount = el("input", { placeholder: "Amount (ADA)", id: "amount" });
-    const adaptor = el("input", { placeholder: "Adaptor's verification key (64-hex)", id: "adaptor" });
-    const period = el("input", { placeholder: "Closing period (..s / ..min / ..h)", id: "period" });
+    const adaptor = el("input", {
+      placeholder: "Adaptor's verification key (64-hex)",
+      id: "adaptor",
+    });
+    const period = el("input", {
+      placeholder: "Closing period (..s / ..min / ..h)",
+      id: "period",
+    });
     const btn = el("button", { text: "Open Channel" });
     const notice = el("div", { class: "notice" });
 
@@ -86,7 +94,7 @@ wasm().then(async () => {
         adaptor: null,
         closePeriod: null,
         tag: null,
-        status: "pending"
+        status: "pending",
       };
 
       try {
@@ -115,16 +123,16 @@ wasm().then(async () => {
         if (period.value.endsWith("s")) {
           channel.closePeriod = BigInt(period.value.slice(0, -1));
         } else if (period.value.endsWith("min")) {
-          channel.closePeriod = 60n * BigInt(period.value.slice(0, -3))
+          channel.closePeriod = 60n * BigInt(period.value.slice(0, -3));
         } else if (period.value.endsWith("h")) {
-          channel.closePeriod = 3600n * BigInt(period.value.slice(0, -1))
+          channel.closePeriod = 3600n * BigInt(period.value.slice(0, -1));
         } else {
           notice.textContent = "malformed/missing close period";
           return;
         }
-      } catch(e) {
-          notice.textContent = `malformed/missing close period: ${e.message}`;
-          return;
+      } catch (e) {
+        notice.textContent = `malformed/missing close period: ${e.message}`;
+        return;
       }
 
       state = "opening";
@@ -137,13 +145,16 @@ wasm().then(async () => {
         render();
         state = "opened";
         localStorage.setItem("state", state);
-        localStorage.setItem("channel", JSON.stringify({
-          ...channel,
-          amount: channel.amount.toString(),
-          closePeriod: channel.closePeriod.toString(),
-          adaptor: asHexString(channel.adaptor),
-          tag: asHexString(channel.tag),
-        }));
+        localStorage.setItem(
+          "channel",
+          JSON.stringify({
+            ...channel,
+            amount: channel.amount.toString(),
+            closePeriod: channel.closePeriod.toString(),
+            adaptor: asHexString(channel.adaptor),
+            tag: asHexString(channel.tag),
+          }),
+        );
       } catch (e) {
         console.log(e);
         channel.status = "failed";
@@ -165,7 +176,7 @@ wasm().then(async () => {
     tx.append(
       el("div", { text: `pending…` }),
       el("div", { class: "spinner" }),
-      el("div", { text: `Status: ${channel.status}` })
+      el("div", { text: `Status: ${channel.status}` }),
     );
     app.append(header, tx);
   }
@@ -175,8 +186,12 @@ wasm().then(async () => {
     const ch = el("fieldset", { class: "channel-info" });
     ch.append(
       el("legend", { text: "Channel" }),
-      el("div", { text: `#${asHexString(channel.tag).slice(0, 12)} → ${asHexString(channel.adaptor).slice(0, 12)}` }),
-      el("div", { html: `<div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/battery-charging.svg"><span>${showLovelace(channel.amount)}</span></div>` }),
+      el("div", {
+        text: `#${asHexString(channel.tag).slice(0, 12)} → ${asHexString(channel.adaptor).slice(0, 12)}`,
+      }),
+      el("div", {
+        html: `<div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/battery-charging.svg"><span>${showLovelace(channel.amount)}</span></div>`,
+      }),
     );
     const notice = el("div", { class: "notice" });
 
@@ -204,9 +219,20 @@ wasm().then(async () => {
     }
 
     const header = el("header");
-    header.append(el("p", { html: `<div style="display: flex; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/credit-card.svg"><span>${showLovelace(userBalance)}</span></div>` }));
-    header.append(el("p", { html: `<div style="display: flex; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/user.svg"><span>${asHexString(userVerificationKey).slice(0, 12)}</span></div>` }));
-    const exit = el("button", { html: `<img src="icons/log-out.svg" />`, class: "icon" })
+    header.append(
+      el("p", {
+        html: `<div style="display: flex; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/credit-card.svg"><span>${showLovelace(userBalance)}</span></div>`,
+      }),
+    );
+    header.append(
+      el("p", {
+        html: `<div style="display: flex; align-items: center; gap: 0.5rem;"><img class="icons" src="icons/user.svg"><span>${asHexString(userVerificationKey).slice(0, 12)}</span></div>`,
+      }),
+    );
+    const exit = el("button", {
+      html: `<img src="icons/log-out.svg" />`,
+      class: "icon",
+    });
     header.append(exit);
 
     exit.onclick = async () => {
@@ -255,14 +281,11 @@ wasm().then(async () => {
   }
 
   function asBuffer(str) {
-    return Uint8Array.from(
-      str.match(/../g),
-      byte => parseInt(byte, 16)
-    );
+    return Uint8Array.from(str.match(/../g), (byte) => parseInt(byte, 16));
   }
 
   function asHexString(buf) {
-    return [...buf].map(b => b.toString(16).padStart(2, "0")).join("");
+    return [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
   function showLovelace(n) {
@@ -283,7 +306,13 @@ wasm().then(async () => {
 
     const balance = await connector.balance(verificationKey);
 
-    localStorage.setItem("balance", JSON.stringify({ balance: balance.toString(), timestamp: Date.now() + 30 * 1000 }));
+    localStorage.setItem(
+      "balance",
+      JSON.stringify({
+        balance: balance.toString(),
+        timestamp: Date.now() + 30 * 1000,
+      }),
+    );
 
     return balance;
   }
@@ -306,7 +335,7 @@ wasm().then(async () => {
       channel.amount,
     );
 
-    console.log('open', transaction.toString());
+    console.log("open", transaction.toString());
 
     await connector.signAndSubmit(transaction, consumer);
   }
@@ -320,7 +349,7 @@ wasm().then(async () => {
       document.querySelector('meta[name="script_ref"]').content,
     );
 
-    console.log('close', transaction.toString());
+    console.log("close", transaction.toString());
 
     await connector.signAndSubmit(transaction, consumer);
   }

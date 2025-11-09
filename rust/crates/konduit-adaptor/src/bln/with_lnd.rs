@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use reqwest::Client;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 mod models;
 
@@ -15,6 +15,13 @@ use crate::{
     },
 };
 
+/// FIXME :: [NOTE ON TIME]
+/// The average block is ~10 minutes = 600seconds.
+/// However, this is probablistic, and is subject to parameters that change every 2016 blocks.
+/// if final ctlv is 80 and each hop is 40 this is a very long hold period.
+/// This is an estimate
+const BITCOIN_BLOCK_TIME: std::time::Duration = Duration::from_secs(600);
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct LndArgs {
     #[arg(long, env = crate::env::BLN_URL)]
@@ -28,6 +35,7 @@ pub struct WithLnd {
     base_url: String,
     macaroon_hex: String,
     client: Client,
+    block_time: Duration,
 }
 
 impl TryFrom<&LndArgs> for WithLnd {
@@ -74,6 +82,7 @@ impl WithLnd {
             base_url,
             macaroon_hex,
             client,
+            block_time: BITCOIN_BLOCK_TIME,
         })
     }
 
@@ -161,28 +170,27 @@ impl BlnInterface for WithLnd {
             .await?;
         let fee_msat = route.total_fees_msat;
 
-        // FIXME :: [NOTE ON TIME]
-        // The average block is ~10 minutes = 600seconds.
-        // However, this is probablistic, and is subject to parameters that change every 2016 blocks.
-        // if final ctlv is 80 and each hop is 40 this is a very long hold period.
-        let estimated_timeout =
-            Duration::from_secs((route.total_time_lock - self.block_height().await?) * 10 * 60);
-
+        let Some(blocks) = route
+            .total_time_lock
+            .checked_sub(self.block_height().await?)
+        else {
+            return Err(BlnError::Time);
+        };
+        // FIXME :: See [NOTE ON TIME]
+        let Some(relative_timeout) = self.block_time.checked_mul(blocks as u32) else {
+            return Err(BlnError::Time);
+        };
         Ok(QuoteResponse {
             fee_msat,
-            estimated_timeout,
+            relative_timeout,
         })
     }
 
     async fn pay(&self, req: PayRequest) -> Result<PayResponse, BlnError> {
-        let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
-            return Err(BlnError::Time);
-        };
-        // FIXME :: See [NOTE ON TIME]
-        let estimate_relative_timeout_blocks = (req.timeout.as_secs() - now.as_secs()) / (10 * 60);
-        let cltv_limit = self.block_height().await? + estimate_relative_timeout_blocks;
+        let blocks = req.relative_timeout.as_secs() / self.block_time.as_secs();
+        let cltv_limit = self.block_height().await? + blocks;
         let fee_limit = FeeLimit {
-            fixed_msat: Some(req.routing_fee),
+            fixed_msat: Some(req.fee_limit),
             ..FeeLimit::default()
         };
 

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{
     Invoice,
@@ -6,11 +6,17 @@ use crate::{
     bln,
     cbor::decode_from_cbor,
     db::DbError,
-    models::{IncompleteSquashResponse, QuoteBody, SquashResponse, TipBody},
+    models::{IncompleteSquashResponse, Info, PayBody, QuoteBody, SquashResponse, TipBody},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_data::{Keytag, Squash};
-use serde::{Deserialize, Serialize};
+use konduit_data::{Keytag, Secret, Squash};
+
+// TODO :: MOVE TO CONFIG
+/// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
+const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60);
+/// "Grace" is extra time between the "quoted" rel time and the time that might be allowed for in a
+/// "pay"
+const ADAPTOR_TIME_GRACE: std::time::Duration = Duration::from_secs(1 * 10 * 60);
 
 #[derive(Debug, thiserror::Error)]
 pub enum HandlerError {
@@ -44,19 +50,6 @@ impl ResponseError for HandlerError {
         log::error!("Handler Error: {}", self);
         HttpResponse::build(self.status_code()).body(self.to_string())
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Info {
-    #[serde(with = "hex")]
-    pub adaptor_key: [u8; 32],
-    pub close_period: u64,
-    pub fee: u64,
-    pub max_tag_length: usize,
-    #[serde(with = "hex")]
-    pub deployer_vkey: [u8; 32],
-    #[serde(with = "hex")]
-    pub script_hash: [u8; 28],
 }
 
 pub async fn info(data: web::Data<AppState>) -> HttpResponse {
@@ -105,7 +98,7 @@ pub async fn squash(
     };
     let (key, tag) = keytag.split();
     log::info!("squash {:?}", squash.verify(&key, &tag));
-    let l2_channel = data.db.update_squash(keytag, squash).await?;
+    let l2_channel = data.db.update_squash(&keytag, squash).await?;
     let Some(mixed_receipt) = l2_channel.mixed_receipt else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
     };
@@ -159,18 +152,86 @@ pub async fn quote(
         return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
     };
 
-    // TODO :: MOVE TO CONFIG
-    // This is ~ the same as the default on bitcoin
-    let adaptor_margin = Duration::from_secs(40 * 10 * 60);
-
-    log::info!("{:?}", bln_quote);
     let amount =
         fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info.fee;
-    let timeout = (adaptor_margin + bln_quote.estimated_timeout).as_millis() as u64;
+    let relative_timeout = (ADAPTOR_TIME_DELTA + bln_quote.relative_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
         amount,
-        timeout,
+        relative_timeout,
         routing_fee: bln_quote.fee_msat,
     };
     Ok(HttpResponse::Ok().json(response_body))
+}
+
+pub async fn pay(
+    req: HttpRequest,
+    data: web::Data<AppState>,
+    body: web::Json<PayBody>,
+) -> Result<HttpResponse, HandlerError> {
+    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
+        return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
+    };
+    let Some(fx) = data.fx.read().await.clone() else {
+        log::info!("FX : {:?}", data.fx);
+        return Ok(HttpResponse::InternalServerError().body("Error: Fx unavailable"));
+    };
+    let pay_body = body.into_inner();
+    let (key, tag) = keytag.split();
+    if !pay_body.cheque.verify(&key, &tag) {
+        return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
+    };
+    let effective_amount_msat =
+        fx.lovelace_to_msat(pay_body.cheque.cheque_body.amount - data.info.fee);
+    if effective_amount_msat < pay_body.amount_msat {
+        return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
+    }
+    let fee_limit = effective_amount_msat - pay_body.amount_msat;
+
+    // The cheque timeout is in posix time.
+    // We need to convert to a time delta.
+    // And then the BLN handler can convert to (relative) blocks and then block height
+    // ie absolute blocks.
+    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return Ok(HttpResponse::InternalServerError().body("System time not available"));
+    };
+    let relative_timeout = pay_body
+        .cheque
+        .cheque_body
+        .timeout
+        .saturating_sub(now)
+        .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
+
+    if relative_timeout.is_zero() {
+        return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
+    };
+
+    let payment_hash = pay_body.cheque.cheque_body.lock.0.clone();
+    if let Err(err) = data.db.insert_cheque(&keytag, pay_body.cheque).await {
+        return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
+    };
+    let pay_request = bln::PayRequest {
+        fee_limit,
+        relative_timeout,
+        amount_msat: pay_body.amount_msat,
+        payee: pay_body.payee,
+        payment_hash,
+        payment_secret: pay_body.payment_secret,
+        final_cltv_delta: pay_body.final_cltv_delta,
+    };
+
+    let pay_response = match data.bln.pay(pay_request).await {
+        Ok(res) => res,
+        Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
+    };
+    let l2_channel = match data.db.unlock(&keytag, Secret(pay_response.secret)).await {
+        Ok(l2_channel) => l2_channel,
+        Err(err) => {
+            return Ok(HttpResponse::BadRequest()
+                .body(format!("Error handling secret: {}", err.to_string())));
+        }
+    };
+    let Some(mixed_receipt) = l2_channel.mixed_receipt else {
+        return Ok(HttpResponse::InternalServerError().body("Logic failure"));
+    };
+    Ok(HttpResponse::Ok().json(mixed_receipt))
 }

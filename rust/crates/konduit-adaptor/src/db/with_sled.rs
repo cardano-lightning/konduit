@@ -1,14 +1,13 @@
-use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future::join_all;
-use konduit_data::{Cheque, Duration, Squash};
+use konduit_data::{Cheque, Secret, Squash};
 use sled::{Db, IVec};
 use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
 
 use crate::{
     db::{
         coiter_with_default::coiter_with_default,
-        interface::{BackendError, UpdateSquashError},
+        interface::{BackendError, InsertChequeError, UnlockError, UpdateSquashError},
     },
     l2_channel::L2Channel,
     models::{Keytag, L1Channel, TipBody, TipResponse},
@@ -167,27 +166,6 @@ async fn update_from_l1(
     )
 }
 
-#[allow(dead_code)]
-async fn add_cheque(
-    db: &sled::Db,
-    keytag: Keytag,
-    cheque: Cheque,
-    // Acceptable timeout
-    timeout: Duration,
-) -> Result<L2Channel, WithSledError<anyhow::Error>> {
-    update_channel_db(
-        db,
-        keytag,
-        |l2_channel: Option<L2Channel>| match l2_channel {
-            Some(mut l2_channel) => {
-                l2_channel.add_cheque(cheque.clone(), timeout)?;
-                Ok(l2_channel)
-            }
-            None => Err(anyhow!("No L2 channel found")),
-        },
-    )
-}
-
 async fn update_squash(
     db: &sled::Db,
     keytag: Keytag,
@@ -204,6 +182,46 @@ async fn update_squash(
                 Ok(l2_channel)
             }
             None => Err(UpdateSquashError::NotFound),
+        },
+    )
+}
+
+async fn insert_cheque(
+    db: &sled::Db,
+    keytag: Keytag,
+    cheque: Cheque,
+) -> Result<L2Channel, WithSledError<InsertChequeError>> {
+    update_channel_db(
+        db,
+        keytag,
+        |l2_channel: Option<L2Channel>| match l2_channel {
+            Some(mut l2_channel) => {
+                l2_channel
+                    .insert_cheque(cheque.clone())
+                    .map_err(InsertChequeError::Logic)?;
+                Ok(l2_channel)
+            }
+            None => return Err(InsertChequeError::NotFound),
+        },
+    )
+}
+
+async fn unlock(
+    db: &sled::Db,
+    keytag: Keytag,
+    secret: Secret,
+) -> Result<L2Channel, WithSledError<UnlockError>> {
+    update_channel_db(
+        db,
+        keytag,
+        |l2_channel: Option<L2Channel>| match l2_channel {
+            Some(mut l2_channel) => {
+                l2_channel
+                    .unlock(secret.clone())
+                    .map_err(UnlockError::Logic)?;
+                Ok(l2_channel)
+            }
+            None => return Err(UnlockError::NotFound),
         },
     )
 }
@@ -255,11 +273,31 @@ impl DbInterface for WithSled {
 
     async fn update_squash(
         &self,
-        keytag: Keytag,
+        keytag: &Keytag,
         squash: Squash,
     ) -> Result<L2Channel, DbError<UpdateSquashError>> {
         let db = self.db.clone();
-        let l2_channel = update_squash(&db, keytag, squash).await?;
+        let l2_channel = update_squash(&db, keytag.clone(), squash).await?;
+        Ok(l2_channel)
+    }
+
+    async fn insert_cheque(
+        &self,
+        keytag: &Keytag,
+        cheque: Cheque,
+    ) -> Result<L2Channel, DbError<InsertChequeError>> {
+        let db = self.db.clone();
+        let l2_channel = insert_cheque(&db, keytag.clone(), cheque).await?;
+        Ok(l2_channel)
+    }
+
+    async fn unlock(
+        &self,
+        keytag: &Keytag,
+        secret: Secret,
+    ) -> Result<L2Channel, DbError<UnlockError>> {
+        let db = self.db.clone();
+        let l2_channel = unlock(&db, keytag.clone(), secret).await?;
         Ok(l2_channel)
     }
 }
@@ -269,9 +307,7 @@ const CHANNEL: u8 = 10;
 const CHANNEL_END: u8 = 19;
 
 fn to_db_key(keytag: Keytag) -> Vec<u8> {
-    std::iter::once(CHANNEL)
-        .chain(keytag.0)
-        .collect()
+    std::iter::once(CHANNEL).chain(keytag.0).collect()
 }
 
 fn to_keytag(db_key: &[u8]) -> Keytag {

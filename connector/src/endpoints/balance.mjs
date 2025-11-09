@@ -1,7 +1,11 @@
 export async function endpointBalance(ctx) {
   try {
-    const addressInfo = await ctx.blockfrost(`/addresses/${ctx.req.param('address')}`);
-    const lovelace = addressInfo.amount?.find((asset) => asset.unit === "lovelace")?.quantity ?? "0";
+    const addressInfo = await ctx.blockfrost(
+      `/addresses/${ctx.req.param("address")}`,
+    );
+    const lovelace =
+      addressInfo.amount?.find((asset) => asset.unit === "lovelace")
+        ?.quantity ?? "0";
     return ctx.json({ lovelace });
   } catch (res) {
     if (res.status === 404) {
@@ -12,6 +16,6 @@ export async function endpointBalance(ctx) {
     } else {
       console.log(res);
     }
-    throw 'unexpected error';
+    throw "unexpected error";
   }
 }

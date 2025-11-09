@@ -1,36 +1,10 @@
 use std::cmp::min;
 
-use konduit_data::{
-    Cheque, Duration, Keytag, MixedReceipt, MixedReceiptUpdateError, Squash, Stage,
-};
+use konduit_data::{Cheque, Keytag, MixedReceipt, Secret, Squash, Stage};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::models::L1Channel;
-
-#[derive(Debug, PartialEq, Error)]
-pub enum ChequeError {
-    #[error("Channel not served")]
-    NotServed,
-
-    #[error("Bad signature")]
-    BadSignature,
-
-    #[error("Expires too soon")]
-    ExpiresTooSoon,
-
-    #[error("No L1 channel")]
-    NoL1Channel,
-
-    #[error("Channel not initiated")]
-    NotInitiated,
-
-    #[error("Channel stage not Opened")]
-    NotOpened,
-
-    #[error("Amount unavailable")]
-    AmountUnavailable,
-}
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum L2ChannelUpdateSquashError {
@@ -47,7 +21,40 @@ pub enum L2ChannelUpdateSquashError {
     NotOpened,
 
     #[error("Mixed Receipt Error {0}")]
-    MixedReceipt(MixedReceiptUpdateError),
+    MixedReceipt(String),
+}
+
+#[derive(Debug, PartialEq, Error)]
+pub enum L2ChannelInsertChequeError {
+    #[error("Channel not served")]
+    NotServed,
+
+    #[error("Bad signature")]
+    BadSignature,
+
+    #[error("No L1 channel")]
+    NoL1Channel,
+
+    #[error("Channel not initiated")]
+    NotInitiated,
+
+    #[error("Channel stage not Opened")]
+    NotOpened,
+
+    #[error("Amount unavailable")]
+    AmountUnavailable,
+
+    #[error("Mixed Receipt Error {0}")]
+    MixedReceipt(String),
+}
+
+#[derive(Debug, PartialEq, Error)]
+pub enum L2ChannelUnlockError {
+    #[error("Channel not initiated")]
+    NotInitiated,
+
+    #[error("Mixed Receipt Error {0}")]
+    MixedReceipt(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,27 +154,27 @@ impl L2Channel {
         self.l1_channel = l1_channel.cloned();
     }
 
-    pub fn add_cheque(&mut self, cheque: Cheque, timeout: Duration) -> Result<(), ChequeError> {
+    /// The safety of the timeout and amount of the cheque should be already
+    /// be established
+    pub fn insert_cheque(&mut self, cheque: Cheque) -> Result<(), L2ChannelInsertChequeError> {
         if !self.is_served {
-            return Err(ChequeError::NotServed);
+            return Err(L2ChannelInsertChequeError::NotServed);
         };
+        // TODO : This is already done upstream.
         let (key, tag) = self.keytag.split();
         if !cheque.verify(&key, &tag) {
-            return Err(ChequeError::BadSignature);
-        }
-        if cheque.cheque_body.timeout >= timeout {
-            return Err(ChequeError::ExpiresTooSoon);
+            return Err(L2ChannelInsertChequeError::BadSignature);
         }
         let Some(l1_channel) = self.l1_channel.as_ref() else {
-            return Err(ChequeError::NoL1Channel);
+            return Err(L2ChannelInsertChequeError::NoL1Channel);
         };
         let Some(ref mut mixed_receipt) = self.mixed_receipt else {
-            return Err(ChequeError::NotInitiated);
+            return Err(L2ChannelInsertChequeError::NotInitiated);
         };
         let subbed = if let konduit_data::Stage::Opened(subbed_val) = l1_channel.stage {
             subbed_val
         } else {
-            return Err(ChequeError::NotOpened);
+            return Err(L2ChannelInsertChequeError::NotOpened);
         };
         let committed = mixed_receipt.committed();
         let available = if committed > subbed {
@@ -176,21 +183,15 @@ impl L2Channel {
             0
         };
         if available > cheque.cheque_body.amount {
-            return Err(ChequeError::AmountUnavailable);
+            return Err(L2ChannelInsertChequeError::AmountUnavailable);
         }
-        // FIXME :: HANDLE ERROR
-        mixed_receipt.insert(cheque).unwrap();
+        mixed_receipt
+            .insert(cheque)
+            .map_err(|err| L2ChannelInsertChequeError::MixedReceipt(err.to_string()))?;
         Ok(())
     }
 
     pub fn update_squash(&mut self, squash: Squash) -> Result<bool, L2ChannelUpdateSquashError> {
-        if !self.is_served {
-            return Err(L2ChannelUpdateSquashError::NotServed);
-        };
-        let (key, tag) = self.keytag.split();
-        if !squash.verify(&key, &tag) {
-            return Err(L2ChannelUpdateSquashError::BadSignature);
-        }
         let Some(l1_channel) = self.l1_channel.as_ref() else {
             return Err(L2ChannelUpdateSquashError::NoL1Channel);
         };
@@ -203,6 +204,15 @@ impl L2Channel {
         };
         mixed_receipt
             .update(squash)
-            .map_err(L2ChannelUpdateSquashError::MixedReceipt)
+            .map_err(|err| L2ChannelUpdateSquashError::MixedReceipt(err.to_string()))
+    }
+
+    pub fn unlock(&mut self, secret: Secret) -> Result<(), L2ChannelUnlockError> {
+        let Some(ref mut mixed_receipt) = self.mixed_receipt.as_mut() else {
+            return Err(L2ChannelUnlockError::NotInitiated);
+        };
+        mixed_receipt
+            .unlock(secret)
+            .map_err(|err| L2ChannelUnlockError::MixedReceipt(err))
     }
 }

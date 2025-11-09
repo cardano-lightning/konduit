@@ -16,6 +16,7 @@ fn parse_script_hash(s: &str) -> Result<Hash<28>, String> {
 
 #[derive(Debug, Clone, Args)]
 pub struct Info {
+    // Amount in channel currency (eg lovelace)
     #[arg(long, env = crate::env::FEE, default_value = "1000")]
     pub fee: u64,
     #[arg(long, env = crate::env::ADAPTOR_VKEY)]

@@ -1,4 +1,4 @@
-import * as hono from 'hono/cors'
+import * as hono from "hono/cors";
 
 export default async function cors(ctx, next) {
   const middleware = hono.cors({

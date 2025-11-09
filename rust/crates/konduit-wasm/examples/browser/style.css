@@ -3,17 +3,29 @@ html {
   font-size: 16px;
 }
 
-*, *:before, *:after {
+*,
+*:before,
+*:after {
   box-sizing: inherit;
 }
 
-body, h1, h2, h3, h4, h5, h6, p, ol, ul {
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+ol,
+ul {
   margin: 0;
   padding: 0;
   font-weight: normal;
 }
 
-ol, ul {
+ol,
+ul {
   list-style: none;
 }
 
@@ -23,17 +35,17 @@ img {
 }
 
 :root {
-  --panel: #73BFB7;
-  --bg: #FCF9EA;
-  --accent: #FFA4A4;
-  --accent-light: #FFBDBD;
-  --text: #FCF9EA;
+  --panel: #73bfb7;
+  --bg: #fcf9ea;
+  --accent: #ffa4a4;
+  --accent-light: #ffbdbd;
+  --text: #fcf9ea;
   --error: #ff4d4d;
   --success: #33ff88;
-  --border: #FCF9EA;
+  --border: #fcf9ea;
   --radius: 8px;
   --line: 1px solid var(--border);
-  font-family: 'Inter', 'Roboto Mono', monospace;
+  font-family: "Inter", "Roboto Mono", monospace;
 }
 
 body {
@@ -70,7 +82,9 @@ header {
   align-items: center;
 }
 
-input, select, button {
+input,
+select,
+button {
   width: 100%;
   padding: 0.8rem;
   border: 1px solid var(--accent);
@@ -100,7 +114,7 @@ button {
 }
 
 button:active {
-  background: rgba(0,255,240,0.1);
+  background: rgba(0, 255, 240, 0.1);
 }
 
 .notice {
@@ -126,7 +140,9 @@ button:active {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .channel-info {

@@ -1,20 +1,25 @@
 use std::collections::BTreeMap;
 
 pub use konduit_data::Keytag;
-use konduit_data::MixedReceipt;
 pub use konduit_data::Stage;
+use konduit_data::{Cheque, MixedReceipt};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::l2_channel::L2Channel;
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Info {
-    pub fee: u64,
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[serde(with = "hex")]
     pub adaptor_key: [u8; 32],
     pub close_period: u64,
+    pub fee: u64,
+    pub max_tag_length: usize,
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub deployer_vkey: [u8; 32],
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub script_hash: [u8; 28],
 }
 
 pub type TipBody = BTreeMap<Keytag, Vec<L1Channel>>;
@@ -23,36 +28,6 @@ pub type TipBody = BTreeMap<Keytag, Vec<L1Channel>>;
 pub struct L1Channel {
     pub stage: Stage,
     pub amount: u64,
-}
-
-pub fn mk_data() -> TipBody {
-    let vec = vec![
-        (
-            Keytag(
-                hex::decode(
-                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef00000000",
-                )
-                .unwrap(),
-            ),
-            vec![L1Channel {
-                stage: Stage::Opened(0),
-                amount: 1000000,
-            }],
-        ),
-        (
-            Keytag(
-                hex::decode(
-                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef00000001",
-                )
-                .unwrap(),
-            ),
-            vec![L1Channel {
-                stage: Stage::Opened(0),
-                amount: 1000000,
-            }],
-        ),
-    ];
-    vec.into_iter().collect()
 }
 
 pub type TipResponse = BTreeMap<Keytag, TipResult>;
@@ -86,11 +61,12 @@ pub struct SimpleQuote {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QuoteResponse {
     pub amount: u64,
-    pub timeout: u64,
+    pub relative_timeout: u64,
+    // TODO (@waalge) TBD whether these fields are relevant.
     // #[serde(with = "hex")]
     // pub lock: [u8; 32],
     // #[serde(with = "hex")]
-    // pub recipient: [u8; 33],
+    // pub payee: [u8; 33],
     // pub amount_msat: u64,
     // #[serde(with = "hex")]
     // pub payment_secret: [u8; 32],
@@ -99,15 +75,13 @@ pub struct QuoteResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayBody {
+    pub cheque: Cheque,
     #[serde(with = "hex")]
-    pub cheque_body: Vec<u8>,
-    #[serde(with = "hex")]
-    pub signature: [u8; 64],
-    #[serde(with = "hex")]
-    pub recipient: [u8; 33],
+    pub payee: [u8; 33],
     pub amount_msat: u64,
     #[serde(with = "hex")]
     pub payment_secret: [u8; 32],
+    pub final_cltv_delta: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -118,17 +92,6 @@ pub struct UnlockedCheque {
     pub signature: [u8; 64],
     #[serde(with = "hex")]
     pub secret: Vec<u8>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Receipt {
-    #[serde(with = "hex")]
-    pub squash_body: Vec<u8>,
-    #[serde(with = "hex")]
-    pub signature: [u8; 64],
-    pub unlockeds: Vec<UnlockedCheque>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expire: Option<Vec<u64>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
