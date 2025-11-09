@@ -52,7 +52,7 @@ async fn main() -> std::io::Result<()> {
                 Some(())
             }
         },
-        Duration::from_secs(300),
+        Duration::from_secs(30),
     );
 
     server.run().await
