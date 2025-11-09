@@ -17,7 +17,7 @@ pub type Lovelace = u64;
 /// a transaction to fail to submit (due to blocks following a random distribution).
 pub static DEFAULT_TTL: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs(120));
 
-pub const MIN_ADA: Lovelace = 2_000_000;
+pub const MIN_ADA_BUFFER: Lovelace = 2_000_000;
 
 pub const FEE_BUFFER: Lovelace = 3_000_000;
 
@@ -254,7 +254,7 @@ pub fn parse_output_datum(channel_output: &Output) -> anyhow::Result<konduit_dat
 pub fn mk_sub_step(receipt: &Receipt, channel_in: &Output) -> Option<(Lovelace, Output)> {
     let datum_in: Datum = parse_output_datum(channel_in).ok()?;
     let value_in: Value<u64> = channel_in.value().clone();
-    let available = value_in.lovelace() - MIN_ADA;
+    let available = value_in.lovelace() - MIN_ADA_BUFFER;
     if let Stage::Opened(subbed_in) = datum_in.stage {
         let to_sub = {
             let owed = receipt.amount();

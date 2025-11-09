@@ -3,6 +3,7 @@ use cardano_connect::CardanoConnect;
 use cardano_connect_blockfrost::Blockfrost;
 use cardano_tx_builder::{Credential, Datum, Hash, Input, Output, SigningKey, VerificationKey};
 use konduit_data::{Duration, Keytag};
+use konduit_tx;
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{db, info::Info};
@@ -69,17 +70,21 @@ impl Admin {
                 guard(output.value().assets().is_empty())?;
                 let adaptor_verification_key = VerificationKey::from(&self.skey);
                 guard(datum.constants.sub_vkey == adaptor_verification_key)?;
-                guard(datum.constants.close_period <= self.close_period)?;
+                guard(datum.constants.close_period >= self.close_period)?;
                 guard({
                     let bytes = <Vec<u8>>::from(&datum.constants.tag);
                     bytes.len() <= self.max_tag_length
                 })?;
-                let keytag = Keytag::new(adaptor_verification_key, datum.constants.tag);
+                let keytag = Keytag::new(datum.constants.add_vkey, datum.constants.tag);
                 let res = (
                     keytag,
                     L1Channel {
                         stage: datum.stage,
-                        amount: output.value().lovelace(),
+                        amount: output
+                            .value()
+                            .lovelace()
+                            .checked_sub(konduit_tx::MIN_ADA_BUFFER)
+                            .unwrap_or(0),
                     },
                 );
                 Some(res)

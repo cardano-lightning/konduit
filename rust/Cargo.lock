@@ -1936,6 +1936,7 @@ dependencies = [
  "futures",
  "hex",
  "konduit-data",
+ "konduit-tx",
  "lightning-invoice",
  "lightning-types",
  "log",
