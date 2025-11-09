@@ -188,8 +188,9 @@ pub async fn pay(
     let fee_limit = effective_amount_msat - pay_body.amount_msat;
 
     // The cheque timeout is in posix time.
-    // We need to convert to relative posix time.
-    // And then the BLN handler can convert to blocks.
+    // We need to convert to a time delta.
+    // And then the BLN handler can convert to (relative) blocks and then block height
+    // ie absolute blocks.
     let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
         return Ok(HttpResponse::InternalServerError().body("System time not available"));
     };
