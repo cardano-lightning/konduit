@@ -11,7 +11,7 @@ import cors from "./middleware/cors.mjs";
 
 const app = new Hono();
 
-app.use(cors)
+app.use(cors);
 app.use(blockfrost);
 app.use(koios);
 

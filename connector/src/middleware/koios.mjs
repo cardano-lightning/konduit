@@ -1,7 +1,8 @@
 export default async function koios(ctx, next) {
-  const baseUrl = ctx.network === "mainnet"
-    ? "https://api.koios.rest/api/v1"
-    : `https://${ctx.network}.koios.rest/api/v1`;
+  const baseUrl =
+    ctx.network === "mainnet"
+      ? "https://api.koios.rest/api/v1"
+      : `https://${ctx.network}.koios.rest/api/v1`;
 
   ctx.koios = async (path, opts = {}) => {
     path = path.startsWith("/") ? path : `/${path}`;
@@ -11,7 +12,7 @@ export default async function koios(ctx, next) {
       return res.json();
     }
 
-    throw res
+    throw res;
   };
 
   return next();
