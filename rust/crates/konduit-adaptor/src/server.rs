@@ -58,7 +58,12 @@ impl Server {
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
-                .wrap(Cors::default().allow_any_origin())
+                .wrap(
+                    Cors::default()
+                        .allow_any_origin()
+                        .allow_any_method()
+                        .allow_any_header(),
+                )
                 .app_data(app_state.clone())
                 .route("/info", web::get().to(handlers::info))
                 .service(
