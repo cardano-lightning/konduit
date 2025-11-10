@@ -1,9 +1,9 @@
 use crate::connector;
 use crate::keytag_middleware::KeytagAuth;
-use crate::{Cmd, app_state::AppState};
+use crate::{app_state::AppState, Cmd};
 use crate::{db, handlers};
 use actix_cors::Cors;
-use actix_web::{App, HttpServer, middleware::Logger, web};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use cardano_connect_blockfrost::Blockfrost;
 use std::sync::Arc;
 

@@ -7,6 +7,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{db, info::Info};
 
+pub const MIN_ADA_BUFFER: u64 = 2_000_000;
+
 #[derive(Clone)]
 pub struct Admin {
     close_period: Duration,
@@ -69,17 +71,21 @@ impl Admin {
                 guard(output.value().assets().is_empty())?;
                 let adaptor_verification_key = VerificationKey::from(&self.skey);
                 guard(datum.constants.sub_vkey == adaptor_verification_key)?;
-                guard(datum.constants.close_period <= self.close_period)?;
+                guard(datum.constants.close_period >= self.close_period)?;
                 guard({
                     let bytes = <Vec<u8>>::from(&datum.constants.tag);
                     bytes.len() <= self.max_tag_length
                 })?;
-                let keytag = Keytag::new(adaptor_verification_key, datum.constants.tag);
+                let keytag = Keytag::new(datum.constants.add_vkey, datum.constants.tag);
                 let res = (
                     keytag,
                     L1Channel {
                         stage: datum.stage,
-                        amount: output.value().lovelace(),
+                        amount: output
+                            .value()
+                            .lovelace()
+                            .checked_sub(MIN_ADA_BUFFER)
+                            .unwrap_or(0),
                     },
                 );
                 Some(res)
