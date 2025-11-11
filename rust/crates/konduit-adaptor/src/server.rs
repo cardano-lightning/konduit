@@ -1,9 +1,9 @@
 use crate::connector;
 use crate::keytag_middleware::KeytagAuth;
-use crate::{app_state::AppState, Cmd};
+use crate::{Cmd, app_state::AppState};
 use crate::{db, handlers};
 use actix_cors::Cors;
-use actix_web::{middleware::Logger, web, App, HttpServer};
+use actix_web::{App, HttpServer, middleware::Logger, web};
 use cardano_connect_blockfrost::Blockfrost;
 use std::sync::Arc;
 
@@ -71,7 +71,8 @@ impl Server {
                     web::scope("/ch")
                         .wrap(KeytagAuth::new("KONDUIT"))
                         .route("/squash", web::post().to(handlers::squash))
-                        .route("/quote", web::post().to(handlers::quote)), // .route("/pay", web::post().to(handlers::pay))
+                        .route("/quote", web::post().to(handlers::quote))
+                        .route("/pay", web::post().to(handlers::pay)),
                 )
                 .service(web::scope("/opt").route("/fx", web::get().to(handlers::fx)))
                 .service(
