@@ -89,7 +89,7 @@ impl WithLnd {
     async fn find_route(&self, payee: [u8; 33], amount_msat: u64) -> Result<Route, BlnError> {
         let route_json = self
             .get(&format!(
-                "v1/graph/routes/{}/0?amt_msat={}",
+                "v1/graph/routes/{}/{}",
                 hex::encode(payee),
                 amount_msat
             ))
