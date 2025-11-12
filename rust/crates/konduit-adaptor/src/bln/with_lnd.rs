@@ -21,6 +21,7 @@ use crate::{
 /// if final ctlv is 80 and each hop is 40 this is a very long hold period.
 /// This is an estimate
 const BITCOIN_BLOCK_TIME: std::time::Duration = Duration::from_secs(600);
+const LND_MIN_CLTV_LIMIT: u64 = 83;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct LndArgs {
@@ -193,10 +194,7 @@ impl BlnInterface for WithLnd {
             req.relative_timeout.as_secs(),
             blocks
         );
-        log::info!("Paying with timeout of {} blocks", blocks);
-        let cltv_limit = self.block_height().await? + blocks;
-        log::info!("cltv_limit: {}", cltv_limit);
-        log::info!("Current block height plus timeout: {}", cltv_limit);
+        let cltv_limit = std::cmp::max(blocks, LND_MIN_CLTV_LIMIT);
         let fee_limit = FeeLimit {
             fixed_msat: Some(req.fee_limit),
             ..FeeLimit::default()
