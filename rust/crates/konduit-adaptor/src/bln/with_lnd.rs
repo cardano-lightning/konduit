@@ -207,8 +207,13 @@ impl BlnInterface for WithLnd {
 
         let response_json = self.post("v1/channels/transactions", &request_body).await?;
 
-        let pay_res: SendPaymentResponse = serde_json::from_value(response_json)
-            .map_err(|e| BlnError::Parse(format!("Failed to parse pay response: {}", e)))?;
+        let pay_res: SendPaymentResponse =
+            serde_json::from_value(response_json.clone()).map_err(|e| {
+                BlnError::Parse(format!(
+                    "Failed to parse pay response: {} {}",
+                    e, response_json
+                ))
+            })?;
 
         if !pay_res.payment_error.is_empty() {
             return Err(BlnError::ApiError {
