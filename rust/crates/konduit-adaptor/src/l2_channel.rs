@@ -177,11 +177,9 @@ impl L2Channel {
             return Err(L2ChannelInsertChequeError::NotOpened);
         };
         let committed = mixed_receipt.committed();
-        let available = if committed > subbed {
-            std::cmp::max(committed - subbed, l1_channel.amount)
-        } else {
-            0
-        };
+        let available = (l1_channel.amount + subbed)
+            .checked_sub(committed)
+            .unwrap_or(0);
         if available < cheque.cheque_body.amount {
             return Err(L2ChannelInsertChequeError::AmountUnavailable);
         }

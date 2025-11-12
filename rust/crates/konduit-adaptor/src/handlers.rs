@@ -153,7 +153,7 @@ pub async fn quote(
     };
 
     let amount =
-        fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info.fee;
+        fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info.fee + 1;
     let relative_timeout = (ADAPTOR_TIME_DELTA + bln_quote.relative_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
         amount,
@@ -185,7 +185,7 @@ pub async fn pay(
     if effective_amount_msat < pay_body.amount_msat {
         return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
     }
-    let fee_limit = effective_amount_msat - pay_body.amount_msat;
+    let fee_limit = effective_amount_msat - pay_body.amount_msat + 1;
 
     // The cheque timeout is in posix time.
     // We need to convert to a time delta.
