@@ -204,7 +204,7 @@ impl BlnInterface for WithLnd {
 
         let request_body = SendPaymentRequest {
             amt_msat: Some(req.amount_msat),
-            cltv_limit: Some(cltv_limit),
+            cltv_limit: Some(blocks),
             fee_limit: Some(fee_limit),
             dest: Some(req.payee),
             payment_hash: Some(req.payment_hash),
