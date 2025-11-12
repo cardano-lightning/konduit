@@ -211,6 +211,8 @@ impl BlnInterface for WithLnd {
             ..SendPaymentRequest::default()
         };
 
+        log::info!("request_body: {:?}", request_body);
+
         let response_json = self.post("v1/channels/transactions", &request_body).await?;
 
         let pay_res: SendPaymentResponse =
