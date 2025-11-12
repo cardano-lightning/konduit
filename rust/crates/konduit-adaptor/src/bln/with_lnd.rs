@@ -195,7 +195,7 @@ impl BlnInterface for WithLnd {
         );
         log::info!("Paying with timeout of {} blocks", blocks);
         let cltv_limit = self.block_height().await? + blocks;
-        log::info!("cltv_limit", cltv_limit);
+        log::info!("cltv_limit: {}", cltv_limit);
         log::info!("Current block height plus timeout: {}", cltv_limit);
         let fee_limit = FeeLimit {
             fixed_msat: Some(req.fee_limit),
