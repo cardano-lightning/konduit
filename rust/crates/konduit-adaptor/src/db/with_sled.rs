@@ -126,20 +126,32 @@ where
 {
     let key = to_db_key(keytag);
     let update_fn_cell = std::cell::RefCell::new(update_fn);
-    // FIXME :: ERROR HANDLING
-    let transaction_result = db.transaction(move |tree: &sled::transaction::TransactionalTree| {
-        let old_bytes_ivec: Option<IVec> = tree.get(&key)?;
-        let old_channel: Option<L2Channel> = old_bytes_ivec
-            .map(|bytes| serde_json::from_slice(bytes.as_ref()))
-            .transpose()
-            .unwrap(); //?;
-        let new_channel: L2Channel = (update_fn_cell.borrow_mut())(old_channel).unwrap(); // .map_err(WithSledError::Logic)?;
-        let new_bytes: Vec<u8> = serde_json::to_vec(&new_channel).unwrap(); //.map_err(SledBackendError::Serde)?;
-        tree.insert(&*key, new_bytes)?;
-        Ok(new_channel)
-    });
-
-    match transaction_result {
+    let result: Result<L2Channel, sled::transaction::TransactionError<WithSledError<E>>> = db
+        .transaction(move |tree: &sled::transaction::TransactionalTree| {
+            let old_bytes_ivec: Option<IVec> = tree.get(&key)?;
+            let old_channel: Option<L2Channel> = old_bytes_ivec
+                .map(|bytes| serde_json::from_slice(bytes.as_ref()))
+                .transpose()
+                .map_err(|err| {
+                    sled::transaction::ConflictableTransactionError::Abort(WithSledError::Backend(
+                        SledBackendError::Serde(err),
+                    ))
+                })?;
+            let new_channel: L2Channel =
+                (update_fn_cell.borrow_mut())(old_channel).map_err(|err| {
+                    sled::transaction::ConflictableTransactionError::Abort(WithSledError::Logic(
+                        err,
+                    ))
+                })?;
+            let new_bytes: Vec<u8> = serde_json::to_vec(&new_channel).map_err(|err| {
+                sled::transaction::ConflictableTransactionError::Abort(WithSledError::Backend(
+                    SledBackendError::Serde(err),
+                ))
+            })?;
+            tree.insert(&*key, new_bytes)?;
+            Ok(new_channel)
+        });
+    match result {
         Ok(new_channel) => Ok(new_channel),
         Err(sled::transaction::TransactionError::Abort(e)) => Err(e),
         Err(sled::transaction::TransactionError::Storage(e)) => {

@@ -182,7 +182,7 @@ impl L2Channel {
         } else {
             0
         };
-        if available > cheque.cheque_body.amount {
+        if available < cheque.cheque_body.amount {
             return Err(L2ChannelInsertChequeError::AmountUnavailable);
         }
         mixed_receipt
