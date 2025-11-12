@@ -21,7 +21,7 @@ use crate::{
 /// if final ctlv is 80 and each hop is 40 this is a very long hold period.
 /// This is an estimate
 const BITCOIN_BLOCK_TIME: std::time::Duration = Duration::from_secs(600);
-const LND_MIN_CLTV_LIMIT: u64 = 83;
+const LND_MIN_CLTV_LIMIT: u64 = 84;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct LndArgs {
