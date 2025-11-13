@@ -132,8 +132,7 @@ pub struct SendPaymentRequest {
 
     /// (string)
     /// A bare-bones invoice for a payment.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub payment_request: Option<String>,
+    pub payment_request: String,
 
     /// The CLTV delta from the current height.
     #[serde(skip_serializing_if = "Option::is_none")]

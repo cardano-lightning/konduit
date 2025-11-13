@@ -23,7 +23,7 @@ pub enum InvoiceError {
 
 #[derive(Debug, Clone)]
 pub struct Invoice {
-    pub __raw: Option<SignedRawBolt11Invoice>,
+    pub __raw: SignedRawBolt11Invoice,
     pub invoice_hash: [u8; 32],
     pub currency: Currency,
     pub amount_msat: u64,
@@ -52,6 +52,24 @@ impl TryFrom<&str> for Invoice {
     }
 }
 
+impl TryFrom<&String> for Invoice {
+    type Error = InvoiceError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        Invoice::try_from(
+            value
+                .parse::<SignedRawBolt11Invoice>()
+                .map_err(|_| InvoiceError::Parse)?,
+        )
+    }
+}
+
+impl From<Invoice> for String {
+    fn from(value: Invoice) -> Self {
+        value.__raw.to_string()
+    }
+}
+
 impl TryFrom<SignedRawBolt11Invoice> for Invoice {
     type Error = InvoiceError;
 
@@ -63,7 +81,7 @@ impl TryFrom<SignedRawBolt11Invoice> for Invoice {
             let currency = invoice.hrp.currency;
             let tagged_fields = TaggedFields::from(invoice.data.tagged_fields);
             Ok(Self {
-                __raw: Some(value),
+                __raw: value,
                 invoice_hash: hash,
                 amount_msat,
                 currency,

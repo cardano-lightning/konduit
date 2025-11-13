@@ -176,16 +176,20 @@ pub async fn pay(
         return Ok(HttpResponse::InternalServerError().body("Error: Fx unavailable"));
     };
     let pay_body = body.into_inner();
+    let invoice = match Invoice::try_from(&pay_body.invoice) {
+        Ok(inv) => inv,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
+    };
     let (key, tag) = keytag.split();
     if !pay_body.cheque.verify(&key, &tag) {
         return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
     };
     let effective_amount_msat =
         fx.lovelace_to_msat(pay_body.cheque.cheque_body.amount - data.info.fee);
-    if effective_amount_msat < pay_body.amount_msat {
+    if effective_amount_msat < invoice.amount_msat {
         return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
     }
-    let fee_limit = effective_amount_msat - pay_body.amount_msat + 1;
+    let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
 
     // The cheque timeout is in posix time.
     // We need to convert to a time delta.
@@ -205,18 +209,14 @@ pub async fn pay(
         return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
     };
 
-    let payment_hash = pay_body.cheque.cheque_body.lock.0.clone();
+    // let payment_hash = pay_body.cheque.cheque_body.lock.0.clone();
     if let Err(err) = data.db.insert_cheque(&keytag, pay_body.cheque).await {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
     let pay_request = bln::PayRequest {
         fee_limit,
         relative_timeout,
-        amount_msat: pay_body.amount_msat,
-        payee: pay_body.payee,
-        payment_hash,
-        payment_secret: pay_body.payment_secret,
-        final_cltv_delta: pay_body.final_cltv_delta,
+        invoice: invoice,
     };
 
     let pay_response = match data.bln.pay(pay_request).await {

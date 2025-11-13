@@ -3,6 +3,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::Invoice;
+
 #[derive(Debug, Error)]
 pub enum BlnError {
     #[error("Initialization failed: {0}")]
@@ -45,6 +47,9 @@ pub struct QuoteResponse {
     pub fee_msat: u64,
 }
 
+// Invariant: all fields must match the invoice
+// We keep that value at hand so we can provide
+// it as a part of the final payment request.
 #[derive(Debug, Clone)]
 pub struct PayRequest {
     // Max routing fee (msat) that the adaptor is willing to pay
@@ -54,12 +59,13 @@ pub struct PayRequest {
     /// In particular, this is not the same value as on the cheque.
     /// This is cheque timeout - adaptor_margin.
     pub relative_timeout: Duration,
-    /// The following fields are derived from the invoice
-    pub amount_msat: u64,
-    pub payee: [u8; 33],
-    pub payment_hash: [u8; 32],
-    pub payment_secret: [u8; 32],
-    pub final_cltv_delta: u64,
+    pub invoice: Invoice,
+    // /// The following fields are derived from the invoice
+    // pub amount_msat: u64,
+    // pub payee: [u8; 33],
+    // pub payment_hash: [u8; 32],
+    // pub payment_secret: [u8; 32],
+    // pub final_cltv_delta: u64,
 }
 
 #[derive(Debug, Clone)]
