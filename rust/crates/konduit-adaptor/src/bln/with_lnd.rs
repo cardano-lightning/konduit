@@ -9,10 +9,7 @@ use crate::{
     bln::{
         BlnError,
         interface::{PayRequest, PayResponse, QuoteResponse},
-        with_lnd::models::{
-            FeeLimit, GetInfo, Route, RouterSendRequest, Routes, SendPaymentRequest,
-            SendPaymentResponse,
-        },
+        with_lnd::models::{GetInfo, Route, RouterSendRequest, Routes, SendPaymentResponse},
     },
 };
 
@@ -209,11 +206,10 @@ impl BlnInterface for WithLnd {
             // final_cltv_delta: Some(req.final_cltv_delta),
             ..RouterSendRequest::default()
         };
-
         log::info!("request_body: {:?}", serde_json::to_string(&request_body));
-        let response_json = self.post("v2/router/send", &request_body).await?;
-
-        log::info!("response_json: {}", response_json);
+        let response_json = self.post("v2/router/send", &request_body).await;
+        log::info!("response_json: {:?}", response_json);
+        let response_json = response_json?;
 
         let pay_res: SendPaymentResponse =
             serde_json::from_value(response_json.clone()).map_err(|e| {
