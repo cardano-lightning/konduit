@@ -10,7 +10,8 @@ use crate::{
         BlnError,
         interface::{PayRequest, PayResponse, QuoteResponse},
         with_lnd::models::{
-            FeeLimit, GetInfo, Route, Routes, SendPaymentRequest, SendPaymentResponse,
+            FeeLimit, GetInfo, Route, RouterSendRequest, Routes, SendPaymentRequest,
+            SendPaymentResponse,
         },
     },
 };
@@ -195,25 +196,21 @@ impl BlnInterface for WithLnd {
             blocks
         );
         let cltv_limit = std::cmp::max(blocks, LND_MIN_CLTV_LIMIT);
-        let fee_limit = FeeLimit {
-            fixed_msat: Some(req.fee_limit),
-            ..FeeLimit::default()
-        };
 
         let invoice_str: String = req.invoice.into();
-        let request_body = SendPaymentRequest {
+        let request_body = RouterSendRequest {
             // amt_msat: Some(req.amount_msat),
             cltv_limit: Some(cltv_limit),
-            fee_limit: Some(fee_limit),
+            fee_limit_msat: Some(req.fee_limit),
             // dest: Some(req.payee),
             // payment_hash: Some(req.payment_hash),
             // payment_addr: Some(req.payment_secret),
-            payment_request: invoice_str,
+            payment_request: Some(invoice_str),
             // final_cltv_delta: Some(req.final_cltv_delta),
-            ..SendPaymentRequest::default()
+            ..RouterSendRequest::default()
         };
 
-        log::info!("request_body: {:?}", request_body);
+        log::info!("request_body: {:?}", serde_json::to_string(&request_body));
         let response_json = self.post("v2/router/send", &request_body).await?;
 
         log::info!("response_json: {}", response_json);
