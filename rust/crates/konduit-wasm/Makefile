@@ -7,7 +7,7 @@ all: browser nodejs
 
 browser:
 	@echo "📦 Building WASM (browser)..."
-	wasm-pack build --release --target no-modules -d $(OUT)-browser
+	wasm-pack build --release --target browser -d $(OUT)-browser
 
 nodejs:
 	@echo "📦 Building WASM (nodejs)..."

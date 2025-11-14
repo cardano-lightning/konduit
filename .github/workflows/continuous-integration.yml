@@ -1,0 +1,224 @@
+name: Continuous Integration
+
+on:
+  push:
+    branch: [main]
+
+env:
+  RUST_CACHE_PATH: |
+    ~/.cargo/bin/
+    ~/.cargo/registry/index/
+    ~/.cargo/registry/cache/
+    ~/.cargo/git/db/
+    rust/target/
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.RUST_CACHE_PATH }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build & test everything in the workspace
+        working-directory: rust
+        run: |
+          cargo test
+
+      - name: Build docs for workspace
+        working-directory: rust
+        run: |
+          cargo doc --workspace --no-deps
+          rm -rf target/doc/konduit_wasm/*
+
+      - name: Upload docs
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: cargo-doc
+          path: rust/target/doc
+
+  wasm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: build metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="nightly-$(git rev-parse --short=8 HEAD)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.RUST_CACHE_PATH }}
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -y install binaryen
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-pack
+
+      - name: Build wasm
+        id: build
+        working-directory: rust
+        env:
+          OUT: konduit-wasm-${{ steps.meta.outputs.version }}
+        run: |
+          wasm-pack build --release --target browser -d "$OUT"-browser crates/konduit-wasm
+          wasm-pack build --release --target nodejs -d "$OUT"-nodejs crates/konduit-wasm
+          echo "name=$OUT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.name }}
+          path: |
+            rust/crates/konduit-wasm/package.json
+            rust/crates/konduit-wasm/typedoc.json
+            rust/crates/konduit-wasm/tsconfig.typedoc.json
+            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-browser
+            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-nodejs
+
+  docs:
+    runs-on: ubuntu-latest
+    needs: [rust, wasm]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Download workspace docs
+        uses: actions/download-artifact@v5
+        with:
+          name: cargo-doc
+          path: site/rust
+
+      - name: Download konduit_wasm artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: konduit-wasm-*
+          path: site/rust/konduit_wasm
+
+      - name: Build wasm documentation
+        working-directory: site/rust/konduit_wasm
+        run: |
+          npm i
+          npx typedoc
+          mv docs/* .
+          rm -r konduit-wasm-* docs
+
+      - name: Prepare Pages artifact (nest under /rust)
+        run: |
+          # Create main index.html
+          cat > site/rust/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Konduit - Rust Workspace Documentation</title>
+              <style>
+                body {
+                  font-family: system-ui, sans-serif;
+                  max-width: 700px;
+                  margin: 4rem auto;
+                  padding: 0 1rem;
+                  color: #dddddd;
+                  line-height: 1.6;
+                  background: #353535;
+                }
+                h1 {
+                  text-align: center;
+                  font-weight: 600;
+                  margin-bottom: 2rem;
+                }
+                ul {
+                  list-style: none;
+                  padding: 0;
+                  display: flex;
+                  flex-wrap: wrap;
+                  justify-content: center;
+                }
+                li {
+                  margin: 1rem 0;
+                }
+                a {
+                  text-decoration: none;
+                  font-size: 1.2rem;
+                  color: #fdbf35;
+                  font-weight: 500;
+                  transition: background 0.2s ease;
+                  padding: 0.25rem 1rem;
+                  display: inline-block;
+                }
+                a:hover {
+                  background: #444444;
+                }
+                footer {
+                  margin-top: 3rem;
+                  text-align: center;
+                  font-size: 0.9rem;
+                  color: #777;
+                }
+              </style>
+          </head>
+          <body>
+              <h1>📚 Workspace Documentation</h1>
+              <ul>
+                <li><a href="./cardano_tx_builder">cardano-tx-builder</a></li>
+                <li><a href="./konduit_wasm">konduit-wasm</a></li>
+              </ul>
+          </body>
+          </html>
+          EOF
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

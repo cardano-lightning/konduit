@@ -37,7 +37,11 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 /// <div class="warning">Native scripts as reference scripts aren't yet supported. Only Plutus
 /// scripts are.</div>
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen,
+    doc = "A transaction output, which comprises of at least an Address and a Value."
+)]
 pub struct Output {
     address: Address<Any>,
     value: DeferredValue,
