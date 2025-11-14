@@ -128,7 +128,7 @@ impl From<NetworkId> for u8 {
 // -------------------------------------------------------------------- WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
 impl NetworkId {
     #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "mainnet"))]

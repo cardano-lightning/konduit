@@ -104,7 +104,7 @@ impl<'d, C> cbor::Decode<'d, C> for Input {
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
 impl Input {
     #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]

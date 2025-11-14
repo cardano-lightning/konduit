@@ -376,7 +376,7 @@ impl<'d, C> cbor::Decode<'d, C> for Output {
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
 impl Output {
     #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "new"))]
