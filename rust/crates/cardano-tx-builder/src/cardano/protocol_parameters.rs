@@ -282,7 +282,7 @@ impl From<&ProtocolParameters> for uplc::tx::SlotConfig {
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
 impl ProtocolParameters {
     #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]

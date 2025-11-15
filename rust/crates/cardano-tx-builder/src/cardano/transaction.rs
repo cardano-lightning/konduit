@@ -1221,7 +1221,7 @@ impl<'d, C, State: IsTransactionBodyState> cbor::Decode<'d, C> for Transaction<S
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
 pub struct TransactionReadyForSigning(Transaction<state::ReadyForSigning>);
 
 #[cfg(feature = "wasm")]
@@ -1241,7 +1241,7 @@ impl DerefMut for TransactionReadyForSigning {
 }
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
 impl TransactionReadyForSigning {
     #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]

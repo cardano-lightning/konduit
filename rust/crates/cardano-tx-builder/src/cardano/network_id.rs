@@ -28,7 +28,11 @@ use wasm_bindgen::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen,
+    doc = "A network identifier to protect misuses of addresses or transactions on a wrong network."
+)]
 pub struct NetworkId(#[n(0)] pallas::NetworkId);
 
 impl fmt::Display for NetworkId {
@@ -128,7 +132,7 @@ impl From<NetworkId> for u8 {
 // -------------------------------------------------------------------- WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
 impl NetworkId {
     #[cfg(feature = "wasm")]
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "mainnet"))]

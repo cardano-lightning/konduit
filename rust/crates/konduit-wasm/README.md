@@ -46,5 +46,14 @@ This produces JavaScript & WASM files under `./konduit-wasm-nodejs`
 ## Example
 
 - [node.js](./examples/node.js/README.md)
-
 - [browser](./examples/browser/README.md)
+
+
+## Documentation
+
+```console
+npx typedoc
+npx serve docs
+```
+
+And then, visit http://localhost:3000/modules/wasm_bindgen
