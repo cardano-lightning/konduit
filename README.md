@@ -12,17 +12,24 @@ An ada holder can have the same experience as a BLN user when paying merchants.
 
 See the [design](./docs/design/) for more details.
 
-## Repo Org
+## Structure
 
-- [`./docs/`](./docs/) - Meeting notes, adrs, design docs
-- [`./kernel/`](./kernel/) - Konuit kernel aka on-chain code. An Aiken repo.
-- [`./rust/`](./rust/) - Tools for konduit. A rust workspace
+- [`./connector`](./connector/) - API query layer for Cardano.
+- [`./docs`](./docs/) - Meeting notes, adrs, design docs.
+- [`./kernel`](./kernel/) - Konuit kernel aka on-chain code. An Aiken repo.
+- [`./rust`](./rust/) - Tools for konduit. A rust workspace.
+
+## API Reference(s)
+
+- [Rust & WASM API Reference](https://cardano-lightning.github.io/konduit/rust)
 
 ## Contributing
 
 TBC.
 
 ## Developing
+
+### Using nix
 
 For the base devel:
 
