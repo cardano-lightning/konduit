@@ -29,7 +29,7 @@ async fn main() -> std::io::Result<()> {
                 Some(())
             }
         },
-        Duration::from_secs(60),
+        Duration::from_secs(15 * 60),
     );
 
     let admin = {
@@ -52,8 +52,7 @@ async fn main() -> std::io::Result<()> {
                 Some(())
             }
         },
-        Duration::from_secs(30),
+        Duration::from_secs(5 * 60),
     );
-
     server.run().await
 }
