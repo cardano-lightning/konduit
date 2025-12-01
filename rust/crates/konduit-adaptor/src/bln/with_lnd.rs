@@ -9,9 +9,7 @@ use crate::{
     bln::{
         BlnError,
         interface::{PayRequest, PayResponse, QuoteResponse},
-        with_lnd::models::{
-            FeeLimit, GetInfo, Route, Routes, SendPaymentRequest, SendPaymentResponse,
-        },
+        with_lnd::models::{GetInfo, Route, RouterSendRequest, Routes, SendPaymentResponse},
     },
 };
 
@@ -21,6 +19,7 @@ use crate::{
 /// if final ctlv is 80 and each hop is 40 this is a very long hold period.
 /// This is an estimate
 const BITCOIN_BLOCK_TIME: std::time::Duration = Duration::from_secs(600);
+const LND_MIN_CLTV_LIMIT: u64 = 84;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct LndArgs {
@@ -188,24 +187,29 @@ impl BlnInterface for WithLnd {
 
     async fn pay(&self, req: PayRequest) -> Result<PayResponse, BlnError> {
         let blocks = req.relative_timeout.as_secs() / self.block_time.as_secs();
-        let cltv_limit = self.block_height().await? + blocks;
-        let fee_limit = FeeLimit {
-            fixed_msat: Some(req.fee_limit),
-            ..FeeLimit::default()
-        };
+        log::info!(
+            "Calculated timeout: {} seconds -> {} blocks",
+            req.relative_timeout.as_secs(),
+            blocks
+        );
+        let cltv_limit = std::cmp::max(blocks, LND_MIN_CLTV_LIMIT);
 
-        let request_body = SendPaymentRequest {
-            amt_msat: Some(req.amount_msat),
+        let invoice_str: String = req.invoice.into();
+        let request_body = RouterSendRequest {
+            // amt_msat: Some(req.amount_msat),
             cltv_limit: Some(cltv_limit),
-            fee_limit: Some(fee_limit),
-            dest: Some(req.payee),
-            payment_hash: Some(req.payment_hash),
-            payment_addr: Some(req.payment_secret),
-            final_cltv_delta: Some(req.final_cltv_delta),
-            ..SendPaymentRequest::default()
+            fee_limit_msat: Some(req.fee_limit),
+            // dest: Some(req.payee),
+            // payment_hash: Some(req.payment_hash),
+            // payment_addr: Some(req.payment_secret),
+            payment_request: Some(invoice_str),
+            // final_cltv_delta: Some(req.final_cltv_delta),
+            ..RouterSendRequest::default()
         };
-
-        let response_json = self.post("v1/channels/transactions", &request_body).await?;
+        log::info!("request_body: {:?}", serde_json::to_string(&request_body));
+        let response_json = self.post("v2/router/send", &request_body).await;
+        log::info!("response_json: {:?}", response_json);
+        let response_json = response_json?;
 
         let pay_res: SendPaymentResponse =
             serde_json::from_value(response_json.clone()).map_err(|e| {
