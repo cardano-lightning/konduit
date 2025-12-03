@@ -55,7 +55,7 @@ jobs:
           rm -rf target/doc/konduit_wasm/*
 
       - name: Upload docs
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cargo-doc
           path: rust/target/doc
