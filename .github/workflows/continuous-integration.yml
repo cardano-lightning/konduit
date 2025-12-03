@@ -97,7 +97,10 @@ jobs:
         run: |
           sudo apt-get -y install binaryen
           rustup target add wasm32-unknown-unknown
-          cargo install wasm-pack
+          # wasm-pack is cached when already installed, no need to re-install it.
+          if ! command -v wasm-pack >/dev/null 2>&1; then
+            cargo install wasm-pack
+          fi
 
       - name: Build wasm
         id: build
