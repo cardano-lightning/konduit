@@ -34,149 +34,6 @@ impl<'a> fmt::Display for PlutusData<'a> {
 // -------------------------------------------------------------------- Building
 
 impl<'a> PlutusData<'a> {
-    /// Construct a data value from an arbitrarily-sized integer.
-    ///
-    /// # examples
-    ///
-    /// ```rust
-    /// # use cardano_tx_builder::PlutusData;
-    /// # use num_bigint::BigInt;
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::integer(42)),
-    ///     "CBOR(182a)",
-    /// );
-    ///
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::integer(-14)),
-    ///     "CBOR(2d)",
-    /// );
-    ///
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::integer(BigInt::from(u128::MAX) + BigInt::from(u128::MAX))),
-    ///     "CBOR(c25101fffffffffffffffffffffffffffffffe)",
-    /// );
-    /// ```
-    pub fn integer(i: impl Into<BigInt>) -> Self {
-        let i: BigInt = i.into();
-
-        Self(Cow::Owned(match i.to_i128().map(pallas::Int::try_from) {
-            Some(Ok(i)) => pallas::PlutusData::BigInt(pallas::BigInt::Int(i)),
-            _ => {
-                let (sign, bytes) = i.to_bytes_be();
-                match sign {
-                    num_bigint::Sign::Minus => {
-                        pallas::PlutusData::BigInt(pallas::BigInt::BigNInt(bytes.into()))
-                    }
-                    _ => pallas::PlutusData::BigInt(pallas::BigInt::BigUInt(bytes.into())),
-                }
-            }
-        }))
-    }
-
-    /// Construct an arbitrarily-sized byte-array value.
-    ///
-    /// # examples
-    ///
-    /// ```rust
-    /// # use cardano_tx_builder::PlutusData;
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::bytes(b"foo")),
-    ///     "CBOR(43666f6f)"
-    /// );
-    ///
-    /// assert_eq!(
-    ///     format!(
-    ///         "{}",
-    ///         PlutusData::bytes(
-    ///             b"Rerum deleniti nisi ea exercitationem architecto. Quia architecto voluptates error."
-    ///         )
-    ///     ),
-    ///     "CBOR(5f5840526572756d2064656c656e697469206e69736920656120657865726369746174696f6e656d206172636869746563746f2e205175696120617263686974656374536f20766f6c75707461746573206572726f722eff)"
-    /// );
-    /// ```
-    pub fn bytes(bytes: impl AsRef<[u8]>) -> Self {
-        Self(Cow::Owned(pallas::PlutusData::BoundedBytes(
-            pallas::BoundedBytes::from(bytes.as_ref().to_vec()),
-        )))
-    }
-
-    /// Construct an arbitrarily-sized list of [`self::PlutusData`] values.
-    ///
-    /// # examples
-    ///
-    /// ```rust
-    /// # use cardano_tx_builder::PlutusData;
-    ///
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::list::<PlutusData>([])),
-    ///     "CBOR(80)"
-    /// );
-    ///
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::list([b"foo", b"bar"])),
-    ///     "CBOR(9f43666f6f43626172ff)"
-    /// );
-    ///
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::list([
-    ///         PlutusData::bytes(b"foo"),
-    ///         PlutusData::list([1, 2]),
-    ///     ])),
-    ///     "CBOR(9f43666f6f9f0102ffff)"
-    /// );
-    /// ```
-    pub fn list<T: Into<Self>>(elems: impl IntoIterator<Item = T>) -> Self {
-        let elems = elems
-            .into_iter()
-            .map(Into::<Self>::into)
-            .map(pallas::PlutusData::from)
-            .collect::<Vec<_>>();
-
-        Self(Cow::Owned(pallas::PlutusData::Array(if elems.is_empty() {
-            pallas::MaybeIndefArray::Def(elems)
-        } else {
-            pallas::MaybeIndefArray::Indef(elems)
-        })))
-    }
-
-    /// Construct an arbitrarily-sized list of [`self::PlutusData`] values.
-    ///
-    /// # examples
-    ///
-    /// ```rust
-    /// # use cardano_tx_builder::PlutusData;
-    ///
-    /// assert_eq!(
-    ///     format!("{}", PlutusData::map::<PlutusData, PlutusData>([])),
-    ///     "CBOR(a0)"
-    /// );
-    ///
-    /// assert_eq!(
-    ///     format!(
-    ///         "{}",
-    ///         PlutusData::map([
-    ///             (b"FOO", 1),
-    ///             (b"BAR", 2),
-    ///         ]),
-    ///     ),
-    ///     "CBOR(a243464f4f014342415202)"
-    /// );
-    pub fn map<K: Into<Self>, V: Into<Self>>(kvs: impl IntoIterator<Item = (K, V)>) -> Self {
-        let kvs = kvs
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    pallas::PlutusData::from(Into::<Self>::into(k)),
-                    pallas::PlutusData::from(Into::<Self>::into(v)),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        Self(Cow::Owned(pallas::PlutusData::Map(
-            pallas::KeyValuePairs::from(kvs),
-        )))
-    }
-
     /// Construct a tagged variant with [`self::PlutusData`] fields.
     ///
     /// <div class="warning">The constructor index `ix` will typically starts at `0`, and be
@@ -238,6 +95,149 @@ impl<'a> PlutusData<'a> {
             })
         }))
     }
+
+    /// Construct an arbitrarily-sized list of [`self::PlutusData`] values.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::PlutusData;
+    ///
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::map::<PlutusData, PlutusData>([])),
+    ///     "CBOR(a0)"
+    /// );
+    ///
+    /// assert_eq!(
+    ///     format!(
+    ///         "{}",
+    ///         PlutusData::map([
+    ///             (b"FOO", 1),
+    ///             (b"BAR", 2),
+    ///         ]),
+    ///     ),
+    ///     "CBOR(a243464f4f014342415202)"
+    /// );
+    pub fn map<K: Into<Self>, V: Into<Self>>(kvs: impl IntoIterator<Item = (K, V)>) -> Self {
+        let kvs = kvs
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    pallas::PlutusData::from(Into::<Self>::into(k)),
+                    pallas::PlutusData::from(Into::<Self>::into(v)),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        Self(Cow::Owned(pallas::PlutusData::Map(
+            pallas::KeyValuePairs::from(kvs),
+        )))
+    }
+
+    /// Construct an arbitrarily-sized list of [`self::PlutusData`] values.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::PlutusData;
+    ///
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::list::<PlutusData>([])),
+    ///     "CBOR(80)"
+    /// );
+    ///
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::list([b"foo", b"bar"])),
+    ///     "CBOR(9f43666f6f43626172ff)"
+    /// );
+    ///
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::list([
+    ///         PlutusData::bytes(b"foo"),
+    ///         PlutusData::list([1, 2]),
+    ///     ])),
+    ///     "CBOR(9f43666f6f9f0102ffff)"
+    /// );
+    /// ```
+    pub fn list<T: Into<Self>>(elems: impl IntoIterator<Item = T>) -> Self {
+        let elems = elems
+            .into_iter()
+            .map(Into::<Self>::into)
+            .map(pallas::PlutusData::from)
+            .collect::<Vec<_>>();
+
+        Self(Cow::Owned(pallas::PlutusData::Array(if elems.is_empty() {
+            pallas::MaybeIndefArray::Def(elems)
+        } else {
+            pallas::MaybeIndefArray::Indef(elems)
+        })))
+    }
+
+    /// Construct an arbitrarily-sized byte-array value.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::PlutusData;
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::bytes(b"foo")),
+    ///     "CBOR(43666f6f)"
+    /// );
+    ///
+    /// assert_eq!(
+    ///     format!(
+    ///         "{}",
+    ///         PlutusData::bytes(
+    ///             b"Rerum deleniti nisi ea exercitationem architecto. Quia architecto voluptates error."
+    ///         )
+    ///     ),
+    ///     "CBOR(5f5840526572756d2064656c656e697469206e69736920656120657865726369746174696f6e656d206172636869746563746f2e205175696120617263686974656374536f20766f6c75707461746573206572726f722eff)"
+    /// );
+    /// ```
+    pub fn bytes(bytes: impl AsRef<[u8]>) -> Self {
+        Self(Cow::Owned(pallas::PlutusData::BoundedBytes(
+            pallas::BoundedBytes::from(bytes.as_ref().to_vec()),
+        )))
+    }
+
+    /// Construct a data value from an arbitrarily-sized integer.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_tx_builder::PlutusData;
+    /// # use num_bigint::BigInt;
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::integer(42)),
+    ///     "CBOR(182a)",
+    /// );
+    ///
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::integer(-14)),
+    ///     "CBOR(2d)",
+    /// );
+    ///
+    /// assert_eq!(
+    ///     format!("{}", PlutusData::integer(BigInt::from(u128::MAX) + BigInt::from(u128::MAX))),
+    ///     "CBOR(c25101fffffffffffffffffffffffffffffffe)",
+    /// );
+    /// ```
+    pub fn integer(i: impl Into<BigInt>) -> Self {
+        let i: BigInt = i.into();
+
+        Self(Cow::Owned(match i.to_i128().map(pallas::Int::try_from) {
+            Some(Ok(i)) => pallas::PlutusData::BigInt(pallas::BigInt::Int(i)),
+            _ => {
+                let (sign, bytes) = i.to_bytes_be();
+                match sign {
+                    num_bigint::Sign::Minus => {
+                        pallas::PlutusData::BigInt(pallas::BigInt::BigNInt(bytes.into()))
+                    }
+                    _ => pallas::PlutusData::BigInt(pallas::BigInt::BigUInt(bytes.into())),
+                }
+            }
+        }))
+    }
 }
 
 // ---------------------------------------------------------------------- Macros
@@ -285,26 +285,9 @@ macro_rules! constr {
 // ------------------------------------------------------------------ Inspecting
 
 impl<'a> PlutusData<'a> {
-    pub fn as_integer<T>(&'a self) -> Option<T>
-    where
-        T: TryFrom<BigInt>,
-    {
+    pub fn as_constr(&'a self) -> Option<(u64, impl Iterator<Item = Self>)> {
         match self.0.as_ref() {
-            pallas::PlutusData::BigInt(big_int) => from_pallas_bigint(big_int).try_into().ok(),
-            _ => None,
-        }
-    }
-
-    pub fn as_bytes(&'a self) -> Option<&'a [u8]> {
-        match self.0.as_ref() {
-            pallas::PlutusData::BoundedBytes(bounded_bytes) => Some(bounded_bytes.as_slice()),
-            _ => None,
-        }
-    }
-
-    pub fn as_list(&'a self) -> Option<impl Iterator<Item = Self>> {
-        match self.0.as_ref() {
-            pallas::PlutusData::Array(array) => Some(from_pallas_array(array)),
+            pallas::PlutusData::Constr(constr) => Some(from_pallas_constr(constr)),
             _ => None,
         }
     }
@@ -316,49 +299,32 @@ impl<'a> PlutusData<'a> {
         }
     }
 
-    pub fn as_constr(&'a self) -> Option<(u64, impl Iterator<Item = Self>)> {
+    pub fn as_list(&'a self) -> Option<impl Iterator<Item = Self>> {
         match self.0.as_ref() {
-            pallas::PlutusData::Constr(constr) => Some(from_pallas_constr(constr)),
+            pallas::PlutusData::Array(array) => Some(from_pallas_array(array)),
+            _ => None,
+        }
+    }
+
+    pub fn as_bytes(&'a self) -> Option<&'a [u8]> {
+        match self.0.as_ref() {
+            pallas::PlutusData::BoundedBytes(bounded_bytes) => Some(bounded_bytes.as_slice()),
+            _ => None,
+        }
+    }
+
+    pub fn as_integer<T>(&'a self) -> Option<T>
+    where
+        T: TryFrom<BigInt>,
+    {
+        match self.0.as_ref() {
+            pallas::PlutusData::BigInt(big_int) => from_pallas_bigint(big_int).try_into().ok(),
             _ => None,
         }
     }
 }
 
 // --------------------------------------------------------------------- Helpers
-
-fn from_pallas_bigint(big_int: &pallas::BigInt) -> BigInt {
-    match big_int {
-        pallas::BigInt::Int(int) => BigInt::from(i128::from(*int)),
-        pallas::BigInt::BigUInt(bounded_bytes) => {
-            BigInt::from_bytes_be(num_bigint::Sign::Plus, bounded_bytes)
-        }
-        pallas::BigInt::BigNInt(bounded_bytes) => {
-            BigInt::from_bytes_be(num_bigint::Sign::Minus, bounded_bytes)
-        }
-    }
-}
-
-fn from_pallas_array<'a>(
-    array: &'a pallas::MaybeIndefArray<pallas::PlutusData>,
-) -> impl Iterator<Item = PlutusData<'a>> {
-    match array {
-        pallas::MaybeIndefArray::Def(elems) => elems,
-        pallas::MaybeIndefArray::Indef(elems) => elems,
-    }
-    .iter()
-    .map(|x| PlutusData(Cow::Borrowed(x)))
-}
-
-fn from_pallas_map<'a>(
-    map: &'a pallas::KeyValuePairs<pallas::PlutusData, pallas::PlutusData>,
-) -> impl Iterator<Item = (PlutusData<'a>, PlutusData<'a>)> {
-    match map {
-        pallas::KeyValuePairs::Def(items) => items,
-        pallas::KeyValuePairs::Indef(items) => items,
-    }
-    .iter()
-    .map(|(k, v)| (PlutusData(Cow::Borrowed(k)), PlutusData(Cow::Borrowed(v))))
-}
 
 fn from_pallas_constr<'a>(
     constr: &'a pallas::Constr<pallas::PlutusData>,
@@ -383,6 +349,40 @@ fn from_pallas_constr<'a>(
     (ix, fields)
 }
 
+fn from_pallas_map<'a>(
+    map: &'a pallas::KeyValuePairs<pallas::PlutusData, pallas::PlutusData>,
+) -> impl Iterator<Item = (PlutusData<'a>, PlutusData<'a>)> {
+    match map {
+        pallas::KeyValuePairs::Def(items) => items,
+        pallas::KeyValuePairs::Indef(items) => items,
+    }
+    .iter()
+    .map(|(k, v)| (PlutusData(Cow::Borrowed(k)), PlutusData(Cow::Borrowed(v))))
+}
+
+fn from_pallas_array<'a>(
+    array: &'a pallas::MaybeIndefArray<pallas::PlutusData>,
+) -> impl Iterator<Item = PlutusData<'a>> {
+    match array {
+        pallas::MaybeIndefArray::Def(elems) => elems,
+        pallas::MaybeIndefArray::Indef(elems) => elems,
+    }
+    .iter()
+    .map(|x| PlutusData(Cow::Borrowed(x)))
+}
+
+fn from_pallas_bigint(big_int: &pallas::BigInt) -> BigInt {
+    match big_int {
+        pallas::BigInt::Int(int) => BigInt::from(i128::from(*int)),
+        pallas::BigInt::BigUInt(bounded_bytes) => {
+            BigInt::from_bytes_be(num_bigint::Sign::Plus, bounded_bytes)
+        }
+        pallas::BigInt::BigNInt(bounded_bytes) => {
+            BigInt::from_bytes_be(num_bigint::Sign::Minus, bounded_bytes)
+        }
+    }
+}
+
 // ----------------------------------------------------------- Converting (from)
 
 impl From<pallas::PlutusData> for PlutusData<'static> {
@@ -390,24 +390,6 @@ impl From<pallas::PlutusData> for PlutusData<'static> {
         Self(Cow::Owned(data))
     }
 }
-
-#[macro_export]
-macro_rules! impl_from_int {
-    ($($t:ty),+ $(,)?) => {
-        $(
-            impl From<$t> for PlutusData<'static> {
-                #[inline]
-                fn from(int: $t) -> Self {
-                    Self::integer(int)
-                }
-            }
-        )+
-    };
-}
-
-impl_from_int!(
-    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, BigInt
-);
 
 impl From<&str> for PlutusData<'static> {
     fn from(bytes: &str) -> Self {
@@ -445,15 +427,33 @@ impl<const T: usize> From<&[u8; T]> for PlutusData<'static> {
     }
 }
 
+#[macro_export]
+macro_rules! impl_from_int {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl From<$t> for PlutusData<'static> {
+                #[inline]
+                fn from(int: $t) -> Self {
+                    Self::integer(int)
+                }
+            }
+        )+
+    };
+}
+
+impl_from_int!(
+    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, BigInt
+);
+
 // ------------------------------------------------------------- Converting (to)
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PlutusType {
-    Integer,
-    Bytes,
-    List,
-    Map,
     Constr,
+    Map,
+    List,
+    Bytes,
+    Integer,
 }
 
 #[derive(Debug)]
@@ -462,11 +462,11 @@ pub struct ParsePlutusDataTypeError;
 impl fmt::Display for PlutusType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PlutusType::Integer => write!(f, "Integer"),
-            PlutusType::Bytes => write!(f, "Bytes"),
-            PlutusType::List => write!(f, "List"),
-            PlutusType::Map => write!(f, "Map"),
             PlutusType::Constr => write!(f, "Constr"),
+            PlutusType::Map => write!(f, "Map"),
+            PlutusType::List => write!(f, "List"),
+            PlutusType::Bytes => write!(f, "Bytes"),
+            PlutusType::Integer => write!(f, "Integer"),
         }
     }
 }
@@ -476,11 +476,11 @@ impl FromStr for PlutusType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "Integer" => Ok(PlutusType::Integer),
-            "Bytes" => Ok(PlutusType::Bytes),
-            "List" => Ok(PlutusType::List),
-            "Map" => Ok(PlutusType::Map),
             "Constr" => Ok(PlutusType::Constr),
+            "Map" => Ok(PlutusType::Map),
+            "List" => Ok(PlutusType::List),
+            "Bytes" => Ok(PlutusType::Bytes),
+            "Integer" => Ok(PlutusType::Integer),
             _ => Err(ParsePlutusDataTypeError),
         }
     }
@@ -526,88 +526,6 @@ impl From<PlutusData<'_>> for pallas::PlutusData {
     }
 }
 
-#[macro_export]
-macro_rules! impl_try_into_int {
-    ($($t:ty),+ $(,)?) => {
-        $(
-            impl<'a> TryFrom<&'a PlutusData<'a>> for $t {
-                type Error = PlutusDecodeError;
-
-                            #[inline]
-                fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-                    data.as_integer().ok_or(PlutusDecodeError::Type(PlutusType::Integer, PlutusType::from(data)))
-                }
-            }
-        )+
-    };
-}
-
-impl_try_into_int!(
-    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, BigInt,
-);
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for &'a [u8] {
-    type Error = PlutusDecodeError;
-
-    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        data.as_bytes().ok_or(PlutusDecodeError::Type(
-            PlutusType::Bytes,
-            PlutusType::from(data),
-        ))
-    }
-}
-
-impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for &'a [u8; T] {
-    type Error = PlutusDecodeError;
-
-    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        let vec = data.as_bytes().ok_or(PlutusDecodeError::Type(
-            PlutusType::Bytes,
-            PlutusType::from(data),
-        ))?;
-        vec.try_into()
-            .map_err(|_| PlutusDecodeError::BytesLen(T, vec.len()))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<PlutusData<'a>> {
-    type Error = PlutusDecodeError;
-
-    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        Ok(data
-            .as_list()
-            .ok_or(PlutusDecodeError::Type(
-                PlutusType::List,
-                PlutusType::from(data),
-            ))?
-            .collect())
-    }
-}
-
-impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for [PlutusData<'a>; T] {
-    type Error = PlutusDecodeError;
-
-    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        let list: Vec<PlutusData<'_>> = data.try_into()?;
-        <[PlutusData<'_>; T]>::try_from(list)
-            .map_err(|list| PlutusDecodeError::ListLen(T, list.len()))
-    }
-}
-
-impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<(PlutusData<'a>, PlutusData<'a>)> {
-    type Error = PlutusDecodeError;
-
-    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        Ok(data
-            .as_map()
-            .ok_or(PlutusDecodeError::Type(
-                PlutusType::List,
-                PlutusType::from(data),
-            ))?
-            .collect())
-    }
-}
-
 impl<'a> TryFrom<&'a PlutusData<'a>> for (u64, Vec<PlutusData<'a>>) {
     type Error = PlutusDecodeError;
 
@@ -635,6 +553,88 @@ impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for (u64, [PlutusData<'a>; 
         ))
     }
 }
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<(PlutusData<'a>, PlutusData<'a>)> {
+    type Error = PlutusDecodeError;
+
+    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
+        Ok(data
+            .as_map()
+            .ok_or(PlutusDecodeError::Type(
+                PlutusType::List,
+                PlutusType::from(data),
+            ))?
+            .collect())
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<PlutusData<'a>> {
+    type Error = PlutusDecodeError;
+
+    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
+        Ok(data
+            .as_list()
+            .ok_or(PlutusDecodeError::Type(
+                PlutusType::List,
+                PlutusType::from(data),
+            ))?
+            .collect())
+    }
+}
+
+impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for [PlutusData<'a>; T] {
+    type Error = PlutusDecodeError;
+
+    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
+        let list: Vec<PlutusData<'_>> = data.try_into()?;
+        <[PlutusData<'_>; T]>::try_from(list)
+            .map_err(|list| PlutusDecodeError::ListLen(T, list.len()))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for &'a [u8] {
+    type Error = PlutusDecodeError;
+
+    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
+        data.as_bytes().ok_or(PlutusDecodeError::Type(
+            PlutusType::Bytes,
+            PlutusType::from(data),
+        ))
+    }
+}
+
+impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for &'a [u8; T] {
+    type Error = PlutusDecodeError;
+
+    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
+        let vec = data.as_bytes().ok_or(PlutusDecodeError::Type(
+            PlutusType::Bytes,
+            PlutusType::from(data),
+        ))?;
+        vec.try_into()
+            .map_err(|_| PlutusDecodeError::BytesLen(T, vec.len()))
+    }
+}
+
+#[macro_export]
+macro_rules! impl_try_into_int {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl<'a> TryFrom<&'a PlutusData<'a>> for $t {
+                type Error = PlutusDecodeError;
+
+                            #[inline]
+                fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
+                    data.as_integer().ok_or(PlutusDecodeError::Type(PlutusType::Integer, PlutusType::from(data)))
+                }
+            }
+        )+
+    };
+}
+
+impl_try_into_int!(
+    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, BigInt,
+);
 
 // -------------------------------------------------------------------- Encoding
 
