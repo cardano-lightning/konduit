@@ -217,11 +217,11 @@ There are two components that require signatures, namely cheques and squashes
 Suppose we have four bytearrays:
 
 ```
-body, signature, tag, key
+body, signature, key, tag
 ```
 
 We say that `(body, signature)` is **well-formed**, or **well-signed**, with
-respect to pair `(tag, key)` if
+respect to pair `(key, tag)`, hereby referred to as **keytag**, if
 
 ```
 verify(key, concat(tag, (serialize(cheque_body)), signature)
@@ -229,9 +229,10 @@ verify(key, concat(tag, (serialize(cheque_body)), signature)
 
 Where `verify` is the signature verification function.
 
-A Konduit channel instance has a fixed value for `tag` and `key` for its entire
-lifecycle. Thus, in the context of channel, the "with respect to" is implicitly
-understood.
+A Konduit channel instance has a fixed keytag for its entire lifecycle. Thus, in
+the context of channel, the "with respect to" is implicitly understood. (Caveat:
+a mutual tx can do _anything_! The output of a mutual tx should not be treated
+as a continuing output/ is not the continuation of a lifecycle.)
 
 ## Cheque
 
@@ -248,10 +249,12 @@ type ChequeBody = (Index, Amount, Timeout, Lock)
 type Cheque = (ChequeBody, Signature)
 ```
 
-More precisely a cheque is associated the pair `(tag, key)`. In theory there can
-be multiple channels with the same tag and key. However, this puts only the user
+More precisely a cheque is associated to a keytag. In theory there can be
+multiple channels with the same keytag. However, this puts only the user
 providing the funds at risk. We reiterate a warning that Consumer should not
-reuse `(tag, key)` unless they absolutely know what they are doing.
+reuse keytag unless they absolutely know what they are doing. Since we expect
+Consumer to reuse their key, we suggest they choose unique tags (with respect to
+their key).
 
 We say a cheque `(body, signature)` is **well-formed** if it is well-signed.
 
@@ -263,11 +266,11 @@ are many other reasons Adaptor may reject a cheque. For example:
 - Amount not underwritten by channel
 - Insufficient time before timeout _etc_
 
-These are conditions to established by Adaptor as part of their L2.
-
-The timeout is still important on the L1. In practice this verification is
-postponed. Thus, we say a cheque is well-formed **subject** to an upper bound
-`bound` if is well-formed, and the `bound` is `<= timeout`.
+The correctness of a cheque with respect to these other conditions depends on
+context external to the cheque itself. The timeout is important on the L1. In
+practice this verification is postponed. Thus, we say a cheque is well-formed
+**subject** to an upper bound `bound` if is well-formed, and the `bound` is
+`<= timeout`.
 
 ## Unlocked
 
@@ -281,21 +284,22 @@ type Unlocked = (ChequeBody, Signature, Secret)
 ```
 
 We say that an unlocked `(body, sig, secret)` is **well-formed** with respect to
-the pair `(tag, vkey)`, subject to an upper bound `bound` provided that:
+the keytag `(key, tag)`, subject to an upper bound `bound` provided that:
 
-- unlocked.0 : `(body, sig)` is well-signed
+- unlocked.0 : `(body, sig)` is well-signed wrt `(key, tag)`
 - unlocked.1 : the secret hashes to the lock
 - unlocked.2 : the secret length is 32
 
 ## Squash
 
 Each pay action issues a new cheque on the L2. Adaptor can use the cheque and
-secret directly on the L1 without Consumer involvement, however they must do so
-before the timeout expires.
+associated secret directly on the L1 without Consumer involvement, however they
+must do so before the timeout expires.
 
-It is likely preferable for Consumer to provide an alternative redemption
-mechanism that removes the time lock. The funds associated to a collection of
-cheques can be "squashed" in to a much smaller piece of data, namely a `Squash`.
+It is likely preferable for both participants to provide an alternative
+redemption mechanism that removes the timelock. The funds associated to a
+collection of cheques can be "squashed" in to a much smaller piece of data,
+namely a `Squash`.
 
 ```aiken
 type Exclude = List<Index>
@@ -303,33 +307,34 @@ type SquashBody = (Amount, Index, Exclude)
 type Squash = (SquashBody, Signature)
 ```
 
-Unlike CL we do not need to "Snapshots", which are the pair squashes one of each
-participant, since only Consumer is issuing cheques.
-
 A squash is **well-formed** if:
 
 - squash.0 : It is well-signed
 - squash.1 : The index `n >= 0`
 - squash.2 : The exclusion list is strictly monotonically increasing with values
-  in
-- squash.3 : `(0, n)` (ie positive numbers strictly less than the index).
+  in `(0, n)` (ie positive numbers strictly less than the index).
 
 Otherwise the squash is ill formed. Consumer must only make well-formed squash.
 Adaptor must reject ill-formed squash. Failure of either participant to do so
-may put their funds at risk. Warning. We do not explicitly verify the
-well-formedness of squash in the kernel. Both participants have to consent to
-the use of an ill-fromed squash, so both are responsible for the consequences.
+may put their funds at risk. Warning: we do not explicitly verify the
+well-formedness of squash in the kernel. Both participants consent to the use of
+an ill-fromed squash (via the signature on the squash or the tx), so both are
+responsible for the consequences.
 
 A cheque is **accounted for** in a squash if its index `<= Index` and it does
 not appear in the `Exclude` list.
 
+Unlike CL we do not need to "Snapshots", which are the pair squashes one of each
+participant, since only Consumer is issuing cheques.
+
 ## Receipt
 
 Before Adaptor routes any cheques from Consumer, they must receive the initial
-squash. This can be empty squash, with body `(0,0,[])`, declaring no value is
-yet owed.
+squash. This can be the empty (aka null) squash, with body `(0,0,[])`, declaring
+no value is yet owed.
 
-In a `sub` Adaptor presents evidence of funds owed. The evidence is a `Receipt`.
+In a `sub`, Adaptor presents evidence of funds owed. The evidence is a
+`Receipt`.
 
 ```aiken
 type Receipt =  (Squash, List<Unlocked>)
@@ -337,13 +342,15 @@ type Receipt =  (Squash, List<Unlocked>)
 
 A receipt is **well-formed** if:
 
-- squash is well-signed
+- the squash is well-signed
 - each unlocked is well-formed
 - each unlocked is unaccounted for in the squash
 
 Unlike the cheques or squash, a receipt is both constructed and submitted by
 Adaptor. The L1 must verify the well formed-ness of the receipt. We subsume the
 well-fromedness logic into accounting.
+
+FIXME
 
 To account a receipt:
 
@@ -357,11 +364,12 @@ channel datum (see below). In a sub step, Adaptor can redeem no more than the
 difference between `owed` and `subbed`. The new cumulative amount `subbed` is
 what the continuing output records.
 
-## Mixed Cheques
+## Mixed Cheque
 
 At the instance end of life, Consumer may close while some cheques are neither
-timed out or had their secret revealed. Thus we need to accommodate yet to be
-determined evidence. Enter mixed cheque: either an unlocked or (locked) cheque.
+timed out or had their secret revealed. Thus we need to accommodate these
+unresolved, aka pending, cheques. Enter mixed cheque: either an unlocked or
+(locked) cheque.
 
 ```aiken
 type MixedCheque {
@@ -370,7 +378,7 @@ type MixedCheque {
 }
 ```
 
-The `Mix` is a mix of unlocked cheques and pending cheques.
+The `Mixed` is a mix of unlocked cheques and pending cheques.
 
 A mixed cheque is **well-formed** provided that whatever it is wrapping is
 well-formed.
@@ -382,7 +390,7 @@ divergence. Konduit is simpler. For example:
 - There are no other locks, so the data structure of the locked cheque is
   simpler. We only support the lock present on BLN.
 
-## Mixed receipt
+## Mixed Receipt
 
 A mixed receipt, as name suggests, is the equivalent to receipt but with
 `MixedCheque`s. In a `respond` Adaptor includes also cheques yet to be
@@ -427,7 +435,7 @@ can remove all funds _not_ possibly belonging to Adaptor.
 ```aiken
 type Constants {
   tag : Tag,
-add_vkey : VerificationKey,
+  add_vkey : VerificationKey,
   sub_vkey : VerificationKey,
   close_period : Int,
 }
@@ -438,13 +446,13 @@ type Datum = (ScriptHash, Constants, Stage)
 /// Pend cheques are Cheque body but without the Index since its not needed
 type Pending = (Amount, Timeout, Secret)
 
+/// Used
+type Used = (Index, Amount)
+
 /// Stage
-/// Opened ( subbed_amount )
-/// Closed ( subbed_amount, elapse_at )
-/// Responded ( locked_amount, pending )
 type Stage {
-  Opened(Amount)
-  Closed(Amount, Timestamp)
+  Opened(Amount, List<Used>)
+  Closed(Amount, List<Used>, Timestamp)
   Responded(Amount, List<Pending>)
 }
 
@@ -641,7 +649,7 @@ The current version of konduit supports only Ada.
 
 Input amounts are found "permissively", while output amounts are "strict".
 
-## Steps (aka BL Specific)
+## Steps / BL Specific
 
 The BL agnostic part provides the correct execution context for the "do step"
 logic. The "do step" context provides the following arguments:
