@@ -17,13 +17,8 @@ use konduit/steps/sub
 use konduit/steps/unlock
 use konduit/types as t
 
-/// ### Main
-/// 
 /// In a standard tx, the "main" invocation does all the verification steps for all
 /// channels.
-/// 
-/// The logic when the redeemer is `Main(steps)`
-/// 
 pub fn handle(datum: t.Datum, steps: List<t.Step>, tx: Transaction) {
   let Transaction { inputs, outputs, validity_range, extra_signatories, .. } =
     tx
