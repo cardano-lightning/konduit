@@ -19,7 +19,7 @@ pub use cardano::{
     network_id::NetworkId,
     output::Output,
     output::change_strategy::ChangeStrategy,
-    plutus_data::PlutusData,
+    plutus_data::{PlutusData, PlutusDecodeError, PlutusType},
     plutus_script::PlutusScript,
     plutus_version::PlutusVersion,
     protocol_parameters::ProtocolParameters,
