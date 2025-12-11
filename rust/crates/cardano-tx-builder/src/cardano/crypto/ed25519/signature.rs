@@ -67,8 +67,8 @@ impl AsRef<[u8]> for Signature {
 
 impl From<Signature> for [u8; 64] {
     fn from(sig: Signature) -> Self {
-        let s = String::from(sig.0);
-        Self::try_from(s.into_bytes())
+        // Only way to 'leak' bytes is via slice?!
+        <[u8; 64]>::try_from(sig.0.as_ref())
             .unwrap_or_else(|e| unreachable!("couldn't convert signature; not 64 bytes: {e:?}"))
     }
 }
@@ -82,5 +82,18 @@ impl From<Signature> for ed25519::Signature {
 impl<'a> From<&'a Signature> for &'a ed25519::Signature {
     fn from(sig: &'a Signature) -> Self {
         &sig.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_roundtrip_fixed_array() {
+        let inner = [0; 64];
+        let sig = Signature::from(inner.clone());
+        let re_inner = <[u8; 64]>::from(sig);
+        assert_eq!(inner, re_inner, "Failed roundtrip");
     }
 }
