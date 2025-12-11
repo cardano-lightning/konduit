@@ -2,7 +2,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{PlutusData, Signature, pallas::ed25519};
+use crate::{PlutusData, Signature, cardano::plutus_data::PlutusDecodeError, pallas::ed25519};
 use std::{cmp, fmt, str::FromStr};
 
 /// A ed25519 verification key (non-extended).
@@ -63,25 +63,24 @@ impl From<ed25519::PublicKey> for VerificationKey {
 impl FromStr for VerificationKey {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(VerificationKey(ed25519::PublicKey::from_str(s)?))
     }
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for VerificationKey {
-    type Error = anyhow::Error;
+    type Error = PlutusDecodeError;
 
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let array =
-            <&'_ [u8; 32]>::try_from(data).map_err(|e| e.context("invalid verification key"))?;
+    fn try_from(data: &PlutusData<'a>) -> Result<Self, Self::Error> {
+        let array = <&'_ [u8; 32]>::try_from(data)?;
         Ok(Self(ed25519::PublicKey::from(*array)))
     }
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for VerificationKey {
-    type Error = anyhow::Error;
+    type Error = PlutusDecodeError;
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+    fn try_from(data: PlutusData<'a>) -> Result<Self, Self::Error> {
         Self::try_from(&data)
     }
 }
