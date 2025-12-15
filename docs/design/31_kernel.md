@@ -682,7 +682,7 @@ does not appear here.
 
 ### Add
 
-- add.0 : Stage in is opened : `Opened(subbed)`
+- add.0 : Stage in is opened : `Opened`
 - add.1 : Stage out is equal to stage in `stage_out == stage_in`
 - add.2 : Funds increased `value_in` < `value_out`
 - add.3 : Return `(add_vkey, None, None)`
@@ -691,8 +691,8 @@ does not appear here.
 
 Redeemer arguments: `receipt`
 
-- sub.0 : Stage in is opened : `Opened(subbed_in)`
-- sub.1 : Stage out is opened : `Opened(subbed_out)`
+- sub.0 : Stage in is opened : `Opened(subbed_in, used_in)`
+- sub.1 : Stage out is opened : `Opened(subbed_out, used_out)`
 - sub.2 : Funds decrease by `subbed = value_in - value_out`
 - sub.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
 - sub.4 : `(owed, mbound) = account_receipt(receipt)` is well-formed.

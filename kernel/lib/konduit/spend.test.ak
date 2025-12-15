@@ -24,7 +24,7 @@ test test_one() {
   let sub_vkey = b32_2
   let close_period = 24 * 60 * 60 * 1000
   let constants = t.Constants { tag, add_vkey, sub_vkey, close_period }
-  let stage = t.Opened(0)
+  let stage = t.Opened(0, [])
 
   let datum = (own_hash, constants, stage)
   let step = t.StepCont(t.Add)
@@ -92,7 +92,7 @@ test test_two() {
       sub_vkey: sub_vkey0,
       close_period,
     }
-  let stage0 = t.Opened(0)
+  let stage0 = t.Opened(0, [])
   let datum0 = (own_hash, constants0, stage0)
   let step0 = t.StepCont(t.Add)
   let own_oref0 = OutputReference(b32_0, 0)
@@ -122,7 +122,7 @@ test test_two() {
       sub_vkey: sub_vkey1,
       close_period,
     }
-  let stage1 = t.Opened(0)
+  let stage1 = t.Opened(0, [])
   let datum1 = (own_hash, constants1, stage1)
   let step1 = t.StepCont(t.Add)
   let own_oref1 = OutputReference(b32_1, 0)

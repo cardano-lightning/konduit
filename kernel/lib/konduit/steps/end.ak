@@ -1,17 +1,23 @@
 use aiken/collection/list
-use extra/xoption
-use konduit/steps/common.{Return}
+use aiken/crypto.{VerificationKey}
+use aiken/interval.{Finite}
+use konduit/prelude.{Timebound}
 use konduit/types as t
 
 pub fn do(
+  lower_bound: Timebound,
   constants: t.Constants,
   stage_in: t.Stage,
-  return: Return<result>,
-) -> result {
+) -> VerificationKey {
   let t.Constants { add_vkey, .. } = constants
   expect t.Responded(_, pends_in) = stage_in
-  let lower_bound =
+  expect
     pends_in
-      |> list.foldl(None, fn((_, timeout, _), c) { xoption.max(c, timeout) })
-  return(add_vkey, lower_bound, None)
+      |> list.all(
+          fn((_, timeout, _)) {
+            expect Finite(lower_bound) = lower_bound
+            timeout <= lower_bound
+          },
+        )
+  add_vkey
 }
