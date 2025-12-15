@@ -1,3 +1,5 @@
+use aiken/interval.{IntervalBoundType}
+
 /// Index is used to enumerate a collection
 pub type Index =
   Int
@@ -22,3 +24,6 @@ pub type Bytes64 =
 /// It is 64 bytes in length
 pub type Signature =
   Bytes64
+
+pub type Timebound =
+  IntervalBoundType<Int>
