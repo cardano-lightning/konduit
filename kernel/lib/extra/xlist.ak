@@ -1,5 +1,6 @@
 use aiken/builtin.{head_list, tail_list}
 use aiken/primitive/bytearray
+use aiken/primitive/int
 
 /// Drop element or fail 
 pub fn drop_hard(l: List<elem>, i: elem) {
@@ -11,6 +12,32 @@ pub fn drop_hard(l: List<elem>, i: elem) {
       } else {
         drop_hard(l, i)
       }
+  }
+}
+
+/// Like drop while, but keep first failed case
+pub fn drop_until(l: List<elem>, pred: fn(elem) -> Bool) {
+  when l is {
+    [] -> []
+    [fst, ..rest] ->
+      if pred(fst) {
+        drop_until(rest, pred)
+      } else {
+        l
+      }
+  }
+}
+
+/// Special case of drop until where pred(x) : x < threshold
+pub fn drop_until_int(l: List<Int>, threshold: Int) {
+  when l is {
+    [fst, ..rest] ->
+      if fst < threshold {
+        drop_until_int(rest, threshold)
+      } else {
+        l
+      }
+    [] -> []
   }
 }
 

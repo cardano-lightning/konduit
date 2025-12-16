@@ -2,9 +2,8 @@ use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
 use cardano/assets.{Value}
 use extra/xlist.{foldl5}
-use extra/xoption
 use konduit/assets.{amount_in, amount_out} as k_assets
-use konduit/prelude.{Amount, Index, Signature, Timebound, Timestamp}
+use konduit/prelude.{Amount, Index, Signature, Timebound}
 use konduit/steps/common.{next_index}
 use konduit/types as t
 use konduit/wellformed as wf
