@@ -4,9 +4,8 @@ use aiken/interval.{Finite}
 use aiken/primitive/bytearray
 use cardano/assets.{Value}
 use extra/xlist.{foldl3}
-use extra/xoption
 use konduit/assets.{amount_in, amount_out} as k_assets
-use konduit/prelude.{Amount, Timebound, Timestamp}
+use konduit/prelude.{Amount, Timebound}
 use konduit/types as t
 
 pub fn do(
