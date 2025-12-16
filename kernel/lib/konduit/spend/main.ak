@@ -2,12 +2,10 @@ use aiken/collection/list
 use aiken/crypto.{ScriptHash, VerificationKey, blake2b_224}
 use aiken/interval.{Interval, IntervalBound}
 use cardano/address.{Address, Script}
-use cardano/transaction.{Input, Output, Transaction, ValidityRange}
+use cardano/transaction.{Input, Output, Transaction}
 use extra/xlist.{foldl3}
-use extra/xoption
-use extra/xtime
 use konduit/io.{yield_in, yield_out}
-use konduit/prelude.{Timebound, Timestamp}
+use konduit/prelude.{Timebound}
 use konduit/steps/add
 use konduit/steps/close
 use konduit/steps/elapse
