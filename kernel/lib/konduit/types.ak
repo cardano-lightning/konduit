@@ -81,12 +81,15 @@ pub type MReceipt =
 type ElapseAt =
   Timestamp
 
+pub type Used =
+  (Index, Amount)
+
 pub type Pending =
   (Amount, Timeout, Lock)
 
 pub type Stage {
-  Opened(Amount)
-  Closed(Amount, ElapseAt)
+  Opened(Amount, List<Used>)
+  Closed(Amount, List<Used>, ElapseAt)
   Responded(Amount, List<Pending>)
 }
 
