@@ -26,4 +26,4 @@ pub type Signature =
   Bytes64
 
 pub type Timebound =
-  IntervalBoundType<Int>
+  IntervalBoundType
