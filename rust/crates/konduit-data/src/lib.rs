@@ -40,6 +40,9 @@ pub use mixed_receipt::*;
 mod pending;
 pub use pending::*;
 
+mod used;
+pub use used::*;
+
 mod hex_serde;
 pub use hex_serde::*;
 

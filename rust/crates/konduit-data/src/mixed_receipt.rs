@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     Cheque, Duration, Indexes, Lock, MAX_UNSQUASHED, MixedCheque, Receipt, Secret, Squash,
-    SquashBody, SquashBodySquashError, Tag, Unlocked, plutus_data_serde,
+    SquashBody, SquashBodySquashError, Tag, Unlocked, Used, plutus_data_serde,
 };
 
 #[derive(Debug, PartialEq, thiserror::Error)]
@@ -78,6 +78,7 @@ impl MixedReceipt {
             None => squash_index,
         }
     }
+
     pub fn verify_components(&self, key: &VerificationKey, tag: &Tag) -> bool {
         self.squash.verify(key, tag)
             && self.mixed_cheques.iter().all(|m| m.verify(key, tag))
@@ -89,6 +90,18 @@ impl MixedReceipt {
 
     pub fn capacity(&self) -> usize {
         MAX_UNSQUASHED - self.mixed_cheques.len()
+    }
+
+    pub fn useds(&self, useds: Vec<Used>) -> Vec<Used> {
+        useds
+            .into_iter()
+            .filter(|used| !self.squash.squash_body.is_index_squashed(used.index))
+            .chain(
+                self.unlockeds().iter().map(|unlocked| {
+                    Used::new(unlocked.cheque_body.index, unlocked.cheque_body.amount)
+                }),
+            )
+            .collect::<Vec<_>>()
     }
 
     pub fn cheques(&self) -> Vec<Cheque> {
@@ -122,7 +135,7 @@ impl MixedReceipt {
         }
     }
 
-    pub fn receipt(&self) -> Receipt {
+    pub fn receipt(&self, used: Vec<Used>) -> Receipt {
         Receipt::new_no_verify(self.squash.clone(), self.unlockeds())
     }
 

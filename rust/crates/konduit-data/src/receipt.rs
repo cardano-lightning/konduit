@@ -3,7 +3,7 @@ use cardano_tx_builder::PlutusData;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{MAX_UNSQUASHED, Squash, Unlocked, plutus_data_serde};
+use crate::{MAX_UNSQUASHED, Squash, Unlocked, Used, plutus_data_serde};
 
 #[derive(Debug, Clone)]
 pub struct Receipt {

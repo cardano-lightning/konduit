@@ -2,12 +2,12 @@ use anyhow::anyhow;
 use cardano_tx_builder::{PlutusData, constr};
 use serde::{Deserialize, Serialize};
 
-use crate::{Duration, Pending};
+use crate::{Duration, Pending, Used};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Stage {
-    Opened(u64),
-    Closed(u64, Duration),
+    Opened(u64, Vec<Used>),
+    Closed(u64, Vec<Used>, Duration),
     Responded(u64, Vec<Pending>),
 }
 
@@ -31,17 +31,31 @@ impl<'a> TryFrom<PlutusData<'a>> for Stage {
         };
 
         fn try_opened(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Stage> {
-            let [a] = <[PlutusData; 1]>::try_from(fields)
+            let [a, b] = <[PlutusData; 2]>::try_from(fields)
                 .map_err(|vec| anyhow!("expected 1 field, found {}", vec.len()))?;
+            let useds: Vec<Used> = b
+                .as_list()
+                .ok_or(anyhow!("Expected list"))?
+                .map(|x| Used::try_from(&x))
+                .collect::<anyhow::Result<Vec<Used>>>()?;
 
-            Ok(Stage::Opened(u64::try_from(&a)?))
+            Ok(Stage::Opened(u64::try_from(&a)?, useds))
         }
 
         fn try_closed(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Stage> {
-            let [a, b] = <[PlutusData; 2]>::try_from(fields)
-                .map_err(|vec| anyhow!("expected 2 field, found {}", vec.len()))?;
+            let [a, b, c] = <[PlutusData; 3]>::try_from(fields)
+                .map_err(|vec| anyhow!("expected 3 field, found {}", vec.len()))?;
 
-            Ok(Stage::Closed(u64::try_from(&a)?, Duration::try_from(&b)?))
+            let useds: Vec<Used> = b
+                .as_list()
+                .ok_or(anyhow!("Expected list"))?
+                .map(|x| Used::try_from(&x))
+                .collect::<anyhow::Result<Vec<Used>>>()?;
+            Ok(Stage::Closed(
+                u64::try_from(&a)?,
+                useds,
+                Duration::try_from(&c)?,
+            ))
         }
 
         fn try_responded(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Stage> {
@@ -60,8 +74,8 @@ impl<'a> TryFrom<PlutusData<'a>> for Stage {
 impl<'a> From<Stage> for PlutusData<'a> {
     fn from(value: Stage) -> Self {
         match value {
-            Stage::Opened(a) => constr!(0, a),
-            Stage::Closed(a, b) => constr!(1, a, b),
+            Stage::Opened(a, b) => constr!(0, a, PlutusData::list(b)),
+            Stage::Closed(a, b, c) => constr!(1, a, PlutusData::list(b), c),
             Stage::Responded(a, b) => constr!(2, a, PlutusData::list(b)),
         }
     }
