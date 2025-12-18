@@ -135,9 +135,9 @@ pub fn close_one(
             .add(*Duration::from_secs(1)),
     );
 
-    let channel_new_datum = match channel_old_datum.stage {
-        Stage::Opened(amount) => Ok(Datum {
-            stage: Stage::Closed(amount, elapse_at),
+    let channel_new_datum = match &channel_old_datum.stage {
+        Stage::Opened(amount, useds) => Ok(Datum {
+            stage: Stage::Closed(amount.clone(), useds.clone(), elapse_at),
             ..channel_old_datum.clone()
         }),
         Stage::Closed(..) | Stage::Responded(..) => Err(anyhow!("channel is not closed")),
@@ -222,7 +222,7 @@ pub fn open(
             sub_vkey: adaptor,
             close_period,
         },
-        stage: Stage::Opened(0),
+        stage: Stage::Opened(0, vec![]),
     });
 
     let funding_inputs: Vec<(Input, Option<PlutusData<'static>>)> =
@@ -255,12 +255,12 @@ pub fn mk_sub_step(receipt: &Receipt, channel_in: &Output) -> Option<(Lovelace, 
     let datum_in: Datum = parse_output_datum(channel_in).ok()?;
     let value_in: Value<u64> = channel_in.value().clone();
     let available = value_in.lovelace() - MIN_ADA_BUFFER;
-    if let Stage::Opened(subbed_in) = datum_in.stage {
+    if let Stage::Opened(subbed_in, useds) = datum_in.stage {
         let to_sub = {
             let owed = receipt.amount();
             min(available, owed - min(subbed_in, owed))
         };
-        let stage_out = Stage::Opened(subbed_in + to_sub);
+        let stage_out = Stage::Opened(subbed_in + to_sub, useds);
         let datum_out = Datum {
             own_hash: datum_in.own_hash,
             constants: datum_in.constants,
