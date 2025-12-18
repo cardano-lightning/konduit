@@ -448,7 +448,7 @@ impl_from_int!(
 // ------------------------------------------------------------- Converting (to)
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum PlutusType {
+pub enum PlutusDataType {
     Constr,
     Map,
     List,
@@ -459,56 +459,60 @@ pub enum PlutusType {
 #[derive(Debug)]
 pub struct ParsePlutusDataTypeError;
 
-impl fmt::Display for PlutusType {
+impl fmt::Display for PlutusDataType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PlutusType::Constr => write!(f, "Constr"),
-            PlutusType::Map => write!(f, "Map"),
-            PlutusType::List => write!(f, "List"),
-            PlutusType::Bytes => write!(f, "Bytes"),
-            PlutusType::Integer => write!(f, "Integer"),
+            PlutusDataType::Constr => write!(f, "Constr"),
+            PlutusDataType::Map => write!(f, "Map"),
+            PlutusDataType::List => write!(f, "List"),
+            PlutusDataType::Bytes => write!(f, "Bytes"),
+            PlutusDataType::Integer => write!(f, "Integer"),
         }
     }
 }
 
-impl FromStr for PlutusType {
+impl FromStr for PlutusDataType {
     type Err = ParsePlutusDataTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "Constr" => Ok(PlutusType::Constr),
-            "Map" => Ok(PlutusType::Map),
-            "List" => Ok(PlutusType::List),
-            "Bytes" => Ok(PlutusType::Bytes),
-            "Integer" => Ok(PlutusType::Integer),
+            "Constr" => Ok(PlutusDataType::Constr),
+            "Map" => Ok(PlutusDataType::Map),
+            "List" => Ok(PlutusDataType::List),
+            "Bytes" => Ok(PlutusDataType::Bytes),
+            "Integer" => Ok(PlutusDataType::Integer),
             _ => Err(ParsePlutusDataTypeError),
         }
     }
 }
 
-impl<'a> From<&PlutusData<'a>> for PlutusType {
+impl<'a> From<&PlutusData<'a>> for PlutusDataType {
     fn from(value: &PlutusData) -> Self {
         match value.0.as_ref() {
-            pallas::PlutusData::Constr(..) => PlutusType::Constr,
-            pallas::PlutusData::Map(..) => PlutusType::Map,
-            pallas::PlutusData::Array(..) => PlutusType::List,
-            pallas::PlutusData::BoundedBytes(..) => PlutusType::Bytes,
-            pallas::PlutusData::BigInt(..) => PlutusType::Integer,
+            pallas::PlutusData::Constr(..) => PlutusDataType::Constr,
+            pallas::PlutusData::Map(..) => PlutusDataType::Map,
+            pallas::PlutusData::Array(..) => PlutusDataType::List,
+            pallas::PlutusData::BoundedBytes(..) => PlutusDataType::Bytes,
+            pallas::PlutusData::BigInt(..) => PlutusDataType::Integer,
         }
     }
 }
 
-/// A first approximation of errors
+/// A list of 'common errors' when decoding plutus.
+/// This list is not exhaustive.
 #[derive(Debug, Error)]
-pub enum PlutusDecodeError {
-    #[error("Expected plutus type {0}, found {1}")]
-    Type(PlutusType, PlutusType),
-    #[error("Expected constr tag {0}, found {1}")]
-    Tag(u64, u64),
-    #[error("Expected list len {0}, found {1}")]
-    ListLen(usize, usize),
-    #[error("Expected bytes len {0}, found {1}")]
-    BytesLen(usize, usize),
+pub enum PlutusDataDecodeError {
+    #[error("Unexpected plutus type {got}; want {want:?}")]
+    Type {
+        got: PlutusDataType,
+        want: PlutusDataType,
+    },
+    #[error("Unexpected tag {got}; want (one of) {want:?}")]
+    Tag { got: u64, want: Vec<u64> },
+    #[error("Unexpected list len {got}; want {want}")]
+    ListLen { got: usize, want: usize },
+    #[error("Unexpected bytes len {got}; want {want}")]
+    BytesLen { got: usize, want: usize },
     // TODO :: should we also check in coercion?
     // #[error("Expected int within type safe range")]
     // IntSize,
@@ -520,93 +524,110 @@ impl From<PlutusData<'_>> for pallas::PlutusData {
     }
 }
 
-impl<'a> TryFrom<&'a PlutusData<'a>> for (u64, Vec<PlutusData<'a>>) {
-    type Error = PlutusDecodeError;
+impl<'a> TryFrom<&'a PlutusData<'a>> for (u64, PlutusData<'a>) {
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        let (ix, fields) = data.as_constr().ok_or(PlutusDecodeError::Type(
-            PlutusType::List,
-            PlutusType::from(data),
-        ))?;
+        let (ix, fields) = data.as_constr().ok_or(PlutusDataDecodeError::Type {
+            want: PlutusDataType::Constr,
+            got: PlutusDataType::from(data),
+        })?;
+        Ok((ix, PlutusData::list(fields.collect::<Vec<_>>())))
+    }
+}
+
+impl<'a> TryFrom<&'a PlutusData<'a>> for (u64, Vec<PlutusData<'a>>) {
+    type Error = PlutusDataDecodeError;
+
+    fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
+        let (ix, fields) = data.as_constr().ok_or(PlutusDataDecodeError::Type {
+            want: PlutusDataType::Constr,
+            got: PlutusDataType::from(data),
+        })?;
         Ok((ix, fields.collect()))
     }
 }
 
 impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for (u64, [PlutusData<'a>; T]) {
-    type Error = PlutusDecodeError;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        let (ix, fields) = data.as_constr().ok_or(PlutusDecodeError::Type(
-            PlutusType::List,
-            PlutusType::from(data),
-        ))?;
+        let (ix, fields) = data.as_constr().ok_or(PlutusDataDecodeError::Type {
+            want: PlutusDataType::List,
+            got: PlutusDataType::from(data),
+        })?;
         Ok((
             ix,
-            <[PlutusData<'a>; T]>::try_from(fields.collect::<Vec<_>>())
-                .map_err(|list| PlutusDecodeError::ListLen(T, list.len()))?,
+            <[PlutusData<'a>; T]>::try_from(fields.collect::<Vec<_>>()).map_err(|list| {
+                PlutusDataDecodeError::ListLen {
+                    want: T,
+                    got: list.len(),
+                }
+            })?,
         ))
     }
 }
 
 impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<(PlutusData<'a>, PlutusData<'a>)> {
-    type Error = PlutusDecodeError;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
         Ok(data
             .as_map()
-            .ok_or(PlutusDecodeError::Type(
-                PlutusType::List,
-                PlutusType::from(data),
-            ))?
+            .ok_or(PlutusDataDecodeError::Type {
+                want: PlutusDataType::Map,
+                got: PlutusDataType::from(data),
+            })?
             .collect())
     }
 }
 
 impl<'a> TryFrom<&'a PlutusData<'a>> for Vec<PlutusData<'a>> {
-    type Error = PlutusDecodeError;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
         Ok(data
             .as_list()
-            .ok_or(PlutusDecodeError::Type(
-                PlutusType::List,
-                PlutusType::from(data),
-            ))?
+            .ok_or(PlutusDataDecodeError::Type {
+                want: PlutusDataType::List,
+                got: PlutusDataType::from(data),
+            })?
             .collect())
     }
 }
 
 impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for [PlutusData<'a>; T] {
-    type Error = PlutusDecodeError;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
         let list: Vec<PlutusData<'_>> = data.try_into()?;
-        <[PlutusData<'_>; T]>::try_from(list)
-            .map_err(|list| PlutusDecodeError::ListLen(T, list.len()))
+        <[PlutusData<'_>; T]>::try_from(list).map_err(|list| PlutusDataDecodeError::ListLen {
+            want: T,
+            got: list.len(),
+        })
     }
 }
 
 impl<'a> TryFrom<&'a PlutusData<'a>> for &'a [u8] {
-    type Error = PlutusDecodeError;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        data.as_bytes().ok_or(PlutusDecodeError::Type(
-            PlutusType::Bytes,
-            PlutusType::from(data),
-        ))
+        data.as_bytes().ok_or(PlutusDataDecodeError::Type {
+            want: PlutusDataType::Bytes,
+            got: PlutusDataType::from(data),
+        })
     }
 }
 
 impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for &'a [u8; T] {
-    type Error = PlutusDecodeError;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-        let vec = data.as_bytes().ok_or(PlutusDecodeError::Type(
-            PlutusType::Bytes,
-            PlutusType::from(data),
-        ))?;
-        vec.try_into()
-            .map_err(|_| PlutusDecodeError::BytesLen(T, vec.len()))
+        let vec = <&[u8]>::try_from(data)?;
+        vec.try_into().map_err(|_| PlutusDataDecodeError::BytesLen {
+            want: T,
+            got: vec.len(),
+        })
     }
 }
 
@@ -615,11 +636,11 @@ macro_rules! impl_try_into_int {
     ($($t:ty),+ $(,)?) => {
         $(
             impl<'a> TryFrom<&'a PlutusData<'a>> for $t {
-                type Error = PlutusDecodeError;
+                type Error = PlutusDataDecodeError;
 
                             #[inline]
                 fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
-                    data.as_integer().ok_or(PlutusDecodeError::Type(PlutusType::Integer, PlutusType::from(data)))
+                    data.as_integer().ok_or(PlutusDataDecodeError::Type { want : PlutusDataType::Integer, got : PlutusDataType::from(data)})
                 }
             }
         )+
