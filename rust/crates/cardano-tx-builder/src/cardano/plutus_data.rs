@@ -488,18 +488,12 @@ impl FromStr for PlutusType {
 
 impl<'a> From<&PlutusData<'a>> for PlutusType {
     fn from(value: &PlutusData) -> Self {
-        if let Some(_) = value.as_constr() {
-            PlutusType::Constr
-        } else if let Some(_) = value.as_map() {
-            PlutusType::Map
-        } else if let Some(_) = value.as_list() {
-            PlutusType::List
-        } else if let Some(_) = value.as_bytes() {
-            PlutusType::Bytes
-        } else if let Some(_) = value.as_integer::<i128>() {
-            PlutusType::Integer
-        } else {
-            panic!("Impossible!")
+        match value.0.as_ref() {
+            pallas::PlutusData::Constr(..) => PlutusType::Constr,
+            pallas::PlutusData::Map(..) => PlutusType::Map,
+            pallas::PlutusData::Array(..) => PlutusType::List,
+            pallas::PlutusData::BoundedBytes(..) => PlutusType::Bytes,
+            pallas::PlutusData::BigInt(..) => PlutusType::Integer,
         }
     }
 }
