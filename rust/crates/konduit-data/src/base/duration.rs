@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, PlutusDataDecodeError};
 use serde::{Deserialize, Serialize};
 use std::{
     ops::{Deref, DerefMut},
@@ -69,19 +69,18 @@ impl FromStr for Duration {
 
 /// Parsing from data, assuming milliseconds
 impl<'a> TryFrom<&PlutusData<'a>> for Duration {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let time = u64::try_from(data).map_err(|e| e.context("invalid duration"))?;
-        Ok(Self(time::Duration::from_millis(time)))
+    fn try_from(data: &PlutusData<'a>) -> Result<Self, Self::Error> {
+        Ok(Self(time::Duration::from_millis(u64::try_from(data)?)))
     }
 }
 
 /// Parsing from data, assuming milliseconds
 impl<'a> TryFrom<PlutusData<'a>> for Duration {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+    fn try_from(data: PlutusData<'a>) -> Result<Self, Self::Error> {
         Self::try_from(&data)
     }
 }

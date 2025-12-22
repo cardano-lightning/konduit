@@ -10,7 +10,7 @@ pub enum Redeemer {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Redeemer {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
@@ -32,7 +32,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Redeemer {
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Redeemer {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         Redeemer::try_from(&data)
@@ -64,7 +64,7 @@ pub enum Step {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Step {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
@@ -85,7 +85,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Step {
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Step {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         Step::try_from(&data)
@@ -112,7 +112,7 @@ pub enum Cont {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Cont {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
@@ -169,7 +169,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Cont {
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Cont {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         Cont::try_from(&data)
@@ -230,7 +230,7 @@ pub enum Eol {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Eol {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let (tag, _fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
@@ -243,7 +243,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Eol {
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Eol {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         Eol::try_from(&data)

@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, PlutusDataDecodeError};
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
@@ -8,7 +8,7 @@ pub struct Tag(pub Vec<u8>);
 impl std::str::FromStr for Tag {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Tag(
             hex::decode(s).map_err(|e| anyhow!(e).context("invalid tag"))?
         ))
@@ -16,18 +16,17 @@ impl std::str::FromStr for Tag {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Tag {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let tag = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid tag"))?;
-        Ok(Self(Vec::from(tag)))
+    fn try_from(data: &PlutusData<'a>) -> Result<Self, Self::Error> {
+        Ok(Self(<&'_ [u8]>::try_from(data)?.to_vec()))
     }
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Tag {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+    fn try_from(data: PlutusData<'a>) -> Result<Self, Self::Error> {
         Self::try_from(&data)
     }
 }

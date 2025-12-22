@@ -84,7 +84,7 @@ impl From<Cheque> for MixedCheque {
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for MixedCheque {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         let (variant, fields): (u64, Vec<PlutusData<'_>>) = (&data).try_into()?;

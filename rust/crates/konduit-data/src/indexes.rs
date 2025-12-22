@@ -112,7 +112,7 @@ fn is_superset_of(a: &[u64], b: &[u64]) -> bool {
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Indexes {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         let l = data

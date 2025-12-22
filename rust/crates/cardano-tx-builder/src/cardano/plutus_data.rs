@@ -624,7 +624,7 @@ impl<'a, const T: usize> TryFrom<&'a PlutusData<'a>> for &'a [u8; T] {
 
     fn try_from(data: &'a PlutusData<'a>) -> Result<Self, Self::Error> {
         let vec = <&[u8]>::try_from(data)?;
-        vec.try_into().map_err(|_| PlutusDataDecodeError::BytesLen {
+        Self::try_from(vec).map_err(|_| PlutusDataDecodeError::BytesLen {
             want: T,
             got: vec.len(),
         })

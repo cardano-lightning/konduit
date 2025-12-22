@@ -18,7 +18,7 @@ impl Constants {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Constants {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
