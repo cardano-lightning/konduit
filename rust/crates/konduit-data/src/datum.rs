@@ -9,7 +9,7 @@ pub struct Datum {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for Datum {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let [a, b, c] = <[PlutusData; 3]>::try_from(data)?;

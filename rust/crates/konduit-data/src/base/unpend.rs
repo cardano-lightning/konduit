@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, PlutusDataDecodeError};
 
 use crate::utils::try_into_array;
 
@@ -12,7 +12,7 @@ pub enum Unpend {
 impl std::str::FromStr for Unpend {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() {
             return Ok(Unpend::Continue);
         }
@@ -24,25 +24,25 @@ impl std::str::FromStr for Unpend {
 
 // We use either empty bytestring or a 32-bytestring to represent Unpend
 impl<'a> TryFrom<&PlutusData<'a>> for Unpend {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let bytes: &[u8] = <&[u8]>::try_from(data).map_err(|e| e.context("invalid unpend"))?;
+    fn try_from(data: &PlutusData<'a>) -> Result<Self, Self::Error> {
+        let bytes: &[u8] = <&[u8]>::try_from(data)?;
         match bytes.len() {
             0 => Ok(Unpend::Continue),
             32 => {
                 let arr = <[u8; 32]>::try_from(bytes)?;
                 Ok(Unpend::Unlock(arr))
             }
-            _ => Err(anyhow!("invalid unpend length: {}", bytes.len())),
+            _ => panic!("Unexpected unpend length"),
         }
     }
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Unpend {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+    fn try_from(data: PlutusData<'a>) -> Result<Self, Self::Error> {
         Self::try_from(&data)
     }
 }

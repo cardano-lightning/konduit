@@ -12,7 +12,7 @@ pub enum Stage {
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Stage {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         let (variant, fields): (u64, Vec<PlutusData<'_>>) = (&data).try_into()?;

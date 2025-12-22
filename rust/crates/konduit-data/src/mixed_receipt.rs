@@ -248,7 +248,7 @@ impl MixedReceipt {
 }
 
 impl<'a> TryFrom<Vec<PlutusData<'a>>> for MixedReceipt {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(value: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
         Self::try_from(<[PlutusData; 2]>::try_from(value).map_err(|_| anyhow!("Bad length"))?)
@@ -256,7 +256,7 @@ impl<'a> TryFrom<Vec<PlutusData<'a>>> for MixedReceipt {
 }
 
 impl<'a> TryFrom<[PlutusData<'a>; 2]> for MixedReceipt {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(value: [PlutusData<'a>; 2]) -> anyhow::Result<Self> {
         let [a, b] = value;
@@ -271,7 +271,7 @@ impl<'a> TryFrom<[PlutusData<'a>; 2]> for MixedReceipt {
 }
 
 impl<'a> TryFrom<&PlutusData<'a>> for MixedReceipt {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         Self::try_from(<[PlutusData; 2]>::try_from(data)?)
