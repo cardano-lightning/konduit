@@ -43,7 +43,7 @@ impl PlutusScript {
         self.0
     }
 
-    pub fn script(&self) -> &Vec<u8> {
+    pub fn script(&self) -> &[u8] {
         &self.1
     }
 
