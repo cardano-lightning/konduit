@@ -43,6 +43,10 @@ impl PlutusScript {
         self.0
     }
 
+    pub fn script(&self) -> &Vec<u8> {
+        &self.1
+    }
+
     /// The size of the flat-serialized script, without any CBOR wrapper.
     pub fn size(&self) -> u64 {
         self.1.len() as u64
