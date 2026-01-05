@@ -15,6 +15,18 @@ impl std::str::FromStr for Tag {
     }
 }
 
+impl AsRef<[u8]> for Tag {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<Vec<u8>> for Tag {
+    fn from(value: Vec<u8>) -> Self {
+        Self(value)
+    }
+}
+
 impl<'a> TryFrom<&PlutusData<'a>> for Tag {
     type Error = anyhow::Error;
 

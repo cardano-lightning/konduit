@@ -75,7 +75,7 @@ handshake. While the channel is open, Consumer can make payments to BLN via
 Adaptor. This happens off-chain aka the L2. The details of the exchanges and
 their context are elsewhere. The important aspects are:
 
-- When initiating a pay, Consumer sends Adaptor a "cheque"
+- When initiating a pay, Consumer sends Adaptor a "(locked) cheque"
 - When resolving a pay Adaptor will request Consumer "squash" cheques into a
   single piece of data.
 
@@ -92,9 +92,9 @@ Adaptor will stop handling new Consumer requests when they see the channel is
 `closed`. There is no risk to Adaptor, so long as they watch the chain more
 frequently than once every respond period.
 
-The Adaptor has evidence they are owed funds as in a `sub`. However, at the time
-of the `respond` it may yet be determined which of the pair is the rightful
-owner of the funds associated to cheques. We say these are pending cheques.
+Adaptor has evidence they are owed funds as in a `sub`. However, at the time of
+the `respond` it may yet be determined which of the pair is the rightful owner
+of the funds associated to cheques. We say these are pending cheques.
 
 If Adaptor has no pending cheques then they are able to take all funds owed
 immediately. If Adaptor has some pending cheques these are held until a point in
@@ -136,8 +136,6 @@ case.
   channels.
 - Only `Sha2_256` locks are available (cf Cardano Lightning with support for
   other lock types).
-- For Konduit, a "Cheque" has a hash and timeout. There is no notion of a cheque
-  without this.
 
 ### HTLCs
 
@@ -234,11 +232,14 @@ the context of channel, the "with respect to" is implicitly understood. (Caveat:
 a mutual tx can do _anything_! The output of a mutual tx should not be treated
 as a continuing output/ is not the continuation of a lifecycle.)
 
-## Cheque
+## Cheques
 
-Cheques are a vehicle by which funds are sent from Consumer to Adaptor. Cheque
-is the key datatype by which the HTLC mechanism relies on. A cheque corresponds
-to a channel, and is created by Consumer and sent to Adaptor.
+Cheques are a vehicle by which funds are sent from Consumer to Adaptor. At
+different points in the process the relevant and known state of the cheque may
+vary between participants. For example a cheque is initially locked, and when
+the secret is learnt is effectively unlocked. We codify our terms here.
+
+### Locked
 
 The data definition is as follows
 
@@ -246,33 +247,33 @@ The data definition is as follows
 type Timeout = Timestamp
 type Lock = Bytes32
 type ChequeBody = (Index, Amount, Timeout, Lock)
-type Cheque = (ChequeBody, Signature)
+type Locked = (ChequeBody, Signature)
 ```
 
-More precisely a cheque is associated to a keytag. In theory there can be
-multiple channels with the same keytag. However, this puts only the user
+More precisely a locked (cheque) is associated to a keytag. In theory there can
+be multiple channels with the same keytag. However, this puts only the user
 providing the funds at risk. We reiterate a warning that Consumer should not
 reuse keytag unless they absolutely know what they are doing. Since we expect
 Consumer to reuse their key, we suggest they choose unique tags (with respect to
 their key).
 
-We say a cheque `(body, signature)` is **well-formed** if it is well-signed.
+We say a locked `(body, signature)` is **well-formed** if it is well-signed.
 
-When Adaptor receives a cheque they must verify it is well-formed. Note there
-are many other reasons Adaptor may reject a cheque. For example:
+When Adaptor receives a locked they must verify it is well-formed. Note there
+are many other reasons Adaptor may reject a locked. For example:
 
 - Non positive index
 - Reuse of index
 - Amount not underwritten by channel
 - Insufficient time before timeout _etc_
 
-The correctness of a cheque with respect to these other conditions depends on
-context external to the cheque itself. The timeout is important on the L1. In
-practice this verification is postponed. Thus, we say a cheque is well-formed
+The correctness of a locked with respect to these other conditions depends on
+context external to the locked itself. The timeout is important on the L1. In
+practice this verification is postponed. Thus, we say a locked is well-formed
 **subject** to an upper bound `bound` if is well-formed, and the `bound` is
 `<= timeout`.
 
-## Unlocked
+### Unlocked
 
 To use a cheque as proof of funds owed, the receiver must provide the "secret".
 A secret is a bytearray that hashes (sha2 256) to the lock. Moreover, it must be
@@ -289,6 +290,21 @@ the keytag `(key, tag)`, subject to an upper bound `bound` provided that:
 - unlocked.0 : `(body, sig)` is well-signed wrt `(key, tag)`
 - unlocked.1 : the secret hashes to the lock
 - unlocked.2 : the secret length is 32
+
+### Cheque
+
+We codify Cheque to encapsulate the two states. Note that we still use the term
+cheque in its more general sense.
+
+```aiken
+type Cheque {
+    Unlocked(..Unlocked)
+    Locked(..Locked)
+}
+```
+
+A cheque is **well-formed** provided that whatever it is wrapping is
+well-formed.
 
 ## Squash
 
@@ -327,7 +343,13 @@ not appear in the `Exclude` list.
 Unlike CL we do not need to "Snapshots", which are the pair squashes one of each
 participant, since only Consumer is issuing cheques.
 
-## Receipt
+## Receipts
+
+Receipts are the collection of funds owed. There are two kinds: one for a sub,
+and the other for a respond. The difference being that a sub does not need to
+include unresolved (still locked) cheques, while a respond does.
+
+### Sub Receipt
 
 Before Adaptor routes any cheques from Consumer, they must receive the initial
 squash. This can be the empty (aka null) squash, with body `(0,0,[])`, declaring
@@ -337,10 +359,10 @@ In a `sub`, Adaptor presents evidence of funds owed. The evidence is a
 `Receipt`.
 
 ```aiken
-type Receipt =  (Squash, List<Unlocked>)
+(Squash, List<Unlocked>)
 ```
 
-A receipt is **well-formed** if:
+A (sub) receipt is **well-formed** if:
 
 - the squash is well-signed
 - each unlocked is well-formed
@@ -364,47 +386,22 @@ channel datum (see below). In a sub step, Adaptor can redeem no more than the
 difference between `owed` and `subbed`. The new cumulative amount `subbed` is
 what the continuing output records.
 
-## Mixed Cheque
+### Respond Receipt
 
-At the instance end of life, Consumer may close while some cheques are neither
-timed out or had their secret revealed. Thus we need to accommodate these
-unresolved, aka pending, cheques. Enter mixed cheque: either an unlocked or
-(locked) cheque.
-
-```aiken
-type MixedCheque {
-    MUnlocked(..Unlocked)
-    MCheque(..Cheque)
-}
-```
-
-The `Mixed` is a mix of unlocked cheques and pending cheques.
-
-A mixed cheque is **well-formed** provided that whatever it is wrapping is
-well-formed.
-
-Our choice of vocab is close to that of Cardano Lightning, but with some
-divergence. Konduit is simpler. For example:
-
-- There is no "normal" cheque. Instead Consumer issues a squash. See below.
-- There are no other locks, so the data structure of the locked cheque is
-  simpler. We only support the lock present on BLN.
-
-## Mixed Receipt
-
-A mixed receipt, as name suggests, is the equivalent to receipt but with
-`MixedCheque`s. In a `respond` Adaptor includes also cheques yet to be
+A receipt in the case of a respond must also include cheques yet to be
 determined:
 
 ```aiken
-type MReceipt =  (Squash, List<MixedCheque>)
+(Squash, List<MixedCheque>)
 ```
 
-The well-formedness of an MReceipt is analogous to those above.
+The well-formedness of an Receipt is analogous to those above.
 
 To account `MReceipt` is similar to that of `Receipt` but must also handle the
 yet to be determined cheques. Pending cheques persist in the instance on-chain
 until on of the participants can demonstrate the funds are theirs.
+
+FIXME
 
 Account for `MReceipt` as follows:
 

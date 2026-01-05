@@ -1,4 +1,4 @@
-use crate::{MixedCheque, Squash, Unlocked, Unpend};
+use crate::{Cheque, Squash, Unlocked, Unpend};
 use anyhow::anyhow;
 use cardano_tx_builder::{PlutusData, constr};
 
@@ -106,7 +106,7 @@ pub enum Cont {
     Add,
     Sub(Squash, Vec<Unlocked>),
     Close,
-    Respond(Squash, Vec<MixedCheque>),
+    Respond(Squash, Vec<Cheque>),
     Unlock(Vec<Unpend>),
     Expire(Vec<Unpend>),
 }
@@ -133,11 +133,11 @@ impl<'a> TryFrom<&PlutusData<'a>> for Cont {
                 let [a, b] = <[PlutusData; 2]>::try_from(fields.collect::<Vec<_>>())
                     .map_err(|_| anyhow!("invalid 'Cont::Sub'"))?;
                 let squash = Squash::try_from(&a)?;
-                let mixed_cheques = <Vec<PlutusData>>::try_from(&b)?
+                let cheques = <Vec<PlutusData>>::try_from(&b)?
                     .into_iter()
-                    .map(MixedCheque::try_from)
-                    .collect::<anyhow::Result<Vec<MixedCheque>>>()?;
-                Ok(Cont::Respond(squash, mixed_cheques))
+                    .map(Cheque::try_from)
+                    .collect::<anyhow::Result<Vec<Cheque>>>()?;
+                Ok(Cont::Respond(squash, cheques))
             }
             4 => {
                 let [a] = <[PlutusData; 1]>::try_from(fields.collect::<Vec<_>>())
@@ -191,11 +191,11 @@ impl<'a> From<Cont> for PlutusData<'a> {
                 )
             ),
             Cont::Close => constr!(2),
-            Cont::Respond(squash, mixed_cheques) => constr!(
+            Cont::Respond(squash, cheques) => constr!(
                 3,
                 PlutusData::from(squash),
                 PlutusData::list(
-                    mixed_cheques
+                    cheques
                         .into_iter()
                         .map(PlutusData::from)
                         .collect::<Vec<PlutusData>>(),

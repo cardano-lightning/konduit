@@ -41,10 +41,10 @@
     "Int": {
       "dataType": "integer"
     },
-    "List$konduit/types/MixedCheque": {
+    "List$konduit/types/Cheque": {
       "dataType": "list",
       "items": {
-        "$ref": "#/definitions/konduit~1types~1MixedCheque"
+        "$ref": "#/definitions/konduit~1types~1Cheque"
       }
     },
     "List$konduit/types/Pending": {
@@ -96,6 +96,41 @@
     "konduit/prelude/Index": {
       "title": "Index",
       "dataType": "integer"
+    },
+    "konduit/types/Cheque": {
+      "title": "Cheque",
+      "description": "A mix of unlocked or (locked) cheques",
+      "anyOf": [
+        {
+          "title": "UnlockedCheque",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1ChequeBody"
+            },
+            {
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            },
+            {
+              "$ref": "#/definitions/konduit~1types~1Secret"
+            }
+          ]
+        },
+        {
+          "title": "LockedCheque",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1ChequeBody"
+            },
+            {
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            }
+          ]
+        }
+      ]
     },
     "konduit/types/ChequeBody": {
       "title": "ChequeBody",
@@ -181,7 +216,7 @@
               "$ref": "#/definitions/konduit~1types~1Squash"
             },
             {
-              "$ref": "#/definitions/List$konduit~1types~1MixedCheque"
+              "$ref": "#/definitions/List$konduit~1types~1Cheque"
             }
           ]
         },
@@ -253,41 +288,6 @@
     "konduit/types/Lock": {
       "title": "Lock",
       "dataType": "bytes"
-    },
-    "konduit/types/MixedCheque": {
-      "title": "MixedCheque",
-      "description": "A mix of unlocked or (locked) cheques",
-      "anyOf": [
-        {
-          "title": "MUnlocked",
-          "dataType": "constructor",
-          "index": 0,
-          "fields": [
-            {
-              "$ref": "#/definitions/konduit~1types~1ChequeBody"
-            },
-            {
-              "$ref": "#/definitions/aiken~1crypto~1Signature"
-            },
-            {
-              "$ref": "#/definitions/konduit~1types~1Secret"
-            }
-          ]
-        },
-        {
-          "title": "MCheque",
-          "dataType": "constructor",
-          "index": 1,
-          "fields": [
-            {
-              "$ref": "#/definitions/konduit~1types~1ChequeBody"
-            },
-            {
-              "$ref": "#/definitions/aiken~1crypto~1Signature"
-            }
-          ]
-        }
-      ]
     },
     "konduit/types/Pending": {
       "title": "Pending",

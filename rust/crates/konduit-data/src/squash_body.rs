@@ -1,18 +1,19 @@
 use std::cmp;
 
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
 use cardano_tx_builder::cbor::ToCbor;
+use cardano_tx_builder::{PlutusData, cbor};
+use serde::{Deserialize, Serialize};
 
-use crate::{ChequeBody, Indexes, IndexesExtendError, Tag};
+use crate::{ChequeBody, Indexes, IndexesError, Tag};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
-pub enum SquashBodySquashError {
+pub enum SquashBodyError {
     #[error("Duplicate index")]
     DuplicateIndex,
 
-    #[error("Indexes extend error {0}")]
-    IndexesExtendError(IndexesExtendError),
+    #[error("Exclude error {0}")]
+    Exclude(IndexesError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +23,45 @@ pub struct SquashBody {
     pub exclude: Indexes,
 }
 
+impl Serialize for SquashBody {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let bytes = PlutusData::from(self.clone()).to_cbor();
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(bytes))
+        } else {
+            serializer.serialize_bytes(&bytes)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SquashBody {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes: Vec<u8> = if deserializer.is_human_readable() {
+            let str: String = serde::Deserialize::deserialize(deserializer)?;
+            hex::decode(str).map_err(serde::de::Error::custom)?
+        } else {
+            serde::Deserialize::deserialize(deserializer)?
+        };
+        let plutus_data: PlutusData = cbor::decode(&bytes).map_err(serde::de::Error::custom)?;
+        Self::try_from(plutus_data).map_err(serde::de::Error::custom)
+    }
+}
+
 impl SquashBody {
+    pub fn zero() -> Self {
+        SquashBody {
+            amount: 0,
+            index: 0,
+            exclude: Indexes::empty(),
+        }
+    }
+
     pub fn new(amount: u64, index: u64, exclude: Indexes) -> anyhow::Result<Self> {
         match SquashBody::verify_new(&index, &exclude) {
             true => Ok(SquashBody::new_no_verify(amount, index, exclude)),
@@ -55,18 +94,18 @@ impl SquashBody {
     /// Only squash what has been verified.
     /// Fails if the cheque is unable to be squashed due
     /// to: Already squashed or; exceed max exclude length.
-    pub fn squash(&mut self, cheque_body: ChequeBody) -> Result<(), SquashBodySquashError> {
+    pub fn squash(&mut self, cheque_body: ChequeBody) -> Result<(), SquashBodyError> {
         match self.exclude.remove(cheque_body.index) {
             Ok(_) => {
                 self.amount += cheque_body.amount;
                 Ok(())
             }
             Err(_) => match self.index < cheque_body.index {
-                false => Err(SquashBodySquashError::DuplicateIndex),
+                false => Err(SquashBodyError::DuplicateIndex),
                 true => {
                     self.exclude
                         .extend(self.index + 1, cheque_body.index - 1)
-                        .map_err(SquashBodySquashError::IndexesExtendError)?;
+                        .map_err(SquashBodyError::Exclude)?;
                     self.amount += cheque_body.amount;
                     self.index = cheque_body.index;
                     Ok(())
@@ -99,6 +138,16 @@ impl<'a> TryFrom<PlutusData<'a>> for SquashBody {
 
 impl<'a> From<&SquashBody> for PlutusData<'a> {
     fn from(value: &SquashBody) -> Self {
+        Self::list(vec![
+            PlutusData::from(value.amount),
+            PlutusData::from(value.index),
+            PlutusData::from(&value.exclude),
+        ])
+    }
+}
+
+impl<'a> From<SquashBody> for PlutusData<'a> {
+    fn from(value: SquashBody) -> Self {
         Self::list(vec![
             PlutusData::from(value.amount),
             PlutusData::from(value.index),

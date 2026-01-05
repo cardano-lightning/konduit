@@ -80,7 +80,7 @@ impl L2Channel {
 
     pub fn from_channels(keytag: Keytag, l1_channels: Vec<L1Channel>) -> Self {
         let l1_channel = l1_channels.into_iter().max_by_key(|item| match item.stage {
-            konduit_data::Stage::Opened(_) => item.amount,
+            konduit_data::Stage::Opened(_, _) => item.amount,
             _ => 0,
         });
         L2Channel {
@@ -121,11 +121,11 @@ impl L2Channel {
         let Some(l1_channel) = &self.l1_channel else {
             return 0;
         };
-        let konduit_data::Stage::Opened(subbed) = l1_channel.stage else {
+        let konduit_data::Stage::Opened(subbed, used) = &l1_channel.stage else {
             return 0;
         };
         let committed = self.committed();
-        if committed < subbed {
+        if &committed < subbed {
             // This should happen only if there exists mimics
             return 0;
         }
@@ -141,9 +141,9 @@ impl L2Channel {
     /// Find the L1 with max claimable amount, max avaliable amount
     pub fn update_from_l1(&mut self, channels: Vec<L1Channel>) {
         let owed = self.owed();
-        let l1_channel = channels.iter().max_by_key(|item| match item.stage {
-            Stage::Opened(subbed) => {
-                if owed < subbed {
+        let l1_channel = channels.iter().max_by_key(|item| match &item.stage {
+            Stage::Opened(subbed, used) => {
+                if &owed < subbed {
                     (0, 0)
                 } else {
                     (min(owed - subbed, item.amount), item.amount)
@@ -171,7 +171,7 @@ impl L2Channel {
         let Some(ref mut mixed_receipt) = self.mixed_receipt else {
             return Err(L2ChannelInsertChequeError::NotInitiated);
         };
-        let subbed = if let konduit_data::Stage::Opened(subbed_val) = l1_channel.stage {
+        let subbed = if let konduit_data::Stage::Opened(subbed_val, used) = &l1_channel.stage {
             subbed_val
         } else {
             return Err(L2ChannelInsertChequeError::NotOpened);
@@ -193,7 +193,7 @@ impl L2Channel {
         let Some(l1_channel) = self.l1_channel.as_ref() else {
             return Err(L2ChannelUpdateSquashError::NoL1Channel);
         };
-        let Stage::Opened(_) = l1_channel.stage else {
+        let Stage::Opened(_, _) = l1_channel.stage else {
             return Err(L2ChannelUpdateSquashError::NotOpened);
         };
         let Some(ref mut mixed_receipt) = self.mixed_receipt.as_mut() else {

@@ -8,7 +8,6 @@ use konduit/types as t
 /// In a standard tx, all but one of the script inputs is spent with `Defer`. More
 /// precisely, the lexicographical first validator input in the tx inputs must have
 /// redeemer `Main`, and all the rest are spent with `Defer`.
-
 pub fn handle(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
   own_oref != main_oref(Script(datum.1st), tx.inputs)
 }
@@ -34,4 +33,3 @@ fn get_own_hash(datum: Datum) {
   expect (own_hash, _, _): (ScriptHash, Data, Data) = inline
   own_hash
 }
-

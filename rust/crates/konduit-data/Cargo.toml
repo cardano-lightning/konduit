@@ -23,3 +23,5 @@ uplc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+serde_with = { version = "3.16.1", features = ["hex"] }
+bincode = "1.3.3"

@@ -1,9 +1,8 @@
-use crate::{Duration, Lock};
+use crate::{Duration, Lock, Locked};
 use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Pending {
     pub amount: u64,
     pub timeout: Duration,
@@ -16,6 +15,16 @@ impl Pending {
             amount,
             timeout,
             lock,
+        }
+    }
+}
+
+impl From<Locked> for Pending {
+    fn from(value: Locked) -> Self {
+        Self {
+            amount: value.amount(),
+            timeout: value.body.timeout,
+            lock: value.body.lock,
         }
     }
 }
