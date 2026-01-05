@@ -1,10 +1,9 @@
 use anyhow::anyhow;
 use cardano_tx_builder::{PlutusData, constr};
-use serde::{Deserialize, Serialize};
 
 use crate::{Duration, Pending, Used};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Stage {
     Opened(u64, Vec<Used>),
     Closed(u64, Vec<Used>, Duration),

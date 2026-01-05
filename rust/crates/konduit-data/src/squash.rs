@@ -1,55 +1,45 @@
 use anyhow::anyhow;
 use cardano_tx_builder::{PlutusData, Signature, SigningKey, VerificationKey};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::{
-    SquashBody, Tag, plutus_data_serde,
+    SquashBody, Tag,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Squash {
-    pub squash_body: SquashBody,
+    pub body: SquashBody,
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub signature: Signature,
 }
 
-impl Serialize for Squash {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        plutus_data_serde::serialize(self, serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Squash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        plutus_data_serde::deserialize::<D, Self>(deserializer)
-    }
-}
-
 impl Squash {
-    pub fn new(squash_body: SquashBody, signature: Signature) -> Self {
-        Self {
-            squash_body,
-            signature,
-        }
+    pub fn new(body: SquashBody, signature: Signature) -> Self {
+        Self { body, signature }
     }
 
     pub fn amount(&self) -> u64 {
-        self.squash_body.amount
+        self.body.amount
     }
 
-    pub fn make(signing_key: &SigningKey, tag: &Tag, squash_body: SquashBody) -> Self {
-        let signature = signing_key.sign(squash_body.tagged_bytes(tag));
-        Self::new(squash_body, signature)
+    pub fn index(&self) -> u64 {
+        self.body.index
+    }
+
+    pub fn is_index_squashed(&self, index: u64) -> bool {
+        self.body.is_index_squashed(index)
+    }
+
+    pub fn make(signing_key: &SigningKey, tag: &Tag, body: SquashBody) -> Self {
+        let signature = signing_key.sign(body.tagged_bytes(tag));
+        Self::new(body, signature)
     }
 
     pub fn verify(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
-        verification_key.verify(self.squash_body.tagged_bytes(tag), &self.signature)
+        verification_key.verify(self.body.tagged_bytes(tag), &self.signature)
     }
 }
 
@@ -92,7 +82,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Squash {
 impl<'a> From<Squash> for [PlutusData<'a>; 2] {
     fn from(value: Squash) -> Self {
         [
-            PlutusData::from(&value.squash_body),
+            PlutusData::from(&value.body),
             signature_to_plutus_data(value.signature),
         ]
     }
@@ -101,5 +91,27 @@ impl<'a> From<Squash> for [PlutusData<'a>; 2] {
 impl<'a> From<Squash> for PlutusData<'a> {
     fn from(value: Squash) -> Self {
         Self::list(<[PlutusData; 2]>::from(value).to_vec())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Indexes;
+
+    use super::*;
+
+    #[test]
+    fn test_squash_round_trip() {
+        let sk = SigningKey::from([0; 32]);
+        let tag = Tag([1; 20].to_vec());
+        let body = SquashBody::new_no_verify(120309, 123, Indexes::new([22].to_vec()).unwrap());
+        let original = Squash::make(&sk, &tag, body);
+
+        println!("{}", serde_json::to_string_pretty(&original).unwrap());
+        let ser = serde_json::to_vec(&original).expect("Failed to serialize ChequeBody");
+
+        let de: Squash = serde_json::from_slice(&ser).expect("Failed to deserialize ChequeBody");
+
+        assert_eq!(original.body, de.body);
     }
 }

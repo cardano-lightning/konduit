@@ -2,7 +2,7 @@ use anyhow::{Error, Result, anyhow};
 use cardano_tx_builder::PlutusData;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Used {
     pub index: u64,
     pub amount: u64,

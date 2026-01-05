@@ -16,7 +16,7 @@ pub fn do(
   value_out: Value,
   stage_out: t.Stage,
   squash: t.Squash,
-  mixeds: List<t.MixedCheque>,
+  cheques: List<t.Cheque>,
 ) -> VerificationKey {
   let t.Constants { tag, add_vkey, sub_vkey, .. } = constants
   expect t.Closed(subbed_in, useds_in, _) = stage_in
@@ -29,7 +29,7 @@ pub fn do(
       tag,
       useds_in,
       squash,
-      mixeds,
+      cheques,
       pends_amount,
       pends,
     )
@@ -43,7 +43,7 @@ fn account(
   tag: t.Tag,
   useds: List<t.Used>,
   squash: t.Squash,
-  mixed: List<t.MixedCheque>,
+  cheques: List<t.Cheque>,
   p_total: Amount,
   pendings: List<t.Pending>,
 ) -> Amount {
@@ -67,7 +67,7 @@ fn account(
     _exclude,
     p_total,
     pendings,
-  <- foldl6(mixed, owed, useds, index, exclude, p_total, pendings, with)
+  <- foldl6(cheques, owed, useds, index, exclude, p_total, pendings, with)
   expect p_total == 0
   expect pendings == []
   owed
@@ -79,7 +79,7 @@ type ReturnWith<result> =
 fn with_(
   before: fn(Int) -> Bool,
   wellsinged: fn(Data, Signature) -> Bool,
-  mixed_cheque: t.MixedCheque,
+  cheques: t.Cheque,
   owed: Amount,
   useds: List<t.Used>,
   index: Index,
@@ -88,8 +88,8 @@ fn with_(
   pendings: List<t.Pending>,
   return: ReturnWith<result>,
 ) -> result {
-  when mixed_cheque is {
-    t.MUnlocked(body, signature, secret) -> {
+  when cheques is {
+    t.UnlockedCheque(body, signature, secret) -> {
       let new_index, amount, timeout <-
         wf.unlocked(wellsinged, body, signature, secret, _)
       let
@@ -102,7 +102,7 @@ fn with_(
       expect before(timeout)
       return(owed + amount, useds, index, exclude, p_total, pendings)
     }
-    t.MCheque(body, signature) -> {
+    t.LockedCheque(body, signature) -> {
       expect wellsinged(body, signature)
       let (new_index, amount, timeout, lock) = body
       let

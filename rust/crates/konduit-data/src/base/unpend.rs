@@ -1,12 +1,25 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 
-use crate::utils::try_into_array;
+use crate::{Secret, utils::try_into_array};
 
 #[derive(Debug, Clone)]
 pub enum Unpend {
     Continue,
+    Expire,
     Unlock([u8; 32]),
+}
+
+impl Unpend {
+    pub fn is_continue(&self) -> bool {
+        matches!(self, Unpend::Continue)
+    }
+}
+
+impl From<&Secret> for Unpend {
+    fn from(value: &Secret) -> Self {
+        Self::Unlock(value.0.clone())
+    }
 }
 
 impl std::str::FromStr for Unpend {
@@ -34,7 +47,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Unpend {
                 let arr = <[u8; 32]>::try_from(bytes)?;
                 Ok(Unpend::Unlock(arr))
             }
-            _ => Err(anyhow!("invalid unpend length: {}", bytes.len())),
+            _ => Ok(Unpend::Expire),
         }
     }
 }
@@ -51,6 +64,7 @@ impl<'a> From<Unpend> for PlutusData<'a> {
     fn from(value: Unpend) -> Self {
         match value {
             Unpend::Continue => PlutusData::bytes([]),
+            Unpend::Expire => PlutusData::bytes([0]),
             Unpend::Unlock(arr) => PlutusData::bytes(arr),
         }
     }

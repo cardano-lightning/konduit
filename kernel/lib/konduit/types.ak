@@ -17,10 +17,10 @@ type Timeout =
 pub type ChequeBody =
   (Index, Amount, Timeout, Lock)
 
-/// Cheque
+/// Locked
 /// The signature corresponds that of the 
 /// add_vkey on the messaged from of the "tagged" cheque body
-pub type Cheque =
+pub type Locked =
   (ChequeBody, Signature)
 
 /// The secret aka the preimage
@@ -32,9 +32,9 @@ pub type Unlocked =
   (ChequeBody, Signature, Secret)
 
 /// A mix of unlocked or (locked) cheques
-pub type MixedCheque {
-  MUnlocked(ChequeBody, Signature, Secret)
-  MCheque(ChequeBody, Signature)
+pub type Cheque {
+  UnlockedCheque(ChequeBody, Signature, Secret)
+  LockedCheque(ChequeBody, Signature)
 }
 
 /// Exclude list
@@ -69,13 +69,6 @@ pub type Constants {
   sub_vkey: VerificationKey,
   close_period: Int,
 }
-
-/// RECEIPT 
-pub type Receipt =
-  (Squash, List<Unlocked>)
-
-pub type MReceipt =
-  (Squash, List<MixedCheque>)
 
 /// STAGE
 type ElapseAt =
@@ -116,7 +109,7 @@ pub type Cont {
   Add
   Sub(Squash, List<Unlocked>)
   Close
-  Respond(Squash, List<MixedCheque>)
+  Respond(Squash, List<Cheque>)
   Unlock(List<Unpend>)
   Expire(List<Unpend>)
 }
