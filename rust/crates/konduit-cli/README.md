@@ -9,49 +9,65 @@ corresponding values, and rename as `.env`.
 
 ## Using
 
+The CLI is _user-centric_. In fact, there is a distinct CLI for Consumer and
+Adaptor. In addition, there is one for admin.
+
+Outputs are one of:
+
 ```
-cargo run -- --help
+[Def] : Default Space separated values. Binary data is hex
+csv : comma seperated values. Binary data is hex
+json : pretty JSON
+cbor : cbor binary
 ```
 
-### open
+```sh
+konduit consumer setup key >> .env.consumer
+konduit consumer show config
+konduit consumer show keytag <tag>
+konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --open <tag>,<adaptor>,<close-period>,<amount> --dry-run
+konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --open <tag>,<adaptor>,<close-period>,<amount>
+konduit consumer show tip
+konduit consumer data null-squash <tag>
+konduit consumer make lock <secret> # <lock>
+konduit consumer make cheque --tag <tag> --index <index> --amount <amount> --timeout <timeout> --lock <lock> --csv # <hexcbor cheque body>,<hex signature>
+konduit consumer make cheque --tag <tag> --index <index> --amount <amount> --timeout <timeout> --secret <secret> --csv # <hexcbor cheque body>,<hex signature>
+konduit consumer verify secret --secret <secret> --lock <lock>
+konduit consumer verify squash --tag <tag> --body <squash> --signature <signature> --csv
+konduit consumer make squash --tag <tag> --amount <amount> --index <index> --exclude <exclude>
+konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --add <tag>,<amount> --close <tag>
+```
+
+```sh
+konduit adaptor setup key >> .env
+konduit adaptor show constants --csv
+konduit adaptor show config
+konduit adaptor show tip
+konduit adaptor verify squash --keytag <keytag> --body <body> --signature <signature> # <bool>
+konduit adaptor verify squash --keytag <keytag> --squash <body> <signature> # <bool>
+konduit adaptor verify locked --keytage <keytag> --body <locked> --signature <signature> # <bool>
+konduit adaptor verify secret --secret <secret> --lock <lock> # <bool>
+konduit adaptor make receipt <squash>;(<locked>);<locked>,<secret>;<locked>,<secret>;
+konduit adaptor tx --receipt <receipt> --receipt <receipt>
+```
+
+```sh
+konduit admin setup key >> .env
+konduit admin show config
+konduit admin tx deploy
+konduit admin tx send --to <address> <amount> --rest <address>
+```
+
+It is easy to compose:
 
 ```
-❯ cargo run -- open --help
-Open a channel with an adaptor and deposit some funds into it
-
-Usage: konduit-cli open \
-    --amount <U64> \
-    --consumer <ED25519_PUB> \
-    --adaptor <ED25519_PUB> \
-    --channel-tag <HEX32> \
-    --close-period <DURATION>
-
-Options:
-      --amount <U64>
-          Quantity of Lovelace to deposit into the channel
-
-      --consumer <ED25519_PUB>
-          Consumer's verification key, allowed to *add* funds.
-
-          We also assume that the consumer is opening that channel and paying for it.
-
-          [env: KONDUIT_CONSUMER=]
-
-      --adaptor <ED25519_PUB>
-          Adaptor's verification key, allowed to *sub* funds
-
-          [env: KONDUIT_ADAPTOR=]
-
-      --channel-tag <HEX32>
-          An (ideally) unique tag to discriminate channels and allow reuse of keys between them
-
-          [env: KONDUIT_CHANNEL_TAG=]
-
-      --close-period <DURATION>
-          Minimum time from `close` to `elapse`. You may specify the duration with a unit; for examples: 5s, 27min, 3h
-
-          [env: KONDUIT_CLOSE_PERIOD=24h]
-
-  -h, --help
-          Print help (see a summary with '-h')
+konduit consumer tx --open <tag>,$(konduit adaptor show constants --csv),<amount>
+konduit adaptor verify squash --keytag $(konduit adaptor show keytag <tag>) --squash $(konduit consumer make squash --tag <tag> --amount <amount> ... --csv)
 ```
+
+### Dotenv
+
+The tool expect envvars for secrets and constants. These can exist via envvars,
+but using `.env` is more convenient when driving by hand. The expected envvars
+is not identical for the different users. For this reason, the tool allows for
+multiple `.env.<user>`, with `.env` used as fallback.
