@@ -7,9 +7,3 @@ pub struct Wallet {
     #[arg(long)]
     pub wallet: Option<SigningKey>,
 }
-
-impl Wallet {
-    pub fn resolve(&self) -> SigningKey {
-        self.wallet.clone().unwrap_or(SigningKey::generate())
-    }
-}

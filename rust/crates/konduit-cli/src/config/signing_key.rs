@@ -68,11 +68,14 @@ impl SigningKey {
     }
 
     pub fn to_address(&self, network_id: &NetworkId) -> Address<kind::Shelley> {
-        Address::new(
-            network_id.clone(),
-            Credential::from_key(Hash::<28>::new(&VerificationKey::from(
-                &<cardano_tx_builder::SigningKey>::from(self.clone()),
-            ))),
-        )
+        Address::new(network_id.clone(), Credential::from_key(self.to_vkh()))
+    }
+
+    pub fn to_verification_key(&self) -> VerificationKey {
+        VerificationKey::from(&<cardano_tx_builder::SigningKey>::from(self.clone()))
+    }
+
+    pub fn to_vkh(&self) -> Hash<28> {
+        Hash::<28>::new(&self.to_verification_key())
     }
 }

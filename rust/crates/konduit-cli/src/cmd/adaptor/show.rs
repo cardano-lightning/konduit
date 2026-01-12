@@ -1,13 +1,15 @@
 use cardano_connect::CardanoConnect;
 use tokio::runtime::Runtime;
 
-use crate::config::admin::Config;
+use crate::config::adaptor::Config;
 
 /// Show
 #[derive(clap::Subcommand)]
 pub enum Cmd {
     /// Show config. This is a parsed version of env
     Config,
+    /// Show adaptor constants used by consumer.
+    Constants,
     /// Show address.
     Address,
     /// Show tip
@@ -23,6 +25,13 @@ impl Cmd {
         if let Cmd::Config = self {
             print!("{}", config);
             return Ok(());
+        } else if let Cmd::Constants = self {
+            print!(
+                "{},{}",
+                config.wallet.to_verification_key(),
+                config.close_period
+            );
+            return Ok(());
         } else {
             let connector = config.connector.connector()?;
             match self {
@@ -32,7 +41,7 @@ impl Cmd {
                 }
                 Cmd::Tip { verbose } => {
                     let tip =
-                        Runtime::new()?.block_on(crate::tip::Admin::new(&connector, &config))?;
+                        Runtime::new()?.block_on(crate::tip::Adaptor::new(&connector, &config))?;
                     if verbose {
                         println!("{:#}", tip);
                     } else {
@@ -41,6 +50,7 @@ impl Cmd {
                     Ok(())
                 }
                 Cmd::Config => panic!("Impossible"),
+                Cmd::Constants => panic!("Impossible"),
             }
         }
     }

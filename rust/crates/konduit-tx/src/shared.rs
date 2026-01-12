@@ -47,9 +47,11 @@ impl Bounds {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_secs(),
+                .as_secs()
+                // Hack to handle blockfrost slots not aligning with current time.
+                .saturating_sub(60),
         );
-        let upper = Duration::from_secs(lower.as_secs() + 20 * 60);
+        let upper = Duration::from_secs(lower.as_secs() + 19 * 60);
         Bounds { lower, upper }
     }
 }

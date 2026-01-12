@@ -1,9 +1,10 @@
 use cardano_tx_builder::{Address, NetworkId, address::kind};
+use konduit_data::Duration;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
-    config::{admin::Config, signing_key::SigningKey},
+    config::{adaptor::Config, signing_key::SigningKey},
     env::base::{load, load_dotenv, signing_key_to_address},
 };
 
@@ -25,10 +26,20 @@ pub struct Env {
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     #[serde(rename = "KONDUIT_HOST_ADDRESS")]
     pub host_address: Option<Address<kind::Shelley>>,
+    /// (Minimum acceptable) Close period
+    #[arg(long)]
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    #[serde(rename = "KONDUIT_CLOSE_PERIOD")]
+    pub close_period: Option<Duration>,
+    /// (Flat) fee (lovelace)
+    #[arg(long)]
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    #[serde(rename = "KONDUIT_FEE")]
+    pub fee: Option<u64>,
 }
 
 impl Env {
-    pub const DEFAULT_PATH: &str = ".env.admin";
+    pub const DEFAULT_PATH: &str = ".env.adaptor";
 
     /// Insert generated or placeholder values
     pub fn fill(self) -> Self {
@@ -38,10 +49,16 @@ impl Env {
         let host_address = self
             .host_address
             .unwrap_or(signing_key_to_address(&network_id, &wallet));
+        let close_period = self
+            .close_period
+            .unwrap_or(Duration::from_secs(24 * 60 * 60));
+        let fee = self.fee.unwrap_or(10_000);
         Self {
             connector,
             wallet: Some(wallet),
             host_address: Some(host_address),
+            close_period: Some(close_period),
+            fee: Some(fee),
         }
     }
 
@@ -51,10 +68,16 @@ impl Env {
         let host_address = self
             .host_address
             .ok_or(anyhow::anyhow!("Host address required"))?;
+        let close_period = self
+            .close_period
+            .ok_or(anyhow::anyhow!("Close period required"))?;
+        let fee = self.fee.ok_or(anyhow::anyhow!("Fee required"))?;
         let config = Config {
             connector,
             wallet,
             host_address,
+            close_period,
+            fee,
         };
         Ok(config)
     }

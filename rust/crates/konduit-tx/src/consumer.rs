@@ -13,10 +13,10 @@ use crate::{
 };
 
 pub struct OpenIntent {
-    tag: Tag,
-    sub_vkey: VerificationKey,
-    close_period: Duration,
-    amount: u64,
+    pub tag: Tag,
+    pub sub_vkey: VerificationKey,
+    pub close_period: Duration,
+    pub amount: u64,
 }
 
 pub enum Intent {
@@ -64,20 +64,24 @@ pub fn tx(
         .filter_map(|(i, c)| mk_step_(c).map(|step_to| (i.clone(), step_to)))
         .collect::<Vec<(Input, StepTo)>>();
     steps.sort_by_key(|(i, _c)| i.clone());
-    let [main_step, steps @ ..] = &steps[..] else {
-        panic!("Impossible")
-    };
-    let main_redeemer = Redeemer::Main(
-        iter::once(main_step.1.to_step())
-            .chain(steps.iter().map(|(_, s)| s.to_step()))
-            .collect::<Vec<_>>(),
-    );
-    let main_input = (main_step.0.clone(), Some(PlutusData::from(main_redeemer)));
-    let defer_inputs = steps
-        .iter()
-        .map(|(i, _)| (i.clone(), Some(PlutusData::from(Redeemer::Defer)).clone()))
-        .collect::<Vec<(Input, Option<PlutusData>)>>();
 
+    let channel_inputs = match &steps[..] {
+        [main_step, steps @ ..] => {
+            let main_redeemer = Redeemer::Main(
+                iter::once(main_step.1.to_step())
+                    .chain(steps.iter().map(|(_, s)| s.to_step()))
+                    .collect::<Vec<_>>(),
+            );
+            iter::once((main_step.0.clone(), Some(PlutusData::from(main_redeemer))))
+                .chain(
+                    steps
+                        .iter()
+                        .map(|(i, _)| (i.clone(), Some(PlutusData::from(Redeemer::Defer)).clone())),
+                )
+                .collect::<Vec<(Input, Option<PlutusData>)>>()
+        }
+        _ => vec![],
+    };
     let opens = opens.iter().map(|o| {
         Output::new(own_address.clone(), Value::new(MIN_ADA_BUFFER + o.amount)).with_datum(
             PlutusData::from(konduit_data::Datum {
@@ -92,6 +96,11 @@ pub fn tx(
             }),
         )
     });
+
+    if channel_inputs.len() == 0 && opens.len() == 0 {
+        return Err(anyhow::anyhow!("Transaction does nothing!"));
+    }
+
     let outputs = steps
         .iter()
         .filter_map(|(i, s)| {
@@ -119,8 +128,7 @@ pub fn tx(
     let inputs = wallet_ins
         .iter()
         .map(|i| (i.clone(), None))
-        .chain(iter::once(main_input))
-        .chain(defer_inputs.into_iter())
+        .chain(channel_inputs.into_iter())
         .collect::<Vec<_>>();
 
     // FIXME :: These bounds should not be necessary,

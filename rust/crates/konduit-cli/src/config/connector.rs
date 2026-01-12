@@ -1,4 +1,4 @@
-use std::fmt::{self, Display};
+use std::fmt;
 
 use cardano_tx_builder::NetworkId;
 use serde::{Deserialize, Serialize};
@@ -9,10 +9,6 @@ pub enum Connector {
 }
 
 impl Connector {
-    fn placeholder() -> Self {
-        Self::Blockfrost(Blockfrost::placeholder())
-    }
-
     pub fn connector(&self) -> anyhow::Result<crate::connector::Connector> {
         match self {
             Connector::Blockfrost(Blockfrost { project_id }) => {
@@ -31,7 +27,7 @@ impl Connector {
 
 impl fmt::Display for Connector {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Connector : ");
+        write!(f, "Connector : ")?;
         match self {
             Self::Blockfrost(inner) => write!(f, "{}", inner),
         }
@@ -43,12 +39,6 @@ pub struct Blockfrost {
 }
 
 impl Blockfrost {
-    fn placeholder() -> Self {
-        Self {
-            project_id: "mainnetXXXXXXXXXXXXXXXXXXXX".to_string(),
-        }
-    }
-
     // Guess the network from the project id
     pub fn network_id(&self) -> NetworkId {
         if self.project_id.starts_with("mainnet") {

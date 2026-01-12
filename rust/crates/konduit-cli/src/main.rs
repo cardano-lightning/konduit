@@ -1,10 +1,10 @@
 use clap::Parser;
 
+mod cardano;
 mod cmd;
 mod config;
 mod connector;
 mod env;
-mod random;
 mod tip;
 
 fn main() {
