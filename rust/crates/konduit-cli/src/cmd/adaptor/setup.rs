@@ -1,6 +1,6 @@
 use toml;
 
-use crate::env::admin::Env;
+use crate::env::adaptor::Env;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct Cmd {

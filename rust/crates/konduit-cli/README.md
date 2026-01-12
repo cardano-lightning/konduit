@@ -2,23 +2,74 @@
 
 > A command-line to construct and navigate Konduit's stages
 
-## Configuring
-
-See [.env.example](.env.example). Replace environment variables by their
-corresponding values, and rename as `.env`.
-
 ## Using
 
-The CLI is _user-centric_. In fact, there is a distinct CLI for Consumer and
-Adaptor. In addition, there is one for admin.
+The CLI is _user-centric_ : Admin, Adaptor, and Consumer.
+
+### Env
+
+The CLI anticipates, but does not require, the usage of dotenv files.
+
+It uses [`dotenvy`](https://github.com/allan2/dotenvy?tab=readme-ov-file) to
+load the dotenv files, if they exist. It tries to load `.env.<user>` and then
+`.env`. `dotenvy` will only load a variable into env variables if does not
+already exist, so env variables declared in the terminal takes precendence over
+dotenv files, as too declarations in `.env.<user>` take precendence over those
+in `.env`.
+
+With this setup, it is ergonomic to execute commands "as" different users. For
+example:
+
+```bash
+alias adaptor="konduit consumer"
+alias consumer="konduit consumer"
+consumer tx --open "$(adaptor show constants --csv),100"
+```
+
+There is overlap in variables expected by each user. For example, each user
+needs a connector, and the host address of the konduit script. By declaring the
+associated values in the `.env` file, these are shared by the users.
+
+If you are running the CLI as a single user, you can simply use `.env`.
+
+If you are running as more than one adaptor, say, you can effectively invoke
+another `.env`, for example `.env.other`, by:
+
+```bash
+set -a; eval $(sed 's/ = /=/' .env.other); set +a ; konduit ...
+```
+
+Note that the generated pretty toml from `adaptor setup >> .env.other` is not
+legal INI. The `sed` noise in the above command handles this quirk.
+
+### Commands
 
 Outputs are one of:
 
 ```
-[Def] : Default Space separated values. Binary data is hex
 csv : comma seperated values. Binary data is hex
 json : pretty JSON
 cbor : cbor binary
+```
+
+```sh
+konduit admin setup key >> .env
+konduit admin show config
+konduit admin tx deploy --spend-all
+konduit admin tx send --to <address>,<amount> --rest <address> --spend-all
+```
+
+```sh
+konduit adaptor setup >> .env.adaptor
+konduit adaptor show constants
+konduit adaptor show config
+konduit adaptor show tip
+konduit adaptor verify squash --keytag <keytag> --body <body> --signature <signature> # <bool>
+konduit adaptor verify squash --keytag <keytag> --squash <body> <signature> # <bool>
+konduit adaptor verify locked --keytage <keytag> --body <locked> --signature <signature> # <bool>
+konduit adaptor verify secret --secret <secret> --lock <lock> # <bool>
+konduit adaptor make receipt <squash>;(<locked>);<locked>,<secret>;<locked>,<secret>;
+konduit adaptor tx --receipt <receipt> --receipt <receipt>
 ```
 
 ```sh
@@ -36,26 +87,6 @@ konduit consumer verify secret --secret <secret> --lock <lock>
 konduit consumer verify squash --tag <tag> --body <squash> --signature <signature> --csv
 konduit consumer make squash --tag <tag> --amount <amount> --index <index> --exclude <exclude>
 konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --add <tag>,<amount> --close <tag>
-```
-
-```sh
-konduit adaptor setup key >> .env
-konduit adaptor show constants --csv
-konduit adaptor show config
-konduit adaptor show tip
-konduit adaptor verify squash --keytag <keytag> --body <body> --signature <signature> # <bool>
-konduit adaptor verify squash --keytag <keytag> --squash <body> <signature> # <bool>
-konduit adaptor verify locked --keytage <keytag> --body <locked> --signature <signature> # <bool>
-konduit adaptor verify secret --secret <secret> --lock <lock> # <bool>
-konduit adaptor make receipt <squash>;(<locked>);<locked>,<secret>;<locked>,<secret>;
-konduit adaptor tx --receipt <receipt> --receipt <receipt>
-```
-
-```sh
-konduit admin setup key >> .env
-konduit admin show config
-konduit admin tx deploy
-konduit admin tx send --to <address> <amount> --rest <address>
 ```
 
 It is easy to compose:

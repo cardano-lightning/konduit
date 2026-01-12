@@ -2,6 +2,7 @@ use crate::env::consumer::Env;
 
 mod setup;
 mod show;
+mod tx;
 
 /// Consumer CLI
 #[derive(clap::Subcommand)]
@@ -11,6 +12,8 @@ pub enum Cmd {
     /// Show info (requires env)
     #[clap(subcommand)]
     Show(show::Cmd),
+    /// Txs
+    Tx(tx::Cmd),
 }
 
 impl Cmd {
@@ -21,6 +24,7 @@ impl Cmd {
             let config = Env::load()?.to_config()?;
             match self {
                 Cmd::Show(cmd) => cmd.run(&config),
+                Cmd::Tx(cmd) => cmd.run(&config),
                 Cmd::Setup(_) => panic!("oops"),
             }
         }

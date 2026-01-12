@@ -1,10 +1,10 @@
-use crate::env::admin::Env;
+use crate::env::adaptor::Env;
 
 mod setup;
 mod show;
-mod tx;
+// mod tx;
 
-/// Admin CLI
+/// Adaptor CLI
 #[derive(clap::Subcommand)]
 pub enum Cmd {
     /// Setup env.
@@ -12,9 +12,9 @@ pub enum Cmd {
     /// Show info (requires env)
     #[clap(subcommand)]
     Show(show::Cmd),
-    /// Txs
-    #[clap(subcommand)]
-    Tx(tx::Cmd),
+    // /// Txs
+    // #[clap(subcommand)]
+    // Tx(tx::Cmd),
 }
 
 impl Cmd {
@@ -26,7 +26,7 @@ impl Cmd {
             let config = e.to_config()?;
             match self {
                 Cmd::Show(cmd) => cmd.run(&config),
-                Cmd::Tx(cmd) => cmd.run(&config),
+                // Cmd::Tx(cmd) => cmd.run(&config),
                 Cmd::Setup(_) => panic!("Impossible"),
             }
         }

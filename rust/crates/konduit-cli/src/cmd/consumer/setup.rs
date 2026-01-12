@@ -1,13 +1,16 @@
 use toml;
 
+use crate::env::consumer::Env;
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct Cmd {
     #[command(flatten)]
-    env: crate::env::consumer::Env,
+    env: Env,
 }
 
 impl Cmd {
     pub(crate) fn run(self) -> anyhow::Result<()> {
+        println!("# ./{}", Env::DEFAULT_PATH);
         println!("{:#}", toml::to_string(&self.env.fill())?);
         Ok(())
     }
