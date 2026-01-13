@@ -33,7 +33,9 @@ participants.
 
 **What** outcome/key result did it support?
 
-Safety.
+```
+Roadmap // v1 // product // konduit tools // konduit cli // iteration after second draft
+```
 
 **What** is immediately next?
 
