@@ -4,11 +4,11 @@ use konduit_data::{Keytag, Receipt};
 use tokio::runtime::Runtime;
 
 use cardano_connect::CardanoConnect;
-use cardano_tx_builder::{Address, Credential, Value, address::kind};
+use cardano_tx_builder::Credential;
 
 use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 
-use crate::{cardano::ADA, cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
+use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
 
 /// Create and submit Konduit transactions
 #[derive(Debug, Clone, clap::Args)]
@@ -20,15 +20,15 @@ pub struct Cmd {
     /// Format : <keytag>;<squash>;<cheque_0>;<cheque_1> ...
     /// squash_body,signature;cheque_body,signature,secret;cheque,secret;
     #[arg(long, value_parser=parse_keytag_receipt)]
-    pub receipts: Vec<(Keytag, Receipt)>,
+    pub receipt: Vec<(Keytag, Receipt)>,
 }
 
 impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
-        let own_address = config.wallet.to_address(&connector.network().into());
         let own_key = config.wallet.to_verification_key();
-        let receipts = self.receipts.into_iter().collect::<BTreeMap<_, _>>();
+        let own_address = config.wallet.to_address(&connector.network().into());
+        let receipts = self.receipt.into_iter().collect::<BTreeMap<_, _>>();
         let preferences = AdaptorPreferences {
             min_single: 10_000,
             min_total: 1_000_000,

@@ -36,6 +36,7 @@ pub fn tx(
     let reference_inputs = vec![reference_input];
     let wallet_ins = wallet_inputs(wallet, utxos);
     let channels_in = filter_channels(utxos, |c| c.constants.sub_vkey == *wallet);
+
     let mk_step_ = |c: &ChannelOutput| mk_step(upper_bound, receipts, c);
     let mut steps = channels_in
         .iter()
@@ -55,21 +56,20 @@ pub fn tx(
         return Err(anyhow::anyhow!("Insufficient total gain"));
     }
     steps.sort_by_key(|(i, _, _)| i.clone());
-    let [main_step, steps @ ..] = &steps[..] else {
+    let [main_step, rest @ ..] = &steps[..] else {
         panic!("Impossible")
     };
     let main_redeemer = Redeemer::Main(
         iter::once(main_step.1.clone())
-            .chain(steps.iter().map(|s| s.1.clone()))
+            .chain(rest.iter().map(|s| s.1.clone()))
             .map(|s| Step::Cont(s.clone()))
             .collect::<Vec<_>>(),
     );
     let main_input = (main_step.0.clone(), Some(PlutusData::from(main_redeemer)));
-    let defer_inputs = steps
+    let defer_inputs = rest
         .iter()
         .map(|(i, _, _)| (i.clone(), Some(PlutusData::from(Redeemer::Defer)).clone()))
         .collect::<Vec<(Input, Option<PlutusData>)>>();
-
     let outputs = steps
         .iter()
         .map(|(i, _, co)| {
@@ -86,11 +86,7 @@ pub fn tx(
         })
         .collect::<Vec<_>>();
     let wallet_hash = Hash::<28>::new(wallet);
-    let specified_signatories = if channels_in.len() > 0 {
-        vec![wallet_hash.clone()]
-    } else {
-        vec![]
-    };
+    let specified_signatories = vec![wallet_hash.clone()];
     let inputs = wallet_ins
         .iter()
         .map(|i| (i.clone(), None))
@@ -98,12 +94,13 @@ pub fn tx(
         .chain(defer_inputs.into_iter())
         .collect::<Vec<_>>();
 
-    // FIXME :: These bounds should not be necessary.
+    // FIXME :: This bounds should not _necessarily_ be necessary.
     let upper_bound = SlotBound::Exclusive(
         network_parameters
             .protocol_parameters
             .posix_to_slot(upper_bound.0),
     );
+
     Transaction::build(
         &network_parameters.protocol_parameters,
         utxos,

@@ -51,10 +51,10 @@ pub fn tx(
     };
     let wallet_ins = wallet_inputs(wallet, utxos);
     let channels_in = filter_channels(utxos, |c| c.constants.add_vkey == *wallet);
-    let own_hash = KONDUIT_VALIDATOR.hash;
-    let own_address = Address::from(Address::new(
+    // FIXME :: support delegation
+    let konduit_address = Address::from(Address::new(
         network_parameters.network_id,
-        Credential::from_script(own_hash),
+        Credential::from_script(KONDUIT_VALIDATOR.hash),
     ));
 
     let mk_step_ = |c: &ChannelOutput| mk_step(&bounds, &intents, c);
@@ -82,23 +82,21 @@ pub fn tx(
         }
         _ => vec![],
     };
-    println!(
-        "MAIN!! {:?}",
-        Redeemer::try_from(channel_inputs[0].1.as_ref().unwrap())
-    );
     let opens = opens.iter().map(|o| {
-        Output::new(own_address.clone(), Value::new(MIN_ADA_BUFFER + o.amount)).with_datum(
-            PlutusData::from(konduit_data::Datum {
-                own_hash,
-                constants: Constants {
-                    tag: o.tag.clone(),
-                    add_vkey: wallet.clone(),
-                    sub_vkey: o.sub_vkey,
-                    close_period: o.close_period.clone(),
-                },
-                stage: Stage::Opened(0, vec![]),
-            }),
+        Output::new(
+            konduit_address.clone(),
+            Value::new(MIN_ADA_BUFFER + o.amount),
         )
+        .with_datum(PlutusData::from(konduit_data::Datum {
+            own_hash: KONDUIT_VALIDATOR.hash,
+            constants: Constants {
+                tag: o.tag.clone(),
+                add_vkey: wallet.clone(),
+                sub_vkey: o.sub_vkey,
+                close_period: o.close_period.clone(),
+            },
+            stage: Stage::Opened(0, vec![]),
+        }))
     });
 
     if channel_inputs.len() == 0 && opens.len() == 0 {
@@ -123,6 +121,7 @@ pub fn tx(
         })
         .chain(opens)
         .collect::<Vec<_>>();
+    println!("OUTPUTS {}", outputs[0].address());
     let wallet_hash = Hash::<28>::new(wallet);
     let specified_signatories = if channels_in.len() > 0 {
         vec![wallet_hash.clone()]
