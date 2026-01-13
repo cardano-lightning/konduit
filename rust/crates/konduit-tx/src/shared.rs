@@ -137,7 +137,7 @@ impl ChannelOutput {
     pub fn to_output(&self, network_id: &NetworkId, credential: &Option<Credential>) -> Output {
         let mut address = Address::new(
             network_id.clone(),
-            Credential::from_key(Hash::<28>::new(KONDUIT_VALIDATOR.hash)),
+            Credential::from_script(KONDUIT_VALIDATOR.hash),
         );
         if let Some(credential) = credential {
             address = address.with_delegation(credential.clone());
