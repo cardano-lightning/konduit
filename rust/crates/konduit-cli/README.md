@@ -47,11 +47,101 @@ Note that the generated pretty toml from `adaptor setup >> .env.other` is not
 legal INI. The `sed` noise in the above command handles this quirk. A less noisy
 approach is to simply make the file INI complient.
 
-### Commands
+### Scenarios
+
+Here we go through some example scenarios that illustrate how the CLI commands
+can be invoked.
+
+Set some aliases:
+
+```bash
+alias admin="cargo run -- admin"
+alias adaptor="cargo run -- adaptor"
+alias conusmer="cargo run -- consumer"
+```
+
+#### Admin deploy:
+
+Create admin .env file. Here we're inserting the project id.
+
+```sh
+admin setup --blockfrost "preview..."  >> .env
+```
+
+Alternatively open the file and edit manually. It is optional to move the key to
+`.env.admin`.
+
+Show wallet details
+
+```sh
+admin show config
+```
+
+Out of band: fund the wallet from external funds
+
+"Deploy" script, ie submit tx with script in reference script of output.
+
+```sh
+admin tx deploy
+```
+
+See the result
+
+```sh
+admin show tip
+```
+
+#### Setup Consumer and adaptor
+
+Create admin .env file. Here we're inserting the project id.
+
+```sh
+consumer setup >> .env.consumer
+adaptor setup >> .env.adaptot
+```
+
+Open the files in an editor and remove the connector and host address entries.
+This way, the CLI will fallback to the `.env` file for these values.
+
+Also edit the adaptor file to set env variables.
+
+Send funds from admin:
+
+```sh
+admin send --to "$(consumer show address),100" --to "$(adaptor show address),10"
+```
+
+Consumer opens a channels with Adaptor with tag `deadbeef` and `10` Ada (+ min
+ada buffer).
+
+```sh
+consumer tx --open "deadbeef,$(adaptor show constants),10"
+```
+
+Both Adaptor and Consumer can see this:
+
+```sh
+consumer show tip
+adaptor show tip
+```
 
 Adaptor verify consumer locked cheque:
 
-```bash
+```sh
+adaptor verify squash \
+    --keytag $(consumer show keytag deadbeef) \
+    --locked \
+        $(consumer make squash \
+            --amount 123 \
+            --index 1 \
+        )
+```
+
+#### Add and sub
+
+Adaptor verify consumer locked cheque:
+
+```sh
 adaptor verify locked \
     --keytag $(consumer show keytag deadbeef) \
     --locked \
@@ -60,59 +150,18 @@ adaptor verify locked \
             --index 1 \
             --amount 123 \
             --duration 2000s \
-            --lock 0000000000000000000000000000000000000000000000000000000000000000 \
+            --secret 0000000000000000000000000000000000000000000000000000000000000000 \
         )
 ```
 
-Outputs are one of:
-
-```sh
-konduit admin setup key >> .env
-konduit admin show config
-konduit admin tx deploy --spend-all
-konduit admin tx send --to <address>,<amount> --rest <address> --spend-all
-```
-
-```sh
-konduit adaptor setup >> .env.adaptor
-konduit adaptor show constants
-konduit adaptor show config
-konduit adaptor show tip
-konduit adaptor verify squash --keytag <keytag> --body <body> --signature <signature> # <bool>
-konduit adaptor verify squash --keytag <keytag> --squash <body> <signature> # <bool>
-konduit adaptor verify locked --keytage <keytag> --body <locked> --signature <signature> # <bool>
-konduit adaptor verify secret --secret <secret> --lock <lock> # <bool>
-konduit adaptor make receipt <squash>;(<locked>);<locked>,<secret>;<locked>,<secret>;
-konduit adaptor tx --receipt <receipt> --receipt <receipt>
-```
-
-```sh
-konduit consumer setup key >> .env.consumer
-konduit consumer show config
-konduit consumer show keytag <tag>
-konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --open <tag>,<adaptor>,<close-period>,<amount> --dry-run
-konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --open <tag>,<adaptor>,<close-period>,<amount>
-konduit consumer show tip
-konduit consumer make null-squash <tag>
-konduit consumer make lock <secret> # <lock>
-konduit consumer make cheque --tag <tag> --index <index> --amount <amount> --timeout <timeout> --lock <lock> --csv # <hexcbor cheque body>,<hex signature>
-konduit consumer make cheque --tag <tag> --index <index> --amount <amount> --timeout <timeout> --secret <secret> --csv # <hexcbor cheque body>,<hex signature>
-konduit consumer verify secret --secret <secret> --lock <lock>
-konduit consumer verify squash --tag <tag> --body <squash> --signature <signature> --csv
-konduit consumer make squash --tag <tag> --amount <amount> --index <index> --exclude <exclude>
-konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --add <tag>,<amount> --close <tag>
-```
-
-It is easy to compose:
+Consumer adds 2 ada to channel
 
 ```
-konduit consumer tx --open <tag>,$(konduit adaptor show constants --csv),<amount>
-konduit adaptor verify squash --keytag $(konduit adaptor show keytag <tag>) --squash $(konduit consumer make squash --tag <tag> --amount <amount> ... --csv)
+consumer tx --add deadbeef,2
 ```
 
-### Dotenv
+Adaptor subs 3 ada from channel
 
-The tool expect envvars for secrets and constants. These can exist via envvars,
-but using `.env` is more convenient when driving by hand. The expected envvars
-is not identical for the different users. For this reason, the tool allows for
-multiple `.env.<user>`, with `.env` used as fallback.
+```
+adaptor tx --receipt "$(consumer show keytag deadbeef);$(consumer make squash --amount 3000000 --index 3)"
+```
