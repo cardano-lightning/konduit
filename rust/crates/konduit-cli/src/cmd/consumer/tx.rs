@@ -4,10 +4,10 @@ use konduit_data::{Duration, Tag};
 use tokio::runtime::Runtime;
 
 use cardano_connect::CardanoConnect;
-use cardano_tx_builder::VerificationKey;
+use cardano_tx_builder::{Credential, VerificationKey};
 
 use konduit_tx::{
-    self, Bounds, NetworkParameters,
+    self, Bounds, KONDUIT_VALIDATOR, NetworkParameters,
     consumer::{Intent, OpenIntent},
 };
 
@@ -125,6 +125,12 @@ impl Cmd {
                             &config.host_address.payment(),
                             config.host_address.delegation().as_ref(),
                         )
+                        .await?
+                        .into_iter(),
+                )
+                .chain(
+                    connector
+                        .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
                         .await?
                         .into_iter(),
                 )

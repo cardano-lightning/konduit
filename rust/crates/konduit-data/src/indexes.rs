@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
-use std::cmp::Ordering;
+use serde::{Deserialize, Serialize};
+use std::{cmp::Ordering, fmt, str};
 
 use crate::MAX_EXCLUDE_LENGTH;
 
@@ -18,8 +19,37 @@ pub enum IndexesError {
     NoIndex,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Indexes(pub Vec<u64>);
+
+impl fmt::Display for Indexes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        )?;
+        Ok(())
+    }
+}
+
+impl str::FromStr for Indexes {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let inner = s
+            .split(",")
+            .map(|x| x.trim())
+            .filter(|x| !x.is_empty())
+            .map(|x| x.parse::<u64>())
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::new(inner)?)
+    }
+}
 
 impl Indexes {
     pub fn empty() -> Self {

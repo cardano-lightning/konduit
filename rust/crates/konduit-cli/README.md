@@ -1,24 +1,28 @@
 # Konduit CLI
 
-> A command-line to construct and navigate Konduit's stages
+> A command-line to create and manage Konduit channels and payments
 
 ## Using
 
-The CLI is _user-centric_ : Admin, Adaptor, and Consumer.
+Konduit CLI is initially intended for rudimental testing. However, it should
+also be flexible and good enough to permit "real world" usage.
+
+The CLI is _user-centric_ , providing explicit interfaces for Admin, Adaptor,
+and Consumer.
 
 ### Env
 
-The CLI anticipates, but does not require, the usage of dotenv files.
+Konduit CLI anticipates, but does not require, the usage of dotenv files.
 
-It uses [`dotenvy`](https://github.com/allan2/dotenvy?tab=readme-ov-file) to
-load the dotenv files, if they exist. It tries to load `.env.<user>` and then
-`.env`. `dotenvy` will only load a variable into env variables if does not
-already exist, so env variables declared in the terminal takes precendence over
-dotenv files, as too declarations in `.env.<user>` take precendence over those
-in `.env`.
+Variables can be declared directly in the env or in files `.env.<user>` and
+`.env`. Presendence of variables is in that order. Under the hood,
+[`dotenvy`](https://github.com/allan2/dotenvy?tab=readme-ov-file) is used to
+load the dotenv files, if the file exists. Env variables declared in the
+terminal takes precendence over dotenv files, and declarations in `.env.<user>`
+take precendence over those in `.env`.
 
-With this setup, it is ergonomic to execute commands "as" different users. For
-example:
+With this setup, it is ergonomic to execute commands "as" different users
+simultaneously. For example:
 
 ```bash
 alias adaptor="konduit consumer"
@@ -40,17 +44,27 @@ set -a; eval $(sed 's/ = /=/' .env.other); set +a ; konduit ...
 ```
 
 Note that the generated pretty toml from `adaptor setup >> .env.other` is not
-legal INI. The `sed` noise in the above command handles this quirk.
+legal INI. The `sed` noise in the above command handles this quirk. A less noisy
+approach is to simply make the file INI complient.
 
 ### Commands
 
-Outputs are one of:
+Adaptor verify consumer locked cheque:
 
+```bash
+adaptor verify locked \
+    --keytag $(consumer show keytag deadbeef) \
+    --locked \
+        $(consumer make locked \
+            --tag deadbeef \
+            --index 1 \
+            --amount 123 \
+            --duration 2000s \
+            --lock 0000000000000000000000000000000000000000000000000000000000000000 \
+        )
 ```
-csv : comma seperated values. Binary data is hex
-json : pretty JSON
-cbor : cbor binary
-```
+
+Outputs are one of:
 
 ```sh
 konduit admin setup key >> .env
@@ -79,7 +93,7 @@ konduit consumer show keytag <tag>
 konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --open <tag>,<adaptor>,<close-period>,<amount> --dry-run
 konduit consumer tx --open <tag>,<adaptor>,<close-period>,<amount> --open <tag>,<adaptor>,<close-period>,<amount>
 konduit consumer show tip
-konduit consumer data null-squash <tag>
+konduit consumer make null-squash <tag>
 konduit consumer make lock <secret> # <lock>
 konduit consumer make cheque --tag <tag> --index <index> --amount <amount> --timeout <timeout> --lock <lock> --csv # <hexcbor cheque body>,<hex signature>
 konduit consumer make cheque --tag <tag> --index <index> --amount <amount> --timeout <timeout> --secret <secret> --csv # <hexcbor cheque body>,<hex signature>

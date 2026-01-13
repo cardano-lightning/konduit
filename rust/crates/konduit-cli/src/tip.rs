@@ -1,15 +1,16 @@
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 use cardano_connect::CardanoConnect;
-use cardano_tx_builder::{Address, Credential, Hash, Value, address::kind};
-use konduit_data::{L1Channel, Retainer};
-use konduit_tx::{KONDUIT_VALIDATOR, Utxo, Utxos};
+use cardano_tx_builder::{Address, Credential, Hash, Input, Value, address::kind};
+use konduit_data::{Keytag, Pending, Used};
+use konduit_tx::{ChannelOutput, KONDUIT_VALIDATOR, Utxo, Utxos, filter_channels};
 
 use crate::config::{self};
 
 pub struct Consumer {
     wallet: Utxos,
     reference_script: Option<Utxo>,
+    channels: BTreeMap<Input, ChannelOutput>,
 }
 
 impl Consumer {
@@ -24,10 +25,18 @@ impl Consumer {
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;
         let reference_script = get_script(connector, &config.host_address).await?;
-        let channels = get_channels(connector, None).await?;
+        // FIXME :: NO STAKING
+        let konduit_utxos = connector
+            .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
+            .await?;
+        let add_vkey = config.wallet.to_verification_key();
+        let channels = filter_channels(&konduit_utxos, |co| co.constants.add_vkey == add_vkey)
+            .into_iter()
+            .collect();
         Ok(Self {
             wallet,
             reference_script,
+            channels,
         })
     }
 }
@@ -39,13 +48,25 @@ impl fmt::Display for Consumer {
         display_utxos(f, &self.wallet)?;
         write!(f, "Reference script ")?;
         display_reference_script(f, &self.reference_script)?;
+        write!(f, "Channels : {}\n", self.channels.len())?;
+        for (input, channel) in self.channels.iter() {
+            write!(f, "  Input : {}\n", input)?;
+            write!(f, "  Tag : {}\n", channel.constants.tag)?;
+            write!(
+                f,
+                "  Sub : {} || Close Period : {} \n",
+                channel.constants.sub_vkey, channel.constants.close_period
+            )?;
+            display_stage(f, &channel.stage)?;
+            write!(f, "  Amt : {} \n", channel.amount)?;
+        }
         Ok(())
     }
 }
-
 pub struct Adaptor {
     wallet: Utxos,
     reference_script: Option<Utxo>,
+    channels: BTreeMap<Input, ChannelOutput>,
 }
 
 impl Adaptor {
@@ -60,9 +81,17 @@ impl Adaptor {
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;
         let reference_script = get_script(connector, &config.host_address).await?;
+        let konduit_utxos = connector
+            .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
+            .await?;
+        let sub_vkey = config.wallet.to_verification_key();
+        let channels = filter_channels(&konduit_utxos, |co| co.constants.sub_vkey == sub_vkey)
+            .into_iter()
+            .collect();
         Ok(Self {
             wallet,
             reference_script,
+            channels,
         })
     }
 }
@@ -74,6 +103,17 @@ impl fmt::Display for Adaptor {
         display_utxos(f, &self.wallet)?;
         write!(f, "Reference script ")?;
         display_reference_script(f, &self.reference_script)?;
+        write!(f, "Channels : {}\n", self.channels.len())?;
+        for (input, channel) in self.channels.iter() {
+            write!(f, "  Input : {}\n", input)?;
+            write!(
+                f,
+                "  Keytag : {}\n",
+                Keytag::new(channel.constants.add_vkey, channel.constants.tag.clone())
+            )?;
+            display_stage(f, &channel.stage)?;
+            write!(f, "  Amt : {} \n", channel.amount)?;
+        }
         Ok(())
     }
 }
@@ -124,25 +164,6 @@ async fn get_script(
         o.script()
             .is_some_and(|script| script == &KONDUIT_VALIDATOR.script)
     }))
-}
-
-async fn get_channels(
-    connector: &impl CardanoConnect,
-    delegation: Option<Credential>,
-) -> anyhow::Result<Option<Utxo>> {
-    let payment = Credential::from_script(KONDUIT_VALIDATOR.hash);
-    let utxos = connector.utxos_at(&payment, delegation.as_ref()).await?;
-
-    todo!("Some code from konduit-tx will fit here")
-    // Ok(utxos.into_iter().filter_map(|(i, o)| {
-    //
-
-    //     Channel {
-    //         input : i,
-    //         constants : ,
-    //         stage,
-    //         amount,
-    // }))
 }
 
 fn display_reference_script(f: &mut fmt::Formatter, u: &Option<Utxo>) -> fmt::Result {
@@ -274,4 +295,49 @@ fn display_channels(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
         write!(f, "Total : {}\n", value)?;
     };
     Ok(())
+}
+
+fn useds_to_string(useds: &Vec<Used>) -> String {
+    if useds.len() == 0 {
+        "[NONE]".to_string()
+    } else {
+        useds
+            .iter()
+            .map(|x| format!("[{},{}]", x.index, x.amount))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+}
+
+fn pendings_to_string(pendings: &Vec<Pending>) -> String {
+    if pendings.len() == 0 {
+        "[NONE]".to_string()
+    } else {
+        pendings
+            .iter()
+            .map(|x| format!("[{},{},{}]", x.amount, x.timeout, hex::encode(x.lock.0)))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+}
+
+fn display_stage(f: &mut fmt::Formatter<'_>, stage: &konduit_data::Stage) -> fmt::Result {
+    match stage {
+        konduit_data::Stage::Opened(subbed, useds) => {
+            write!(f, "  Opened : {} : {} \n", subbed, useds_to_string(useds))
+        }
+        konduit_data::Stage::Closed(subbed, useds, elapse_at) => write!(
+            f,
+            "  Closed : {} : {} : {} \n",
+            subbed,
+            useds_to_string(useds),
+            elapse_at
+        ),
+        konduit_data::Stage::Responded(pendings_amount, pendings) => write!(
+            f,
+            "  Responded : {} : {} \n",
+            pendings_amount,
+            pendings_to_string(pendings)
+        ),
+    }
 }

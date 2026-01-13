@@ -2,7 +2,8 @@ use crate::env::adaptor::Env;
 
 mod setup;
 mod show;
-// mod tx;
+mod tx;
+mod verify;
 
 /// Adaptor CLI
 #[derive(clap::Subcommand)]
@@ -12,9 +13,11 @@ pub enum Cmd {
     /// Show info (requires env)
     #[clap(subcommand)]
     Show(show::Cmd),
-    // /// Txs
-    // #[clap(subcommand)]
-    // Tx(tx::Cmd),
+    /// Verify squashes and cheques (internally eg not against a retainer)
+    #[clap(subcommand)]
+    Verify(verify::Cmd),
+    /// Txs
+    Tx(tx::Cmd),
 }
 
 impl Cmd {
@@ -25,8 +28,9 @@ impl Cmd {
             let e = Env::load()?;
             let config = e.to_config()?;
             match self {
+                Cmd::Verify(cmd) => cmd.run(&config),
                 Cmd::Show(cmd) => cmd.run(&config),
-                // Cmd::Tx(cmd) => cmd.run(&config),
+                Cmd::Tx(cmd) => cmd.run(&config),
                 Cmd::Setup(_) => panic!("Impossible"),
             }
         }

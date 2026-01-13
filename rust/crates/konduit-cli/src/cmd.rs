@@ -1,6 +1,7 @@
 mod adaptor;
 mod admin;
 mod consumer;
+mod parsers;
 
 /// A utility for constructing and driving Konduit's stages
 #[derive(clap::Parser)]

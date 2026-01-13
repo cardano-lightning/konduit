@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::anyhow;
 use cardano_tx_builder::{PlutusData, VerificationKey};
 
@@ -10,6 +12,12 @@ pub struct Keytag(pub Vec<u8>);
 impl AsRef<[u8]> for Keytag {
     fn as_ref(&self) -> &[u8] {
         &self.0
+    }
+}
+
+impl fmt::Display for Keytag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0.clone()))
     }
 }
 

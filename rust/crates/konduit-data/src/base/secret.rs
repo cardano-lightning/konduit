@@ -24,10 +24,12 @@ impl AsRef<[u8]> for Secret {
 }
 
 impl TryFrom<Vec<u8>> for Secret {
-    type Error = Vec<u8>;
+    type Error = anyhow::Error;
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        Ok(Self(<[u8; 32]>::try_from(value)?))
+        Ok(Self(
+            <[u8; 32]>::try_from(value).map_err(|_| anyhow::anyhow!("Wrong length"))?,
+        ))
     }
 }
 
