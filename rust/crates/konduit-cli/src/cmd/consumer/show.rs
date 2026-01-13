@@ -1,4 +1,5 @@
 use cardano_connect::CardanoConnect;
+use konduit_data::{Keytag, Tag};
 use tokio::runtime::Runtime;
 
 use crate::config::consumer::Config;
@@ -8,6 +9,8 @@ use crate::config::consumer::Config;
 pub enum Cmd {
     /// Show config. This is a parsed version of env
     Config,
+    /// Show Keytag
+    Keytag { tag: Tag },
     /// Show address.
     Address,
     /// Show tip
@@ -21,6 +24,7 @@ pub enum Cmd {
 impl Cmd {
     pub(crate) fn run(self, config: &Config) -> anyhow::Result<()> {
         if let Cmd::Config = self {
+            // Separated out since connector might not be setup correctly.
             print!("{}", config);
             return Ok(());
         } else {
@@ -28,6 +32,10 @@ impl Cmd {
             match self {
                 Cmd::Address => {
                     print!("{}", config.wallet.to_address(&connector.network().into()));
+                    Ok(())
+                }
+                Cmd::Keytag { tag } => {
+                    print!("{}", Keytag::new(config.wallet.to_verification_key(), tag));
                     Ok(())
                 }
                 Cmd::Tip { verbose } => {

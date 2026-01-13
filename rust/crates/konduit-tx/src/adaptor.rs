@@ -13,9 +13,9 @@ use crate::{
 
 pub struct AdaptorPreferences {
     // Prevents spending a utxo that would result in too little gain relative to the cost of inclusion.
-    min_single: u64,
+    pub min_single: u64,
     // Prevents a transaction in which the total gain is too little
-    min_total: u64,
+    pub min_total: u64,
 }
 
 // WARNING :: This transaction does **not** verify that the resultant tx does not

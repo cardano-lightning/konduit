@@ -82,6 +82,10 @@ pub fn tx(
         }
         _ => vec![],
     };
+    println!(
+        "MAIN!! {:?}",
+        Redeemer::try_from(channel_inputs[0].1.as_ref().unwrap())
+    );
     let opens = opens.iter().map(|o| {
         Output::new(own_address.clone(), Value::new(MIN_ADA_BUFFER + o.amount)).with_datum(
             PlutusData::from(konduit_data::Datum {
