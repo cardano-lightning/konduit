@@ -8,14 +8,36 @@ Below is an entry template.
 
 ### yyyy-mm-dd
 
-**What** did you work on this week? (little prose, mostly links to PR, docs,
-source code, ..)
+@\<you\>
 
-**What** outcome/key result did it support?
-
-**What** is immediately next?
+- Describe : **What** did you work on this week? (little prose, mostly links to
+  PR, docs, source code, ..)
+- OKRs : **What** outcome/key result did it support?
+- Next : **What** is immediately next?
 
 ## Entries
+
+### 2025-01-17
+
+@waalge:
+[fix-multi-unlocked](https://github.com/cardano-lightning/konduit/pull/69/commits/0ca5a8ce00835c79d0803b2562ceaffeb57294f2)
+has CLI working. At least open, add, and sub are tested. Time has been sunk into
+providing a quantified risk assessment for Adaptor. This includes considering
+the many "what happens if..." after Adaptor routes a payment. This has stalled
+work on finishing the above PR to fixing the afore named `konduit-adaptor`
+service.
+
+OKRs:
+
+```
+roadmap // v1 // product // konduit tools // konduit cli // iteration after second draft
+roadmap // v1 // maturity // docs // quantified adaptor risk assessment
+```
+
+Next:
+
+- First draft of quantified risk assessment
+- Find pragmatic solution to get adaptor server back on track
 
 ### 2025-01-10
 
@@ -34,7 +56,7 @@ participants.
 **What** outcome/key result did it support?
 
 ```
-Roadmap // v1 // product // konduit tools // konduit cli // iteration after second draft
+roadmap // v1 // product // konduit tools // konduit cli // iteration after second draft
 ```
 
 **What** is immediately next?
