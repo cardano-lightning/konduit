@@ -82,6 +82,11 @@
 
 ### Maturity metrics
 
+- [ ] Docs
+  - [ ] API (openapi or equivalent)
+  - [ ] High level explainer
+  - [ ] Setup and maintainence guide(s)
+  - [ ] Quantified Adaptor risk assessment
 - [ ] Consumer / Payments
   - [ ] > 100 stickers sold (on testnet if not mainnet)
   - [ ] > 10 distinct devices
