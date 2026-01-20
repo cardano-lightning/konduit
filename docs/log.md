@@ -19,22 +19,25 @@ Below is an entry template.
 
 ### 2025-01-17
 
-@paluh: [Basic TS app organization +
-typing]https://github.com/cardano-lightning/konduit-js/pull/2/commits/f8a2702f527084242094d000ca98f79c370626e6
+@paluh:
+[Basic TS app organization + typing](https://github.com/cardano-lightning/konduit-js/pull/2/commits/f8a2702f527084242094d000ca98f79c370626e6)
 I ported the basic structure of the App. I separated some minimal CSS theming,
-reusable components and coused on making the core screen working as stubs
-mostly. As the main objective is to port the payment flow now I'm going over the
-separate sections of the app (settings, channel setup and invoice scanning) and
-impementing those one by one. The above flow enforces me to also port or
-re-implement a set of core libraries which I do on "demand" basis. So far I'v
-ported or re-implemented the following libraries: `currency-format`, `cardano`
-(basic types, operations), `hex`, partially 'konduit-consumer' and improved
-error handling in the `bln` lib. [Konsoidate and improve konduit-consumer
-lib][https://github.com/cardano-lightning/konduit-js/pull/2/commits/f895297e90c8c324e084323ea8faf6d6fcd733b4]
+reusable components and made the core screens working. As the main objective is
+to port the payment flow now I'm going over the separate sections of the app
+(settings, channel setup and invoice scanning) and impementing those one by one.
+The above flow enforces me to port or re-implement a set of core libraries which
+I do on "demand" basis. So far I've ported or re-implemented the following
+libraries: `currency-format`, `cardano` (basic types, operations), `hex` and
+partially 'konduit-consumer'. I also improved error handling in the `bln` lib.
+
+[Konsoidate and improve konduit-consumer lib](https://github.com/cardano-lightning/konduit-js/pull/2/commits/f895297e90c8c324e084323ea8faf6d6fcd733b4)
 I decided to actually consolidate and improve the `konduit-consumer` lib
 (integrated `cardano`, `hex` into it to minimize the number of sub-libs). I also
-established some API standars in the library code - we avoid exceptions and use
-explicit error handling thorugh `Result` types instead.
+established some API standars in the library code:
+
+- we avoid exceptions and use explicit error handling thorugh `Result` types
+  instead.
+- we use TS type level branding extensively.
 
 OKRs: TBD
 
