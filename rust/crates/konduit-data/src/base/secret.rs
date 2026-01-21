@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
+use cardano_tx_builder::{PlutusData, PlutusDataDecodeError};
 
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,7 @@ pub struct Secret(pub [u8; 32]);
 impl std::str::FromStr for Secret {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Secret(try_into_array(
             &hex::decode(s).map_err(|e| anyhow!(e).context("invalid tag"))?,
         )?))
@@ -22,18 +22,17 @@ impl std::str::FromStr for Secret {
 impl_hex_serde_for_wrapper!(Secret, [u8; 32]);
 
 impl<'a> TryFrom<&PlutusData<'a>> for Secret {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let v = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid tag"))?;
-        Ok(Self(try_into_array(v)?))
+    fn try_from(data: &PlutusData<'a>) -> Result<Self, Self::Error> {
+        Ok(Self(<&[u8; 32]>::try_from(data)?.to_owned()))
     }
 }
 
 impl<'a> TryFrom<PlutusData<'a>> for Secret {
-    type Error = anyhow::Error;
+    type Error = PlutusDataDecodeError;
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+    fn try_from(data: PlutusData<'a>) -> Result<Self, Self::Error> {
         Self::try_from(&data)
     }
 }
