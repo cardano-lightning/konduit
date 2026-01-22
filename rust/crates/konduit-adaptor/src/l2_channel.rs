@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use konduit_data::{Cheque, Keytag, MixedReceipt, Secret, Squash, Stage};
+use konduit_data::{Cheque, Keytag, Receipt, Secret, Squash, Stage};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -21,7 +21,7 @@ pub enum L2ChannelUpdateSquashError {
     NotOpened,
 
     #[error("Mixed Receipt Error {0}")]
-    MixedReceipt(String),
+    Receipt(String),
 }
 
 #[derive(Debug, PartialEq, Error)]
@@ -45,7 +45,7 @@ pub enum L2ChannelInsertChequeError {
     AmountUnavailable,
 
     #[error("Mixed Receipt Error {0}")]
-    MixedReceipt(String),
+    Receipt(String),
 }
 
 #[derive(Debug, PartialEq, Error)]
@@ -54,7 +54,7 @@ pub enum L2ChannelUnlockError {
     NotInitiated,
 
     #[error("Mixed Receipt Error {0}")]
-    MixedReceipt(String),
+    Receipt(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,7 +63,7 @@ pub struct L2Channel {
     /// L1Channel with greatest available funds.
     pub l1_channel: Option<L1Channel>,
     /// Current evidence of funds owed.
-    pub mixed_receipt: Option<MixedReceipt>,
+    pub mixed_receipt: Option<Receipt>,
     /// L2 channel can be de-activated.
     pub is_served: bool,
 }
@@ -185,7 +185,7 @@ impl L2Channel {
         }
         mixed_receipt
             .insert(cheque)
-            .map_err(|err| L2ChannelInsertChequeError::MixedReceipt(err.to_string()))?;
+            .map_err(|err| L2ChannelInsertChequeError::Receipt(err.to_string()))?;
         Ok(())
     }
 
@@ -197,12 +197,12 @@ impl L2Channel {
             return Err(L2ChannelUpdateSquashError::NotOpened);
         };
         let Some(ref mut mixed_receipt) = self.mixed_receipt.as_mut() else {
-            self.mixed_receipt = Some(MixedReceipt::new(squash, vec![]).unwrap());
+            self.mixed_receipt = Some(Receipt::new(squash, vec![]).unwrap());
             return Ok(true);
         };
         mixed_receipt
             .update(squash)
-            .map_err(|err| L2ChannelUpdateSquashError::MixedReceipt(err.to_string()))
+            .map_err(|err| L2ChannelUpdateSquashError::Receipt(err.to_string()))
     }
 
     pub fn unlock(&mut self, secret: Secret) -> Result<(), L2ChannelUnlockError> {
@@ -211,6 +211,6 @@ impl L2Channel {
         };
         mixed_receipt
             .unlock(secret)
-            .map_err(|err| L2ChannelUnlockError::MixedReceipt(err))
+            .map_err(|err| L2ChannelUnlockError::Receipt(err))
     }
 }
