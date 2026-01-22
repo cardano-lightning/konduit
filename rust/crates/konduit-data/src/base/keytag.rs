@@ -2,12 +2,16 @@ use std::fmt;
 
 use anyhow::anyhow;
 use cardano_tx_builder::{PlutusData, VerificationKey};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::Tag;
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
-pub struct Keytag(pub Vec<u8>);
+#[serde(transparent)]
+pub struct Keytag(#[serde_as(as = "serde_with::hex::Hex")] pub Vec<u8>);
 
 impl AsRef<[u8]> for Keytag {
     fn as_ref(&self) -> &[u8] {

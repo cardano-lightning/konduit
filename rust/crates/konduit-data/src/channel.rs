@@ -6,6 +6,17 @@ use cardano_tx_builder::VerificationKey;
 
 use crate::{Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Step, Tag, Used};
 
+/// A channel is an edge in the Lightning network.
+/// In Konduit, a channel is from Consumer to Adaptor.
+///
+/// What a `channel` actually is, is a subtle business.
+/// The design of Konduit does not enforce a uniqueness of well-formed UTXOs
+/// at tip at the Konduit script address.
+/// Konduit design does require some chain liveness to guarantee safety.
+/// More precisely, if Adaptor sees tip (confirmed tip) `< close_period / 2`,
+/// then they are safe upto general chain safety (eg tx failures due to chain congestion).
+/// also does not depend on "tracing" state through channels.
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Aux {
     is_active: bool,

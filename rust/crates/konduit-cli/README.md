@@ -165,3 +165,11 @@ Adaptor subs 3 ada from channel
 ```
 adaptor tx --receipt "$(consumer show keytag deadbeef);$(consumer make squash --amount 3000000 --index 3)"
 ```
+
+## TODO
+
+- [ ] When is responded safe?! It's safe if you sync against the same utxo set
+      used in the tx. In this case, it is not possible to respond to the
+      retainer (can respond only to closed whereas retainer must be opened).
+      This is a downstream problem, that is, it must be correctly handled in the
+      konduit-adaptor server.

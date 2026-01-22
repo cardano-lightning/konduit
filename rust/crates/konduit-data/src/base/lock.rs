@@ -1,12 +1,16 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 use cryptoxide::hashing::sha256;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::{Secret, utils::try_into_array};
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
-pub struct Lock(pub [u8; 32]);
+#[serde(transparent)]
+pub struct Lock(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
 
 impl std::str::FromStr for Lock {
     type Err = anyhow::Error;
