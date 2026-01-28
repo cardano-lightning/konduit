@@ -1,15 +1,18 @@
-use thiserror::Error;
+mod types;
+pub use types::*;
 
 mod interface;
 pub use interface::*;
 
+mod error;
 mod with_coin_gecko;
 mod with_static;
+pub use error::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum FxInitError {
     #[error("Fx Error {0}")]
-    FxError(FxError),
+    Fx(Error),
     #[error("No fx specified")]
     None,
 }
@@ -27,13 +30,13 @@ pub struct FxArgs {
 impl FxArgs {
     pub fn build(self) -> Result<Box<dyn FxInterface>, FxInitError> {
         if self.with_coin_gecko && self.with_static.is_some() {
-            return Err(FxInitError::FxError(FxError::Other(
+            return Err(FxInitError::Fx(Error::Other(
                 "Cannot use both: coin gecko and static fx at the same time".to_string(),
             )))?;
         }
         match self.with_static {
             Some(args) => {
-                let fx = with_static::WithStatic::try_from(&args).map_err(FxInitError::FxError)?;
+                let fx = with_static::WithStatic::try_from(&args).map_err(FxInitError::Fx)?;
                 Ok(Box::new(fx))
             }
             None => {

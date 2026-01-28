@@ -2,22 +2,24 @@ use std::{sync::Arc, time::Duration};
 
 use cardano_tx_builder::SigningKey;
 use clap::Parser;
-use konduit_adaptor::env;
-use konduit_adaptor::{Cmd, Server, admin, cron::cron};
+use konduit_adaptor::{Admin, Args, Server, cron::cron};
+use konduit_adaptor::{Args, env};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenvy::dotenv().ok();
 
-    let cmd = Cmd::parse();
-    let server = Server::from_cmd(cmd.clone())
+    let args = Args::parse();
+
+    let app_state = AppState::new(info, db, bln, None, connector);
+    let server = Server::from_cmd(args.clone())
         .await
-        .expect("Failed to parse cmd");
+        .expect("Failed to parse args");
 
     // Fire off fx updater
     let fx_data = server.fx();
-    let fx = Arc::new(cmd.fx.build().expect("Failed to setup fx"));
+    let fx = Arc::new(args.fx.build().expect("Failed to setup fx"));
     cron(
         move || {
             let fx = fx.clone();
@@ -39,7 +41,7 @@ async fn main() -> std::io::Result<()> {
             let bytes = hex::decode(skey_hex).expect("failed to decode signing key from hex");
             SigningKey::try_from(bytes).expect("failed to create signing key from bytes")
         };
-        admin::Admin::new(server.connector(), server.db(), server.info(), skey)
+        Admin::new(server.connector(), server.db(), server.info(), skey)
             .await
             .expect("failed to create admin instance")
     };

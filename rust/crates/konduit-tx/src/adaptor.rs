@@ -11,6 +11,7 @@ use crate::{
     wallet_inputs,
 };
 
+#[derive(Debug, Clone)]
 pub struct AdaptorPreferences {
     // Prevents spending a utxo that would result in too little gain relative to the cost of inclusion.
     pub min_single: u64,

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::fx::interface::{BaseCurrency, Fx, FxError, FxInterface};
+use super::{BaseCurrency, Error, Fx, FxInterface};
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct WithStaticArgs {
@@ -18,7 +18,7 @@ pub struct WithStatic {
 }
 
 impl TryFrom<&WithStaticArgs> for WithStatic {
-    type Error = FxError;
+    type Error = Error;
 
     fn try_from(value: &WithStaticArgs) -> Result<Self, Self::Error> {
         Ok(WithStatic {
@@ -30,7 +30,7 @@ impl TryFrom<&WithStaticArgs> for WithStatic {
 
 #[async_trait]
 impl FxInterface for WithStatic {
-    async fn get(&self) -> Result<Fx, FxError> {
+    async fn get(&self) -> Result<Fx, Error> {
         let new: Fx = Fx::new(BaseCurrency::Eur, self.ada, self.bitcoin);
         Ok(new)
     }

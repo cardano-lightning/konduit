@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Command;
 
-use crate::fx::interface::{BaseCurrency, Fx, FxError, FxInterface};
+use super::{BaseCurrency, Error, Fx, FxInterface};
 
 #[derive(Debug, Clone)]
 pub struct WithCoinGecko {
@@ -19,7 +19,7 @@ impl WithCoinGecko {
 
 #[async_trait]
 impl FxInterface for WithCoinGecko {
-    async fn get(&self) -> Result<Fx, FxError> {
+    async fn get(&self) -> Result<Fx, Error> {
         let base = BaseCurrency::Eur;
         let coins = with_curl(&base, &self.token).await?;
 
@@ -30,10 +30,10 @@ impl FxInterface for WithCoinGecko {
 
         let ada = *price_map
             .get("cardano")
-            .ok_or(FxError::InvalidData("Expect cardano".to_string()))?;
+            .ok_or(Error::InvalidData("Expect cardano".to_string()))?;
         let bitcoin = *price_map
             .get("bitcoin")
-            .ok_or(FxError::InvalidData("Expect bitcoin".to_string()))?;
+            .ok_or(Error::InvalidData("Expect bitcoin".to_string()))?;
 
         let response = Fx::new(base, ada, bitcoin);
 
@@ -48,10 +48,7 @@ struct CoinMarket {
 }
 
 /// Requests via Reqwests seem to fail. Via curl succeed some times.
-async fn with_curl(
-    base: &BaseCurrency,
-    token: &Option<String>,
-) -> Result<Vec<CoinMarket>, FxError> {
+async fn with_curl(base: &BaseCurrency, token: &Option<String>) -> Result<Vec<CoinMarket>, Error> {
     let url = format!(
         "https://api.coingecko.com/api/v3/coins/markets?vs_currency={base}&ids=bitcoin,cardano"
     );
@@ -62,16 +59,16 @@ async fn with_curl(
             .arg("-H")
             .arg(format!("x_cg_demo_api_key : {}", token));
     };
-    let output = output.output().map_err(FxError::Io)?;
+    let output = output.output().map_err(Error::Io)?;
     if output.status.success() {
         // If the API fails, we still only pick this up as a failure to deserialize.
         let response_data: Vec<CoinMarket> =
-            serde_json::from_slice(&output.stdout).map_err(FxError::Serde)?;
+            serde_json::from_slice(&output.stdout).map_err(Error::Serde)?;
         Ok(response_data)
     } else {
         let status = output.status;
         let message = String::from_utf8_lossy(&output.stderr);
-        Err(FxError::Other(format!(
+        Err(Error::Other(format!(
             "Process failed : {status} : {message}"
         )))
     }
@@ -79,7 +76,7 @@ async fn with_curl(
 
 // THIS CODE IS IMMEDIATELY RATE LIMITED
 #[allow(dead_code)]
-async fn with_reqwest(base: BaseCurrency) -> Result<Vec<CoinMarket>, FxError> {
+async fn with_reqwest(base: BaseCurrency) -> Result<Vec<CoinMarket>, Error> {
     let params = [
         ("vs_currency", base.to_string()),
         ("ids", "bitcoin,cardano".to_string()),
@@ -90,7 +87,7 @@ async fn with_reqwest(base: BaseCurrency) -> Result<Vec<CoinMarket>, FxError> {
         .query(&params)
         .send()
         .await
-        .map_err(FxError::Network)?;
+        .map_err(Error::Network)?;
     println!("coins {:?}", coins);
     let coins: Vec<CoinMarket> = coins.json().await?;
     Ok(coins)
