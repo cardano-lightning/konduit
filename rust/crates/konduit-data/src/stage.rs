@@ -11,6 +11,16 @@ pub enum Stage {
     Responded(u64, Vec<Pending>),
 }
 
+impl Stage {
+    pub fn is_opened(&self) -> bool {
+        if let Stage::Opened(_, _) = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl<'a> TryFrom<PlutusData<'a>> for Stage {
     type Error = anyhow::Error;
 

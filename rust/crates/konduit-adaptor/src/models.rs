@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 
 pub use konduit_data::Keytag;
+use konduit_data::L1Channel;
 pub use konduit_data::Stage;
-use konduit_data::{Cheque, MixedReceipt};
+use konduit_data::{Cheque, Receipt};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::l2_channel::L2Channel;
+use crate::Channel;
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,22 +25,16 @@ pub struct Info {
 
 pub type TipBody = BTreeMap<Keytag, Vec<L1Channel>>;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct L1Channel {
-    pub stage: Stage,
-    pub amount: u64,
-}
-
 pub type TipResponse = BTreeMap<Keytag, TipResult>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum TipResult {
     New,
-    MixedReceipt(MixedReceipt),
+    Receipt(Receipt),
     Ended,
 }
 
-pub type ShowResponse = BTreeMap<Keytag, L2Channel>;
+pub type ShowResponse = BTreeMap<Keytag, Channel>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Secrets(Vec<[u8; 32]>);
@@ -103,7 +98,7 @@ pub enum SquashResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IncompleteSquashResponse {
-    pub mixed_receipt: MixedReceipt,
+    pub receipt: Receipt,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expire: Option<Vec<u64>>,
 }

@@ -1,11 +1,13 @@
 use thiserror::Error;
 
 mod interface;
-pub use interface::{DbError, DbInterface, UpdateSquashError};
+pub use interface::DbInterface;
 
 mod coiter_with_default;
 
+mod error;
 mod with_sled;
+pub use error::*;
 
 #[derive(Debug, Error)]
 pub enum DbInitError {
@@ -19,7 +21,7 @@ pub enum DbInitError {
 pub struct DbArgs {
     /// Db with sled
     #[clap(flatten)]
-    pub sled: Option<with_sled::SledArgs>,
+    pub sled: Option<with_sled::Args>,
 }
 
 impl DbArgs {

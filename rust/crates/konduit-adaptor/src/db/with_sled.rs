@@ -1,316 +1,204 @@
 use async_trait::async_trait;
-use futures::future::join_all;
-use konduit_data::{Cheque, Secret, Squash};
-use sled::{Db, IVec};
-use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
+use sled::Db;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{
-    db::{
-        coiter_with_default::coiter_with_default,
-        interface::{BackendError, InsertChequeError, UnlockError, UpdateSquashError},
-    },
-    l2_channel::L2Channel,
-    models::{Keytag, L1Channel, TipBody, TipResponse},
+use konduit_data::{Keytag, Locked, Secret, Squash};
+
+mod cli_args;
+pub use cli_args::Args;
+
+use crate::{Channel, ChannelError, channel::Retainer};
+
+use super::{
+    Error,
+    coiter_with_default::coiter_with_default,
+    interface::{DbInterface, DbResult},
 };
 
-use super::interface::{DbError, DbInterface};
-
-#[derive(Debug, thiserror::Error)]
-pub enum WithSledError<LogicError> {
-    #[error("Sled Error : {0}")]
-    Backend(SledBackendError),
-    #[error("Other {0}")]
-    Logic(LogicError),
-}
-
-impl<LogicError> From<WithSledError<LogicError>> for DbError<LogicError> {
-    fn from(value: WithSledError<LogicError>) -> Self {
-        match value {
-            WithSledError::Backend(error) => DbError::Backend(BackendError::from(error)),
-            WithSledError::Logic(error) => DbError::Logic(error),
-        }
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum SledBackendError {
-    #[error("Sled Error : {0}")]
-    Sled(sled::Error),
-    #[error("Serde Error : {0}")]
-    Serde(serde_json::Error),
-}
-
-impl From<sled::Error> for SledBackendError {
+impl From<sled::Error> for BackendError {
     fn from(e: sled::Error) -> Self {
-        SledBackendError::Sled(e)
+        Self::Other(e.to_string())
     }
-}
-
-impl From<serde_json::Error> for SledBackendError {
-    fn from(e: serde_json::Error) -> Self {
-        SledBackendError::Serde(e)
-    }
-}
-
-impl From<SledBackendError> for BackendError {
-    fn from(value: SledBackendError) -> Self {
-        match value {
-            SledBackendError::Sled(error) => BackendError::Other(error.to_string()),
-            SledBackendError::Serde(error) => BackendError::Other(error.to_string()),
-        }
-    }
-}
-
-impl<T> From<SledBackendError> for WithSledError<T> {
-    fn from(value: SledBackendError) -> Self {
-        WithSledError::Backend(value)
-    }
-}
-
-#[derive(Debug, Clone, clap::Args)]
-pub struct SledArgs {
-    /// The path to the database file
-    #[clap(long, default_value = "konduit.db", env = crate::env::DB_PATH)]
-    pub path: String,
 }
 
 pub struct WithSled {
     db: Arc<Db>,
 }
 
-impl TryFrom<&SledArgs> for WithSled {
-    type Error = SledBackendError;
+impl TryFrom<&Args> for WithSled {
+    type Error = BackendError;
 
-    fn try_from(value: &SledArgs) -> Result<Self, Self::Error> {
+    fn try_from(value: &Args) -> Result<Self, Self::Error> {
         let x = Self::open(value.path.clone())?;
         Ok(x)
     }
 }
 
+pub fn into_vec(c: &Channel) -> Result<Vec<u8>, BackendError> {
+    let v = postcard::to_stdvec(c)?;
+    Ok(v)
+}
+
+pub fn from_vec(v: &[u8]) -> Result<Channel, BackendError> {
+    let c = postcard::from_bytes(v)?;
+    Ok(c)
+}
+
 impl WithSled {
-    pub fn open(db_path: String) -> Result<Self, sled::Error> {
+    pub fn open(db_path: String) -> Result<Self, BackendError> {
         Ok(Self {
             db: Arc::new(sled::open(db_path)?),
         })
     }
-}
 
-pub fn get_channel_keys(db: &Db) -> Result<Vec<Keytag>, SledBackendError> {
-    let range = [CHANNEL]..[CHANNEL_END];
-    let res = db
-        .range(range)
-        .keys()
-        .map(|result| result.map(|x| to_keytag(x.as_ref())))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(res)
-}
-
-async fn get_channel(db: &sled::Db, keytag: Keytag) -> Result<Option<L2Channel>, SledBackendError> {
-    match db.get(to_db_key(keytag))? {
-        Some(bytes) => {
-            let channel = serde_json::from_slice(&bytes)?;
-            Ok(Some(channel))
-        }
-        None => Ok(None),
+    pub fn channel_keys(&self) -> Result<Vec<Keytag>, BackendError> {
+        let range = [CHANNEL]..[CHANNEL_END];
+        let res = self
+            .db
+            .as_ref()
+            .range(range)
+            .keys()
+            .map(|result| result.map(|x| to_keytag(x.as_ref())))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(res)
     }
-}
 
-pub fn update_channel_db<F, E>(
-    db: &Db,
-    keytag: Keytag,
-    update_fn: F,
-) -> Result<L2Channel, WithSledError<E>>
-where
-    F: FnMut(Option<L2Channel>) -> Result<L2Channel, E>,
-    E: std::fmt::Debug + 'static,
-{
-    let key = to_db_key(keytag);
-    let update_fn_cell = std::cell::RefCell::new(update_fn);
-    let result: Result<L2Channel, sled::transaction::TransactionError<WithSledError<E>>> = db
-        .transaction(move |tree: &sled::transaction::TransactionalTree| {
-            let old_bytes_ivec: Option<IVec> = tree.get(&key)?;
-            let old_channel: Option<L2Channel> = old_bytes_ivec
-                .map(|bytes| serde_json::from_slice(bytes.as_ref()))
-                .transpose()
-                .map_err(|err| {
-                    sled::transaction::ConflictableTransactionError::Abort(WithSledError::Backend(
-                        SledBackendError::Serde(err),
-                    ))
-                })?;
-            let new_channel: L2Channel =
-                (update_fn_cell.borrow_mut())(old_channel).map_err(|err| {
-                    sled::transaction::ConflictableTransactionError::Abort(WithSledError::Logic(
-                        err,
-                    ))
-                })?;
-            let new_bytes: Vec<u8> = serde_json::to_vec(&new_channel).map_err(|err| {
-                sled::transaction::ConflictableTransactionError::Abort(WithSledError::Backend(
-                    SledBackendError::Serde(err),
-                ))
-            })?;
-            tree.insert(&*key, new_bytes)?;
-            Ok(new_channel)
-        });
-    match result {
-        Ok(new_channel) => Ok(new_channel),
-        Err(sled::transaction::TransactionError::Abort(e)) => Err(e),
-        Err(sled::transaction::TransactionError::Storage(e)) => {
-            Err(WithSledError::Backend(SledBackendError::Sled(e)))
+    fn get_value(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, BackendError> {
+        let b = self.db.as_ref().get(key)?;
+        Ok(b.map(|v| v.to_vec()))
+    }
+
+    fn get_channel(&self, keytag: Keytag) -> DbResult<Option<Channel>> {
+        match self.get_value(to_db_key(&keytag))? {
+            Some(bytes) => {
+                let channel = from_vec(&bytes)?;
+                Ok(Some(channel))
+            }
+            None => Ok(None),
         }
     }
-}
 
-async fn update_from_l1(
-    db: &sled::Db,
-    keytag: Keytag,
-    channels: Vec<L1Channel>,
-) -> Result<L2Channel, WithSledError<Infallible>> {
-    update_channel_db(
-        db,
-        keytag.clone(),
-        |l2_channel: Option<L2Channel>| match l2_channel {
-            Some(mut l2_channel) => {
-                l2_channel.update_from_l1(channels.clone());
-                Ok(l2_channel)
-            }
-            None => Ok(L2Channel::from_channels(keytag.clone(), channels.clone())),
-        },
-    )
-}
+    pub fn update_option_channel<F>(&self, keytag: &Keytag, update_fn: F) -> DbResult<Channel>
+    where
+        F: Fn(Option<Channel>) -> Result<Channel, LogicError>,
+    {
+        let abort_backend =
+            |err| sled::transaction::ConflictableTransactionError::Abort(Error::Backend(err));
+        let abort_logic =
+            |err| sled::transaction::ConflictableTransactionError::Abort(Error::Logic(err));
 
-async fn update_squash(
-    db: &sled::Db,
-    keytag: Keytag,
-    squash: Squash,
-) -> Result<L2Channel, WithSledError<UpdateSquashError>> {
-    update_channel_db(
-        db,
-        keytag,
-        |l2_channel: Option<L2Channel>| match l2_channel {
-            Some(mut l2_channel) => {
-                l2_channel
-                    .update_squash(squash.clone())
-                    .map_err(UpdateSquashError::Logic)?;
-                Ok(l2_channel)
-            }
-            None => Err(UpdateSquashError::NotFound),
-        },
-    )
-}
+        let key = to_db_key(keytag);
+        let result: Result<Channel, sled::transaction::TransactionError<Error>> =
+            self.db.transaction(move |tree| {
+                let key = key.clone();
+                let old_channel = tree
+                    .get(&key)?
+                    .map(|bytes| from_vec(bytes.as_ref()))
+                    .transpose()
+                    .map_err(abort_backend)?;
+                let new_channel = update_fn(old_channel).map_err(abort_logic)?;
+                let new_bytes = into_vec(&new_channel).map_err(abort_backend)?;
+                tree.insert(key.as_slice(), new_bytes)?;
+                Ok(new_channel)
+            });
 
-async fn insert_cheque(
-    db: &sled::Db,
-    keytag: Keytag,
-    cheque: Cheque,
-) -> Result<L2Channel, WithSledError<InsertChequeError>> {
-    update_channel_db(
-        db,
-        keytag,
-        |l2_channel: Option<L2Channel>| match l2_channel {
-            Some(mut l2_channel) => {
-                l2_channel
-                    .insert_cheque(cheque.clone())
-                    .map_err(InsertChequeError::Logic)?;
-                Ok(l2_channel)
+        match result {
+            Ok(new_channel) => Ok(new_channel),
+            Err(sled::transaction::TransactionError::Abort(e)) => Err(e),
+            Err(sled::transaction::TransactionError::Storage(e)) => {
+                Err(Error::Backend(BackendError::Other(e.to_string())))
             }
-            None => return Err(InsertChequeError::NotFound),
-        },
-    )
-}
+        }
+    }
 
-async fn unlock(
-    db: &sled::Db,
-    keytag: Keytag,
-    secret: Secret,
-) -> Result<L2Channel, WithSledError<UnlockError>> {
-    update_channel_db(
-        db,
-        keytag,
-        |l2_channel: Option<L2Channel>| match l2_channel {
-            Some(mut l2_channel) => {
-                l2_channel
-                    .unlock(secret.clone())
-                    .map_err(UnlockError::Logic)?;
-                Ok(l2_channel)
-            }
-            None => return Err(UnlockError::NotFound),
-        },
-    )
+    pub fn update_channel<F, T>(&self, keytag: &Keytag, update_fn: F) -> DbResult<Channel>
+    where
+        F: Fn(&mut Channel) -> Result<T, ChannelError>,
+    {
+        let wrap = move |opt: Option<Channel>| {
+            let mut channel = opt.ok_or_else(|| LogicError::NoEntry(keytag.clone()))?;
+            update_fn(&mut channel)?;
+            Ok(channel)
+        };
+        self.update_option_channel(keytag, wrap)
+    }
+
+    fn one_update_retainers(&self, keytag: &Keytag, retainers: Vec<Retainer>) -> DbResult<Channel> {
+        self.update_option_channel(keytag, move |opt| {
+            let mut channel = opt.unwrap_or_else(|| Channel::new(keytag.clone()));
+            channel.update_retainer(retainers.clone());
+            Ok(channel)
+        })
+    }
 }
 
 #[async_trait]
 impl DbInterface for WithSled {
-    async fn update_l1s(&self, tip: TipBody) -> Result<TipResponse, DbError<Infallible>> {
-        let curr = get_channel_keys(self.db.as_ref()).map_err(WithSledError::Backend)?;
-        let db = self.db.clone();
-        let mut futures = vec![];
-        coiter_with_default(tip.into_iter(), curr.into_iter(), |k, v| {
-            let db = db.clone();
-            futures.push(async move { update_from_l1(db.as_ref(), k, v).await });
+    async fn update_retainers(
+        &self,
+        retainers: BTreeMap<Keytag, Vec<Retainer>>,
+    ) -> DbResult<BTreeMap<Keytag, Result<Channel, ChannelError>>> {
+        let curr = self.channel_keys()?;
+        let mut futures = Vec::new();
+        coiter_with_default(retainers.into_iter(), curr.into_iter(), |k, v| {
+            futures.push(async move { (k.clone(), self.one_update_retainers(&k, v)) });
         });
-        join_all(futures)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        // FIXME
-        let r: BTreeMap<_, _> = BTreeMap::new();
-        Ok(r)
-    }
+        let results = futures::future::join_all(futures).await;
+        let mut res = BTreeMap::new();
+        for (key, update_result) in results {
+            match update_result {
+                Ok(channel) => {
+                    res.insert(key, Ok(channel));
+                }
+                Err(Error::Logic(LogicError::Channel(ce))) => {
+                    res.insert(key, Err(ce));
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
 
-    async fn get_channel(&self, keytag: &Keytag) -> Result<Option<L2Channel>, DbError<Infallible>> {
-        let db = self.db.as_ref();
-        let res = get_channel(db, keytag.clone())
-            .await
-            .map_err(WithSledError::Backend)?;
         Ok(res)
     }
 
-    async fn get_all(&self) -> Result<BTreeMap<Keytag, L2Channel>, DbError<Infallible>> {
-        let ks = get_channel_keys(&self.db).map_err(WithSledError::Backend)?;
-        let db = self.db.clone();
-        let futures = ks.into_iter().map(async |k| {
-            let db = db.clone();
-            get_channel(&db, k.clone())
-                .await
-                .map_err(WithSledError::<Infallible>::Backend)
-                .map(|ch| (k.clone(), ch.unwrap()))
-        });
-        let r = join_all(futures)
-            .await
+    async fn get_channel(&self, keytag: &Keytag) -> DbResult<Option<Channel>> {
+        let res = self.get_channel(keytag.clone())?;
+        Ok(res)
+    }
+
+    async fn get_all(&self) -> DbResult<BTreeMap<Keytag, Channel>> {
+        let ks = self.channel_keys()?;
+        let all = ks
             .into_iter()
-            .collect::<Result<_, _>>()?;
-        Ok(r)
+            .map(|k| {
+                // Justify unwrap :: we've only just grabbed all keys. It _must_ be a Some channel.
+                self.get_channel(k.clone())
+                    .map(|ch| (k.clone(), ch.unwrap()))
+            })
+            .collect::<DbResult<_>>()?;
+        Ok(all)
     }
 
-    async fn update_squash(
-        &self,
-        keytag: &Keytag,
-        squash: Squash,
-    ) -> Result<L2Channel, DbError<UpdateSquashError>> {
-        let db = self.db.clone();
-        let l2_channel = update_squash(&db, keytag.clone(), squash).await?;
-        Ok(l2_channel)
+    async fn update_squash(&self, keytag: &Keytag, squash: Squash) -> DbResult<Channel> {
+        self.update_channel(keytag, |c: &mut Channel| {
+            c.update_squash(squash.clone())?;
+            Ok(())
+        })
     }
 
-    async fn insert_cheque(
-        &self,
-        keytag: &Keytag,
-        cheque: Cheque,
-    ) -> Result<L2Channel, DbError<InsertChequeError>> {
-        let db = self.db.clone();
-        let l2_channel = insert_cheque(&db, keytag.clone(), cheque).await?;
-        Ok(l2_channel)
+    async fn append_locked(&self, keytag: &Keytag, locked: Locked) -> DbResult<Channel> {
+        self.update_channel(keytag, |c: &mut Channel| {
+            c.append_locked(locked.clone())?;
+            Ok(())
+        })
     }
 
-    async fn unlock(
-        &self,
-        keytag: &Keytag,
-        secret: Secret,
-    ) -> Result<L2Channel, DbError<UnlockError>> {
-        let db = self.db.clone();
-        let l2_channel = unlock(&db, keytag.clone(), secret).await?;
-        Ok(l2_channel)
+    async fn unlock(&self, keytag: &Keytag, secret: Secret) -> DbResult<Channel> {
+        self.update_channel(keytag, |c: &mut Channel| {
+            c.unlock(secret.clone())?;
+            Ok(())
+        })
     }
 }
 
@@ -318,12 +206,11 @@ impl DbInterface for WithSled {
 const CHANNEL: u8 = 10;
 const CHANNEL_END: u8 = 19;
 
-fn to_db_key(keytag: Keytag) -> Vec<u8> {
-    std::iter::once(CHANNEL).chain(keytag.0).collect()
+fn to_db_key(keytag: &Keytag) -> Vec<u8> {
+    std::iter::once(CHANNEL).chain(keytag.0.clone()).collect()
 }
 
 fn to_keytag(db_key: &[u8]) -> Keytag {
     Keytag(db_key[1..].to_vec())
 }
-
 // END OF DB_KEYS

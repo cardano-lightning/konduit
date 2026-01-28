@@ -1,10 +1,13 @@
+use konduit_tx::ChannelOutput;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::cmp;
 
 use cardano_tx_builder::VerificationKey;
 
-use crate::{Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Step, Tag, Used};
+use konduit_data::{
+    Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
+};
 
 /// A channel is an edge in the Lightning network.
 /// In Konduit, a channel is from Consumer to Adaptor.
@@ -68,6 +71,7 @@ impl Channel {
     }
 
     pub fn update_retainer(&mut self, l1s: Vec<Retainer>) -> Result<(), ChannelError> {
+        // FIXME :: Handle Useds better!
         self.retainer = match &self.receipt {
             None => l1s.into_iter().max_by_key(|l1| l1.amount),
             Some(receipt) => l1s.into_iter().max_by_key(|l1| {
@@ -143,6 +147,10 @@ impl Channel {
         }
     }
 
+    pub fn receipt(&self) -> Option<Receipt> {
+        self.receipt.clone()
+    }
+
     pub fn unlock(&mut self, secret: Secret) -> Result<(), ChannelError> {
         self.receipt
             .as_mut()
@@ -173,4 +181,36 @@ pub struct Retainer {
     amount: u64,
     subbed: u64,
     useds: Vec<Used>,
+}
+
+impl TryFrom<&L1Channel> for Retainer {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &L1Channel) -> Result<Self, Self::Error> {
+        let Stage::Opened(subbed, useds) = value.stage.clone() else {
+            return Err(anyhow::anyhow!("Not openened"));
+        };
+        let amount = value.amount;
+        Ok(Retainer {
+            amount,
+            subbed,
+            useds,
+        })
+    }
+}
+
+impl TryFrom<&ChannelOutput> for Retainer {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &ChannelOutput) -> Result<Self, Self::Error> {
+        let Stage::Opened(subbed, useds) = value.stage.clone() else {
+            return Err(anyhow::anyhow!("Not openened"));
+        };
+        let amount = value.amount;
+        Ok(Retainer {
+            amount,
+            subbed,
+            useds,
+        })
+    }
 }

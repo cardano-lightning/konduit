@@ -1,64 +1,77 @@
-use crate::models::{L1Channel, TipBody};
-use cardano_connect::CardanoConnect;
 use cardano_connect_blockfrost::Blockfrost;
-use cardano_tx_builder::{Credential, Datum, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::{Duration, Keytag};
+use cardano_tx_builder::{
+    Address, Credential, Datum, Hash, Input, Output, SigningKey, VerificationKey, address::kind,
+};
+use konduit_data::{Duration, Keytag, L1Channel};
+use konduit_tx::{
+    KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences, filter_channels,
+};
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{db, info::Info};
+use crate::{common::ChannelParameters, db};
 
-pub const MIN_ADA_BUFFER: u64 = 2_000_000;
+mod args;
+mod config;
+pub use args::Args as AdminArgs;
 
 #[derive(Clone)]
 pub struct Admin {
-    close_period: Duration,
-    connector: Arc<Blockfrost>,
+    cardano: Arc<Blockfrost>,
     db: Arc<dyn db::DbInterface + Send + Sync + 'static>,
-    max_tag_length: usize,
-    #[allow(dead_code)]
+    network_parameters: NetworkParameters,
+    channel_parameters: ChannelParameters,
+    tx_preferences: AdaptorPreferences,
     script_utxo: (Input, Output),
-    script_hash: Hash<28>,
-    skey: SigningKey,
+    wallet: SigningKey,
 }
 
 fn guard(cond: bool) -> Option<()> {
     if cond { Some(()) } else { None }
 }
 
-async fn fetch_script_utxo(
-    connector: Arc<Blockfrost>,
-    deployer_vkey: VerificationKey,
-    script_hash: Hash<28>,
-) -> anyhow::Result<(Input, Output)> {
-    let deployed_by = Credential::from_key(Hash::<28>::new(deployer_vkey));
-    let deployer_utxos = connector.utxos_at(&deployed_by, None).await?;
-    deployer_utxos
-        .into_iter()
-        .find(|(_input, output)| {
-            let output_script_hash = output.script().map(Hash::<28>::from);
-            output_script_hash == Some(script_hash)
-        })
-        .ok_or_else(|| anyhow::anyhow!("could not find konduit script UTXO"))
-}
-
 impl Admin {
     pub async fn new(
-        connector: Arc<Blockfrost>,
+        config: AdminConfig,
+        cardano: Arc<Blockfrost>,
         db: Arc<dyn db::DbInterface + Send + Sync + 'static>,
-        info: Arc<Info>,
-        skey: SigningKey,
     ) -> anyhow::Result<Admin> {
-        let deployer_vkey = info.deployer_vkey;
-        let script_hash = info.script_hash;
-        let script_utxo = fetch_script_utxo(connector.clone(), deployer_vkey, script_hash).await?;
+        let AdminConfig {
+            wallet,
+            channel_parameters,
+            preferences,
+            host_address,
+        } = config;
+        // Treat network parameters as constants.
+        // This will mean the service requires restarting
+        // when a there is a protocol params change.
+        let protocol_parameters = cardano.protocol_parameters().await?;
+        let network_id = cardano.network().into();
+        let network_parameters = NetworkParameters {
+            network_id,
+            protocol_parameters,
+        };
+        // Treat reference script utxo as constant.
+        // If this moves, the service needs to be restarted.
+        let Some(script_utxo) = cardano
+            .utxos_at(&host_address.payment(), host_address.delegation().as_ref())
+            .await?
+            .iter()
+            .find(|(_, o)| {
+                o.script()
+                    .is_some_and(|s| Hash::<28>::from(s) == KONDUIT_VALIDATOR.hash)
+            })
+        else {
+            return Err(anyhow::anyhow!("No reference script found"));
+        };
+
         Ok(Self {
-            close_period: info.close_period,
-            connector,
+            cardano,
             db,
-            max_tag_length: info.max_tag_length,
+            network_parameters,
+            channel_parameters,
+            tx_preferences,
             script_utxo,
-            script_hash: info.script_hash,
-            skey,
+            wallet,
         })
     }
 
@@ -94,27 +107,89 @@ impl Admin {
         }
     }
 
-    async fn fetch_tip(&self) -> anyhow::Result<TipBody> {
-        let script_credential = Credential::from_script(self.script_hash);
-        let channel_utxos = self.connector.utxos_at(&script_credential, None).await?;
-        let channels = channel_utxos
-            .into_iter()
-            .filter_map(|(_, output)| self.parse_channel_output(output));
+    fn retainers(&self, utxos: &BTreeMap<Input, Output>) -> BTreeMap<Keytag, Vec<Retainer>> {
+        let close_period = self.close_period;
+        let tag_length = self.max_tag_length;
+        let own_vkey = VerificationKey::from(&self.skey);
+        let candidates = filter_channels(&utxos, |co| {
+            [
+                co.constants.sub_vkey == own_vkey,
+                co.constants.close_period >= close_period,
+                co.constants.tag.0.len() <= tag_length,
+                co.stage.is_opened(),
+            ]
+            .iter()
+            .all(|&x| x)
+        })
+        .into_iter()
+        .filter_map(|(_, co)| Retainer::try_from(&co).ok().map(|r| (co.keytag(), r)));
+        let mut retainers = BTreeMap::new();
+        for (keytag, retainer) in candidates {
+            retainers
+                .entry(keytag)
+                .or_insert_with(Vec::new)
+                .push(retainer);
+        }
+        retainers
+    }
 
+    async fn fetch_tip(&self) -> anyhow::Result<TipBody> {
+        let script_credential = Credential::from_script(KONDUIT_VALIDATOR.hash);
+        let channel_utxos = self.connector.utxos_at(&script_credential, None).await?;
+        let close_period = self.close_period;
+        let tag_length = self.max_tag_length;
+        let own_vkey = VerificationKey::from(&self.skey);
+        let candidates = filter_channels(&channel_utxos, |co| {
+            [
+                co.constants.sub_vkey == own_vkey,
+                co.constants.close_period >= close_period,
+                co.constants.tag.0.len() <= tag_length,
+                co.stage.is_opened(),
+            ]
+            .iter()
+            .all(|&x| x)
+        })
+        .into_iter()
+        .map(|(_, co)| (co.keytag(), co.to_l1_channel()));
         let mut tip_body = BTreeMap::new();
-        for (keytag, l1_channel) in channels {
+        for (keytag, retainer) in candidates {
             tip_body
                 .entry(keytag)
                 .or_insert_with(Vec::new)
-                .push(l1_channel);
+                .push(retainer);
         }
         Ok(tip_body)
     }
 
+    /// These should be considered confirmed utxos,
+    /// acceptable to be treated as retainers.
+    pub async fn snapshot(&self) -> anyhow::Result<BTreeMap<Input, Output>> {
+        let credential = Credential::from_script(KONDUIT_VALIDATOR.hash);
+        let utxos = self.connector.utxos_at(&credential, None).await?;
+        Ok(utxos)
+    }
+
     pub async fn sync(&self) -> Result<(), anyhow::Error> {
-        let tip = self.fetch_tip().await?;
-        self.db.update_l1s(tip).await?;
-        // sub(s)...
+        let snapshot = self.snapshot().await?;
+        let retainers = self.retainers(&snapshot);
+        let channels = self.db.update_retainers(retainers).await?;
+        let receipts = channels
+            .iter()
+            .filter_map(|(kt, c)| c.ok().and_then(|c| c.receipt()).map(|r| (kt.clone(), r)))
+            .collect::<BTreeMap<_, _>>();
+        // FIXME :: This is the fudge. We treat tip as snapshot.
+        // We are more likely to either:
+        // - treat as confirmed something that will rollback
+        // - use as an input a utxo that has already been spent.
+        let tip = snapshot;
+        let tx = konduit_tx::adaptor::tx(
+            network_parameters,
+            preferences,
+            wallet,
+            &receipts,
+            &tip,
+            upper_bound,
+        );
         Ok(())
     }
 }

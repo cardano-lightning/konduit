@@ -9,7 +9,7 @@ use cardano_tx_builder::{
     Address, Credential, Hash, Input, NetworkId, Output, PlutusData, ProtocolParameters, Value,
     VerificationKey,
 };
-use konduit_data::{Constants, Datum, Duration, L1Channel, Stage};
+use konduit_data::{Constants, Datum, Duration, Keytag, L1Channel, Stage};
 
 use crate::KONDUIT_VALIDATOR;
 
@@ -30,6 +30,7 @@ pub const MIN_ADA_BUFFER: Lovelace = 2_000_000;
 
 pub const FEE_BUFFER: Lovelace = 3_000_000;
 
+#[derive(Debug, Clone)]
 pub struct NetworkParameters {
     pub network_id: NetworkId,
     pub protocol_parameters: ProtocolParameters,
@@ -89,6 +90,10 @@ pub struct ChannelOutput {
 }
 
 impl ChannelOutput {
+    pub fn keytag(&self) -> Keytag {
+        Keytag::new(self.constants.add_vkey, self.constants.tag.clone())
+    }
+
     pub fn to_l1_channel(&self) -> L1Channel {
         L1Channel {
             amount: self.amount.clone(),
