@@ -17,6 +17,25 @@ Below is an entry template.
 
 ## Entries
 
+### 2025-01-24
+
+@waalge:
+[fix-multi-unlocked](https://github.com/cardano-lightning/konduit/pull/69/commits/982fcc1c29e98e100c37b41ef142c7bac91249ae)
+Continued work on the risk assessment for Adaptor. ADR on
+[rate limit add](https://github.com/cardano-lightning/konduit/blob/2de196b8481a3fb1e06a0b75e08d32383b630863/docs/adrs/01-rate-limit-add.md),
+proposing two possible solutions to prevent an "add spamming" attack described
+in the risk assessment.
+
+OKRs:
+
+```
+roadmap // v1 // maturity // docs // quantified adaptor risk assessment
+```
+
+Next:
+
+- Find pragmatic solution(s) to get adaptor server back on track
+
 ### 2025-01-17
 
 @waalge:
