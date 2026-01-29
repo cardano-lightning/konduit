@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+use cardano_tx_builder::Signature;
 pub use konduit_data::Keytag;
-use konduit_data::L1Channel;
 pub use konduit_data::Stage;
 use konduit_data::{Cheque, Receipt};
+use konduit_data::{L1Channel, Locked};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -68,9 +69,13 @@ pub struct QuoteResponse {
     pub routing_fee: u64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayBody {
-    pub cheque: Cheque,
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub cheque_body: Vec<u8>,
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub signature: [u8; 64],
     pub invoice: String,
     // #[serde(with = "hex")]
     // pub payee: [u8; 33],
@@ -80,13 +85,14 @@ pub struct PayBody {
     // pub final_cltv_delta: u64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UnlockedCheque {
-    #[serde(with = "hex")]
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub cheque_body: Vec<u8>,
-    #[serde(with = "hex")]
-    pub signature: [u8; 64],
-    #[serde(with = "hex")]
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub signature: Signature,
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub secret: Vec<u8>,
 }
 

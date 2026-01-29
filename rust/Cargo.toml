@@ -63,5 +63,6 @@ cardano-tx-builder = { path = "crates/cardano-tx-builder" }
 cardano-connect = { path = "crates/cardano-connect" }
 cardano-connect-blockfrost = { path = "crates/cardano-connect-blockfrost" }
 cardano-connect-wasm = { path = "crates/cardano-connect-wasm" }
+bln-client = { path = "crates/bln-client" }
 konduit-tx = { path = "crates/konduit-tx" }
 konduit-data = { path = "crates/konduit-data" }

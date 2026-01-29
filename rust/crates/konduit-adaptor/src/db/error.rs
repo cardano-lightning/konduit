@@ -55,3 +55,5 @@ impl From<ChannelError> for Error {
         Self::Logic(LogicError::Channel(value))
     }
 }
+
+pub type Result<T> = std::result::Result<T, Error>;

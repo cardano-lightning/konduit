@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bitcoin_hashes::Hash;
+use bitcoin::hashes::Hash;
 use lightning_invoice::{
     self, Currency, Description, Fallback, MinFinalCltvExpiryDelta, PrivateRoute, RawHrp,
     RawTaggedField, SignedRawBolt11Invoice, TaggedField,

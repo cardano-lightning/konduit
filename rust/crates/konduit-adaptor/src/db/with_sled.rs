@@ -9,11 +9,7 @@ pub use cli_args::Args;
 
 use crate::{Channel, ChannelError, channel::Retainer};
 
-use super::{
-    Error,
-    coiter_with_default::coiter_with_default,
-    interface::{DbInterface, DbResult},
-};
+use super::{BackendError, Error, LogicError, api::Api, coiter_with_default::coiter_with_default};
 
 impl From<sled::Error> for BackendError {
     fn from(e: sled::Error) -> Self {
@@ -68,7 +64,7 @@ impl WithSled {
         Ok(b.map(|v| v.to_vec()))
     }
 
-    fn get_channel(&self, keytag: Keytag) -> DbResult<Option<Channel>> {
+    fn get_channel(&self, keytag: Keytag) -> super::Result<Option<Channel>> {
         match self.get_value(to_db_key(&keytag))? {
             Some(bytes) => {
                 let channel = from_vec(&bytes)?;
@@ -78,7 +74,7 @@ impl WithSled {
         }
     }
 
-    pub fn update_option_channel<F>(&self, keytag: &Keytag, update_fn: F) -> DbResult<Channel>
+    pub fn update_option_channel<F>(&self, keytag: &Keytag, update_fn: F) -> super::Result<Channel>
     where
         F: Fn(Option<Channel>) -> Result<Channel, LogicError>,
     {
@@ -111,7 +107,7 @@ impl WithSled {
         }
     }
 
-    pub fn update_channel<F, T>(&self, keytag: &Keytag, update_fn: F) -> DbResult<Channel>
+    pub fn update_channel<F, T>(&self, keytag: &Keytag, update_fn: F) -> super::Result<Channel>
     where
         F: Fn(&mut Channel) -> Result<T, ChannelError>,
     {
@@ -123,7 +119,11 @@ impl WithSled {
         self.update_option_channel(keytag, wrap)
     }
 
-    fn one_update_retainers(&self, keytag: &Keytag, retainers: Vec<Retainer>) -> DbResult<Channel> {
+    fn one_update_retainers(
+        &self,
+        keytag: &Keytag,
+        retainers: Vec<Retainer>,
+    ) -> super::Result<Channel> {
         self.update_option_channel(keytag, move |opt| {
             let mut channel = opt.unwrap_or_else(|| Channel::new(keytag.clone()));
             channel.update_retainer(retainers.clone());
@@ -133,11 +133,11 @@ impl WithSled {
 }
 
 #[async_trait]
-impl DbInterface for WithSled {
+impl Api for WithSled {
     async fn update_retainers(
         &self,
         retainers: BTreeMap<Keytag, Vec<Retainer>>,
-    ) -> DbResult<BTreeMap<Keytag, Result<Channel, ChannelError>>> {
+    ) -> super::Result<BTreeMap<Keytag, Result<Channel, ChannelError>>> {
         let curr = self.channel_keys()?;
         let mut futures = Vec::new();
         coiter_with_default(retainers.into_iter(), curr.into_iter(), |k, v| {
@@ -162,12 +162,12 @@ impl DbInterface for WithSled {
         Ok(res)
     }
 
-    async fn get_channel(&self, keytag: &Keytag) -> DbResult<Option<Channel>> {
+    async fn get_channel(&self, keytag: &Keytag) -> super::Result<Option<Channel>> {
         let res = self.get_channel(keytag.clone())?;
         Ok(res)
     }
 
-    async fn get_all(&self) -> DbResult<BTreeMap<Keytag, Channel>> {
+    async fn get_all(&self) -> super::Result<BTreeMap<Keytag, Channel>> {
         let ks = self.channel_keys()?;
         let all = ks
             .into_iter()
@@ -176,25 +176,25 @@ impl DbInterface for WithSled {
                 self.get_channel(k.clone())
                     .map(|ch| (k.clone(), ch.unwrap()))
             })
-            .collect::<DbResult<_>>()?;
+            .collect::<super::Result<_>>()?;
         Ok(all)
     }
 
-    async fn update_squash(&self, keytag: &Keytag, squash: Squash) -> DbResult<Channel> {
+    async fn update_squash(&self, keytag: &Keytag, squash: Squash) -> super::Result<Channel> {
         self.update_channel(keytag, |c: &mut Channel| {
             c.update_squash(squash.clone())?;
             Ok(())
         })
     }
 
-    async fn append_locked(&self, keytag: &Keytag, locked: Locked) -> DbResult<Channel> {
+    async fn append_locked(&self, keytag: &Keytag, locked: Locked) -> super::Result<Channel> {
         self.update_channel(keytag, |c: &mut Channel| {
             c.append_locked(locked.clone())?;
             Ok(())
         })
     }
 
-    async fn unlock(&self, keytag: &Keytag, secret: Secret) -> DbResult<Channel> {
+    async fn unlock(&self, keytag: &Keytag, secret: Secret) -> super::Result<Channel> {
         self.update_channel(keytag, |c: &mut Channel| {
             c.unlock(secret.clone())?;
             Ok(())
