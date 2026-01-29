@@ -1,3 +1,5 @@
+use core::fmt;
+
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 
@@ -12,6 +14,24 @@ impl std::str::FromStr for Tag {
         Ok(Tag(
             hex::decode(s).map_err(|e| anyhow!(e).context("invalid tag"))?
         ))
+    }
+}
+
+impl fmt::Display for Tag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0.clone()))
+    }
+}
+
+impl AsRef<[u8]> for Tag {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<Vec<u8>> for Tag {
+    fn from(value: Vec<u8>) -> Self {
+        Self(value)
     }
 }
 

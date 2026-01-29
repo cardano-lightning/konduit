@@ -1,28 +1,28 @@
-mod data;
-mod tx;
-mod wallet;
+mod adaptor;
+mod admin;
+mod consumer;
+mod parsers;
 
 /// A utility for constructing and driving Konduit's stages
 #[derive(clap::Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
-#[clap(propagate_version = true)]
 pub(crate) enum Cmd {
     #[clap(subcommand)]
-    Data(data::Cmd),
+    Adaptor(adaptor::Cmd),
 
     #[clap(subcommand)]
-    Wallet(wallet::Cmd),
+    Admin(admin::Cmd),
 
     #[clap(subcommand)]
-    Tx(tx::Cmd),
+    Consumer(consumer::Cmd),
 }
 
 impl Cmd {
-    pub(crate) async fn execute(self) -> anyhow::Result<()> {
+    pub(crate) fn run(self) -> anyhow::Result<()> {
         match self {
-            Self::Data(cmd) => cmd.execute().await,
-            Self::Wallet(cmd) => cmd.execute().await,
-            Self::Tx(cmd) => cmd.execute().await,
+            Self::Adaptor(cmd) => cmd.run(),
+            Self::Admin(cmd) => cmd.run(),
+            Self::Consumer(cmd) => cmd.run(),
         }
     }
 }

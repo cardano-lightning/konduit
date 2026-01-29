@@ -1,34 +1,28 @@
-use thiserror::Error;
+mod error;
+pub use error::*;
+mod api;
+pub use api::Api;
 
-mod interface;
-pub use interface::{DbError, DbInterface, UpdateSquashError};
-
+// Helpers
 mod coiter_with_default;
 
+// Impls
 mod with_sled;
-
-#[derive(Debug, Error)]
-pub enum DbInitError {
-    #[error("Sled database error: {0}")]
-    Sled(#[from] sled::Error),
-    #[error("No database specified")]
-    None,
-}
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct DbArgs {
     /// Db with sled
     #[clap(flatten)]
-    pub sled: Option<with_sled::SledArgs>,
+    pub sled: Option<with_sled::Args>,
 }
 
 impl DbArgs {
-    pub fn build(self) -> Result<impl DbInterface, DbInitError> {
+    pub fn build(self) -> error::Result<impl Api> {
         if let Some(args) = &self.sled {
             let db = with_sled::WithSled::try_from(args).expect("oops");
             Ok(db)
         } else {
-            Err(DbInitError::None)
+            panic!("db failed to init")
         }
     }
 }

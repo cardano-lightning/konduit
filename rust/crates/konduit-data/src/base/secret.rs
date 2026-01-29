@@ -1,9 +1,7 @@
 use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 
-use serde::{Deserialize, Serialize};
-
-use crate::{impl_hex_serde_for_wrapper, utils::try_into_array};
+use crate::utils::try_into_array;
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
@@ -19,7 +17,21 @@ impl std::str::FromStr for Secret {
     }
 }
 
-impl_hex_serde_for_wrapper!(Secret, [u8; 32]);
+impl AsRef<[u8]> for Secret {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl TryFrom<Vec<u8>> for Secret {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(Self(
+            <[u8; 32]>::try_from(value).map_err(|_| anyhow::anyhow!("Wrong length"))?,
+        ))
+    }
+}
 
 impl<'a> TryFrom<&PlutusData<'a>> for Secret {
     type Error = anyhow::Error;

@@ -2,7 +2,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::pallas::ed25519;
+use crate::{PlutusData, pallas::ed25519};
 use std::{cmp, fmt, str::FromStr};
 
 /// An EdDSA signature on Curve25519.
@@ -43,6 +43,14 @@ impl From<[u8; 64]> for Signature {
     }
 }
 
+impl TryFrom<Vec<u8>> for Signature {
+    type Error = Vec<u8>;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(Self::from(<[u8; 64]>::try_from(value)?))
+    }
+}
+
 impl FromStr for Signature {
     type Err = anyhow::Error;
 
@@ -54,6 +62,24 @@ impl FromStr for Signature {
 impl From<ed25519::Signature> for Signature {
     fn from(sig: ed25519::Signature) -> Self {
         Self(sig)
+    }
+}
+
+impl<'a> TryFrom<&PlutusData<'a>> for Signature {
+    type Error = anyhow::Error;
+
+    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+        let array =
+            <&'_ [u8; 64]>::try_from(data).map_err(|e| e.context("invalid verification key"))?;
+        Ok(Self(ed25519::Signature::from(*array)))
+    }
+}
+
+impl<'a> TryFrom<PlutusData<'a>> for Signature {
+    type Error = anyhow::Error;
+
+    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+        Self::try_from(&data)
     }
 }
 
@@ -82,6 +108,12 @@ impl From<Signature> for ed25519::Signature {
 impl<'a> From<&'a Signature> for &'a ed25519::Signature {
     fn from(sig: &'a Signature) -> Self {
         &sig.0
+    }
+}
+
+impl<'a> From<Signature> for PlutusData<'a> {
+    fn from(key: Signature) -> Self {
+        Self::bytes(key.0)
     }
 }
 

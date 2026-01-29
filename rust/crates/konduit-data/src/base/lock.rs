@@ -2,12 +2,15 @@ use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 use cryptoxide::hashing::sha256;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
-use crate::{Secret, impl_hex_serde_for_wrapper, utils::try_into_array};
+use crate::{Secret, utils::try_into_array};
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
-pub struct Lock(pub [u8; 32]);
+#[serde(transparent)]
+pub struct Lock(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
 
 impl std::str::FromStr for Lock {
     type Err = anyhow::Error;
@@ -19,7 +22,19 @@ impl std::str::FromStr for Lock {
     }
 }
 
-impl_hex_serde_for_wrapper!(Lock, [u8; 32]);
+impl AsRef<[u8]> for Lock {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl TryFrom<Vec<u8>> for Lock {
+    type Error = Vec<u8>;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(Self(<[u8; 32]>::try_from(value)?))
+    }
+}
 
 impl From<Secret> for Lock {
     fn from(value: Secret) -> Self {

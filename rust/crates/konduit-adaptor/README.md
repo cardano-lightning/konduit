@@ -1,3 +1,54 @@
+# Konduit Server.
+
+## TODOs
+
+### Info
+
+Previously there had been an accidental equivalence of config options and info.
+As info has got more complex, the two have diverged, but we've not yet fixed
+this.
+
+#### Newer design
+
+Channel params:
+
+- adaptor key - Verification key
+- (min) close period - Int (Duration in millis)
+- (max) tag length - Int
+- delegation - Bool - True if channel delegation supported, currently always
+  false.
+
+Versioning info:
+
+- Script hash - this is hard coded through our dependency on konduit-tx
+
+Tx building assistance:
+
+- Script Host - Address - Address to query to find reference script
+
+Fee:
+
+- Any - Fee is purely infomational and it is not safety critical. We know that
+  the current mechanism is insufficient, and we leave out options open.
+
+### Admin
+
+#### L1 Sync
+
+Sync with l1: what's an upstream responsibility and whats a downstream
+responsibility?
+
+The problem: channel retainers must be confirmed utxos, while transactions are
+built over current UTXOs (which may or may not be considered confirmed).
+
+For the purposes of getting shit done, we will assume that all Utxos fed in via
+admin are confirmed. This does make the system more sensitive add spamming, and
+for the same reason more transactions will fail, but this is measured risk, and
+we will fix this problem later.
+
+Error handling. We have "global" and "local" error potential. Global, being
+"cannot reach db". Local being "something went wrong with a specific channel".
+
 # Adaptor server
 
 > Does all the layer 2 things.
