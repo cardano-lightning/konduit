@@ -1,14 +1,42 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{
-    Invoice, State, bln,
-    cbor::decode_from_cbor,
-    db::DbError,
-    fx, info,
-    models::{IncompleteSquashResponse, PayBody, QuoteBody, SquashResponse, TipBody},
+    bln, db, fx, info,
+    models::{IncompleteSquashResponse, PayBody, QuoteBody, SquashResponse},
+    server::cbor::decode_from_cbor,
+    state::State,
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_data::{Keytag, Secret, Squash};
+use konduit_data::{Keytag, Locked, Secret, Squash};
+
+const FEE_PLACEHOLDER: u64 = 1000;
+
+#[derive(Debug, thiserror::Error)]
+pub enum HandlerError {
+    #[error("Internal Network Error")]
+    Network(#[from] reqwest::Error),
+
+    #[error("LND returned: {0}")]
+    LndApi(String),
+
+    #[error("LND returned: {0}")]
+    Db(#[from] db::Error),
+}
+
+impl ResponseError for HandlerError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            HandlerError::Network(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            HandlerError::LndApi(_) => StatusCode::BAD_GATEWAY,
+            HandlerError::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::build(self.status_code())
+            .json(serde_json::json!({ "error": self.to_string() }))
+    }
+}
 
 // TODO :: MOVE TO CONFIG
 /// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
@@ -16,37 +44,6 @@ const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60
 /// "Grace" is extra time between the "quoted" rel time and the time that might be allowed for in a
 /// "pay"
 const ADAPTOR_TIME_GRACE: std::time::Duration = Duration::from_secs(1 * 10 * 60);
-
-#[derive(Debug, thiserror::Error)]
-pub enum HandlerError {
-    #[error("Db : {0}")]
-    Db(String),
-    #[error("String : {0}")]
-    Logic(String),
-}
-
-impl From<DbError> for HandlerError {
-    fn from(value: DbError) -> Self {
-        match value {
-            DbError::Backend(error) => HandlerError::Db(error.to_string()),
-            DbError::Logic(error) => HandlerError::Logic(error.to_string()),
-        }
-    }
-}
-
-impl ResponseError for HandlerError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            HandlerError::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            HandlerError::Logic(_) => StatusCode::BAD_REQUEST,
-        }
-    }
-
-    fn error_response(&self) -> HttpResponse {
-        log::error!("Handler Error: {}", self);
-        HttpResponse::build(self.status_code()).body(self.to_string())
-    }
-}
 
 pub async fn info(data: web::Data<State>) -> info::Info {
     (*data.info()).clone()
@@ -122,7 +119,7 @@ pub async fn quote(
             payee: simple_quote.payee,
         },
         QuoteBody::Bolt11(s) => {
-            let Ok(invoice) = Invoice::try_from(s.as_str()) else {
+            let Ok(invoice) = bln::Invoice::try_from(s.as_str()) else {
                 return Ok(HttpResponse::BadRequest().body("Bad invoice"));
             };
             bln::QuoteRequest {
@@ -135,7 +132,8 @@ pub async fn quote(
         return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
     };
     let amount =
-        fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info().fee + 1;
+        fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + FEE_PLACEHOLDER + 1;
+    // fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info().fee + 1;
     let relative_timeout = (ADAPTOR_TIME_DELTA + bln_quote.relative_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
         amount,
@@ -157,17 +155,17 @@ pub async fn pay(
         log::info!("FX : {:?}", data.fx());
         return Ok(HttpResponse::InternalServerError().body("Error: Fx unavailable"));
     };
-    let pay_body = body.into_inner();
-    let invoice = match Invoice::try_from(&pay_body.invoice) {
+    let body = body.into_inner();
+    let locked = Locked::new(body.cheque_body, body.signature);
+    let invoice = match bln::Invoice::try_from(&body.invoice) {
         Ok(inv) => inv,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
     };
     let (key, tag) = keytag.split();
-    if !pay_body.cheque.verify(&key, &tag) {
+    if !pay_body..verify(&key, &tag) {
         return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
     };
-    let effective_amount_msat =
-        fx.lovelace_to_msat(pay_body.cheque.cheque_body.amount - data.info().fee);
+    let effective_amount_msat = fx.lovelace_to_msat(pay_body.cheque.amount() - FEE_PLACEHOLDER);
     if effective_amount_msat < invoice.amount_msat {
         return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
     }
@@ -182,8 +180,7 @@ pub async fn pay(
     };
     let relative_timeout = pay_body
         .cheque
-        .cheque_body
-        .timeout
+        .timeout()
         .saturating_sub(now)
         .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
 
@@ -192,7 +189,7 @@ pub async fn pay(
     };
 
     // let payment_hash = pay_body.cheque.cheque_body.lock.0.clone();
-    if let Err(err) = data.db.insert_cheque(&keytag, pay_body.cheque).await {
+    if let Err(err) = data.db().append_locked(&keytag, pay_body.cheque).await {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
     let pay_request = bln::PayRequest {

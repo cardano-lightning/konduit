@@ -5,6 +5,8 @@ use serde_with::serde_as;
 
 use crate::env;
 
+mod metavar;
+
 /// These variables are either those used by more than one component,
 /// or are mandatory.
 /// These are not all variables required: component specific ones
@@ -13,7 +15,7 @@ use crate::env;
 pub struct CommonArgs {
     #[arg(long, env = env::SIGNING_KEY)]
     pub signing_key: SigningKey,
-    #[arg(long, env = env::CLOSE_PERIOD, value_name=crate::metavar::DURATION, default_value="24h")]
+    #[arg(long, env = env::CLOSE_PERIOD, value_name=metavar::DURATION, default_value="24h")]
     pub close_period: Duration,
     #[arg(long, env = env::TAG_LENGTH, default_value = "32")]
     pub tag_length: usize,

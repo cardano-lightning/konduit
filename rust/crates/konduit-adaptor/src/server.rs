@@ -1,14 +1,13 @@
-use crate::keytag_middleware::KeytagAuth;
-use crate::{Cmd, app_state::AppState};
-use crate::{State, connector};
-use crate::{db, handlers};
+use crate::{args::Args, state::State};
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
-use cardano_connect_blockfrost::Blockfrost;
-use std::sync::Arc;
 
 mod args;
 pub use args::Args as ServerArgs;
+
+mod cbor;
+mod handlers;
+mod middleware;
 
 #[derive(Debug, Clone)]
 pub enum CliError {
@@ -23,7 +22,7 @@ pub struct Server {
 
 impl Server {
     pub fn new(state: State, host: String, port: Option<u16>) -> Self {
-        let bind_address = format!("{}:{}", cmd.host.host, cmd.host.port);
+        let bind_address = format!("{}:{}", host, port);
         Self {
             state,
             bind_address,
@@ -52,7 +51,7 @@ impl Server {
                 .service(
                     // FIXME : Implement auth
                     web::scope("/ch")
-                        .wrap(KeytagAuth::new("KONDUIT"))
+                        .wrap(middleware::KeytagAuth::new("KONDUIT"))
                         .route("/squash", web::post().to(handlers::squash))
                         .route("/quote", web::post().to(handlers::quote))
                         .route("/pay", web::post().to(handlers::pay)),

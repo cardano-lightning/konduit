@@ -1,0 +1,32 @@
+[package]
+name = "bln-client"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64 = "0.22.1"
+bitcoin = "0.32.8"
+clap.workspace = true
+hex.workspace = true
+lightning-invoice = { version = "0.34.0", features = ["serde"] }
+lightning-types = "0.3.0"
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+serde_with = { version = "3.16.1", features = ["hex", "base64"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+dotenvy.workspace = true
+tokio.workspace = true
