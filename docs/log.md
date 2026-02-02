@@ -17,6 +17,24 @@ Below is an entry template.
 
 ## Entries
 
+### 2025-01-31
+
+@waalge:
+[fix-multi-unlocked](https://github.com/cardano-lightning/konduit/pull/69/changes/0be1c46cb47e6e5a77cbd21ee9f5b9610b813ccd)
+work continues on konduit-server (currently konduit-adaptor). An accidental,
+large refactoring brought about as the amount of incoherence in the existing
+code became unmanageable while trying to bring in the new.
+
+OKRs:
+
+```
+roadmap // v1 // konduit server // second implementation
+```
+
+Next:
+
+- Complete refactor of konduit-server. Get thing running again
+
 ### 2025-01-24
 
 @waalge:
