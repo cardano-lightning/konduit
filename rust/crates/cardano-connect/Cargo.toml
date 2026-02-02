@@ -17,5 +17,3 @@ release = false
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
 trait-variant.workspace = true
-
-trait-variant = "0.1.2"
