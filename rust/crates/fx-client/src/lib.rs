@@ -12,3 +12,6 @@ pub mod binance;
 pub mod coin_gecko;
 pub mod fixed;
 pub mod kraken;
+
+#[cfg(feature = "cli")]
+pub mod cli;

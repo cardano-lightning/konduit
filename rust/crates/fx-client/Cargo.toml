@@ -30,10 +30,9 @@ tokio = { workspace = true, features = ["full"], optional = true }
 dotenvy = { workspace = true, optional = true }
 humantime = { workspace = true, optional = true }
 
+[features]
+cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
+
 [[bin]]
 name = "fx-print"
 path = "src/main.rs"
-required-features = ["cli"]
-
-[features]
-cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
