@@ -47,7 +47,7 @@
     - [ ] Demonstrates full lifecycle management
     - [ ] Bench for adaptor of "sub" in real-ish world conditions
     - [ ] Hand driven tests work after final version of Kernel
-- [ ] Konduit adaptor - Adaptor service
+- [ ] Konduit server - Adaptor service
   - [ ] Interface specification
     - [x] First draft (roughly compelete upto Auth)
     - [ ] Second draft - Justifiable "complete" given a first version of App
