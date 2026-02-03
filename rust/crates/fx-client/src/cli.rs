@@ -1,4 +1,3 @@
-// rust-analyzer: { "features": ["cli"] }
 use crate::{Api, BaseCurrency, binance, coin_gecko, fixed, kraken};
 use clap::Parser;
 use std::time::Duration;
