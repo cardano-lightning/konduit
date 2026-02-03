@@ -16,4 +16,3 @@ release = false
 [dependencies]
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
-trait-variant.workspace = true

@@ -1,13 +1,14 @@
 mod types;
 pub use types::*;
 
-mod interface;
-pub use interface::*;
-
 mod error;
+pub use error::*;
+
+mod api;
+pub use api::*;
+
 mod with_coin_gecko;
 mod with_static;
-pub use error::Error;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FxInitError {
@@ -28,7 +29,7 @@ pub struct FxArgs {
 }
 
 impl FxArgs {
-    pub fn build(self) -> Result<Box<dyn FxInterface>, FxInitError> {
+    pub fn build(self) -> std::result::Result<Box<dyn Api>, FxInitError> {
         if self.with_coin_gecko && self.with_static.is_some() {
             return Err(FxInitError::Fx(Error::Other(
                 "Cannot use both: coin gecko and static fx at the same time".to_string(),

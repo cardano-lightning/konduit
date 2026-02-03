@@ -2,23 +2,12 @@ use chrono::Utc;
 use serde::Serialize;
 use std::fmt;
 
-use actix_web::{HttpRequest, HttpResponse, Responder, body::BoxBody};
-
 #[derive(Debug, Clone, Serialize)]
 pub struct State {
     pub created_at: i64,
     pub base: BaseCurrency,
     pub ada: f64,
     pub bitcoin: f64,
-}
-
-impl Responder for State {
-    type Body = BoxBody;
-
-    fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
-        // Automatically returns 200 OK with application/json
-        HttpResponse::Ok().json(self)
-    }
 }
 
 impl State {
@@ -43,13 +32,39 @@ impl State {
 #[derive(Clone, Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum BaseCurrency {
+    Aud,
+    Chf,
     Eur,
+    Gbp,
+    Jpy,
+    Usd,
 }
 
 impl fmt::Display for BaseCurrency {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Aud => write!(f, "aud"),
+            Self::Chf => write!(f, "chf"),
             Self::Eur => write!(f, "eur"),
+            Self::Gbp => write!(f, "gbp"),
+            Self::Jpy => write!(f, "jpy"),
+            Self::Usd => write!(f, "usd"),
+        }
+    }
+}
+
+impl std::str::FromStr for BaseCurrency {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "aud" => Ok(Self::Aud),
+            "chf" => Ok(Self::Chf),
+            "eur" => Ok(Self::Eur),
+            "gbp" => Ok(Self::Gbp),
+            "jpy" => Ok(Self::Jpy),
+            "usd" => Ok(Self::Usd),
+            _ => Err(format!("'{}' is not a valid base currency", s)),
         }
     }
 }

@@ -1,0 +1,39 @@
+[package]
+name = "fx-client"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+hex.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+thiserror.workspace = true
+
+# Binary-only dependencies (marked as optional)
+clap = { workspace = true, features = ["derive", "env"], optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+dotenvy = { workspace = true, optional = true }
+humantime = { workspace = true, optional = true }
+
+[[bin]]
+name = "fx-print"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]

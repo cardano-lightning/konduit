@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use super::{BaseCurrency, Error, Fx, FxInterface};
+use super::{Api, BaseCurrency, Error, State};
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct WithStaticArgs {
@@ -29,9 +29,9 @@ impl TryFrom<&WithStaticArgs> for WithStatic {
 }
 
 #[async_trait]
-impl FxInterface for WithStatic {
-    async fn get(&self) -> Result<Fx, Error> {
-        let new: Fx = Fx::new(BaseCurrency::Eur, self.ada, self.bitcoin);
+impl Api for WithStatic {
+    async fn get(&self) -> super::Result<State> {
+        let new = State::new(BaseCurrency::Eur, self.ada, self.bitcoin);
         Ok(new)
     }
 }

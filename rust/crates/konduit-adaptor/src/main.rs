@@ -41,7 +41,7 @@ async fn main() -> std::io::Result<()> {
             let bytes = hex::decode(skey_hex).expect("failed to decode signing key from hex");
             SigningKey::try_from(bytes).expect("failed to create signing key from bytes")
         };
-        Admin::new(server.connector(), server.db(), server.info(), skey)
+        Admin::new(app.connector(), app.db(), app.info(), skey)
             .await
             .expect("failed to create admin instance")
     };

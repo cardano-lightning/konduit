@@ -1,18 +1,18 @@
-use cardano_connect_blockfrost::Blockfrost;
-use cardano_tx_builder::{
-    Credential, Datum, Hash, Input, Output, SigningKey, VerificationKey, address::kind,
-};
-use konduit_data::{Keytag, L1Channel};
+use cardano_connect::CardanoConnect;
+use cardano_tx_builder::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
+use konduit_data::Keytag;
 use konduit_tx::{
     Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences, filter_channels,
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{admin::config::Config, channel::Retainer, common::ChannelParameters, db};
+use crate::{
+    admin::config::Config, cardano::Cardano, channel::Retainer, common::ChannelParameters, db,
+};
 
 #[derive(Clone)]
 pub struct Service {
-    cardano: Arc<Blockfrost>,
+    cardano: Arc<Cardano>,
     db: Arc<dyn db::Api + Send + Sync + 'static>,
     network_parameters: NetworkParameters,
     channel_parameters: ChannelParameters,
@@ -28,7 +28,7 @@ fn guard(cond: bool) -> Option<()> {
 impl Service {
     pub async fn new(
         config: Config,
-        cardano: Arc<Blockfrost>,
+        cardano: Arc<Cardano>,
         db: Arc<dyn db::Api + Send + Sync + 'static>,
     ) -> anyhow::Result<Self> {
         let Config {
@@ -51,7 +51,7 @@ impl Service {
         let Some(script_utxo) = cardano
             .utxos_at(&host_address.payment(), host_address.delegation().as_ref())
             .await?
-            .iter()
+            .into_iter()
             .find(|(_, o)| {
                 o.script()
                     .is_some_and(|s| Hash::<28>::from(s) == KONDUIT_VALIDATOR.hash)
@@ -72,9 +72,9 @@ impl Service {
     }
 
     fn retainers(&self, utxos: &BTreeMap<Input, Output>) -> BTreeMap<Keytag, Vec<Retainer>> {
-        let close_period = self.close_period;
-        let tag_length = self.max_tag_length;
-        let own_vkey = VerificationKey::from(&self.skey);
+        let close_period = self.channel_parameters.close_period;
+        let tag_length = self.channel_parameters.tag_length;
+        let own_vkey = VerificationKey::from(&self.wallet);
         let candidates = filter_channels(&utxos, |co| {
             [
                 co.constants.sub_vkey == own_vkey,
@@ -101,7 +101,7 @@ impl Service {
     /// acceptable to be treated as retainers.
     pub async fn snapshot(&self) -> anyhow::Result<BTreeMap<Input, Output>> {
         let credential = Credential::from_script(KONDUIT_VALIDATOR.hash);
-        let utxos = self.connector.utxos_at(&credential, None).await?;
+        let utxos = self.cardano.utxos_at(&credential, None).await?;
         Ok(utxos)
     }
 
@@ -111,22 +111,29 @@ impl Service {
         let channels = self.db.update_retainers(retainers).await?;
         let receipts = channels
             .iter()
-            .filter_map(|(kt, c)| c.ok().and_then(|c| c.receipt()).map(|r| (kt.clone(), r)))
+            .filter_map(|(kt, c)| {
+                c.as_ref()
+                    .ok()
+                    .and_then(|c| c.receipt())
+                    .map(|r| (kt.clone(), r))
+            })
             .collect::<BTreeMap<_, _>>();
         // FIXME :: This is the fudge. We treat tip as snapshot.
         // We are more likely to either:
         // - treat as confirmed something that will rollback
         // - use as an input a utxo that has already been spent.
         let tip = snapshot;
-        let upper_bound = Bounds::twenty_mins();
-        let tx = konduit_tx::adaptor::tx(
-            self.network_parameters,
-            self.tx_preferences,
-            self.wallet,
+        let upper_bound = Bounds::twenty_mins().upper;
+        let mut tx = konduit_tx::adaptor::tx(
+            &self.network_parameters,
+            &self.tx_preferences,
+            &VerificationKey::from(&self.wallet),
             &receipts,
             &tip,
-            upper_bound,
-        );
+            &upper_bound,
+        )?;
+        tx.sign(self.wallet.clone());
+        self.cardano.submit(&tx);
         Ok(())
     }
 }

@@ -2,7 +2,10 @@ use anyhow::anyhow;
 use cardano_connect::CardanoConnect;
 use cardano_connect_blockfrost::Blockfrost;
 
-pub(crate) async fn new() -> anyhow::Result<Blockfrost> {
+// FIXME :: Cannot make impl dyn, so for not use concrete impl
+pub type Cardano = Blockfrost;
+
+pub(crate) async fn new() -> anyhow::Result<Cardano> {
     let project_id = std::env::var(crate::env::BLOCKFROST_PROJECT_ID).map_err(|e| {
         anyhow!(e).context(format!(
             "missing {} environment variable",

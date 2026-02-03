@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use crate::{
     bln, db, fx, info,
@@ -7,7 +7,7 @@ use crate::{
     state::State,
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_data::{Keytag, Locked, Secret, Squash};
+use konduit_data::{Keytag, Squash};
 
 const FEE_PLACEHOLDER: u64 = 1000;
 
@@ -19,8 +19,11 @@ pub enum HandlerError {
     #[error("LND returned: {0}")]
     LndApi(String),
 
-    #[error("LND returned: {0}")]
+    #[error("DB returned: {0}")]
     Db(#[from] db::Error),
+
+    #[error("Other")]
+    Other,
 }
 
 impl ResponseError for HandlerError {
@@ -29,6 +32,7 @@ impl ResponseError for HandlerError {
             HandlerError::Network(_) => StatusCode::INTERNAL_SERVER_ERROR,
             HandlerError::LndApi(_) => StatusCode::BAD_GATEWAY,
             HandlerError::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            HandlerError::Other => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -155,62 +159,63 @@ pub async fn pay(
         log::info!("FX : {:?}", data.fx());
         return Ok(HttpResponse::InternalServerError().body("Error: Fx unavailable"));
     };
-    let body = body.into_inner();
-    let locked = Locked::new(body.cheque_body, body.signature);
-    let invoice = match bln::Invoice::try_from(&body.invoice) {
-        Ok(inv) => inv,
-        Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
-    };
-    let (key, tag) = keytag.split();
-    if !pay_body..verify(&key, &tag) {
-        return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
-    };
-    let effective_amount_msat = fx.lovelace_to_msat(pay_body.cheque.amount() - FEE_PLACEHOLDER);
-    if effective_amount_msat < invoice.amount_msat {
-        return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
-    }
-    let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
+    todo!("Not yet reimplemented")
+    // let body = body.into_inner();
+    // let locked = Locked::new(body.cheque_body, body.signature);
+    // let invoice = match bln::Invoice::try_from(&body.invoice) {
+    //     Ok(inv) => inv,
+    //     Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
+    // };
+    // let (key, tag) = keytag.split();
+    // if !pay_body..verify(&key, &tag) {
+    //     return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
+    // };
+    // let effective_amount_msat = fx.lovelace_to_msat(pay_body.cheque.amount() - FEE_PLACEHOLDER);
+    // if effective_amount_msat < invoice.amount_msat {
+    //     return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
+    // }
+    // let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
 
-    // The cheque timeout is in posix time.
-    // We need to convert to a time delta.
-    // And then the BLN handler can convert to (relative) blocks and then block height
-    // ie absolute blocks.
-    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
-        return Ok(HttpResponse::InternalServerError().body("System time not available"));
-    };
-    let relative_timeout = pay_body
-        .cheque
-        .timeout()
-        .saturating_sub(now)
-        .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
+    // // The cheque timeout is in posix time.
+    // // We need to convert to a time delta.
+    // // And then the BLN handler can convert to (relative) blocks and then block height
+    // // ie absolute blocks.
+    // let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+    //     return Ok(HttpResponse::InternalServerError().body("System time not available"));
+    // };
+    // let relative_timeout = pay_body
+    //     .cheque
+    //     .timeout()
+    //     .saturating_sub(now)
+    //     .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
 
-    if relative_timeout.is_zero() {
-        return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
-    };
+    // if relative_timeout.is_zero() {
+    //     return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
+    // };
 
-    // let payment_hash = pay_body.cheque.cheque_body.lock.0.clone();
-    if let Err(err) = data.db().append_locked(&keytag, pay_body.cheque).await {
-        return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
-    };
-    let pay_request = bln::PayRequest {
-        fee_limit,
-        relative_timeout,
-        invoice: invoice,
-    };
+    // // let payment_hash = pay_body.cheque.cheque_body.lock.0.clone();
+    // if let Err(err) = data.db().append_locked(&keytag, pay_body.cheque).await {
+    //     return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
+    // };
+    // let pay_request = bln::PayRequest {
+    //     fee_limit,
+    //     relative_timeout,
+    //     invoice: invoice,
+    // };
 
-    let pay_response = match data.bln.pay(pay_request).await {
-        Ok(res) => res,
-        Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
-    };
-    let channel = match data.db.unlock(&keytag, Secret(pay_response.secret)).await {
-        Ok(channel) => channel,
-        Err(err) => {
-            return Ok(HttpResponse::BadRequest()
-                .body(format!("Error handling secret: {}", err.to_string())));
-        }
-    };
-    let Some(receipt) = channel.receipt() else {
-        return Ok(HttpResponse::InternalServerError().body("Logic failure"));
-    };
-    Ok(HttpResponse::Ok().json(receipt))
+    // let pay_response = match data.bln.pay(pay_request).await {
+    //     Ok(res) => res,
+    //     Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
+    // };
+    // let channel = match data.db.unlock(&keytag, Secret(pay_response.secret)).await {
+    //     Ok(channel) => channel,
+    //     Err(err) => {
+    //         return Ok(HttpResponse::BadRequest()
+    //             .body(format!("Error handling secret: {}", err.to_string())));
+    //     }
+    // };
+    // let Some(receipt) = channel.receipt() else {
+    //     return Ok(HttpResponse::InternalServerError().body("Logic failure"));
+    // };
+    // Ok(HttpResponse::Ok().json(receipt))
 }

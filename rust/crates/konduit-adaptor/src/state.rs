@@ -6,13 +6,13 @@ use crate::{args::Args, bln, cardano, db, fx, info};
 
 pub struct State {
     info: Arc<info::Info>,
+    fx: Arc<RwLock<fx::State>>,
     db: Arc<dyn db::Api + Send + Sync + 'static>,
-    bln: Arc<dyn bln::Api + Send + Sync>,
-    fx: Arc<RwLock<Option<fx::Fx>>>,
     // TODO: Not sure how hard it would be to turn CardanoConnect into a dyn compatible trait
     // object. For now we use Blockfrost directly. In the future we can either share
     // share the object or pass custom config of the connector via State.
-    cardano: Arc<Blockfrost>,
+    cardano: Arc<cardano::Cardano>,
+    bln: Arc<dyn bln::Api + Send + Sync>,
 }
 
 impl State {
@@ -20,7 +20,7 @@ impl State {
         info: info::Info,
         db: Db,
         bln: Bln,
-        fx: Option<fx::Fx>,
+        fx: fx::State,
         cardano: Blockfrost,
     ) -> Self
     where
@@ -56,7 +56,7 @@ impl State {
         self.info.clone()
     }
 
-    pub async fn from_args(args: &Args) -> Self {
+    pub async fn from_args(args: &Args) -> anyhow::Result<Self> {
         let db = args.db.build().expect("Failed to setup database");
         let bln = args.bln.build().expect("Failed to setup bln");
         let fx = args.fx.build().expect("Failed to setup fx");
@@ -65,10 +65,10 @@ impl State {
             .expect("Failed to setup cardano connect");
         let info = info::Info::from_args(args.common);
         Ok(Self {
-            db,
-            bln,
-            fx,
-            cardano,
+            db: Arc::new(db),
+            bln: Arc::new(bln),
+            fx: Arc::new(fx),
+            cardano: Arc::new(cardano),
             info,
         })
     }

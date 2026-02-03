@@ -4,26 +4,24 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Command;
 
-use crate::fx::{Api, State};
-
-use super::{BaseCurrency, Error};
+use crate::{Api, BaseCurrency, Error, State};
 
 #[derive(Debug, Clone)]
-pub struct WithCoinGecko {
+pub struct Client {
     token: Option<String>,
+    base: BaseCurrency,
 }
 
-impl WithCoinGecko {
-    pub fn new(token: Option<String>) -> Self {
-        Self { token }
+impl Client {
+    pub fn new(base: BaseCurrency, token: Option<String>) -> Self {
+        Self { token, base }
     }
 }
 
 #[async_trait]
-impl Api for WithCoinGecko {
+impl Api for Client {
     async fn get(&self) -> super::Result<State> {
-        let base = BaseCurrency::Eur;
-        let coins = with_curl(&base, &self.token).await?;
+        let coins = with_curl(&self.base, &self.token).await?;
 
         let price_map: HashMap<String, f64> = coins
             .into_iter()
@@ -37,7 +35,7 @@ impl Api for WithCoinGecko {
             .get("bitcoin")
             .ok_or(Error::InvalidData("Expect bitcoin".to_string()))?;
 
-        let response = State::new(base, ada, bitcoin);
+        let response = State::new(self.base.clone(), ada, bitcoin);
 
         Ok(response)
     }

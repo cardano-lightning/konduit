@@ -3,22 +3,24 @@ use cardano_tx_builder::{
     Credential, Input, Output, ProtocolParameters, Transaction, transaction::state,
 };
 use std::collections::BTreeMap;
-use trait_variant::make;
 
-#[make(CardanoConnectDyn: Send)]
 pub trait CardanoConnect {
     fn network(&self) -> Network;
 
-    async fn health(&self) -> anyhow::Result<String>;
+    fn health(&self) -> impl Future<Output = anyhow::Result<String>>;
 
-    async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters>;
+    fn protocol_parameters(&self) -> impl Future<Output = anyhow::Result<ProtocolParameters>>;
 
-    async fn utxos_at(
+    /// If delegation is None then it _should_ be ignored:
+    /// Any address with matching payment credential should be returned.
+    fn utxos_at(
         &self,
         payment: &Credential,
         delegation: Option<&Credential>,
-    ) -> anyhow::Result<BTreeMap<Input, Output>>;
+    ) -> impl Future<Output = anyhow::Result<BTreeMap<Input, Output>>>;
 
-    async fn submit(&self, transaction: &Transaction<state::ReadyForSigning>)
-    -> anyhow::Result<()>;
+    fn submit(
+        &self,
+        transaction: &Transaction<state::ReadyForSigning>,
+    ) -> impl Future<Output = anyhow::Result<()>>;
 }
