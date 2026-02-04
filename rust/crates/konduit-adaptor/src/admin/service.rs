@@ -6,13 +6,11 @@ use konduit_tx::{
 };
 use std::{collections::BTreeMap, iter, sync::Arc};
 
-use crate::{
-    admin::config::Config, cardano::Cardano, channel::Retainer, common::ChannelParameters, db,
-};
+use crate::{admin::config::Config, channel::Retainer, common::ChannelParameters, db};
 
 #[derive(Clone)]
-pub struct Service {
-    cardano: Arc<Cardano>,
+pub struct Service<Connector: CardanoConnect + Send + Sync + 'static> {
+    cardano: Arc<Connector>,
     db: Arc<dyn db::Api + Send + Sync + 'static>,
     network_parameters: NetworkParameters,
     channel_parameters: ChannelParameters,
@@ -21,10 +19,10 @@ pub struct Service {
     wallet: SigningKey,
 }
 
-impl Service {
+impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
     pub async fn new(
         config: Config,
-        cardano: Arc<Cardano>,
+        cardano: Arc<Connector>,
         db: Arc<dyn db::Api + Send + Sync + 'static>,
     ) -> anyhow::Result<Self> {
         let Config {
@@ -141,8 +139,7 @@ impl Service {
             &upper_bound,
         )?;
         tx.sign(self.wallet.clone());
-        // FIXME :: This is not `Send` so it wont work in `tokio::spawn`
-        // self.cardano.submit(&tx).await?;
+        self.cardano.submit(&tx).await?;
         Ok(())
     }
 }

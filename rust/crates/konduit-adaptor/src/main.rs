@@ -46,12 +46,12 @@ async fn main() -> anyhow::Result<()> {
     let admin_every = args.admin.admin_every.clone();
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(admin::Service::new(admin_config, cardano.clone(), db.clone()).await?);
-    let admin_clone = admin.clone();
     tokio::spawn(async move {
+        let admin = Arc::clone(&admin);
         let mut ticker = interval(admin_every);
         loop {
             ticker.tick().await;
-            match admin_clone.sync().await {
+            match admin.sync().await {
                 Ok(_) => log::info!("Admin sync ok"),
                 Err(e) => log::error!("Admin sync failed: {}", e),
             }
