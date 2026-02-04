@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bln_client;
-pub use bln_client::{Api, Invoice, PayRequest, QuoteRequest};
+pub use bln_client::{Api, Invoice, QuoteRequest};
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct LndArgs {
@@ -10,20 +10,11 @@ pub struct LndArgs {
     pub lnd_base_url: String,
 
     /// LND Macaroon in hex format. Pulled from LND_MACAROON env var.
-    #[arg(
-        long, 
-        env = "LND_MACAROON", 
-        value_parser = |s: &str| hex::decode(s).map_err(|e| e.to_string())
-    )]
+    #[arg( long, env = "LND_MACAROON", value_parser = |s: &str| hex::decode(s).map_err(|e| e.to_string()))]
     pub lnd_macaroon: Vec<u8>,
 
     /// BLN block time. defaults to 600s = 10 mins
-    #[arg(
-        long, 
-        env = "BLN_BLOCK_TIME", 
-        value_parser = humantime::parse_duration,
-        default_value = "10m",
-    )]
+    #[arg( long, env = "BLN_BLOCK_TIME", value_parser = humantime::parse_duration, default_value = "10m",)]
     pub bln_block_time: Duration,
 }
 

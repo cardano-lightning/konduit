@@ -2051,6 +2051,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "futures",
+ "fx-client",
  "hex",
  "humantime",
  "konduit-data",

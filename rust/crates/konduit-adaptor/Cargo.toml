@@ -30,7 +30,9 @@ clap = { workspace = true, features = ["env"] }
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
 futures.workspace = true
+fx-client = { workspace = true, features = ["cli"] }
 hex = { workspace = true, features = ["serde"] }
+humantime = "2.3.0"
 konduit-data.workspace = true
 konduit-tx.workspace = true
 lightning-invoice = { version = "0.33.2", features = ["serde"] }
@@ -45,7 +47,6 @@ serde_with = { version = "3.15.1", features = ["base64", "hex", "json"] }
 sled = "0.34.7"
 thiserror.workspace = true
 tokio.workspace = true
-humantime = "2.3.0"
 
 [dev-dependencies]
 proptest.workspace = true

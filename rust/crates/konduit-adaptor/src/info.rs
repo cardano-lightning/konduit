@@ -1,9 +1,10 @@
 use actix_web::{HttpRequest, HttpResponse, Responder, body::BoxBody};
 use cardano_tx_builder::{Address, Hash, address::kind::Shelley};
+use konduit_tx::KONDUIT_VALIDATOR;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::common::{ChannelParameters, CommonArgs};
+use crate::common::{Args, ChannelParameters};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Info {
@@ -16,7 +17,19 @@ pub struct Info {
 }
 
 impl Info {
-    pub fn from_args(args: CommonArgs) -> Self {}
+    pub fn from_args(args: &Args) -> Self {
+        let tos = TosInfo { flat_fee: args.fee };
+        let channel_parameters = ChannelParameters::from_args(args.clone());
+        let tx_help = TxHelp {
+            host_address: args.host_address.clone(),
+            validator: KONDUIT_VALIDATOR.hash,
+        };
+        Self {
+            tos,
+            channel_parameters,
+            tx_help,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,6 @@
 mod error;
 pub use error::*;
+
 mod api;
 pub use api::Api;
 
@@ -10,13 +11,13 @@ mod coiter_with_default;
 mod with_sled;
 
 #[derive(Debug, Clone, clap::Args)]
-pub struct DbArgs {
+pub struct Args {
     /// Db with sled
     #[clap(flatten)]
     pub sled: Option<with_sled::Args>,
 }
 
-impl DbArgs {
+impl Args {
     pub fn build(self) -> error::Result<impl Api> {
         if let Some(args) = &self.sled {
             let db = with_sled::WithSled::try_from(args).expect("oops");

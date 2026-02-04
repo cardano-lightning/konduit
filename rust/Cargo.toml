@@ -62,10 +62,11 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.55"
 
 
-cardano-tx-builder = { path = "crates/cardano-tx-builder" }
+bln-client = { path = "crates/bln-client" }
 cardano-connect = { path = "crates/cardano-connect" }
 cardano-connect-blockfrost = { path = "crates/cardano-connect-blockfrost" }
 cardano-connect-wasm = { path = "crates/cardano-connect-wasm" }
-bln-client = { path = "crates/bln-client" }
-konduit-tx = { path = "crates/konduit-tx" }
+cardano-tx-builder = { path = "crates/cardano-tx-builder" }
+fx-client = { path = "crates/fx-client" }
 konduit-data = { path = "crates/konduit-data" }
+konduit-tx = { path = "crates/konduit-tx" }

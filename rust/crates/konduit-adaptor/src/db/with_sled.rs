@@ -4,8 +4,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use konduit_data::{Keytag, Locked, Secret, Squash};
 
-mod cli_args;
-pub use cli_args::Args;
+mod args;
+pub use args::SledArgs as Args;
 
 use crate::{Channel, ChannelError, channel::Retainer};
 

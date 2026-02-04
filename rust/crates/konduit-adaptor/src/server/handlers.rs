@@ -1,13 +1,14 @@
 use std::time::Duration;
 
 use crate::{
-    bln, db, fx, info,
+    bln, db, info,
     models::{IncompleteSquashResponse, PayBody, QuoteBody, SquashResponse},
-    server::cbor::decode_from_cbor,
-    state::State,
+    server::{self, cbor::decode_from_cbor},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use konduit_data::{Keytag, Squash};
+
+type Data = web::Data<server::Data>;
 
 const FEE_PLACEHOLDER: u64 = 1000;
 
@@ -49,19 +50,16 @@ const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60
 /// "pay"
 const ADAPTOR_TIME_GRACE: std::time::Duration = Duration::from_secs(1 * 10 * 60);
 
-pub async fn info(data: web::Data<State>) -> info::Info {
+pub async fn info(data: Data) -> info::Info {
     (*data.info()).clone()
 }
 
-pub async fn fx(data: web::Data<State>) -> Result<fx::Fx, fx::Error> {
-    data.fx()
-        .read()
-        .await
-        .clone()
-        .ok_or(fx::Error::Other("unavailable".to_string()))
+pub async fn fx(data: Data) -> HttpResponse {
+    let fx = data.fx().read().await.clone();
+    HttpResponse::Ok().json(fx)
 }
 
-pub async fn show(data: web::Data<State>) -> Result<HttpResponse, HandlerError> {
+pub async fn show(data: Data) -> Result<HttpResponse, HandlerError> {
     log::info!("SHOW");
     let results = data.db().get_all().await?;
     Ok(HttpResponse::Ok().json(results))
@@ -69,7 +67,7 @@ pub async fn show(data: web::Data<State>) -> Result<HttpResponse, HandlerError> 
 
 pub async fn squash(
     req: HttpRequest,
-    data: web::Data<State>,
+    data: Data,
     body: web::Bytes,
 ) -> Result<HttpResponse, HandlerError> {
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
@@ -101,16 +99,13 @@ pub async fn squash(
 
 pub async fn quote(
     req: HttpRequest,
-    data: web::Data<State>,
+    data: Data,
     body: web::Json<QuoteBody>,
 ) -> Result<HttpResponse, HandlerError> {
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
-    let Some(fx) = data.fx().read().await.clone() else {
-        log::info!("FX : {:?}", data.fx());
-        return Ok(HttpResponse::InternalServerError().body("Error: Fx unavailable"));
-    };
+    let fx = data.fx().read().await.clone();
     let Some(channel) = data.db().get_channel(&keytag).await? else {
         return Ok(HttpResponse::BadRequest().body("No channel found"));
     };
@@ -149,16 +144,13 @@ pub async fn quote(
 
 pub async fn pay(
     req: HttpRequest,
-    data: web::Data<State>,
+    data: Data,
     body: web::Json<PayBody>,
 ) -> Result<HttpResponse, HandlerError> {
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
-    let Some(fx) = data.fx().read().await.clone() else {
-        log::info!("FX : {:?}", data.fx());
-        return Ok(HttpResponse::InternalServerError().body("Error: Fx unavailable"));
-    };
+    let fx = data.fx().read().await.clone();
     todo!("Not yet reimplemented")
     // let body = body.into_inner();
     // let locked = Locked::new(body.cheque_body, body.signature);

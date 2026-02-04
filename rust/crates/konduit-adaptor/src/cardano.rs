@@ -1,22 +1,9 @@
-use anyhow::anyhow;
-use cardano_connect::CardanoConnect;
 use cardano_connect_blockfrost::Blockfrost;
 
-// FIXME :: Cannot make impl dyn, so for not use concrete impl
+mod args;
+pub use args::CardanoArgs as Args;
+
+// TODO: Not sure how hard it would be to turn CardanoConnect into a dyn compatible trait
+// object. For now we use Blockfrost directly. In the future we can either share
+// share the object or pass custom config of the connector via Data.
 pub type Cardano = Blockfrost;
-
-pub(crate) async fn new() -> anyhow::Result<Cardano> {
-    let project_id = std::env::var(crate::env::BLOCKFROST_PROJECT_ID).map_err(|e| {
-        anyhow!(e).context(format!(
-            "missing {} environment variable",
-            crate::env::BLOCKFROST_PROJECT_ID
-        ))
-    })?;
-
-    let client = Blockfrost::new(project_id);
-    let resp = client.health().await;
-    match resp {
-        Ok(_) => Ok(client),
-        Err(e) => Err(e),
-    }
-}

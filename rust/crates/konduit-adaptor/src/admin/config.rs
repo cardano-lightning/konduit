@@ -11,8 +11,8 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_args(common: common::CommonArgs, admin: super::AdminArgs) -> Self {
-        let common::CommonArgs {
+    pub fn from_args(common: common::Args, admin: super::Args) -> Self {
+        let common::Args {
             signing_key: wallet,
             close_period,
             tag_length,

@@ -4,7 +4,7 @@ use konduit_data::Keytag;
 use konduit_tx::{
     Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences, filter_channels,
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, iter, sync::Arc};
 
 use crate::{
     admin::config::Config, cardano::Cardano, channel::Retainer, common::ChannelParameters, db,
@@ -19,10 +19,6 @@ pub struct Service {
     tx_preferences: AdaptorPreferences,
     script_utxo: (Input, Output),
     wallet: SigningKey,
-}
-
-fn guard(cond: bool) -> Option<()> {
-    if cond { Some(()) } else { None }
 }
 
 impl Service {
@@ -99,8 +95,17 @@ impl Service {
 
     /// These should be considered confirmed utxos,
     /// acceptable to be treated as retainers.
-    pub async fn snapshot(&self) -> anyhow::Result<BTreeMap<Input, Output>> {
+    async fn snapshot(&self) -> anyhow::Result<BTreeMap<Input, Output>> {
         let credential = Credential::from_script(KONDUIT_VALIDATOR.hash);
+        let utxos = self.cardano.utxos_at(&credential, None).await?;
+        Ok(utxos)
+    }
+
+    /// These should be considered confirmed utxos,
+    /// acceptable to be treated as retainers.
+    async fn wallet_utxos(&self) -> anyhow::Result<BTreeMap<Input, Output>> {
+        let vkh = Hash::<28>::new(&VerificationKey::from(&self.wallet));
+        let credential = Credential::from_key(vkh);
         let utxos = self.cardano.utxos_at(&credential, None).await?;
         Ok(utxos)
     }
@@ -122,7 +127,10 @@ impl Service {
         // We are more likely to either:
         // - treat as confirmed something that will rollback
         // - use as an input a utxo that has already been spent.
-        let tip = snapshot;
+        let tip = iter::once(self.script_utxo.clone())
+            .chain(snapshot.into_iter())
+            .chain(self.wallet_utxos().await?.into_iter())
+            .collect::<BTreeMap<_, _>>();
         let upper_bound = Bounds::twenty_mins().upper;
         let mut tx = konduit_tx::adaptor::tx(
             &self.network_parameters,
@@ -133,7 +141,8 @@ impl Service {
             &upper_bound,
         )?;
         tx.sign(self.wallet.clone());
-        self.cardano.submit(&tx);
+        // FIXME :: This is not `Send` so it wont work in `tokio::spawn`
+        // self.cardano.submit(&tx).await?;
         Ok(())
     }
 }
