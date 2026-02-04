@@ -2,7 +2,11 @@ use cardano_connect::CardanoConnect;
 use cardano_connect_wasm::{self as wasm, CardanoConnector};
 use cardano_tx_builder::{Credential, Hash, NetworkId, transaction::TransactionReadyForSigning};
 use konduit_data::{Duration, Tag};
-use konduit_tx::KONDUIT_VALIDATOR;
+use konduit_tx::{
+    Bounds, NetworkParameters,
+    consumer::{self, OpenIntent},
+};
+use std::collections::btree_map::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -34,15 +38,22 @@ pub async fn open(
 
     let consumer_credential = Credential::from_key(Hash::<28>::new(consumer));
 
-    Ok(TransactionReadyForSigning::from(konduit_tx::open(
+    let network_parameters = NetworkParameters {
+        network_id: NetworkId::from(connector.network()),
+        protocol_parameters: connector.protocol_parameters().await?,
+    };
+
+    Ok(TransactionReadyForSigning::from(consumer::tx(
+        &network_parameters,
+        &consumer,
+        vec![OpenIntent {
+            tag,
+            sub_vkey: adaptor,
+            close_period,
+            amount,
+        }],
+        BTreeMap::new(),
         &connector.utxos_at(&consumer_credential, None).await?,
-        &connector.protocol_parameters().await?,
-        NetworkId::from(connector.network()),
-        KONDUIT_VALIDATOR.hash,
-        amount,
-        consumer,
-        adaptor,
-        tag,
-        close_period,
+        Bounds::twenty_mins(),
     )?))
 }
