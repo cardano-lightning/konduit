@@ -3,7 +3,10 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use clap::Parser;
 
-    use bln_client::cli::{BlnArgs, Cmd, Config, PayRequest, QuoteRequest};
+    use bln_client::{
+        PayRequest, QuoteRequest,
+        cli::{BlnArgs, Cmd, Config},
+    };
 
     // 1. Parse CLI arguments
     dotenvy::dotenv().ok();

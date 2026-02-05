@@ -15,7 +15,7 @@ impl Config {
             Ok(Config::Lnd(lnd::Config {
                 base_url,
                 macaroon,
-                block_time: args.bln_block_time,
+                block_time: args.block_time,
                 min_cltv: 84,
                 tls_certificate: None,
             }))
