@@ -7,8 +7,10 @@ use cardano_tx_builder::{
     transaction::{TransactionReadyForSigning, state},
 };
 use gloo_net::http::{Request, Response};
+use gloo_timers::callback::Timeout;
 use std::{collections::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
+use web_sys::{AbortController, AbortSignal};
 
 mod balance;
 mod health;
@@ -18,6 +20,7 @@ mod utxos_at;
 #[wasm_bindgen]
 pub struct CardanoConnector {
     base_url: String,
+    http_timeout_ms: u32,
     network: Network,
 }
 
@@ -26,14 +29,19 @@ pub struct CardanoConnector {
 #[wasm_bindgen]
 impl CardanoConnector {
     #[wasm_bindgen]
-    pub async fn new(base_url: &str) -> crate::Result<Self> {
+    pub async fn new(base_url: &str, http_timeout_ms: Option<u32>) -> crate::Result<Self> {
+        let http_timeout_ms = http_timeout_ms.unwrap_or(10_000);
         let base_url = base_url.strip_suffix("/").unwrap_or(base_url).to_string();
         let network = Network::Other(0);
 
-        let mut connector = Self { base_url, network };
+        let mut connector = Self {
+            base_url,
+            http_timeout_ms,
+            network,
+        };
 
         let network = connector
-            .get::<network::Response>("/network")
+            .get::<network::Response>("/network", http_timeout_ms)
             .await?
             .network;
 
@@ -47,7 +55,7 @@ impl CardanoConnector {
             "preview" => {
                 connector.network = Network::Preview;
             }
-            _ => panic!("unexpected network returned by the connector"),
+            _ => Err(anyhow!("unsupported network: {}", network))?,
         };
 
         Ok(connector)
@@ -58,16 +66,18 @@ impl CardanoConnector {
         &self,
         transaction: &mut TransactionReadyForSigning,
         signing_key: &[u8],
-    ) -> crate::Result<()> {
+    ) -> crate::Result<Vec<u8>> {
         let signing_key: SigningKey = <[u8; 32]>::try_from(signing_key)
             .expect("invalid signing key length")
             .into();
 
         transaction.sign(signing_key);
 
+        let tx_hash = transaction.id();
+
         self.submit(transaction.deref()).await?;
 
-        Ok(())
+        Ok(tx_hash.as_ref().into())
     }
 
     #[wasm_bindgen]
@@ -79,10 +89,15 @@ impl CardanoConnector {
         let addr = Address::new(self.network().into(), Credential::from(verification_key));
 
         let balance = self
-            .get::<balance::Response>(&format!("/balance/{addr}"))
+            .get::<balance::Response>(&format!("/balance/{addr}"), self.http_timeout_ms)
             .await?;
 
         Ok(balance.lovelace.parse::<u64>().map_err(|e| anyhow!(e))?)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn network_magic_number(&self) -> u64 {
+        self.network.into()
     }
 }
 
@@ -91,26 +106,47 @@ impl CardanoConnector {
 #[wasm_bindgen]
 
 impl CardanoConnector {
-    async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
-        self.send::<T>(
-            Request::get(&format!("{}{path}", self.base_url))
-                .build()
-                .unwrap(),
-        )
-        .await
+    async fn get<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        timeout_ms: u32,
+    ) -> anyhow::Result<T> {
+        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms);
+        let request = Request::get(&format!("{}{path}", self.base_url))
+            .abort_signal(Some(&abort_on_timeout))
+            .build()?;
+        let result = self.send::<T>(request).await;
+        timeout_handle.cancel();
+        result
+    }
+
+    fn mk_abort_on_timeout(timeout_ms: u32) -> (AbortSignal, Timeout) {
+        let controller = AbortController::new().expect("Failed to create AbortController");
+        let signal: AbortSignal = controller.signal();
+        let timeout_controller = controller.clone(); // Clone for move into closure
+        let timeout_handle = Timeout::new(timeout_ms, move || {
+            timeout_controller.abort();
+            log::warn!("Aborted request due to timeout after {}ms", timeout_ms);
+        });
+        (signal, timeout_handle)
     }
 
     async fn post<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
         body: impl Into<JsValue>,
+        timeout_ms: u32,
     ) -> anyhow::Result<T> {
-        self.send::<T>(
-            Request::post(&format!("{}{path}", self.base_url))
-                .body(js_sys::JSON::stringify(&body.into()).unwrap())
-                .unwrap(),
-        )
-        .await
+        let body = js_sys::JSON::stringify(&body.into())
+            .map_err(|e| anyhow!("failed to serialize request body: {:?}", e))?;
+        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms);
+        let request = Request::post(&format!("{}{path}", self.base_url))
+            .abort_signal(Some(&abort_on_timeout))
+            .body(body)?;
+
+        let result = self.send::<T>(request).await;
+        timeout_handle.cancel();
+        result
     }
 
     async fn send<T: serde::de::DeserializeOwned>(&self, request: Request) -> anyhow::Result<T> {
@@ -156,17 +192,21 @@ impl CardanoConnect for CardanoConnector {
     }
 
     async fn health(&self) -> anyhow::Result<String> {
-        let health = self.get::<health::Response>("/health").await?;
+        let health = self
+            .get::<health::Response>("/health", self.http_timeout_ms)
+            .await?;
         Ok(health.status)
     }
 
     async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
-        Ok(match self.network {
-            Network::Mainnet => ProtocolParameters::mainnet(),
-            Network::Preprod => ProtocolParameters::preprod(),
-            Network::Preview => ProtocolParameters::preview(),
-            Network::Other(..) => panic!("unexpected 'other' network"),
-        })
+        match self.network {
+            Network::Mainnet => Ok(ProtocolParameters::mainnet()),
+            Network::Preprod => Ok(ProtocolParameters::preprod()),
+            Network::Preview => Ok(ProtocolParameters::preview()),
+            Network::Other(..) => Err(anyhow!(
+                "protocol parameters for 'other' networks are not supported"
+            )),
+        }
     }
 
     /// If delegation is None then it _should_ be ignored:
@@ -182,7 +222,7 @@ impl CardanoConnect for CardanoConnector {
         }
 
         let utxos = self
-            .get::<Vec<utxos_at::Response>>(&format!("/utxos_at/{addr}"))
+            .get::<Vec<utxos_at::Response>>(&format!("/utxos_at/{addr}"), self.http_timeout_ms)
             .await?;
 
         Ok(utxos
@@ -195,9 +235,10 @@ impl CardanoConnect for CardanoConnector {
         &self,
         transaction: &Transaction<state::ReadyForSigning>,
     ) -> anyhow::Result<()> {
-        let body = singleton("transaction", hex::encode(transaction.to_cbor()));
+        let body = singleton("transaction", hex::encode(transaction.to_cbor()))?;
 
-        self.post::<serde_json::Value>("/submit", body).await?;
+        self.post::<serde_json::Value>("/submit", body, self.http_timeout_ms)
+            .await?;
 
         Ok(())
     }
@@ -205,8 +246,14 @@ impl CardanoConnect for CardanoConnector {
 
 // --------------------------------------------------------------------- Helpers
 
-fn singleton(key: &str, value: impl Into<JsValue>) -> JsValue {
+fn singleton(key: &str, value: impl Into<JsValue>) -> anyhow::Result<JsValue> {
     let obj = js_sys::Object::new();
-    js_sys::Reflect::set(&obj, &(key.into()), &(value.into())).unwrap();
-    obj.into()
+    js_sys::Reflect::set(&obj, &(key.into()), &(value.into())).map_err(|e| {
+        anyhow!(
+            "failed to construct singleton object with key '{}': {:?}",
+            key,
+            e
+        )
+    })?;
+    Ok(obj.into())
 }

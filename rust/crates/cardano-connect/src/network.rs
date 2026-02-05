@@ -10,6 +10,21 @@ pub enum Network {
     Other(u64),
 }
 
+type NetworkMagicNumber = u64;
+
+const MAINNET_MAGIC_NUMBER: u64 = 764824073;
+
+impl Into<NetworkMagicNumber> for Network {
+    fn into(self) -> u64 {
+        match self {
+            Network::Mainnet => MAINNET_MAGIC_NUMBER,
+            Network::Preprod => 1,
+            Network::Preview => 2,
+            Network::Other(n) => n,
+        }
+    }
+}
+
 impl From<Network> for NetworkId {
     fn from(network: Network) -> NetworkId {
         match network {
