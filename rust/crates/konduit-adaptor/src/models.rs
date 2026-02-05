@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use cardano_tx_builder::Signature;
+use konduit_data::ChequeBody;
 pub use konduit_data::Keytag;
 pub use konduit_data::Stage;
 use konduit_data::{Cheque, Receipt};
@@ -72,10 +73,9 @@ pub struct QuoteResponse {
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayBody {
+    pub cheque_body: ChequeBody,
     #[serde_as(as = "serde_with::hex::Hex")]
-    pub cheque_body: Vec<u8>,
-    #[serde_as(as = "serde_with::hex::Hex")]
-    pub signature: [u8; 64],
+    pub signature: Signature,
     pub invoice: String,
     // #[serde(with = "hex")]
     // pub payee: [u8; 33],

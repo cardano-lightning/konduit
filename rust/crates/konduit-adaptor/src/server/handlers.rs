@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{
     bln, db, info,
@@ -6,7 +6,7 @@ use crate::{
     server::{self, cbor::decode_from_cbor},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_data::{Keytag, Squash};
+use konduit_data::{Keytag, Locked, Squash};
 
 type Data = web::Data<server::Data>;
 
@@ -151,49 +151,47 @@ pub async fn pay(
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
     let fx = data.fx().read().await.clone();
-    todo!("Not yet reimplemented")
-    // let body = body.into_inner();
-    // let locked = Locked::new(body.cheque_body, body.signature);
-    // let invoice = match bln::Invoice::try_from(&body.invoice) {
-    //     Ok(inv) => inv,
-    //     Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
-    // };
-    // let (key, tag) = keytag.split();
-    // if !pay_body..verify(&key, &tag) {
-    //     return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
-    // };
-    // let effective_amount_msat = fx.lovelace_to_msat(pay_body.cheque.amount() - FEE_PLACEHOLDER);
-    // if effective_amount_msat < invoice.amount_msat {
-    //     return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
-    // }
-    // let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
+    let body = body.into_inner();
+    let locked = Locked::new(body.cheque_body, body.signature);
+    let invoice = match bln::Invoice::try_from(&body.invoice) {
+        Ok(inv) => inv,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
+    };
+    let (key, tag) = keytag.split();
+    if !locked.verify(&key, &tag) {
+        return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
+    };
+    let effective_amount_msat = fx.lovelace_to_msat(locked.amount() - FEE_PLACEHOLDER);
+    if effective_amount_msat < invoice.amount_msat {
+        return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
+    }
+    let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
 
-    // // The cheque timeout is in posix time.
-    // // We need to convert to a time delta.
-    // // And then the BLN handler can convert to (relative) blocks and then block height
-    // // ie absolute blocks.
-    // let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
-    //     return Ok(HttpResponse::InternalServerError().body("System time not available"));
-    // };
-    // let relative_timeout = pay_body
-    //     .cheque
-    //     .timeout()
-    //     .saturating_sub(now)
-    //     .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
+    // The cheque timeout is in posix time.
+    // We need to convert to a time delta.
+    // And then the BLN handler can convert to (relative) blocks and then block height
+    // ie absolute blocks.
+    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return Ok(HttpResponse::InternalServerError().body("System time not available"));
+    };
+    let relative_timeout = locked
+        .timeout()
+        .saturating_sub(now)
+        .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
 
-    // if relative_timeout.is_zero() {
-    //     return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
-    // };
+    if relative_timeout.is_zero() {
+        return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
+    };
 
-    // // let payment_hash = pay_body.cheque.cheque_body.lock.0.clone();
-    // if let Err(err) = data.db().append_locked(&keytag, pay_body.cheque).await {
-    //     return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
-    // };
-    // let pay_request = bln::PayRequest {
-    //     fee_limit,
-    //     relative_timeout,
-    //     invoice: invoice,
-    // };
+    let payment_hash = locked.lock().0.clone();
+    if let Err(err) = data.db().append_locked(&keytag, locked).await {
+        return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
+    };
+    let pay_request = bln::ApiPayRequest {
+        fee_limit,
+        relative_timeout,
+        invoice: invoice,
+    };
 
     // let pay_response = match data.bln.pay(pay_request).await {
     //     Ok(res) => res,
@@ -210,4 +208,5 @@ pub async fn pay(
     //     return Ok(HttpResponse::InternalServerError().body("Logic failure"));
     // };
     // Ok(HttpResponse::Ok().json(receipt))
+    todo!("Not yet reimplemented")
 }

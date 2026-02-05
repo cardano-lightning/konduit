@@ -16,17 +16,25 @@ release = false
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-base64 = "0.22.1"
+base64.workspace = true
 bitcoin = "0.32.8"
-clap.workspace = true
 hex.workspace = true
 lightning-invoice = { version = "0.34.0", features = ["serde"] }
 lightning-types = "0.3.0"
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
-serde_with = { version = "3.16.1", features = ["hex", "base64"] }
+serde_with = { workspace = true, features = ["hex", "base64"] }
 thiserror.workspace = true
 
-[dev-dependencies]
-dotenvy.workspace = true
-tokio.workspace = true
+# Binary-only dependencies (marked as optional)
+clap = { workspace = true, features = ["derive", "env"], optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+dotenvy = { workspace = true, optional = true }
+humantime = { workspace = true, optional = true }
+
+[features]
+cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
+
+[[bin]]
+name = "bln-cli"
+path = "src/main.rs"

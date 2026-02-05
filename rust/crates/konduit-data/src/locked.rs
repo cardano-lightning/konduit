@@ -5,7 +5,7 @@ use serde_with::serde_as;
 
 use crate::cheque_body::ChequeBody;
 use crate::utils::{signature_from_plutus_data, signature_to_plutus_data};
-use crate::{Duration, Tag};
+use crate::{Duration, Lock, Tag};
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -30,6 +30,10 @@ impl Locked {
 
     pub fn timeout(&self) -> Duration {
         self.body.timeout
+    }
+
+    pub fn lock(&self) -> &Lock {
+        &self.body.lock
     }
 
     pub fn make(signing_key: &SigningKey, tag: &Tag, body: ChequeBody) -> Self {

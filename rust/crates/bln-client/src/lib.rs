@@ -9,3 +9,6 @@ pub use error::*;
 
 // Clients
 pub mod lnd;
+
+#[cfg(feature = "cli")]
+pub mod cli;
