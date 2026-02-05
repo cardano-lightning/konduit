@@ -1,58 +1,70 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use cardano_tx_builder::SigningKey;
 use clap::Parser;
-use konduit_adaptor::env;
-use konduit_adaptor::{Cmd, Server, admin, cron::cron};
+use konduit_adaptor::{admin, args, info, server};
+use tokio::{sync::RwLock, time::interval};
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenvy::dotenv().ok();
 
-    let cmd = Cmd::parse();
-    let server = Server::from_cmd(cmd.clone())
-        .await
-        .expect("Failed to parse cmd");
+    let args = args::Args::parse();
 
-    // Fire off fx updater
-    let fx_data = server.fx();
-    let fx = Arc::new(cmd.fx.build().expect("Failed to setup fx"));
-    cron(
-        move || {
-            let fx = fx.clone();
-            let fx_data = fx_data.clone();
-            async move {
-                let new_value = fx.as_ref().get().await.ok();
-                let mut data_guard = fx_data.write().await;
-                *data_guard = new_value;
-                Some(())
+    // FX
+    let fx_every = args.fx.every;
+    let fx_config = fx_client::cli::Config::from_args(args.fx)
+        .ok_or_else(|| anyhow::anyhow!("Failed to resolve FX configuration from provided flags"))?;
+    let fx_client = fx_config.build()?;
+    let fx_init_state = fx_client.get().await?;
+    let fx_state = Arc::new(RwLock::new(fx_init_state));
+    let fx_state_clone = fx_state.clone();
+    tokio::spawn(async move {
+        let mut ticker = interval(fx_every);
+        loop {
+            ticker.tick().await;
+            match fx_client.get().await {
+                Ok(new_state) => {
+                    let mut w = fx_state_clone.write().await;
+                    *w = new_state;
+                }
+                Err(e) => eprintln!("Background FX update failed: {}", e),
             }
-        },
-        Duration::from_secs(15 * 60),
-    );
+        }
+    });
 
-    let admin = {
-        let skey = {
-            let skey_hex = std::env::var(env::ADAPTOR_SKEY)
-                .unwrap_or_else(|_| panic!("missing {} environment variable", env::ADAPTOR_SKEY));
-            let bytes = hex::decode(skey_hex).expect("failed to decode signing key from hex");
-            SigningKey::try_from(bytes).expect("failed to create signing key from bytes")
-        };
-        admin::Admin::new(server.connector(), server.db(), server.info(), skey)
-            .await
-            .expect("failed to create admin instance")
-    };
-    cron(
-        move || {
-            let admin = admin.clone();
-            async move {
-                // TODO: We should log and panic in here.
-                let _ = admin.sync().await;
-                Some(())
+    // CARDANO
+    let cardano = Arc::new(args.cardano.build().await?);
+
+    // DB
+    let db = Arc::new(args.db.build()?);
+
+    // BLN
+    let bln = bln_client::cli::Config::from_args(args.bln)
+        .map_err(|s| anyhow::anyhow!(s))?
+        .build()?;
+
+    // ADMIN
+    let admin_every = args.admin.admin_every.clone();
+    let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
+    let admin = Arc::new(admin::Service::new(admin_config, cardano.clone(), db.clone()).await?);
+    tokio::spawn(async move {
+        let admin = Arc::clone(&admin);
+        let mut ticker = interval(admin_every);
+        loop {
+            ticker.tick().await;
+            match admin.sync().await {
+                Ok(_) => log::info!("Admin sync ok"),
+                Err(e) => log::error!("Admin sync failed: {}", e),
             }
-        },
-        Duration::from_secs(5 * 60),
-    );
-    server.run().await
+        }
+    });
+
+    // INFO
+    let info = Arc::new(info::Info::from_args(&args.common));
+
+    let server_data = server::Data::new(bln, cardano, db, fx_state, info);
+    let server = server::Service::new(args.server, server_data);
+    server.run().await?;
+    Ok(())
 }

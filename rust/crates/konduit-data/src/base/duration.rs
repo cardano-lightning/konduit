@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use cardano_tx_builder::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::{
+    fmt,
     ops::{Deref, DerefMut},
     str::FromStr,
     time,
@@ -18,6 +19,12 @@ impl Duration {
 
     pub fn from_millis(millis: u64) -> Self {
         Self(time::Duration::from_millis(millis))
+    }
+}
+
+impl fmt::Display for Duration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}ms", self.as_millis())
     }
 }
 

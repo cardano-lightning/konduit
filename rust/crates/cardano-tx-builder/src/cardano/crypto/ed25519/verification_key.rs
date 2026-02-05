@@ -54,6 +54,14 @@ impl From<[u8; 32]> for VerificationKey {
     }
 }
 
+impl TryFrom<Vec<u8>> for VerificationKey {
+    type Error = Vec<u8>;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(Self::from(<[u8; 32]>::try_from(value)?))
+    }
+}
+
 impl From<ed25519::PublicKey> for VerificationKey {
     fn from(key: ed25519::PublicKey) -> Self {
         Self(key)

@@ -11,7 +11,9 @@
 /// For example, the [`Transaction::sign`](super::Transaction::sign) method is only available in the state
 /// [`ReadyForSigning`]. This ensures that the body is not inadvertently modified once constructed,
 /// as it would invalidate all existing signatures.
-pub trait IsTransactionBodyState: crate::non_extensible::NonExtensible {}
+pub trait IsTransactionBodyState: crate::non_extensible::NonExtensible {
+    type ChangeStrategy;
+}
 
 /// Indicates that a [`Transaction`](super::Transaction) is in an unknown state; only some methods
 /// will be available.
@@ -20,7 +22,9 @@ pub trait IsTransactionBodyState: crate::non_extensible::NonExtensible {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Unknown;
 impl crate::non_extensible::NonExtensible for Unknown {}
-impl IsTransactionBodyState for Unknown {}
+impl IsTransactionBodyState for Unknown {
+    type ChangeStrategy = ();
+}
 
 /// Indicates that a [`Transaction`](super::Transaction) is under construction, and its body may
 /// still be modified.
@@ -29,7 +33,9 @@ impl IsTransactionBodyState for Unknown {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InConstruction;
 impl crate::non_extensible::NonExtensible for InConstruction {}
-impl IsTransactionBodyState for InConstruction {}
+impl IsTransactionBodyState for InConstruction {
+    type ChangeStrategy = crate::cardano::output::change_strategy::ChangeStrategy;
+}
 
 /// Indicates that a [`Transaction`](super::Transaction)'s body is now complete, and the
 /// transaction is either awaiting signatures, or fully signed. In particular, methods such as
@@ -40,4 +46,6 @@ impl IsTransactionBodyState for InConstruction {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ReadyForSigning;
 impl crate::non_extensible::NonExtensible for ReadyForSigning {}
-impl IsTransactionBodyState for ReadyForSigning {}
+impl IsTransactionBodyState for ReadyForSigning {
+    type ChangeStrategy = ();
+}

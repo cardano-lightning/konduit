@@ -13,11 +13,20 @@ pub use stage::*;
 mod cheque_body;
 pub use cheque_body::*;
 
-mod cheque;
-pub use cheque::*;
+mod locked;
+pub use locked::*;
 
 mod unlocked;
 pub use unlocked::*;
+
+mod cheque;
+pub use cheque::*;
+
+mod pending;
+pub use pending::*;
+
+mod used;
+pub use used::*;
 
 mod indexes;
 pub use indexes::*;
@@ -28,25 +37,17 @@ pub use squash_body::*;
 mod squash;
 pub use squash::*;
 
-mod receipt;
-pub use receipt::*;
-
-mod mixed_cheque;
-pub use mixed_cheque::*;
-
-mod mixed_receipt;
-pub use mixed_receipt::*;
-
-mod pending;
-pub use pending::*;
-
-mod hex_serde;
-pub use hex_serde::*;
-
-mod plutus_data_serde;
+mod squash_proposal;
+pub use squash_proposal::*;
 
 mod redeemer;
 pub use redeemer::*;
+
+mod receipt;
+pub use receipt::*;
+
+mod l1_channel;
+pub use l1_channel::*;
 
 mod utils;
 

@@ -1,0 +1,46 @@
+[package]
+name = "bln-client"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+bitcoin = "0.32.8"
+hex.workspace = true
+lightning-invoice = { version = "0.34.0", features = ["serde"] }
+lightning-types = "0.3.0"
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+serde_with = { workspace = true, features = ["hex", "base64"] }
+thiserror.workspace = true
+
+# Binary-only dependencies (marked as optional)
+clap = { workspace = true, features = ["derive", "env"], optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+dotenvy = { workspace = true, optional = true }
+humantime = { workspace = true, optional = true }
+
+[features]
+cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
+
+[[bin]]
+name = "bln-cli"
+path = "src/main.rs"
+
+[dev-dependencies]
+clap = { workspace = true, features = ["derive", "env"]}
+tokio = { workspace = true, features = ["full"]}
+dotenvy = { workspace = true}
+humantime = { workspace = true}

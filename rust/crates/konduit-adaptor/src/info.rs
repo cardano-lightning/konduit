@@ -1,32 +1,56 @@
-use crate::cmd::metavar;
-use cardano_tx_builder::{Hash, VerificationKey};
-use clap::Args;
-use konduit_data::Duration;
+use actix_web::{HttpRequest, HttpResponse, Responder, body::BoxBody};
+use cardano_tx_builder::{Address, Hash, address::kind::Shelley};
+use konduit_tx::KONDUIT_VALIDATOR;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
-fn parse_hex<const LEN: usize>(s: &str) -> Result<[u8; LEN], String> {
-    let s = s.strip_prefix("0x").unwrap_or(s);
-    let bytes = hex::decode(s).map_err(|e| e.to_string())?;
-    <[u8; LEN]>::try_from(bytes).map_err(|_| "Invalid length".to_string())
-}
+use crate::common::{Args, ChannelParameters};
 
-fn parse_script_hash(s: &str) -> Result<Hash<28>, String> {
-    let arr: [u8; 28] = parse_hex(s)?;
-    Ok(Hash::from(arr))
-}
-
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Info {
-    // Amount in channel currency (eg lovelace)
-    #[arg(long, env = crate::env::FEE, default_value = "1000")]
-    pub fee: u64,
-    #[arg(long, env = crate::env::ADAPTOR_VKEY)]
-    pub adaptor_key: VerificationKey,
-    #[arg(long, env = crate::env::CLOSE_PERIOD, value_name=metavar::DURATION, default_value="24h")]
-    pub close_period: Duration,
-    #[arg(long, env = crate::env::DEPLOYER_VKEY, value_name=metavar::ED25519_VERIFICATION_KEY)]
-    pub deployer_vkey: VerificationKey,
-    #[arg(long, env = crate::env::SCRIPT_HASH, value_name=metavar::SCRIPT_HASH, value_parser = parse_script_hash)]
-    pub script_hash: Hash<28>,
-    #[arg(long, env = crate::env::MAX_TAG_LENGTH, default_value = "32")]
-    pub max_tag_length: usize,
+    // Terms of service. Purely informational
+    pub tos: TosInfo,
+    // Channel parameters
+    pub channel_parameters: ChannelParameters,
+    // Tx building
+    pub tx_help: TxHelp,
+}
+
+impl Info {
+    pub fn from_args(args: &Args) -> Self {
+        let tos = TosInfo { flat_fee: args.fee };
+        let channel_parameters = ChannelParameters::from_args(args.clone());
+        let tx_help = TxHelp {
+            host_address: args.host_address.clone(),
+            validator: KONDUIT_VALIDATOR.hash,
+        };
+        Self {
+            tos,
+            channel_parameters,
+            tx_help,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TosInfo {
+    flat_fee: u64,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TxHelp {
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    host_address: Address<Shelley>,
+    #[serde_as(as = "serde_with::hex::Hex")]
+    validator: Hash<28>,
+}
+
+impl Responder for Info {
+    type Body = BoxBody;
+
+    fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
+        // Standardizing on 200 OK for info queries
+        HttpResponse::Ok().json(self)
+    }
 }

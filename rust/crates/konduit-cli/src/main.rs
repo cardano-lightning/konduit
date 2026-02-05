@@ -1,13 +1,12 @@
-use anyhow::anyhow;
 use clap::Parser;
 
+mod cardano;
 mod cmd;
+mod config;
 mod connector;
 mod env;
-mod metavar;
+mod tip;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv().map_err(|e| anyhow!(e).context("fail to parse .env"))?;
-    cmd::Cmd::parse().execute().await
+fn main() {
+    cmd::Cmd::parse().run().unwrap();
 }

@@ -40,7 +40,7 @@ pub use state::IsTransactionBodyState;
 /// [`state::ReadyForSigning`].
 pub struct Transaction<State: IsTransactionBodyState> {
     inner: pallas::Tx,
-    change_strategy: ChangeStrategy,
+    change_strategy: State::ChangeStrategy,
     state: PhantomData<State>,
 }
 
@@ -1208,12 +1208,22 @@ impl<C, State: IsTransactionBodyState> cbor::Encode<C> for Transaction<State> {
     }
 }
 
-impl<'d, C, State: IsTransactionBodyState> cbor::Decode<'d, C> for Transaction<State> {
+impl<'d, C> cbor::Decode<'d, C> for Transaction<state::Unknown> {
     fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
         Ok(Self {
             inner: d.decode_with(ctx)?,
             state: PhantomData,
-            change_strategy: ChangeStrategy::default(),
+            change_strategy: (),
+        })
+    }
+}
+
+impl<'d, C> cbor::Decode<'d, C> for Transaction<state::ReadyForSigning> {
+    fn decode(d: &mut cbor::Decoder<'d>, ctx: &mut C) -> Result<Self, cbor::decode::Error> {
+        Ok(Self {
+            inner: d.decode_with(ctx)?,
+            state: PhantomData,
+            change_strategy: (),
         })
     }
 }

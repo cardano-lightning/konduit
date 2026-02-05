@@ -23,6 +23,7 @@ tag-name = "v{{version}}"
 [workspace.dependencies]
 anyhow = "1.0.100"
 async-trait = "0.1.89"
+base64 = "0.22.1"
 blockfrost = "1.1.0"
 blockfrost-openapi = "0.1.75"
 chrono = { version = "0.4.42", features = ["serde"] }
@@ -30,10 +31,12 @@ clap = { version = "4.5.49", features = ["derive", "env"] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
 cryptoxide = "0.5.1"
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
+envy = "0.4.2"
 futures = "0.3.31"
 getrandom = "0.2.16"
 gloo-net = "0.6.0"
+humantime = "2.3.0"
 hex = "0.4.3"
 indoc = "2.0.6"
 itertools = "0.14.0"
@@ -51,15 +54,20 @@ rand = "0.9.2"
 reqwest = "0.12.23"
 serde = "1.0.228"
 serde_json = { version = "1.0.145", features = ["std"] }
+serde_with = { version = "3.16.1", features = ["hex", "base64"] }
 thiserror = "2.0.17"
 tokio = { version = "1.47.1", features = ["full"] }
+trait-variant = "0.1.2"
 uplc = "1.1.19"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.55"
 
-cardano-tx-builder = { path = "crates/cardano-tx-builder" }
+
+bln-client = { path = "crates/bln-client" }
 cardano-connect = { path = "crates/cardano-connect" }
 cardano-connect-blockfrost = { path = "crates/cardano-connect-blockfrost" }
 cardano-connect-wasm = { path = "crates/cardano-connect-wasm" }
-konduit-tx = { path = "crates/konduit-tx" }
+cardano-tx-builder = { path = "crates/cardano-tx-builder" }
+fx-client = { path = "crates/fx-client" }
 konduit-data = { path = "crates/konduit-data" }
+konduit-tx = { path = "crates/konduit-tx" }

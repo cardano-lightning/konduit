@@ -1,12 +1,15 @@
 use std::collections::BTreeMap;
 
+use cardano_tx_builder::Signature;
+use konduit_data::ChequeBody;
 pub use konduit_data::Keytag;
 pub use konduit_data::Stage;
-use konduit_data::{Cheque, MixedReceipt};
+use konduit_data::{Cheque, Receipt};
+use konduit_data::{L1Channel, Locked};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::l2_channel::L2Channel;
+use crate::Channel;
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,22 +27,16 @@ pub struct Info {
 
 pub type TipBody = BTreeMap<Keytag, Vec<L1Channel>>;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct L1Channel {
-    pub stage: Stage,
-    pub amount: u64,
-}
-
 pub type TipResponse = BTreeMap<Keytag, TipResult>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum TipResult {
     New,
-    MixedReceipt(MixedReceipt),
+    Receipt(Receipt),
     Ended,
 }
 
-pub type ShowResponse = BTreeMap<Keytag, L2Channel>;
+pub type ShowResponse = BTreeMap<Keytag, Channel>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Secrets(Vec<[u8; 32]>);
@@ -73,9 +70,12 @@ pub struct QuoteResponse {
     pub routing_fee: u64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayBody {
-    pub cheque: Cheque,
+    pub cheque_body: ChequeBody,
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub signature: Signature,
     pub invoice: String,
     // #[serde(with = "hex")]
     // pub payee: [u8; 33],
@@ -85,13 +85,14 @@ pub struct PayBody {
     // pub final_cltv_delta: u64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UnlockedCheque {
-    #[serde(with = "hex")]
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub cheque_body: Vec<u8>,
-    #[serde(with = "hex")]
-    pub signature: [u8; 64],
-    #[serde(with = "hex")]
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub signature: Signature,
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub secret: Vec<u8>,
 }
 
@@ -103,7 +104,7 @@ pub enum SquashResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IncompleteSquashResponse {
-    pub mixed_receipt: MixedReceipt,
+    pub receipt: Receipt,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expire: Option<Vec<u64>>,
 }

@@ -1,36 +1,35 @@
-pub const ADAPTOR_SKEY: &str = "KONDUIT_ADAPTOR_SKEY";
+/// Declaration of variable names.
 
-pub const ADAPTOR_VKEY: &str = "KONDUIT_ADAPTOR_VKEY";
+/// # Adaptor wallet
+pub const SIGNING_KEY: &str = "KONDUIT_SIGNING_KEY";
 
-pub const BLN_MACAROON: &str = "KONDUIT_BLN_MACAROON";
-
-pub const BLN_TLS: &str = "KONDUIT_BLN_TLS";
-
-pub const BLN_URL: &str = "KONDUIT_BLN_URL";
-
-/// Blockfrost project id
+/// # Cardano connect
 pub const BLOCKFROST_PROJECT_ID: &str = "KONDUIT_BLOCKFROST_PROJECT_ID";
 
-pub const COIN_GEKO_TOKEN: &str = "KONDUIT_COIN_GECKO_TOKEN";
-
+/// # Db config
 pub const DB_PATH: &str = "KONDUIT_DB_PATH";
 
-pub const FX_ADA: &str = "KONDUIT_FX_ADA";
+/// # Server config
+pub const SERVER_HOST: &str = "KONDUIT_SERVER_HOST";
+pub const SERVER_PORT: &str = "KONDUIT_SERVER_PORT";
 
-pub const FX_BITCOIN: &str = "KONDUIT_FX_BITCOIN";
-
-// Adaptor server host
-pub const HOST: &str = "KONDUIT_HOST";
-
+/// # Channel params
 pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";
-
-pub const DEPLOYER_VKEY: &str = "KONDUIT_DEPLOYER_VKEY";
-
 pub const FEE: &str = "KONDUIT_FEE";
+pub const TAG_LENGTH: &str = "KONDUIT_TAG_LENGTH";
 
-pub const MAX_TAG_LENGTH: &str = "KONDUIT_MAX_TAG_LENGTH";
+/// # Tx building & preferences
+/// Host address is the cardano address hosting the konduit validator reference script.
+pub const MIN_SINGLE: &str = "KONDUIT_MIN_SINGLE";
+pub const MIN_TOTAL: &str = "KONDUIT_MIN_TOTAL";
+pub const HOST_ADDRESS: &str = "KONDUIT_HOST_ADDRESS";
 
-// Adaptor server port
-pub const PORT: &str = "KONDUIT_PORT";
+/// # BLN
+pub const BLN_MACAROON: &str = "KONDUIT_BLN_MACAROON";
+pub const BLN_TLS: &str = "KONDUIT_BLN_TLS";
+pub const BLN_URL: &str = "KONDUIT_BLN_URL";
 
-pub const SCRIPT_HASH: &str = "KONDUIT_SCRIPT_HASH";
+/// # Fx
+pub const COIN_GEKO_TOKEN: &str = "KONDUIT_COIN_GECKO_TOKEN";
+pub const FX_ADA: &str = "KONDUIT_FX_ADA";
+pub const FX_BITCOIN: &str = "KONDUIT_FX_BITCOIN";

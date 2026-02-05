@@ -300,7 +300,7 @@ impl Transaction<state::InConstruction> {
 
         Ok(Transaction {
             inner: tx.inner,
-            change_strategy: tx.change_strategy,
+            change_strategy: (),
             state: PhantomData,
         })
     }

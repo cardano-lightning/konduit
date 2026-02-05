@@ -46,7 +46,7 @@ needs to also demonstrate financial sustainability...
 
 ## Jargon
 
-See the [glossary](../../glossary.md) (TBC)
+See the [glossary](../glossary.md) (TBC)
 
 - BLN - Bitcoin Lightning Network
 - BD - Business Development
