@@ -32,6 +32,7 @@ humantime = { workspace = true, optional = true }
 
 [features]
 cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
+namespaced = []
 
 [[bin]]
 name = "fx-print"

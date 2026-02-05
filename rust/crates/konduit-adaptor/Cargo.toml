@@ -30,7 +30,7 @@ clap = { workspace = true, features = ["env"] }
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
 futures.workspace = true
-fx-client = { workspace = true, features = ["cli"] }
+fx-client = { workspace = true, features = ["cli", "namespaced"] }
 hex = { workspace = true, features = ["serde"] }
 humantime = "2.3.0"
 konduit-data.workspace = true
