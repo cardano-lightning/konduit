@@ -17,6 +17,25 @@ Below is an entry template.
 
 ## Entries
 
+### 2025-05-31
+
+@waalge:
+[fix-multi-unlocked](https://github.com/cardano-lightning/konduit/pull/69) is
+merged, albeit as incomplete. Majority of efforts were on bringing coherence to
+the server.
+
+OKRs:
+
+```
+roadmap // v1 // konduit server // second implementation
+```
+
+Next:
+
+- Align bln-client with fx-client interms of cli behaviour
+- Run manually driven testing of the bln-client
+- Re-do the konduit server handlers for pay and quote
+
 ### 2025-01-31
 
 @waalge:
