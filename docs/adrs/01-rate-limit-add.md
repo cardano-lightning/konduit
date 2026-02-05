@@ -30,13 +30,14 @@ simultaneously. A single tx with 10 steps may cost only 1 ada. Furthermore, an
 attacker could exploit a period of _temporal divergence_ between Cardano and
 Bitcoin bitcoin networks. This shorten the time required to fund the DoS.
 
-A note on Temporal divergence. Temporal divergence is a divergence in time
-between Cardano's Plutus (posix time) vs BLN's commitments that use bitcoin
-block height. Bitcoin blocks are produced via a process that can be modelled as
-an exponential distributions. Divergence can occur simply because this is a
-random process, although its more likely to be significant due to external
-factors such as a sudden drop in hashing power. Detailed calculations are
-elsewhere.
+> [!NOTE]
+> Temporal divergence is a divergence in time 
+> between Cardano's Plutus (posix time) vs BLN's commitments that use bitcoin
+> block height. Bitcoin blocks are produced via a process that can be modelled as
+> an exponential distributions. Divergence can occur simply because this is a
+> random process, although its more likely to be significant due to external
+> factors such as a sudden drop in hashing power. Detailed calculations are
+> elsewhere.
 
 ## Decision
 
