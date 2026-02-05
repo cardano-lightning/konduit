@@ -31,6 +31,7 @@ impl State {
 
 #[derive(Clone, Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum BaseCurrency {
     Aud,
     Chf,
