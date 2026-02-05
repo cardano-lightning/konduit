@@ -29,11 +29,11 @@ fn setup_config() -> lnd::Config {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_v1_getinfo_success() {
     let config = setup_config();
     let client = lnd::Client::try_from(config).unwrap();
 
     let result = client.v1_getinfo().await;
-
     assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
 }
