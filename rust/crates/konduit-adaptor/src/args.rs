@@ -8,7 +8,7 @@ use clap::Parser;
 // However we now do this weird dance of `pub struct MyServiceArgs` and `pub use
 // args::MyServiceArgs as Args`.
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     /// ## Common
@@ -33,7 +33,7 @@ pub struct Args {
 
     /// ## BLN
     #[command(flatten)]
-    pub bln: crate::bln::BlnArgs,
+    pub bln: bln_client::cli::Args,
 
     /// ## FX
     #[command(flatten)]

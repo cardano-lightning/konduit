@@ -1,4 +1,6 @@
-use crate::{Api, Error, lnd};
+use std::sync::Arc;
+
+use crate::{Api, lnd};
 
 /// Internal configuration enum representing the chosen backend and its settings.
 pub enum Config {
@@ -23,11 +25,11 @@ impl Config {
     }
 
     /// Consumes the config and initializes the appropriate API client.
-    pub fn build(self) -> crate::Result<Box<dyn Api>> {
+    pub fn build(self) -> crate::Result<Arc<dyn Api>> {
         match self {
             Config::Lnd(config) => {
                 let client = lnd::Client::try_from(config)?;
-                Ok(Box::new(client))
+                Ok(Arc::new(client))
             }
         }
     }

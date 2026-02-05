@@ -5,10 +5,9 @@ mod config;
 pub use config::Config;
 
 mod cmd;
-pub use cmd::Cmd;
+pub use cmd::*;
 
 use clap::Parser;
-use std::time::Duration;
 
 // Re-exports from the client library
 pub use crate::{Api, Invoice, PayRequest, PayResponse, QuoteRequest, QuoteResponse};

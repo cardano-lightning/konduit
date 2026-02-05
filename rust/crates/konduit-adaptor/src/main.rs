@@ -40,7 +40,9 @@ async fn main() -> anyhow::Result<()> {
     let db = Arc::new(args.db.build()?);
 
     // BLN
-    let bln = Arc::new(args.bln.build()?);
+    let bln = bln_client::cli::Config::from_args(args.bln)
+        .map_err(|s| anyhow::anyhow!(s))?
+        .build()?;
 
     // ADMIN
     let admin_every = args.admin.admin_every.clone();

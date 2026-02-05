@@ -2,7 +2,6 @@
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use clap::Parser;
-    use std::str::FromStr;
 
     use bln_client::cli::{BlnArgs, Cmd, Config, PayRequest, QuoteRequest};
 
@@ -27,16 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Cmd::Quote { amount_msat, payee } => {
             println!("--- Requesting Quote ---");
 
-            // Convert Vec<u8> to [u8; 33] as required by QuoteRequest
-            let mut payee_arr = [0u8; 33];
-            if payee.len() != 33 {
-                return Err("Payee public key must be exactly 33 bytes".into());
-            }
-            payee_arr.copy_from_slice(&payee);
-
             let req = QuoteRequest {
                 amount_msat,
-                payee: payee_arr,
+                payee: payee.0,
             };
 
             match client.quote(req).await {

@@ -10,8 +10,8 @@ pub enum Cmd {
         amount_msat: u64,
 
         /// The 33-byte public key of the payee in hex format.
-        #[arg(long, value_parser = |s: &str| hex::decode(s).map_err(|e| e.to_string()))]
-        payee: Vec<u8>,
+        #[arg(long)]
+        payee: Payee,
     },
     /// Pay based on a previous quote.
     Pay {
@@ -27,4 +27,23 @@ pub enum Cmd {
         #[arg(long)]
         invoice: String,
     },
+}
+
+#[derive(Debug, Clone)]
+pub struct Payee(pub [u8; 33]);
+
+impl std::str::FromStr for Payee {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let vec = hex::decode(s).map_err(|err| err.to_string())?;
+        let arr = <[u8; 33]>::try_from(vec).map_err(|_| "Wrong length".to_string())?;
+        Ok(Payee(arr))
+    }
+}
+
+impl AsRef<[u8; 33]> for Payee {
+    fn as_ref(&self) -> &[u8; 33] {
+        &self.0
+    }
 }

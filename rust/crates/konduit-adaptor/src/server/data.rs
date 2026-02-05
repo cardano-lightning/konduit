@@ -3,10 +3,10 @@ use cardano_connect_blockfrost::Blockfrost;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::{bln, cardano, db, info};
+use crate::{cardano, db, info};
 
 pub struct Data {
-    bln: Arc<dyn bln::Api + Send + Sync>,
+    bln: Arc<dyn bln_client::Api + Send + Sync>,
     cardano: Arc<cardano::Cardano>,
     db: Arc<dyn db::Api + Send + Sync + 'static>,
     fx: Arc<RwLock<fx_client::State>>,
@@ -15,7 +15,7 @@ pub struct Data {
 
 impl Data {
     pub fn new(
-        bln: Arc<dyn bln::Api + Send + Sync>,
+        bln: Arc<dyn bln_client::Api + Send + Sync>,
         cardano: Arc<cardano::Cardano>,
         db: Arc<dyn db::Api + Send + Sync + 'static>,
         fx: Arc<RwLock<fx_client::State>>,
@@ -38,7 +38,7 @@ impl Data {
         self.db.clone()
     }
 
-    pub fn bln(&self) -> Arc<dyn bln::Api + Send + Sync + 'static> {
+    pub fn bln(&self) -> Arc<dyn bln_client::Api + Send + Sync + 'static> {
         self.bln.clone()
     }
 

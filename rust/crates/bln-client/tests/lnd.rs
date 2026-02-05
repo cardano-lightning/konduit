@@ -2,7 +2,7 @@ use dotenvy::dotenv;
 use std::env;
 use std::time::Duration;
 
-use bln_client::lnd;
+use bln_client::lnd::{self, Macaroon};
 
 fn setup_config() -> lnd::Config {
     dotenv().ok();
@@ -10,7 +10,9 @@ fn setup_config() -> lnd::Config {
     let base_url = env::var("LND_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
     let macaroon_hex = env::var("LND_MACAROON").expect("LND_MACROON must be set (hex string)");
-    let macaroon = hex::decode(macaroon_hex).expect("LND_MACROON must be valid hex");
+    let macaroon = macaroon_hex
+        .parse::<Macaroon>()
+        .expect("LND_MACROON must be valid hex");
 
     let block_time_secs = env::var("BLOCK_TIME")
         .unwrap_or_else(|_| "600".to_string())
