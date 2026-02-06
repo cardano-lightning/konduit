@@ -16,3 +16,4 @@ release = false
 [dependencies]
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
+web-time.workspace = true
