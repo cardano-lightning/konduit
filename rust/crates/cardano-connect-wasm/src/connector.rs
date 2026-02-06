@@ -68,7 +68,7 @@ impl CardanoConnector {
         signing_key: &[u8],
     ) -> crate::Result<Vec<u8>> {
         let signing_key: SigningKey = <[u8; 32]>::try_from(signing_key)
-            .expect("invalid signing key length")
+            .map_err(|_| anyhow!("invalid signing key length"))?
             .into();
 
         transaction.sign(signing_key);
@@ -111,7 +111,7 @@ impl CardanoConnector {
         path: &str,
         timeout_ms: u32,
     ) -> anyhow::Result<T> {
-        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms);
+        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms)?;
         let request = Request::get(&format!("{}{path}", self.base_url))
             .abort_signal(Some(&abort_on_timeout))
             .build()?;
@@ -120,15 +120,16 @@ impl CardanoConnector {
         result
     }
 
-    fn mk_abort_on_timeout(timeout_ms: u32) -> (AbortSignal, Timeout) {
-        let controller = AbortController::new().expect("Failed to create AbortController");
+    fn mk_abort_on_timeout(timeout_ms: u32) -> anyhow::Result<(AbortSignal, Timeout)> {
+        let controller =
+            AbortController::new().map_err(|_| anyhow!("Failed to create AbortController"))?;
         let signal: AbortSignal = controller.signal();
         let timeout_controller = controller.clone(); // Clone for move into closure
         let timeout_handle = Timeout::new(timeout_ms, move || {
             timeout_controller.abort();
             log::warn!("Aborted request due to timeout after {}ms", timeout_ms);
         });
-        (signal, timeout_handle)
+        anyhow::Ok((signal, timeout_handle))
     }
 
     async fn post<T: serde::de::DeserializeOwned>(
@@ -139,7 +140,7 @@ impl CardanoConnector {
     ) -> anyhow::Result<T> {
         let body = js_sys::JSON::stringify(&body.into())
             .map_err(|e| anyhow!("failed to serialize request body: {:?}", e))?;
-        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms);
+        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms)?;
         let request = Request::post(&format!("{}{path}", self.base_url))
             .abort_signal(Some(&abort_on_timeout))
             .body(body)?;
