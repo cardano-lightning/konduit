@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use cardano_connect::CardanoConnect;
 use cardano_connect_wasm::{self as wasm, CardanoConnector};
 use cardano_tx_builder::{Credential, Hash, NetworkId, transaction::TransactionReadyForSigning};
@@ -25,11 +26,11 @@ pub async fn open(
     amount: u64,
 ) -> wasm::Result<TransactionReadyForSigning> {
     let consumer = <[u8; 32]>::try_from(consumer)
-        .expect("invalid verification key length")
+        .map_err(|_| anyhow!("invalid verification key length"))?
         .into();
 
     let adaptor = <[u8; 32]>::try_from(adaptor)
-        .expect("invalid verification key length")
+        .map_err(|_| anyhow!("invalid verification key length"))?
         .into();
 
     let tag = Tag::from(tag);

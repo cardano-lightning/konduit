@@ -1,9 +1,11 @@
-use std::{
-    cmp,
-    collections::BTreeMap,
-    sync::LazyLock,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{cmp, collections::BTreeMap, sync::LazyLock};
+
+// Standard system time breaks in wasm targets
+#[cfg(target_family = "wasm")]
+use web_time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(not(target_family = "wasm"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use cardano_tx_builder::{
     Address, Credential, Hash, Input, NetworkId, Output, PlutusData, ProtocolParameters, Value,
