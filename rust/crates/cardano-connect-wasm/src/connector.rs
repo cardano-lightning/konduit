@@ -11,6 +11,7 @@ use gloo_timers::callback::Timeout;
 use std::{collections::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
 use web_sys::{AbortController, AbortSignal};
+use web_time::Duration;
 
 mod balance;
 mod health;
@@ -20,7 +21,7 @@ mod utxos_at;
 #[wasm_bindgen]
 pub struct CardanoConnector {
     base_url: String,
-    http_timeout_ms: u32,
+    http_timeout: Duration,
     network: Network,
 }
 
@@ -29,19 +30,19 @@ pub struct CardanoConnector {
 #[wasm_bindgen]
 impl CardanoConnector {
     #[wasm_bindgen]
-    pub async fn new(base_url: &str, http_timeout_ms: Option<u32>) -> crate::Result<Self> {
-        let http_timeout_ms = http_timeout_ms.unwrap_or(10_000);
+    pub async fn new(base_url: &str, http_timeout_ms: Option<u64>) -> crate::Result<Self> {
+        let http_timeout = Duration::from_millis(http_timeout_ms.unwrap_or(10_000) as u64);
         let base_url = base_url.strip_suffix("/").unwrap_or(base_url).to_string();
         let network = Network::Other(0);
 
         let mut connector = Self {
             base_url,
-            http_timeout_ms,
+            http_timeout,
             network,
         };
 
         let network = connector
-            .get::<network::Response>("/network", http_timeout_ms)
+            .get::<network::Response>("/network", http_timeout)
             .await?
             .network;
 
@@ -81,15 +82,25 @@ impl CardanoConnector {
     }
 
     #[wasm_bindgen]
-    pub async fn balance(&self, verification_key: &[u8]) -> crate::Result<u64> {
+    pub async fn balance(
+        &self,
+        verification_key: &[u8],
+        http_timeout_ms: Option<u64>,
+    ) -> crate::Result<u64> {
         let verification_key: VerificationKey = <[u8; 32]>::try_from(verification_key)
             .map_err(|_| anyhow!("invalid verification key length"))?
             .into();
 
         let addr = Address::new(self.network().into(), Credential::from(verification_key));
 
+        let timeout = if let Some(ms) = http_timeout_ms {
+            Duration::from_millis(ms as u64)
+        } else {
+            self.http_timeout
+        };
+
         let balance = self
-            .get::<balance::Response>(&format!("/balance/{addr}"), self.http_timeout_ms)
+            .get::<balance::Response>(&format!("/balance/{addr}"), timeout)
             .await?;
 
         Ok(balance.lovelace.parse::<u64>().map_err(|e| anyhow!(e))?)
@@ -109,7 +120,7 @@ impl CardanoConnector {
     async fn get<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
-        timeout_ms: u32,
+        timeout_ms: Duration,
     ) -> anyhow::Result<T> {
         let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms)?;
         let request = Request::get(&format!("{}{path}", self.base_url))
@@ -120,10 +131,14 @@ impl CardanoConnector {
         result
     }
 
-    fn mk_abort_on_timeout(timeout_ms: u32) -> anyhow::Result<(AbortSignal, Timeout)> {
+    fn mk_abort_on_timeout(timeout: Duration) -> anyhow::Result<(AbortSignal, Timeout)> {
         let controller =
             AbortController::new().map_err(|_| anyhow!("Failed to create AbortController"))?;
         let signal: AbortSignal = controller.signal();
+        let timeout_ms: u32 = timeout
+            .as_millis()
+            .try_into()
+            .map_err(|_| anyhow!("timeout duration too large"))?;
         let timeout_controller = controller.clone(); // Clone for move into closure
         let timeout_handle = Timeout::new(timeout_ms, move || {
             timeout_controller.abort();
@@ -136,11 +151,11 @@ impl CardanoConnector {
         &self,
         path: &str,
         body: impl Into<JsValue>,
-        timeout_ms: u32,
+        timeout: Duration,
     ) -> anyhow::Result<T> {
         let body = js_sys::JSON::stringify(&body.into())
             .map_err(|e| anyhow!("failed to serialize request body: {:?}", e))?;
-        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout_ms)?;
+        let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(timeout)?;
         let request = Request::post(&format!("{}{path}", self.base_url))
             .abort_signal(Some(&abort_on_timeout))
             .body(body)?;
@@ -194,7 +209,7 @@ impl CardanoConnect for CardanoConnector {
 
     async fn health(&self) -> anyhow::Result<String> {
         let health = self
-            .get::<health::Response>("/health", self.http_timeout_ms)
+            .get::<health::Response>("/health", self.http_timeout)
             .await?;
         Ok(health.status)
     }
@@ -223,7 +238,7 @@ impl CardanoConnect for CardanoConnector {
         }
 
         let utxos = self
-            .get::<Vec<utxos_at::Response>>(&format!("/utxos_at/{addr}"), self.http_timeout_ms)
+            .get::<Vec<utxos_at::Response>>(&format!("/utxos_at/{addr}"), self.http_timeout)
             .await?;
 
         Ok(utxos
@@ -238,7 +253,7 @@ impl CardanoConnect for CardanoConnector {
     ) -> anyhow::Result<()> {
         let body = singleton("transaction", hex::encode(transaction.to_cbor()))?;
 
-        self.post::<serde_json::Value>("/submit", body, self.http_timeout_ms)
+        self.post::<serde_json::Value>("/submit", body, self.http_timeout)
             .await?;
 
         Ok(())
