@@ -29,6 +29,7 @@ serde_json.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 web-sys.workspace = true
+web-time.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
