@@ -1,3 +1,5 @@
+use anyhow::anyhow;
+use cardano_connect_wasm::{self as wasm};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -10,7 +12,7 @@ pub enum LogLevel {
 }
 
 #[wasm_bindgen(js_name = "enableLogs")]
-pub fn enable_logs(level: LogLevel) {
+pub fn enable_logs(level: LogLevel) -> wasm::Result<()> {
     let log_level = match level {
         LogLevel::Trace => log::Level::Trace,
         LogLevel::Debug => log::Level::Debug,
@@ -18,6 +20,7 @@ pub fn enable_logs(level: LogLevel) {
         LogLevel::Warn => log::Level::Warn,
         LogLevel::Error => log::Level::Error,
     };
-    console_log::init_with_level(log_level).expect("console_log init failed");
+    console_log::init_with_level(log_level).map_err(|_| anyhow!("console_log init failed"))?;
     console_error_panic_hook::set_once();
+    Ok(())
 }
