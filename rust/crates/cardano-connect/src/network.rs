@@ -13,13 +13,15 @@ pub enum Network {
 type NetworkMagicNumber = u64;
 
 const MAINNET_MAGIC_NUMBER: u64 = 764824073;
+const PREPROD_MAGIC_NUMBER: u64 = 1;
+const PREVIEW_MAGIC_NUMBER: u64 = 2;
 
 impl Into<NetworkMagicNumber> for Network {
     fn into(self) -> u64 {
         match self {
             Network::Mainnet => MAINNET_MAGIC_NUMBER,
-            Network::Preprod => 1,
-            Network::Preview => 2,
+            Network::Preprod => PREPROD_MAGIC_NUMBER,
+            Network::Preview => PREVIEW_MAGIC_NUMBER,
             Network::Other(n) => n,
         }
     }
