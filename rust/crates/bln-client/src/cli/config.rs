@@ -21,6 +21,9 @@ impl Config {
                 block_time: args.block_time,
                 min_cltv: 84,
                 tls_certificate: None,
+                // FIXME :: This may be insufficient in some contexts
+                // It should be double the server's capacity.
+                max_cache_size: 1000,
             }))
         } else {
             Err("Missing required LND configuration (base URL and Macaroon).".to_string())

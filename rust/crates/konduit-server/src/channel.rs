@@ -103,7 +103,7 @@ impl Channel {
         }
     }
 
-    pub fn squash_proposal(&self) -> Result<SquashProposal, ChannelError> {
+    pub fn squash_proposal(&self) -> Result<Option<SquashProposal>, ChannelError> {
         match &self.receipt {
             None => Err(ChannelError::NoReceipt),
             Some(receipt) => receipt

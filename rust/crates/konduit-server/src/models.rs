@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use cardano_tx_builder::Signature;
-use konduit_data::ChequeBody;
 pub use konduit_data::Keytag;
+use konduit_data::L1Channel;
+use konduit_data::Receipt;
 pub use konduit_data::Stage;
-use konduit_data::{Cheque, Receipt};
-use konduit_data::{L1Channel, Locked};
+use konduit_data::{ChequeBody, SquashProposal};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -100,12 +100,5 @@ pub struct UnlockedCheque {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum SquashResponse {
     Complete,
-    Incomplete(IncompleteSquashResponse),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct IncompleteSquashResponse {
-    pub receipt: Receipt,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expire: Option<Vec<u64>>,
+    Incomplete(SquashProposal),
 }

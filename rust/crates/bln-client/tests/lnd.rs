@@ -26,6 +26,7 @@ fn setup_config() -> lnd::Config {
         block_time: Duration::from_secs(block_time_secs),
         min_cltv: 84,
         tls_certificate: None,
+        max_cache_size: 1000,
     }
 }
 

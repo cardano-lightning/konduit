@@ -1,7 +1,7 @@
 use actix_web::{App, test, web};
 use cardano_tx_builder::{SigningKey, address_test, key_credential};
-use konduit_adaptor::*;
 use konduit_data::Duration;
+use konduit_server::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

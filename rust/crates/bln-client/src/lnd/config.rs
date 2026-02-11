@@ -13,6 +13,7 @@ pub struct Config {
     pub block_time: Duration,
     pub min_cltv: u64,
     pub tls_certificate: Option<Vec<u8>>,
+    pub max_cache_size: usize,
 }
 
 #[derive(Debug, Clone)]

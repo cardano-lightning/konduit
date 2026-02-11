@@ -149,6 +149,9 @@ pub struct SendPaymentResponse {
     #[serde(default)] // Use default (empty string) if null or missing
     pub payment_error: String,
 
+    /// WIP :: Trying to filter SUCCEEDED from IN-FLIGHT
+    pub status: String,
+
     /// (bytes -> base64 string)
     /// The payment preimage.
     #[serde_as(as = "Base64")]

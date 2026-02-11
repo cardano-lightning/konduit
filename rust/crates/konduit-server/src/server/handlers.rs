@@ -2,11 +2,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{
     db, info,
-    models::{IncompleteSquashResponse, PayBody, QuoteBody, SquashResponse},
+    models::{PayBody, QuoteBody, SquashResponse},
     server::{self, cbor::decode_from_cbor},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_data::{Keytag, Locked, Squash};
+use konduit_data::{Keytag, Locked, Secret, Squash};
 
 type Data = web::Data<server::Data>;
 
@@ -84,15 +84,12 @@ pub async fn squash(
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
     };
-    // FIXME :: This should be moved to a single method eg `squashable`
-    let response_body = if !receipt.unlockeds().is_empty() {
-        // FIXME :: Should include possible expire
-        SquashResponse::Incomplete(IncompleteSquashResponse {
-            receipt,
-            expire: None,
-        })
-    } else {
-        SquashResponse::Complete
+    let response_body = match receipt.squash_proposal() {
+        Ok(Some(propose)) => SquashResponse::Incomplete(propose),
+        Ok(None) => SquashResponse::Complete,
+        Err(_) => {
+            return Ok(HttpResponse::InternalServerError().body("Failed to resolve squash"));
+        }
     };
     Ok(HttpResponse::Ok().json(response_body))
 }
@@ -165,6 +162,10 @@ pub async fn pay(
     if !locked.verify(&key, &tag) {
         return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
     };
+    if invoice.payment_hash != locked.lock().0 {
+        return Ok(HttpResponse::BadRequest().body(format!("Lock does not match payment_hash")));
+    }
+
     let effective_amount_msat = fx.lovelace_to_msat(locked.amount() - FEE_PLACEHOLDER);
     if effective_amount_msat < invoice.amount_msat {
         return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
@@ -187,7 +188,6 @@ pub async fn pay(
         return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
     };
 
-    let payment_hash = locked.lock().0.clone();
     if let Err(err) = data.db().append_locked(&keytag, locked).await {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
@@ -196,21 +196,35 @@ pub async fn pay(
         relative_timeout,
         invoice: invoice,
     };
-
-    // let pay_response = match data.bln.pay(pay_request).await {
-    //     Ok(res) => res,
-    //     Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
-    // };
-    // let channel = match data.db.unlock(&keytag, Secret(pay_response.secret)).await {
-    //     Ok(channel) => channel,
-    //     Err(err) => {
-    //         return Ok(HttpResponse::BadRequest()
-    //             .body(format!("Error handling secret: {}", err.to_string())));
-    //     }
-    // };
-    // let Some(receipt) = channel.receipt() else {
-    //     return Ok(HttpResponse::InternalServerError().body("Logic failure"));
-    // };
-    // Ok(HttpResponse::Ok().json(receipt))
-    todo!("Not yet reimplemented")
+    let pay_response = match data.bln().pay(pay_request).await {
+        Ok(res) => res,
+        Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
+    };
+    let channel = if let Some(secret) = pay_response.secret {
+        data.db().unlock(&keytag, Secret(secret)).await
+    } else {
+        match data.db().get_channel(&keytag).await {
+            Ok(Some(c)) => Ok(c),
+            Ok(None) => return Ok(HttpResponse::InternalServerError().body("Impossible")),
+            Err(err) => Err(err),
+        }
+    };
+    let channel = match channel {
+        Ok(channel) => channel,
+        Err(err) => {
+            return Ok(HttpResponse::BadRequest()
+                .body(format!("Error handling secret: {}", err.to_string())));
+        }
+    };
+    let Some(receipt) = channel.receipt() else {
+        return Ok(HttpResponse::InternalServerError().body("Failure to recover receipt"));
+    };
+    let response_body = match receipt.squash_proposal() {
+        Ok(Some(propose)) => SquashResponse::Incomplete(propose),
+        Ok(None) => SquashResponse::Complete,
+        Err(_) => {
+            return Ok(HttpResponse::InternalServerError().body("Failed to resolve squash"));
+        }
+    };
+    Ok(HttpResponse::Ok().json(response_body))
 }
