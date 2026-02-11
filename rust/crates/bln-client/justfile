@@ -42,6 +42,9 @@ health:
     @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain}'
 
 # --- Invoice Commands ---
+# Decode a bolt11 invoice to see destination and amount
+decode-invoice invoice:
+    @just node={{node}} _request GET "/v1/payreq/{{invoice}}" | jq '{destination: .destination, amount_msat: .num_msat}' 
 
 # List invoices
 invoices short="":

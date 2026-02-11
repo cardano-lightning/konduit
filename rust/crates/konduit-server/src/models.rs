@@ -57,6 +57,7 @@ pub struct SimpleQuote {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QuoteResponse {
+    pub index: u64,
     pub amount: u64,
     pub relative_timeout: u64,
     // TODO (@waalge) TBD whether these fields are relevant.

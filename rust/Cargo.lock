@@ -2056,6 +2056,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "konduit-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64",
+ "bitcoin_hashes",
+ "bln-client",
+ "cardano-connect",
+ "cardano-connect-blockfrost",
+ "cardano-tx-builder",
+ "clap",
+ "dotenvy",
+ "futures",
+ "hex",
+ "humantime",
+ "konduit-data",
+ "konduit-tx",
+ "lightning-invoice 0.33.2",
+ "lightning-types 0.2.0",
+ "minicbor",
+ "proptest",
+ "proptest-derive",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "konduit-data"
 version = "0.0.0"
 dependencies = [
