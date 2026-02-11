@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use konduit_adaptor::{admin, args, info, server};
+use konduit_server::{admin, args, info, server};
 use tokio::{sync::RwLock, time::interval};
 
 #[actix_web::main]

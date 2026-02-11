@@ -1,5 +1,5 @@
 [package]
-name = "konduit-adaptor"
+name = "konduit-server"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
