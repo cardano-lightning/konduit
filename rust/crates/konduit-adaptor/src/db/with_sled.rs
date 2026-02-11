@@ -47,6 +47,12 @@ impl WithSled {
         })
     }
 
+    pub fn open_temporary() -> Result<Self, BackendError> {
+        Ok(Self {
+            db: Arc::new(sled::Config::new().temporary(true).open()?),
+        })
+    }
+
     pub fn channel_keys(&self) -> Result<Vec<Keytag>, BackendError> {
         let range = [CHANNEL]..[CHANNEL_END];
         let res = self

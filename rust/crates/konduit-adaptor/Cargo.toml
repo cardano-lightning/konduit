@@ -21,7 +21,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 base64 = "0.22.1"
 bitcoin_hashes = "=0.14.0"
-bln-client = { workspace = true, features = ["cli" ] }
+bln-client = { workspace = true, features = ["cli", "namespaced"] }
 cardano-connect-blockfrost.workspace = true
 cardano-connect.workspace = true
 cardano-tx-builder.workspace = true

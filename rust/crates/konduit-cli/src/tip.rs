@@ -243,6 +243,8 @@ fn display_utxos(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
 }
 
 // Assume the address is deduced from context
+// FIXME :: Is this worth keeping??
+#[allow(dead_code)]
 fn display_channels(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
     if f.alternate() {
         // Verbose

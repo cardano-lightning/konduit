@@ -1,0 +1,77 @@
+# Global variable for the node name
+node := "default"
+# Computed filename for the environment
+dot_file := if node == "default" { ".env" } else { ".env." + node }
+
+# Default recipe to show help
+default:
+    @just --list
+
+# Internal helper to perform raw authenticated requests
+# We source the specific dot_file inside the shell to ensure the correct credentials are used
+_request method path data='':
+    @if [ ! -f "{{dot_file}}" ]; then \
+        echo "Error: Configuration file {{dot_file}} not found."; \
+        exit 1; \
+    fi; \
+    export $(grep -v '^#' {{dot_file}} | xargs); \
+    if [ -z "$LND_BASE_URL" ] || [ -z "$LND_MACAROON" ]; then \
+        echo "Error: LND credentials not found in {{dot_file}}"; \
+        exit 1; \
+    fi; \
+    curl -s -X {{method}} \
+        --cacert ${LND_TLS_CERT:-/dev/null} \
+        -k \
+        -H "Grpc-Metadata-macaroon: $LND_MACAROON" \
+        -d '{{data}}' \
+        "$LND_BASE_URL{{path}}"
+
+# Helper to encode hashes to hex
+encode-hash hash:
+    @if [ $(echo -n "{{hash}}" | wc -c) -eq 64 ]; then \
+        echo -n "{{hash}}"; \
+    else \
+        echo -n "{{hash}}" | base64 -d | xxd -p -c 0; \
+    fi
+
+# --- Node Commands ---
+
+# Check node health (shows which node is active)
+health:
+    @echo "Connecting to node using {{dot_file}}..."
+    @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain}'
+
+# --- Invoice Commands ---
+
+# List invoices
+invoices short="":
+    @just node={{node}} _request GET "/v1/invoices" | jq 'if .invoices then (if "{{short}}" == "--short" then .invoices[] | {state: .state, memo: .memo, value: .value, settled: .settled} else . end) else . end'
+
+# Add a new invoice (amt msat)
+add-invoice amt_msat memo="":
+    @just node={{node}} _request POST "/v1/invoices" '{"value_msat": "{{amt_msat}}", "memo": "{{memo}}"}' | jq -r '.payment_request'
+
+# --- Payment Commands ---
+
+# Pay a lightning invoice
+pay invoice:
+    @B64_PREIMAGE=$(just node={{node}} _request POST "/v1/channels/transactions" "{\"payment_request\": \"{{invoice}}\"}" | jq -r '.payment_preimage'); \
+    if [ "$B64_PREIMAGE" != "null" ]; then \
+        just encode-hash $B64_PREIMAGE; \
+    else \
+        echo "Payment failed."; \
+    fi
+
+# List payments
+payments short="":
+    @just node={{node}} _request GET "/v1/payments" | jq 'if .payments then (if "{{short}}" == "--short" then .payments[] | {status: .status, hash: .payment_hash, value: .value_sat} else . end) else . end'
+
+# --- Utility ---
+
+# Generate a template for a specific node
+# Usage: just init-node alice
+init-node name:
+    @echo "LND_BASE_URL=https://127.0.0.1:8080" > .env.{{name}}
+    @echo "LND_MACAROON=<hex_macaroon>" >> .env.{{name}}
+    @echo "LND_TLS_CERT=~/.lnd/tls.cert" >> .env.{{name}}
+    @echo ".env.{{name}} created."

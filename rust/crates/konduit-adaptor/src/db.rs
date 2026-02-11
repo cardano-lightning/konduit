@@ -1,3 +1,6 @@
+mod args;
+pub use args::DbArgs as Args;
+
 mod error;
 pub use error::*;
 
@@ -8,22 +11,4 @@ pub use api::Api;
 mod coiter_with_default;
 
 // Impls
-mod with_sled;
-
-#[derive(Debug, Clone, clap::Args)]
-pub struct Args {
-    /// Db with sled
-    #[clap(flatten)]
-    pub sled: Option<with_sled::Args>,
-}
-
-impl Args {
-    pub fn build(self) -> error::Result<impl Api> {
-        if let Some(args) = &self.sled {
-            let db = with_sled::WithSled::try_from(args).expect("oops");
-            Ok(db)
-        } else {
-            panic!("db failed to init")
-        }
-    }
-}
+pub mod with_sled;

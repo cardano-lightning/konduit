@@ -9,6 +9,7 @@ pub use error::*;
 
 // Clients
 pub mod lnd;
+pub mod mock;
 
 #[cfg(feature = "cli")]
 pub mod cli;
