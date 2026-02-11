@@ -14,6 +14,16 @@ pub struct QuoteResponse {
     pub fee_msat: u64,
 }
 
+#[derive(Debug, Clone)]
+pub struct RevealRequest {
+    pub lock: [u8; 32],
+}
+
+#[derive(Debug, Clone)]
+pub struct RevealResponse {
+    pub secret: Option<[u8; 32]>,
+}
+
 // Invariant: all fields must match the invoice
 // We keep that value at hand so we can provide
 // it as a part of the final payment request.
@@ -35,7 +45,4 @@ pub struct PayRequest {
     // pub final_cltv_delta: u64,
 }
 
-#[derive(Debug, Clone)]
-pub struct PayResponse {
-    pub secret: [u8; 32],
-}
+pub type PayResponse = RevealResponse;

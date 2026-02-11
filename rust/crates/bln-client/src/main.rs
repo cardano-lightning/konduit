@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match client.pay(req).await {
                 Ok(res) => {
                     println!("Payment Successful!");
-                    println!("  Preimage (Secret): {}", hex::encode(res.secret));
+                    println!("  Preimage (Secret): {:?}", res.secret.map(hex::encode));
                 }
                 Err(e) => eprintln!("API Error: {:?}", e),
             }

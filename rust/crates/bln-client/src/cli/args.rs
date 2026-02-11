@@ -11,6 +11,12 @@ pub struct ClientArgs {
     #[cfg_attr(feature = "namespaced", arg(long("bln-block-time")))]
     pub block_time: Duration,
 
+    // Mock
+    /// The base URL of the LND REST API.
+    #[arg(long, env = "BLN_MOCK", default_value_t = false)]
+    #[cfg_attr(feature = "namespaced", arg(long("bln-mock")))]
+    pub mock: bool,
+
     // LND
     /// The base URL of the LND REST API.
     #[arg(long, env = "LND_BASE_URL")]

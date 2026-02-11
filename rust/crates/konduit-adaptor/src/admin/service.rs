@@ -109,6 +109,8 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
     }
 
     pub async fn sync(&self) -> Result<(), anyhow::Error> {
+        // FIXME :: Sync BLN
+        // At present this is not even in the admin context
         let snapshot = self.snapshot().await?;
         let retainers = self.retainers(&snapshot);
         let channels = self.db.update_retainers(retainers).await?;

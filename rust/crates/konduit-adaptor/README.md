@@ -33,6 +33,15 @@ Fee:
 
 ### Admin
 
+#### BLN Sync
+
+For cheques that do not immediately resolve, we need to handle either:
+
+1. A later resolution
+2. An expiration
+
+At the moment we do neither.
+
 #### L1 Sync
 
 Sync with l1: what's an upstream responsibility and whats a downstream

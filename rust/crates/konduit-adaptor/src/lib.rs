@@ -14,7 +14,7 @@ pub mod args;
 
 pub mod info;
 
-mod db;
+pub mod db;
 
 pub mod env;
 pub mod server;
