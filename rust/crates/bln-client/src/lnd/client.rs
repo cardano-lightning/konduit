@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::{Method, RequestBuilder};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use super::types::{get_info, graph_routes, payments, send_payment};
+use super::types::{get_info, graph_routes, payments, router_send, stream_wrapper};
 
 use crate::{
     Api, Error, PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest,
@@ -26,8 +26,7 @@ impl TryFrom<Config> for Client {
     type Error = Error;
 
     fn try_from(value: Config) -> crate::Result<Self> {
-        // High timeout for pathfinding and multi-hop payments
-        let mut client_builder = reqwest::Client::builder().timeout(Duration::from_secs(360));
+        let mut client_builder = reqwest::Client::builder().timeout(Duration::from_secs(30));
         if let Some(cert_bytes) = value.tls_certificate.as_ref() {
             let cert = reqwest::Certificate::from_pem(cert_bytes)
                 .map_err(|e| Error::Init(format!("Failed to parse PEM: {}", e)))?;
@@ -51,17 +50,21 @@ impl TryFrom<Config> for Client {
 
 impl Client {
     fn url(&self, path: &str) -> String {
-        format!(
-            "{}/{}",
-            self.config.base_url.trim_end_matches('/'),
-            path.trim_start_matches('/')
-        )
+        format!("{}/{}", self.config.base_url, path)
     }
 
     fn request(&self, method: Method, path: &str) -> RequestBuilder {
         self.client
             .request(method, self.url(path))
             .header("Grpc-Metadata-Macaroon", hex::encode(&self.config.macaroon))
+    }
+
+    fn get(&self, path: &str) -> RequestBuilder {
+        self.request(Method::GET, path)
+    }
+
+    fn post(&self, path: &str) -> RequestBuilder {
+        self.request(Method::POST, path)
     }
 
     async fn execute<T: DeserializeOwned>(&self, builder: RequestBuilder) -> crate::Result<T> {
@@ -74,7 +77,7 @@ impl Client {
         Ok(response.json().await?)
     }
 
-    /// Robust stream handler that handles concatenated JSON objects without newlines
+    /// Stream handler that parses until a JSON object is complete.
     async fn execute_stream<T, F>(
         &self,
         builder: RequestBuilder,
@@ -93,41 +96,69 @@ impl Client {
 
         let mut stream = response.bytes_stream();
         let mut buffer = Vec::new();
+        let mut total_bytes_received = 0;
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result.map_err(|e| Error::Init(e.to_string()))?;
+            total_bytes_received += chunk.len();
             buffer.extend_from_slice(&chunk);
 
-            // Attempt to parse objects from the buffer.
-            // LND REST can send items separated by newlines OR just back-to-back JSON.
-            // We use a StreamDeserializer approach.
-            let mut cursor = std::io::Cursor::new(&buffer);
-            let mut last_finish = 0;
+            loop {
+                let mut it = serde_json::Deserializer::from_slice(&buffer)
+                    .into_iter::<stream_wrapper::StreamWrapper<T>>();
+                match it.next() {
+                    Some(Ok(wrapper)) => {
+                        let offset = it.byte_offset();
+                        let terminal = is_terminal(&wrapper.result);
+                        if terminal {
+                            return Ok(wrapper.result);
+                        }
+                        buffer.drain(..offset);
+                        while !buffer.is_empty() && buffer[0].is_ascii_whitespace() {
+                            buffer.remove(0);
+                        }
+                        continue;
+                    }
+                    Some(Err(e)) if e.is_eof() => {
+                        break;
+                    }
+                    Some(Err(e)) => {
+                        let snippet_len = std::cmp::min(buffer.len(), 100);
+                        let snippet = String::from_utf8_lossy(&buffer[..snippet_len]);
+                        println!(
+                            "DEBUG: JSON Parse Error: {}. Buffer start: {}...",
+                            e, snippet
+                        );
 
-            let mut stream_de = serde_json::Deserializer::from_reader(&mut cursor).into_iter::<T>();
-
-            while let Some(Ok(data)) = stream_de.next() {
-                last_finish = stream_de.byte_offset();
-                if is_terminal(&data) {
-                    return Ok(data);
+                        if let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                            println!(
+                                "DEBUG: Found newline at pos {}. Skipping invalid line.",
+                                pos
+                            );
+                            buffer.drain(..pos + 1);
+                            continue;
+                        }
+                        return Err(Error::ApiError {
+                            status: 500,
+                            message: format!("Unrecoverable JSON parse error in stream: {}", e),
+                        });
+                    }
+                    None => break,
                 }
-            }
-
-            // Remove processed bytes from the buffer
-            if last_finish > 0 {
-                buffer.drain(..last_finish);
             }
         }
 
         Err(Error::ApiError {
             status: 500,
-            message: "Stream connection closed without reaching terminal (SUCCEEDED/FAILED) state"
-                .into(),
+            message: format!(
+                "Stream closed without reaching terminal state. Total bytes received: {}",
+                total_bytes_received
+            ),
         })
     }
 
     pub async fn v1_getinfo(&self) -> crate::Result<get_info::GetInfo> {
-        self.execute(self.request(Method::GET, "v1/getinfo")).await
+        self.execute(self.get("v1/getinfo")).await
     }
 
     pub async fn v1_graph_routes(
@@ -136,24 +167,22 @@ impl Client {
         amount: u64,
     ) -> crate::Result<graph_routes::GraphRoutes> {
         let path = format!("v1/graph/routes/{}/{}", hex::encode(payee), amount);
-        self.execute(self.request(Method::GET, &path)).await
+        self.execute(self.get(&path)).await
     }
 
     pub async fn v1_payments(
         &self,
-        query: &payments::PaymentsRequest,
-    ) -> crate::Result<payments::PaymentsResponse> {
-        self.execute(self.request(Method::GET, "v1/payments").query(query))
-            .await
+        query: &payments::Request,
+    ) -> crate::Result<payments::Response> {
+        self.execute(self.get("v1/payments").query(query)).await
     }
 
     pub async fn v2_router_send(
         &self,
-        body: send_payment::RouterSendRequest,
-    ) -> crate::Result<send_payment::SendPaymentResponse> {
-        let builder = self.request(Method::POST, "v2/router/send").json(&body);
-        // Ensure we check for status strings correctly
-        self.execute_stream(builder, |res: &send_payment::SendPaymentResponse| {
+        body: router_send::Request,
+    ) -> crate::Result<router_send::Response> {
+        let builder = self.post("v2/router/send").json(&body);
+        self.execute_stream(builder, |res: &router_send::Response| {
             res.status == "SUCCEEDED" || res.status == "FAILED"
         })
         .await
@@ -191,7 +220,7 @@ impl Api for Client {
 
     async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
         let blocks = req.relative_timeout.as_secs() / self.config.block_time.as_secs();
-        let body = send_payment::RouterSendRequest {
+        let body = router_send::Request {
             cltv_limit: Some(std::cmp::max(blocks, self.config.min_cltv)),
             fee_limit_msat: Some(req.fee_limit),
             payment_request: Some(req.invoice.into()),
@@ -200,22 +229,20 @@ impl Api for Client {
 
         let res = self.v2_router_send(body).await?;
         if res.status == "FAILED" {
-            return Err(Error::ApiError {
+            Err(Error::ApiError {
                 status: 500,
                 message: format!("LND Payment Failed: {}", res.payment_error),
-            });
-        }
-
-        if res.payment_preimage.is_empty() {
-            return Err(Error::ApiError {
-                status: 500,
+            })
+        } else if res.payment_preimage.is_empty() {
+            Err(Error::ApiError {
+                status: 503,
                 message: "Payment succeeded but no preimage returned".into(),
-            });
+            })
+        } else {
+            Ok(PayResponse {
+                secret: res.payment_preimage.as_slice().try_into().ok(),
+            })
         }
-
-        Ok(PayResponse {
-            secret: res.payment_preimage.as_slice().try_into().ok(),
-        })
     }
 
     async fn reveal(&self, req: RevealRequest) -> crate::Result<RevealResponse> {
@@ -230,7 +257,7 @@ impl Api for Client {
 
         let last_update = *self.last_cache_update.lock().await;
         let res = self
-            .v1_payments(&payments::PaymentsRequest {
+            .v1_payments(&payments::Request {
                 index_offset: Some(last_update),
                 include_incomplete: false,
                 ..Default::default()

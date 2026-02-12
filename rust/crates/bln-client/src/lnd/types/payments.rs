@@ -5,7 +5,7 @@ use std::collections::HashMap;
 /// Request parameters for GET /v1/payments
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct PaymentsRequest {
+pub struct Request {
     pub include_incomplete: bool,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -31,7 +31,7 @@ pub struct PaymentsRequest {
 /// Response from GET /v1/payments
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PaymentsResponse {
+pub struct Response {
     pub payments: Vec<Payment>,
 
     #[serde_as(as = "DisplayFromStr")]

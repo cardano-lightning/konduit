@@ -15,16 +15,16 @@ impl Config {
         if args.mock {
             Ok(Config::Mock)
         } else if let (Some(base_url), Some(macaroon)) = (args.lnd_base_url, args.lnd_macaroon) {
-            Ok(Config::Lnd(lnd::Config {
+            Ok(Config::Lnd(lnd::Config::new(
                 base_url,
                 macaroon,
-                block_time: args.block_time,
-                min_cltv: 84,
-                tls_certificate: None,
+                args.block_time,
+                84,
+                None,
                 // FIXME :: This may be insufficient in some contexts
                 // It should be double the server's capacity.
-                max_cache_size: 1000,
-            }))
+                1000,
+            )))
         } else {
             Err("Missing required LND configuration (base URL and Macaroon).".to_string())
         }
