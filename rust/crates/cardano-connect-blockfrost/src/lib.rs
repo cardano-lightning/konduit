@@ -195,9 +195,6 @@ impl CardanoConnect for Blockfrost {
             Network::Mainnet => ProtocolParameters::mainnet(),
             Network::Preview => ProtocolParameters::preview(),
             Network::Preprod => ProtocolParameters::preprod(),
-            Network::Other(_) => Err(anyhow!(
-                "`ProtocolParameters` for network `Other` are unknown"
-            ))?,
         };
         Ok(pp)
     }

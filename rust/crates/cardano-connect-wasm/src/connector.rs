@@ -31,9 +31,9 @@ pub struct CardanoConnector {
 impl CardanoConnector {
     #[wasm_bindgen]
     pub async fn new(base_url: &str, http_timeout_ms: Option<u64>) -> crate::Result<Self> {
-        let http_timeout = Duration::from_millis(http_timeout_ms.unwrap_or(10_000) as u64);
+        let http_timeout = Duration::from_millis(http_timeout_ms.unwrap_or(10_000));
         let base_url = base_url.strip_suffix("/").unwrap_or(base_url).to_string();
-        let network = Network::Other(0);
+        let network = Network::mainnet();
 
         let mut connector = Self {
             base_url,
@@ -46,18 +46,7 @@ impl CardanoConnector {
             .await?
             .network;
 
-        match network.as_str() {
-            "mainnet" => {
-                connector.network = Network::Mainnet;
-            }
-            "preprod" => {
-                connector.network = Network::Preprod;
-            }
-            "preview" => {
-                connector.network = Network::Preview;
-            }
-            _ => Err(anyhow!("unsupported network: {}", network))?,
-        };
+        connector.network = Network::try_from(network.as_str())?;
 
         Ok(connector)
     }
@@ -96,8 +85,8 @@ impl CardanoConnector {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn network_magic_number(&self) -> u64 {
-        self.network.into()
+    pub fn network(&self) -> Network {
+        self.network
     }
 }
 
@@ -197,14 +186,7 @@ impl CardanoConnect for CardanoConnector {
     }
 
     async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
-        match self.network {
-            Network::Mainnet => Ok(ProtocolParameters::mainnet()),
-            Network::Preprod => Ok(ProtocolParameters::preprod()),
-            Network::Preview => Ok(ProtocolParameters::preview()),
-            Network::Other(..) => Err(anyhow!(
-                "protocol parameters for 'other' networks are not supported"
-            )),
-        }
+        Ok(self.network.into())
     }
 
     /// If delegation is None then it _should_ be ignored:
