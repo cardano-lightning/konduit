@@ -1,7 +1,7 @@
 use actix_web::{App, test, web};
 use cardano_tx_builder::{SigningKey, address_test, key_credential};
-use konduit_adaptor::*;
 use konduit_data::Duration;
+use konduit_server::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -36,7 +36,7 @@ async fn test_handler_scenario() {
     // 3. Init the App with the specific handler
     let app = test::init_service(
         App::new()
-            .app_data(data)
+            .app_data(web::Data::new(data))
             .route("/your-endpoint", web::get().to(server::handlers::info)),
     )
     .await;
