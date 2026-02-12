@@ -114,7 +114,6 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
 
     pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
         // This is a silly implementation.
-        // At present this is not even in the admin context
         let channels = self.db.get_all().await?;
         for (keytag, channel) in channels.iter() {
             if let Some(lockeds) = channel.receipt().map(|x| x.lockeds()) {

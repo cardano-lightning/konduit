@@ -164,9 +164,13 @@ impl Client {
     pub async fn v1_graph_routes(
         &self,
         payee: [u8; 33],
-        amount: u64,
+        amount_msat: u64,
     ) -> crate::Result<graph_routes::GraphRoutes> {
-        let path = format!("v1/graph/routes/{}/{}", hex::encode(payee), amount);
+        let path = format!(
+            "v1/graph/routes/{}/{}",
+            hex::encode(payee),
+            amount_msat / 1000 + 1
+        );
         self.execute(self.get(&path)).await
     }
 

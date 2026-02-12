@@ -263,10 +263,7 @@ impl Config {
             }
             SquashResponse::Incomplete(proposal) => {
                 println!("\nReceived Incomplete Squash Response.");
-                println!(
-                    "Server Proposal: Index {}, Amount {}",
-                    proposal.proposal.index, proposal.proposal.amount
-                );
+                println!("Server Proposal: {:?}", proposal,);
 
                 // Placeholder for verification steps:
                 // 1. Verify signatures of all 'unlocked' items
