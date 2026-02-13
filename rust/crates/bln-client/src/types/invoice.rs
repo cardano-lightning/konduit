@@ -1,25 +1,13 @@
-use std::time::Duration;
-
-use bitcoin::hashes::Hash;
+use crate::types::TaggedFields;
+use error::InvoiceError;
 use lightning_invoice::{
-    self, Currency, Description, Fallback, MinFinalCltvExpiryDelta, PrivateRoute, RawHrp,
-    RawTaggedField, SignedRawBolt11Invoice, TaggedField,
+    Currency, Description, Fallback, MinFinalCltvExpiryDelta, PrivateRoute, RawHrp,
+    SignedRawBolt11Invoice,
 };
 use lightning_types::features::Bolt11InvoiceFeatures;
+use std::time::Duration;
 
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum InvoiceError {
-    #[error("Parse Error")]
-    Parse,
-    #[error("Bad input")]
-    BadInput,
-    #[error("Cannot handle picosatoshi")]
-    AmountPico,
-    #[error("Amount Overflow")]
-    AmountOverflow,
-    #[error("Missing field {0}")]
-    MissingField(String),
-}
+pub mod error;
 
 #[derive(Debug, Clone)]
 pub struct Invoice {
@@ -132,59 +120,5 @@ fn amount_msat(hrp: &RawHrp) -> Result<u64, InvoiceError> {
         raw_amount
             .checked_mul(m / 10)
             .ok_or(InvoiceError::AmountOverflow)
-    }
-}
-
-#[derive(Default)]
-struct TaggedFields {
-    payment_hash: Option<[u8; 32]>,
-    description: Option<Description>,
-    payee_pub_key: Option<[u8; 33]>,
-    description_hash: Option<[u8; 32]>,
-    expiry_time: Option<Duration>,
-    min_final_cltv_expiry_delta: Option<MinFinalCltvExpiryDelta>,
-    fallback: Option<Fallback>,
-    private_route: Option<PrivateRoute>,
-    payment_secret: Option<[u8; 32]>,
-    payment_metadata: Option<Vec<u8>>,
-    features: Option<Bolt11InvoiceFeatures>,
-}
-
-impl From<Vec<RawTaggedField>> for TaggedFields {
-    fn from(value: Vec<RawTaggedField>) -> Self {
-        let mut tfs = TaggedFields::default();
-        value.iter().for_each(|tagged_field| match tagged_field {
-            lightning_invoice::RawTaggedField::KnownSemantics(tagged_field) => {
-                match tagged_field.clone() {
-                    TaggedField::PaymentHash(sha256) => {
-                        tfs.payment_hash = Some(sha256.0.to_byte_array())
-                    }
-                    TaggedField::Description(description) => tfs.description = Some(description),
-                    TaggedField::PayeePubKey(payee_pub_key) => {
-                        tfs.payee_pub_key = Some(payee_pub_key.0.serialize())
-                    }
-                    TaggedField::DescriptionHash(sha256) => {
-                        tfs.description_hash = Some(sha256.0.to_byte_array())
-                    }
-                    TaggedField::ExpiryTime(expiry_time) => {
-                        tfs.expiry_time = Some(*expiry_time.as_duration())
-                    }
-                    TaggedField::MinFinalCltvExpiryDelta(min_final_cltv_expiry_delta) => {
-                        tfs.min_final_cltv_expiry_delta = Some(min_final_cltv_expiry_delta)
-                    }
-                    TaggedField::Fallback(fallback) => tfs.fallback = Some(fallback),
-                    TaggedField::PrivateRoute(private_route) => {
-                        tfs.private_route = Some(private_route)
-                    }
-                    TaggedField::PaymentSecret(payment_secret) => {
-                        tfs.payment_secret = Some(payment_secret.0)
-                    }
-                    TaggedField::PaymentMetadata(items) => tfs.payment_metadata = Some(items),
-                    TaggedField::Features(features) => tfs.features = Some(features),
-                }
-            }
-            lightning_invoice::RawTaggedField::UnknownSemantics(_fe32s) => {}
-        });
-        tfs
     }
 }

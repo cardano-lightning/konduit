@@ -19,9 +19,9 @@ pub const FEE: &str = "KONDUIT_FEE";
 pub const TAG_LENGTH: &str = "KONDUIT_TAG_LENGTH";
 
 /// # Tx building & preferences
-/// Host address is the cardano address hosting the konduit validator reference script.
 pub const MIN_SINGLE: &str = "KONDUIT_MIN_SINGLE";
 pub const MIN_TOTAL: &str = "KONDUIT_MIN_TOTAL";
+/// Host address is the cardano address hosting the konduit validator reference script.
 pub const HOST_ADDRESS: &str = "KONDUIT_HOST_ADDRESS";
 
 /// # BLN

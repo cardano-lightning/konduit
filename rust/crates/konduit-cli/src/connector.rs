@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 /// A wrapper enum that allows switching between different Cardano connection
 /// implementations based on configuration and enabled features.
+#[allow(dead_code)]
 pub enum Connector {
     #[cfg(feature = "blockfrost")]
     Blockfrost(cardano_connect_blockfrost::Blockfrost),

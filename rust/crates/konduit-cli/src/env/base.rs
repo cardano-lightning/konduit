@@ -6,13 +6,6 @@ use crate::config::signing_key::SigningKey;
 
 pub const PREFIX: &str = "KONDUIT_";
 
-pub fn placeholder_address(network_id: Option<NetworkId>) -> Address<kind::Shelley> {
-    Address::new(
-        network_id.unwrap_or(NetworkId::MAINNET),
-        Credential::from_key(Hash::<28>::new(vec![])),
-    )
-}
-
 pub fn signing_key_to_address(
     network_id: &NetworkId,
     wallet: &SigningKey,

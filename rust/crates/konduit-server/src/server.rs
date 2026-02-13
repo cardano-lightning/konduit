@@ -8,5 +8,5 @@ mod data;
 pub use data::Data;
 
 mod cbor;
-mod handlers;
+pub mod handlers;
 mod middleware;

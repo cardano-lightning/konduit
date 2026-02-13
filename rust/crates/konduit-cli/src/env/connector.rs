@@ -1,21 +1,35 @@
 use cardano_tx_builder::NetworkId;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{self, connector::Blockfrost};
+use crate::{
+    config::{self, connector::Blockfrost},
+    env::network::Network,
+};
 
 /// Connector options
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
 pub struct ConnectorEnv {
-    /// Connector option: Blockfrost project id
+    /// Network. This is the fallback if cardano connector not.
+    #[arg(long)]
+    #[serde(rename = "KONDUIT_NETWORK")]
+    pub network: Option<Network>,
+
     #[arg(long)]
     #[serde(rename = "KONDUIT_BLOCKFROST_PROJECT_ID")]
     pub blockfrost: Option<String>,
 }
 
 impl ConnectorEnv {
-    pub fn placeholder() -> Self {
+    pub fn placeholder(network: Option<Network>) -> Self {
         Self {
-            blockfrost: Some("mainnetXXXXXXXXXXXXXXXXXXXX".to_string()),
+            network: network,
+            blockfrost: Some(format!(
+                "{}XXXXXXXXXXXXXXXXXXXX",
+                network
+                    .unwrap_or(Network::Mainnet)
+                    .to_string()
+                    .to_lowercase()
+            )),
         }
     }
 
@@ -31,21 +45,29 @@ impl ConnectorEnv {
     }
 
     pub fn fill(self) -> Self {
-        if let Some(project_id) = self.blockfrost {
-            return Self {
-                blockfrost: Some(project_id),
-            };
-        };
-        Self::placeholder()
+        if self.blockfrost.is_some() {
+            self
+        } else {
+            Self::placeholder(self.network)
+        }
     }
 
     pub fn network_id(&self) -> Option<NetworkId> {
-        self.blockfrost.clone().map(|s| {
-            if s.starts_with("mainnet") {
-                NetworkId::MAINNET
-            } else {
-                NetworkId::TESTNET
-            }
-        })
+        self.blockfrost
+            .as_ref()
+            .map(|s| {
+                if s.starts_with("mainnet") {
+                    NetworkId::MAINNET
+                } else {
+                    NetworkId::TESTNET
+                }
+            })
+            .or(self.network.map(|s| {
+                if s == Network::Mainnet {
+                    NetworkId::MAINNET
+                } else {
+                    NetworkId::TESTNET
+                }
+            }))
     }
 }

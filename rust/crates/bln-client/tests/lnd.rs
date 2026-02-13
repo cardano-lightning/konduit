@@ -1,8 +1,10 @@
+use bln_client::{
+    Api,
+    lnd::{self, Macaroon},
+    types::RevealRequest,
+};
 use dotenvy::dotenv;
-use std::env;
-use std::time::Duration;
-
-use bln_client::lnd::{self, Macaroon};
+use std::{env, time::Duration};
 
 fn setup_config() -> lnd::Config {
     dotenv().ok();
@@ -36,4 +38,23 @@ async fn test_v1_getinfo_success() {
 
     let result = client.v1_getinfo().await;
     assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
+}
+
+/// This is a bad test since it relies on a specific node. and history
+#[tokio::test]
+#[ignore]
+async fn test_reveal() {
+    let config = setup_config();
+    let client = lnd::Client::try_from(config).unwrap();
+    let lock = <[u8; 32]>::try_from(
+        hex::decode("af1d3781312baa93c7687305df6ea6f01927d7752a5281b37f7d5acaeedaab0c").unwrap(),
+    )
+    .unwrap();
+    let result = client.reveal(RevealRequest { lock }).await;
+    assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
+    assert_eq!(
+        hex::encode(result.unwrap().secret.unwrap()),
+        "ec981cc41b90059035a9fa1e795115568b95b31cd3960089f77153ab57458ece",
+        "bad result"
+    );
 }

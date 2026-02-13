@@ -1,11 +1,15 @@
+use crate::{
+    Api, Error,
+    lnd::{
+        Config,
+        types::{get_info, graph_routes, payments, send_payment},
+    },
+    types::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse},
+};
 use async_trait::async_trait;
 use reqwest::RequestBuilder;
 use serde::{Serialize, de::DeserializeOwned};
-use std::time::Duration;
-
-use super::types::{GetInfo, Route, RouterSendRequest, Routes, SendPaymentResponse};
-
-use crate::{Api, Error, PayRequest, PayResponse, QuoteRequest, QuoteResponse, lnd::Config};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
 pub struct Client {
@@ -16,7 +20,7 @@ pub struct Client {
 impl TryFrom<Config> for Client {
     type Error = Error;
 
-    fn try_from(value: Config) -> Result<Self, Self::Error> {
+    fn try_from(value: Config) -> crate::Result<Self> {
         let mut client_builder = reqwest::Client::builder().timeout(Duration::from_secs(60));
         if let Some(cert_bytes) = value.tls_certificate.as_ref() {
             let cert = reqwest::Certificate::from_pem(cert_bytes)
@@ -48,7 +52,16 @@ impl Client {
             .await?;
 
         if response.status().is_success() {
-            Ok(response.json::<T>().await?)
+            let body_text = response.text().await?;
+
+            match serde_json::from_str::<T>(&body_text) {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    eprintln!("{:?}", e);
+                    panic!("{:?}", body_text);
+                    let context = get_error_context(&body_text, e.line(), e.column());
+                }
+            }
         } else {
             let status = response.status().into();
             let message = response.text().await?;
@@ -61,6 +74,15 @@ impl Client {
         self.execute(self.client.get(&url)).await
     }
 
+    pub async fn get_query<T: DeserializeOwned, U: Serialize + Sized>(
+        &self,
+        path: &str,
+        query: &U,
+    ) -> crate::Result<T> {
+        let url = format!("{}/{}", &self.config.base_url, path);
+        self.execute(self.client.get(&url).query(query)).await
+    }
+
     pub async fn post<B: Serialize, T: DeserializeOwned>(
         &self,
         path: &str,
@@ -70,7 +92,7 @@ impl Client {
         self.execute(self.client.post(&url).json(&body)).await
     }
 
-    pub async fn v1_getinfo(&self) -> crate::Result<GetInfo> {
+    pub async fn v1_getinfo(&self) -> crate::Result<get_info::GetInfo> {
         self.get("v1/getinfo").await
     }
 
@@ -78,19 +100,26 @@ impl Client {
         &self,
         payee: [u8; 33],
         amount_msat: u64,
-    ) -> crate::Result<Routes> {
+    ) -> crate::Result<graph_routes::GraphRoutes> {
         self.get(&format!(
             "v1/graph/routes/{}/{}",
             hex::encode(payee),
             amount_msat
         ))
-        .await?
+        .await
+    }
+
+    pub async fn v1_payments(
+        &self,
+        query: &payments::PaymentsRequest,
+    ) -> crate::Result<payments::PaymentsResponse> {
+        self.get_query("v1/payments", query).await
     }
 
     pub async fn v2_router_send(
         &self,
-        body: RouterSendRequest,
-    ) -> crate::Result<SendPaymentResponse> {
+        body: send_payment::RouterSendRequest,
+    ) -> crate::Result<send_payment::SendPaymentResponse> {
         self.post("v2/router/send", &body).await
     }
 
@@ -98,7 +127,11 @@ impl Client {
         self.v1_getinfo().await.map(|x| x.block_height as u64)
     }
 
-    async fn find_route(&self, payee: [u8; 33], amount_msat: u64) -> crate::Result<Route> {
+    async fn find_route(
+        &self,
+        payee: [u8; 33],
+        amount_msat: u64,
+    ) -> crate::Result<graph_routes::Route> {
         let routes = self.v1_graph_routes(payee, amount_msat).await?;
         // FIXME :: Take first route. We have no knowledge of what to do when there are multiple
         let route = routes.routes.first().ok_or_else(|| Error::ApiError {
@@ -133,12 +166,12 @@ impl Api for Client {
         })
     }
 
-    async fn pay(&self, req: PayRequest) -> Result<PayResponse, Error> {
+    async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
         let blocks = req.relative_timeout.as_secs() / self.config.block_time.as_secs();
         let cltv_limit = std::cmp::max(blocks, self.config.min_cltv);
 
         let invoice_str: String = req.invoice.into();
-        let body = RouterSendRequest {
+        let body = send_payment::RouterSendRequest {
             // amt_msat: Some(req.amount_msat),
             cltv_limit: Some(cltv_limit),
             fee_limit_msat: Some(req.fee_limit),
@@ -147,7 +180,7 @@ impl Api for Client {
             // payment_addr: Some(req.payment_secret),
             payment_request: Some(invoice_str),
             // final_cltv_delta: Some(req.final_cltv_delta),
-            ..RouterSendRequest::default()
+            ..send_payment::RouterSendRequest::default()
         };
 
         let pay_res = self.v2_router_send(body).await?;
@@ -161,7 +194,60 @@ impl Api for Client {
         let secret = &pay_res.payment_preimage;
 
         Ok(PayResponse {
-            secret: secret.as_slice().try_into()?,
+            secret: secret.as_slice().try_into().ok(),
         })
     }
+
+    // FIXME:: This is awful.
+    async fn reveal(&self, req: RevealRequest) -> crate::Result<RevealResponse> {
+        let two_weeks_secs = 14 * 24 * 60 * 60;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let start_time = now.saturating_sub(two_weeks_secs);
+        let query = payments::PaymentsRequest {
+            include_incomplete: false,
+            // creation_date_start: Some(start_time),
+            ..Default::default()
+        };
+
+        let res = self.v1_payments(&query).await?;
+
+        if let Some(target) = res
+            .payments
+            .into_iter()
+            .find(|p| p.payment_hash == req.lock)
+        {
+            let secret = target.payment_preimage;
+            Ok(RevealResponse { secret })
+        } else {
+            Err(Error::InvalidData(format!(
+                "No hash {}",
+                hex::encode(&req.lock.to_vec())
+            )))
+        }
+    }
+}
+
+fn get_error_context(text: &str, line: usize, col: usize) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    if line == 0 || line > lines.len() {
+        return format!("(Line {} out of bounds or empty)", line);
+    }
+
+    let target_line = lines[line - 1];
+    // Calculate a window around the column
+    let start = col.saturating_sub(40);
+    let end = (col + 40).min(target_line.len());
+    let snippet = &target_line[start..end];
+
+    format!(
+        "\nLine {}, Col {}: ... {} ...\n{: >width$}^",
+        line,
+        col,
+        snippet,
+        "",
+        width = (col - start) + 11 // Offset for "Line X, Col Y: ... "
+    )
 }

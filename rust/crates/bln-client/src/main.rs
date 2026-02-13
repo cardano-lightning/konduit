@@ -1,9 +1,11 @@
 #[cfg(feature = "cli")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use bln_client::{
+        cli::{BlnArgs, Cmd, Config},
+        types::{Invoice, PayRequest, QuoteRequest},
+    };
     use clap::Parser;
-
-    use bln_client::cli::{BlnArgs, Cmd, Config, PayRequest, QuoteRequest};
 
     // 1. Parse CLI arguments
     dotenvy::dotenv().ok();
@@ -49,8 +51,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Assuming Invoice can be parsed from a string (BOLT11)
             // This is a placeholder for the actual invoice parsing logic
-            let parsed_invoice = bln_client::Invoice::try_from(&invoice)
-                .map_err(|_| "Failed to parse BOLT11 invoice")?;
+            let parsed_invoice =
+                Invoice::try_from(&invoice).map_err(|_| "Failed to parse BOLT11 invoice")?;
 
             let req = PayRequest {
                 fee_limit,
@@ -61,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match client.pay(req).await {
                 Ok(res) => {
                     println!("Payment Successful!");
-                    println!("  Preimage (Secret): {}", hex::encode(res.secret));
+                    println!("  Preimage (Secret): {:?}", res.secret.map(hex::encode));
                 }
                 Err(e) => eprintln!("API Error: {:?}", e),
             }

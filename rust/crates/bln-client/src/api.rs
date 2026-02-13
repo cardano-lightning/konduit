@@ -1,6 +1,7 @@
+use crate::types::{
+    PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse,
+};
 use async_trait::async_trait;
-
-use crate::{PayRequest, PayResponse, QuoteRequest, QuoteResponse};
 
 #[async_trait]
 pub trait Api: Send + Sync {
@@ -9,4 +10,7 @@ pub trait Api: Send + Sync {
 
     /// Pay based on a previous quote.
     async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse>;
+
+    /// Reveal a secret if it is known
+    async fn reveal(&self, req: RevealRequest) -> crate::Result<RevealResponse>;
 }

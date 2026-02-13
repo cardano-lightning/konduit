@@ -542,6 +542,7 @@ dependencies = [
  "lightning-types 0.3.0",
  "reqwest",
  "serde",
+ "serde_json",
  "serde_with",
  "thiserror 2.0.17",
  "tokio",
@@ -2052,7 +2053,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "konduit-adaptor"
+name = "konduit-cli"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-connect",
+ "cardano-connect-blockfrost",
+ "cardano-tx-builder",
+ "clap",
+ "dotenvy",
+ "envy",
+ "hex",
+ "konduit-data",
+ "konduit-tx",
+ "rand",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tokio",
+ "toml",
+]
+
+[[package]]
+name = "konduit-data"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "cardano-tx-builder",
+ "chrono",
+ "cryptoxide 0.5.1",
+ "hex",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.17",
+ "uplc",
+]
+
+[[package]]
+name = "konduit-server"
 version = "0.0.0"
 dependencies = [
  "actix",
@@ -2090,45 +2130,6 @@ dependencies = [
  "sled",
  "thiserror 2.0.17",
  "tokio",
-]
-
-[[package]]
-name = "konduit-cli"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "cardano-connect",
- "cardano-connect-blockfrost",
- "cardano-tx-builder",
- "clap",
- "dotenvy",
- "envy",
- "hex",
- "konduit-data",
- "konduit-tx",
- "rand",
- "serde",
- "serde_json",
- "serde_with",
- "tokio",
- "toml",
-]
-
-[[package]]
-name = "konduit-data"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "bincode",
- "cardano-tx-builder",
- "chrono",
- "cryptoxide 0.5.1",
- "hex",
- "serde",
- "serde_json",
- "serde_with",
- "thiserror 2.0.17",
- "uplc",
 ]
 
 [[package]]
