@@ -1,11 +1,11 @@
+use crate::{
+    config::{admin::Config, connector::Connector, signing_key::SigningKey},
+    env::{base::signing_key_to_address, connector},
+};
 use cardano_tx_builder::{Address, NetworkId, address::kind};
+use connector::ConnectorEnv;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::{
-    config::{admin::Config, signing_key::SigningKey},
-    env::base::{load, load_dotenv, signing_key_to_address},
-};
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
@@ -13,18 +13,40 @@ pub struct Env {
     /// Blockfrost project id
     #[command(flatten)]
     #[serde(flatten)]
-    pub connector: super::connector::ConnectorEnv,
-    // Wallet signing key (32 byte hex)
-    #[arg(long)]
-    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    pub connector: ConnectorEnv,
+
+    /// Wallet signing key (32 byte hex)
+    #[arg(long, env = "KONDUIT_WALLET")]
     #[serde(rename = "KONDUIT_WALLET")]
+    #[serde_as(as = "Option<serde_with::hex::Hex>")]
     pub wallet: Option<SigningKey>,
+
     /// Address of Konduit reference script
     /// This `fill`s to admin wallets address (with no delegation).
-    #[arg(long)]
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    #[arg(long, env = "KONDUIT_HOST_ADDRESS")]
     #[serde(rename = "KONDUIT_HOST_ADDRESS")]
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub host_address: Option<Address<kind::Shelley>>,
+}
+
+impl TryFrom<Env> for Config {
+    type Error = anyhow::Error;
+
+    fn try_from(env: Env) -> Result<Self, Self::Error> {
+        let connector = Connector::try_from(env.connector)?;
+
+        let wallet = env.wallet.ok_or(anyhow::anyhow!("Wallet required"))?;
+
+        let host_address = env
+            .host_address
+            .ok_or(anyhow::anyhow!("Host address required"))?;
+
+        Ok(Config {
+            connector,
+            wallet,
+            host_address,
+        })
+    }
 }
 
 impl Env {
@@ -43,24 +65,5 @@ impl Env {
             wallet: Some(wallet),
             host_address: Some(host_address),
         }
-    }
-
-    pub fn to_config(self) -> anyhow::Result<Config> {
-        let connector = self.connector.to_config()?;
-        let wallet = self.wallet.ok_or(anyhow::anyhow!("Wallet required"))?;
-        let host_address = self
-            .host_address
-            .ok_or(anyhow::anyhow!("Host address required"))?;
-        let config = Config {
-            connector,
-            wallet,
-            host_address,
-        };
-        Ok(config)
-    }
-
-    pub fn load() -> anyhow::Result<Self> {
-        load_dotenv(Self::DEFAULT_PATH)?;
-        load::<Self>()
     }
 }

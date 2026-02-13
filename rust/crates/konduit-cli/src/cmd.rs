@@ -1,3 +1,5 @@
+use crate::env;
+
 mod adaptor;
 mod admin;
 mod consumer;
@@ -7,22 +9,26 @@ mod parsers;
 #[derive(clap::Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
 pub(crate) enum Cmd {
-    #[clap(subcommand)]
-    Adaptor(adaptor::Cmd),
+    Adaptor(WithEnv<env::adaptor::Env, adaptor::Cmd>),
+    Admin(WithEnv<env::admin::Env, admin::Cmd>),
+    Consumer(WithEnv<env::consumer::Env, consumer::Cmd>),
+}
 
-    #[clap(subcommand)]
-    Admin(admin::Cmd),
+#[derive(clap::Parser)]
+pub struct WithEnv<E: clap::Args, C: clap::Subcommand> {
+    #[command(flatten)]
+    env: E,
 
-    #[clap(subcommand)]
-    Consumer(consumer::Cmd),
+    #[command(subcommand)]
+    cmd: C,
 }
 
 impl Cmd {
     pub(crate) fn run(self) -> anyhow::Result<()> {
         match self {
-            Self::Adaptor(cmd) => cmd.run(),
-            Self::Admin(cmd) => cmd.run(),
-            Self::Consumer(cmd) => cmd.run(),
+            Self::Adaptor(WithEnv { env, cmd }) => cmd.run(env),
+            Self::Admin(WithEnv { env, cmd }) => cmd.run(env),
+            Self::Consumer(WithEnv { env, cmd }) => cmd.run(env),
         }
     }
 }

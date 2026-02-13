@@ -1,7 +1,6 @@
+use crate::config::admin::Config;
 use cardano_connect::CardanoConnect;
 use tokio::runtime::Runtime;
-
-use crate::config::admin::Config;
 
 /// Show
 #[derive(clap::Subcommand)]

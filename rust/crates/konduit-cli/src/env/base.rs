@@ -1,10 +1,6 @@
-use std::{collections::HashMap, fs};
-
-use cardano_tx_builder::{Address, Credential, Hash, NetworkId, VerificationKey, address::kind};
-
 use crate::config::signing_key::SigningKey;
-
-pub const PREFIX: &str = "KONDUIT_";
+use cardano_tx_builder::{Address, Credential, Hash, NetworkId, VerificationKey, address::kind};
+use std::fs;
 
 pub fn signing_key_to_address(
     network_id: &NetworkId,
@@ -16,18 +12,6 @@ pub fn signing_key_to_address(
             &<cardano_tx_builder::SigningKey>::from(wallet.clone()),
         ))),
     )
-}
-
-pub fn load<T: serde::de::DeserializeOwned>() -> anyhow::Result<T> {
-    let mut map = HashMap::new();
-    for (key, value) in std::env::vars() {
-        if key.starts_with(PREFIX) {
-            map.insert(key, value);
-        }
-    }
-    let json = serde_json::to_value(map).expect("Failed to map env vars");
-    let x = serde_json::from_value(json)?;
-    Ok(x)
 }
 
 pub fn load_dotenv(default_path: &str) -> anyhow::Result<()> {
