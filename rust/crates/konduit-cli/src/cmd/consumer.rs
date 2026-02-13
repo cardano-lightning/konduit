@@ -28,7 +28,7 @@ pub enum Cmd {
 impl Cmd {
     pub(crate) fn run(self, env: Env) -> anyhow::Result<()> {
         if let Cmd::Setup(cmd) = self {
-            return cmd.run();
+            return cmd.run(env);
         }
 
         let config = Config::try_from(env)?;

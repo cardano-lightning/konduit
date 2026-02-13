@@ -76,17 +76,29 @@ impl DefaultPath for Env {
 }
 
 impl Fill for Env {
-    fn fill(self) -> Self {
-        let connector = self.connector.fill();
+    fn fill(self, global: Self) -> Self {
+        let connector = self.connector.fill(global.connector);
+
         let network_id = connector.network_id().unwrap_or(NetworkId::MAINNET);
-        let wallet = self.wallet.unwrap_or(SigningKey::generate());
-        let host_address = self
-            .host_address
-            .unwrap_or(signing_key_to_address(&network_id, &wallet));
-        let close_period = self
-            .close_period
-            .unwrap_or(Duration::from_secs(24 * 60 * 60));
-        let fee = self.fee.unwrap_or(10_000);
+
+        let wallet = self
+            .wallet
+            .unwrap_or(global.wallet.unwrap_or(SigningKey::generate()));
+
+        let host_address = self.host_address.unwrap_or(
+            global
+                .host_address
+                .unwrap_or(signing_key_to_address(&network_id, &wallet)),
+        );
+
+        let close_period = self.close_period.unwrap_or(
+            global
+                .close_period
+                .unwrap_or(Duration::from_secs(24 * 60 * 60)),
+        );
+
+        let fee = self.fee.unwrap_or(global.fee.unwrap_or(10_000));
+
         Self {
             connector,
             wallet: Some(wallet),
