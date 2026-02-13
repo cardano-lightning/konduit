@@ -1,6 +1,7 @@
 use crate::{
     config::{adaptor::Config, connector::Connector, signing_key::SigningKey},
     env::{base::signing_key_to_address, connector},
+    shared::{DefaultPath, Fill},
 };
 use cardano_tx_builder::{Address, NetworkId, address::kind};
 use connector::ConnectorEnv;
@@ -70,11 +71,12 @@ impl TryFrom<Env> for Config {
     }
 }
 
-impl Env {
-    pub const DEFAULT_PATH: &str = ".env.adaptor";
+impl DefaultPath for Env {
+    const DEFAULT_PATH: &str = ".env.adaptor";
+}
 
-    /// Insert generated or placeholder values
-    pub fn fill(self) -> Self {
+impl Fill for Env {
+    fn fill(self) -> Self {
         let connector = self.connector.fill();
         let network_id = connector.network_id().unwrap_or(NetworkId::MAINNET);
         let wallet = self.wallet.unwrap_or(SigningKey::generate());

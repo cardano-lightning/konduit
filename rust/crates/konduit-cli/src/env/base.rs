@@ -1,6 +1,29 @@
-use crate::config::signing_key::SigningKey;
+use crate::{
+    config::signing_key::SigningKey,
+    shared::{DefaultPath, Fill},
+};
 use cardano_tx_builder::{Address, Credential, Hash, NetworkId, VerificationKey, address::kind};
-use std::fs;
+use std::{fs, io::IsTerminal};
+use toml;
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct Setup<E: clap::Args> {
+    #[command(flatten)]
+    pub env: E,
+}
+
+impl<E: clap::Args + DefaultPath + Fill + serde::Serialize> Setup<E> {
+    pub fn run(self) -> anyhow::Result<()> {
+        if std::io::stdout().is_terminal() {
+            println!("./{}", E::DEFAULT_PATH);
+        }
+        println!(
+            "{:#}",
+            toml::to_string(&self.env.fill())?.replace(" = ", "=")
+        );
+        Ok(())
+    }
+}
 
 pub fn signing_key_to_address(
     network_id: &NetworkId,

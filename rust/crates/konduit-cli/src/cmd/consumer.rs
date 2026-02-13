@@ -1,7 +1,9 @@
-use crate::{config::consumer::Config, env::consumer::Env};
+use crate::{
+    config::consumer::Config,
+    env::{base::Setup, consumer::Env},
+};
 
 mod make;
-mod setup;
 mod show;
 mod tx;
 
@@ -9,7 +11,7 @@ mod tx;
 #[derive(clap::Subcommand)]
 pub enum Cmd {
     /// Show an example of environment variables.
-    Setup(setup::Cmd),
+    Setup(Setup<Env>),
 
     /// Show info (requires env)
     #[clap(subcommand)]

@@ -1,6 +1,8 @@
-use crate::{config::adaptor::Config, env::adaptor::Env};
+use crate::{
+    config::adaptor::Config,
+    env::{adaptor::Env, base::Setup},
+};
 
-mod setup;
 mod show;
 mod tx;
 mod verify;
@@ -9,7 +11,7 @@ mod verify;
 #[derive(clap::Subcommand)]
 pub enum Cmd {
     /// Show an example of environment variables.
-    Setup(setup::Cmd),
+    Setup(Setup<Env>),
 
     /// Show current configuration.
     #[clap(subcommand)]

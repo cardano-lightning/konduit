@@ -1,10 +1,12 @@
 use clap::Parser;
+use shared::DefaultPath;
 
 mod cardano;
 mod cmd;
 mod config;
 mod connector;
 mod env;
+mod shared;
 mod tip;
 
 const ROLES: [&str; 3] = [
