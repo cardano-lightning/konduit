@@ -2,50 +2,59 @@
 
 > A command-line to create and manage Konduit channels and payments
 
-## Using
+## Overview
 
 Konduit CLI is initially intended for rudimental testing. However, it should
 also be flexible and good enough to permit "real world" usage.
 
-The CLI is _user-centric_ , providing explicit interfaces for Admin, Adaptor,
-and Consumer.
+The CLI is _user-centric_ , providing explicit interfaces for:
 
-### Env
+- [consumer](../../../docs/design/11_roles.md#consumer): principle target of
+  the application and akin as to the user of a typical traditional application.
+  Consumers typically don't use the command-line, but commands exist for the sake of
+  playing that role in a local/test setup.
 
-Konduit CLI anticipates, but does not require, the usage of dotenv files.
+- [adaptor](../../../docs/design/11_roles.md#adaptor): infrastructure operator
+  who run (some of) the "back-end services" of Konduit, along side a BLN node.
 
-Variables can be declared directly in the env or in files `.env.<user>` and
-`.env`. Presendence of variables is in that order. Under the hood,
-[`dotenvy`](https://github.com/allan2/dotenvy?tab=readme-ov-file) is used to
-load the dotenv files, if the file exists. Env variables declared in the
-terminal takes precendence over dotenv files, and declarations in `.env.<user>`
-take precendence over those in `.env`.
+- [admin](../../../docs/design/11_roles.md#adaptor): administrator of a Konduit
+  protocol instance; deploying and administering smart contracts.
 
-With this setup, it is ergonomic to execute commands "as" different users
-simultaneously. For example:
+### Configuration
 
-```bash
-alias adaptor="konduit consumer"
-alias consumer="konduit consumer"
-consumer tx --open "$(adaptor show constants --csv),100"
+Konduit CLI encourages, but does not require, the usage of dotenv files. Each
+role has command with shared options, defined at the root of each role
+sub-group. There is overlap in options expected by each user.
+
+In any case, environment variables exist for each of those options and can be
+declared in `.env[.<user>]` files. For example:
+
+<table>
+<strong><code>.env.consumer</code></strong>
+
+```.env
+KONDUIT_WALLET=329d3e30535349258fa24d8a58f4c376b14cc5504b1a100fbc266019b994ecb6
 ```
+</table>
 
-There is overlap in variables expected by each user. For example, each user
-needs a connector, and the host address of the konduit script. By declaring the
-associated values in the `.env` file, these are shared by the users.
+Environment follows the following precedence rules (variables found in the
+first areas takes precedence):
 
-If you are running the CLI as a single user, you can simply use `.env`.
+1. command-line options
+1. exported env var
+1. `.env.<user>`
+1. `.env`
 
-If you are running as more than one adaptor, say, you can effectively invoke
-another `.env`, for example `.env.other`, by:
-
-```bash
-set -a; eval $(sed 's/ = /=/' .env.other); set +a ; konduit ...
-```
-
-Note that the generated pretty toml from `adaptor setup >> .env.other` is not
-legal INI. The `sed` noise in the above command handles this quirk. A less noisy
-approach is to simply make the file INI complient.
+> [!TIP]
+>
+> It is ergonomic to execute commands "as" different users simultaneously. For example:
+>
+> ```bash
+> alias adaptor="konduit adaptor"
+> alias consumer="konduit consumer"
+>
+> consumer tx --open "$(adaptor show constants --csv),100"
+> ```
 
 ### Scenarios
 
@@ -65,7 +74,7 @@ alias conusmer="cargo run -- consumer"
 Create admin .env file. Here we're inserting the project id.
 
 ```sh
-admin setup --blockfrost "preview..."  >> .env
+konduit admin setup --blockfrost "preview..."  >> .env
 ```
 
 Alternatively open the file and edit manually. It is optional to move the key to
