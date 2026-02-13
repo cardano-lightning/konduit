@@ -1,10 +1,13 @@
+use crate::{
+    api::Api,
+    types::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse},
+};
 use async_trait::async_trait;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
-use crate::api::Api;
-use crate::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct Client {
@@ -60,10 +63,11 @@ impl Api for Client {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::api::Api;
-    use crate::mock::client::Client;
-    use crate::{QuoteRequest, RevealRequest};
+    use crate::{
+        api::Api,
+        mock::client::Client,
+        types::{QuoteRequest, RevealRequest},
+    };
     use std::time::Duration;
 
     // Helper to create a dummy 32-byte array

@@ -1,14 +1,15 @@
+use crate::{
+    Api, Error,
+    lnd::{
+        Config,
+        types::{get_info, graph_routes, payments, send_payment},
+    },
+    types::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse},
+};
 use async_trait::async_trait;
 use reqwest::RequestBuilder;
 use serde::{Serialize, de::DeserializeOwned};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use super::types::{get_info, graph_routes, payments, send_payment};
-
-use crate::{
-    Api, Error, PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest,
-    RevealResponse, lnd::Config,
-};
 
 #[derive(Debug)]
 pub struct Client {

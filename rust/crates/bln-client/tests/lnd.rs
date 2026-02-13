@@ -1,9 +1,10 @@
+use bln_client::{
+    Api,
+    lnd::{self, Macaroon},
+    types::RevealRequest,
+};
 use dotenvy::dotenv;
-use std::env;
-use std::time::Duration;
-
-use bln_client::lnd::{self, Macaroon};
-use bln_client::{Api, RevealRequest};
+use std::{env, time::Duration};
 
 fn setup_config() -> lnd::Config {
     dotenv().ok();

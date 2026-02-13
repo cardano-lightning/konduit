@@ -1,6 +1,7 @@
+use crate::types::{
+    PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse,
+};
 use async_trait::async_trait;
-
-use crate::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse};
 
 #[async_trait]
 pub trait Api: Send + Sync {

@@ -1,23 +1,25 @@
-use std::time::Duration;
-
 use crate::lnd;
+use std::time::Duration;
 
 /// Flat structure for backend client configuration.
 #[derive(Debug, clap::Args)]
 pub struct ClientArgs {
-    /// BLN block time. Defaults to 10 minutes (600s).
-    /// Specified independently of the specific client implementation.
-    #[arg(long, env = "BLN_BLOCK_TIME", value_parser = humantime::parse_duration, default_value = "10m", global = true)]
+    /// BLN block time specified independently of the specific client implementation.
+    #[arg(
+        long,
+        env = "BLN_BLOCK_TIME",
+        value_parser = humantime::parse_duration,
+        default_value = "10m",
+        global = true
+    )]
     #[cfg_attr(feature = "namespaced", arg(long("bln-block-time")))]
     pub block_time: Duration,
 
-    // Mock
-    /// The base URL of the LND REST API.
+    /// When set, run commands against a mocked LND server.
     #[arg(long, env = "BLN_MOCK", default_value_t = false)]
     #[cfg_attr(feature = "namespaced", arg(long("bln-mock")))]
     pub mock: bool,
 
-    // LND
     /// The base URL of the LND REST API.
     #[arg(long, env = "LND_BASE_URL")]
     #[cfg_attr(feature = "namespaced", arg(long("bln-lnd-base-url")))]

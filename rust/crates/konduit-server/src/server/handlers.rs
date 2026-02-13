@@ -1,5 +1,3 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 use crate::{
     db, info,
     models::{IncompleteSquashResponse, PayBody, QuoteBody, SquashResponse},
@@ -7,6 +5,7 @@ use crate::{
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use konduit_data::{Keytag, Locked, Squash};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 type Data = web::Data<server::Data>;
 
@@ -113,15 +112,15 @@ pub async fn quote(
         return Ok(HttpResponse::BadRequest().body("No capacity"));
     };
     let quote_request = match body.into_inner() {
-        QuoteBody::Simple(simple_quote) => bln_client::QuoteRequest {
+        QuoteBody::Simple(simple_quote) => bln_client::types::QuoteRequest {
             amount_msat: simple_quote.amount_msat,
             payee: simple_quote.payee,
         },
         QuoteBody::Bolt11(s) => {
-            let Ok(invoice) = bln_client::Invoice::try_from(s.as_str()) else {
+            let Ok(invoice) = bln_client::types::Invoice::try_from(s.as_str()) else {
                 return Ok(HttpResponse::BadRequest().body("Bad invoice"));
             };
-            bln_client::QuoteRequest {
+            bln_client::types::QuoteRequest {
                 amount_msat: invoice.amount_msat,
                 payee: invoice.payee_compressed,
             }
@@ -153,7 +152,7 @@ pub async fn pay(
     let fx = data.fx().read().await.clone();
     let body = body.into_inner();
     let locked = Locked::new(body.cheque_body, body.signature);
-    let invoice = match bln_client::Invoice::try_from(&body.invoice) {
+    let invoice = match bln_client::types::Invoice::try_from(&body.invoice) {
         Ok(inv) => inv,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
     };
@@ -187,7 +186,7 @@ pub async fn pay(
     if let Err(err) = data.db().append_locked(&keytag, locked).await {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
-    let pay_request = bln_client::PayRequest {
+    let pay_request = bln_client::types::PayRequest {
         fee_limit,
         relative_timeout,
         invoice: invoice,
