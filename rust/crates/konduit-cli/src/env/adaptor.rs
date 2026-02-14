@@ -1,9 +1,9 @@
 use crate::{
     config::{adaptor::Config, connector::Connector, signing_key::SigningKey},
     env::{base::signing_key_to_address, connector},
-    shared::{DefaultPath, Fill},
+    shared::{DefaultPath, Fill, Setup},
 };
-use cardano_tx_builder::{Address, NetworkId, address::kind};
+use cardano_tx_builder::{Address, address::kind};
 use connector::ConnectorEnv;
 use konduit_data::Duration;
 use serde::{Deserialize, Serialize};
@@ -71,40 +71,38 @@ impl TryFrom<Env> for Config {
     }
 }
 
+impl Setup for Env {}
+
 impl DefaultPath for Env {
     const DEFAULT_PATH: &str = ".env.adaptor";
 }
 
 impl Fill for Env {
-    fn fill(self, global: Self) -> Self {
-        let connector = self.connector.fill(global.connector);
+    type Error = anyhow::Error;
 
-        let network_id = connector.network_id().unwrap_or(NetworkId::MAINNET);
+    fn fill(self) -> anyhow::Result<Self> {
+        let connector = self.connector.fill()?;
 
-        let wallet = self
-            .wallet
-            .unwrap_or(global.wallet.unwrap_or(SigningKey::generate()));
+        let network_id = connector.network_id();
 
-        let host_address = self.host_address.unwrap_or(
-            global
-                .host_address
-                .unwrap_or(signing_key_to_address(&network_id, &wallet)),
-        );
+        let wallet = self.wallet.unwrap_or(SigningKey::generate());
 
-        let close_period = self.close_period.unwrap_or(
-            global
-                .close_period
-                .unwrap_or(Duration::from_secs(24 * 60 * 60)),
-        );
+        let host_address = self
+            .host_address
+            .unwrap_or(signing_key_to_address(&network_id, &wallet));
 
-        let fee = self.fee.unwrap_or(global.fee.unwrap_or(10_000));
+        let close_period = self
+            .close_period
+            .unwrap_or(Duration::from_secs(24 * 60 * 60));
 
-        Self {
+        let fee = self.fee.unwrap_or(10000);
+
+        Ok(Self {
             connector,
             wallet: Some(wallet),
             host_address: Some(host_address),
             close_period: Some(close_period),
             fee: Some(fee),
-        }
+        })
     }
 }

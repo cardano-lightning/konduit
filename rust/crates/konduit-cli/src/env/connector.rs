@@ -1,32 +1,34 @@
 use crate::{
     config::connector::{Blockfrost, Connector},
-    env::network::Network,
     shared::Fill,
 };
+use anyhow::anyhow;
+use cardano_connect::Network;
 use cardano_tx_builder::NetworkId;
 use serde::{Deserialize, Serialize};
+
+const ENV_BLOCKFROST_PROJECT_ID: &str = "KONDUIT_BLOCKFROST_PROJECT_ID";
+const ENV_NETWORK: &str = "KONDUIT_NETWORK";
 
 /// Connector options
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
 pub struct ConnectorEnv {
-    /// Network. This is the fallback if cardano connector not.
-    #[arg(long, env = "KONDUIT_NETWORK", ignore_case = true)]
+    /// Network. This is the fallback when blockfrost project is isn't specified.
+    #[arg(long, default_value_t = Network::Mainnet, env = ENV_NETWORK)]
     #[serde(rename = "KONDUIT_NETWORK")]
-    pub network: Option<Network>,
+    pub network: Network,
 
-    #[arg(long, env = "KONDUIT_BLOCKFROST_PROJECT_ID")]
+    #[arg(long, env = ENV_BLOCKFROST_PROJECT_ID, alias = "blockfrost")]
     #[serde(rename = "KONDUIT_BLOCKFROST_PROJECT_ID")]
-    pub blockfrost: Option<String>,
+    pub blockfrost_project_id: Option<String>,
 }
 
 impl TryFrom<ConnectorEnv> for Connector {
     type Error = anyhow::Error;
 
     fn try_from(env: ConnectorEnv) -> Result<Self, Self::Error> {
-        if let Some(project_id) = env.blockfrost {
-            return Ok(Connector::Blockfrost(Blockfrost {
-                project_id: project_id.clone(),
-            }));
+        if let Some(project_id) = env.blockfrost_project_id {
+            return Ok(Connector::Blockfrost(Blockfrost { project_id }));
         };
 
         Err(anyhow::anyhow!(
@@ -36,75 +38,55 @@ impl TryFrom<ConnectorEnv> for Connector {
 }
 
 impl Fill for ConnectorEnv {
-    fn fill(self, global: ConnectorEnv) -> Self {
-        let network = self.network.or(global.network);
+    type Error = anyhow::Error;
 
-        // In case where:
-        //
-        // - only the global option is passed
-        // - but there's also a matching env var
-        //
-        // Both will be Some -- possibly with different values. And the local will default to the
-        // env var, and override the global option; which is not expected. So in case they're both
-        // some and different, we fallback to whichever differs from the env var.
-        if self.blockfrost != global.blockfrost
-            && self.blockfrost.is_some()
-            && global.blockfrost.is_some()
-        {
-            let blockfrost_env = std::env::var("KONDUIT_BLOCKFROST_PROJECT_ID").ok();
-            return Self {
-                blockfrost: if self.blockfrost == blockfrost_env {
-                    global.blockfrost
-                } else {
-                    self.blockfrost
-                },
-                network,
-            };
+    fn fill(self) -> anyhow::Result<Self> {
+        let blockfrost = self.blockfrost_project_id;
+
+        let network = self.network;
+
+        if let Some(project_id) = blockfrost {
+            let inferred_network = [Network::Mainnet, Network::Preprod, Network::Preview]
+                .into_iter()
+                .find(|prefix| project_id.starts_with(&prefix.to_string()))
+                .ok_or(anyhow!(
+                    "invalid Blockfrost project id: doesn't start with any known network?"
+                ))?;
+
+            if network != inferred_network {
+                eprintln!(
+                    "WARNING: inferred network from blockfrost project id differs from configured network; continuing with network={inferred_network}"
+                );
+            }
+
+            return Ok(Self {
+                blockfrost_project_id: Some(project_id),
+                network: inferred_network,
+            });
         }
 
-        let blockfrost = self.blockfrost.or(global.blockfrost);
-
-        if blockfrost.is_some() {
-            return Self {
-                network,
-                blockfrost,
-            };
-        }
-
-        Self::placeholder(network)
+        Ok(Self::placeholder(network))
     }
 }
 
 impl ConnectorEnv {
-    pub fn placeholder(network: Option<Network>) -> Self {
+    pub fn placeholder(network: Network) -> Self {
         Self {
-            network: network,
-            blockfrost: Some(format!(
-                "{}XXXXXXXXXXXXXXXXXXXX",
-                network
-                    .unwrap_or(Network::Mainnet)
-                    .to_string()
-                    .to_lowercase()
-            )),
+            network,
+            blockfrost_project_id: Some(format!("{network}XXXXXXXXXXXXXXXXXXXX")),
         }
     }
 
-    pub fn network_id(&self) -> Option<NetworkId> {
-        self.blockfrost
+    pub fn network_id(&self) -> NetworkId {
+        self.blockfrost_project_id
             .as_ref()
             .map(|s| {
-                if s.starts_with("mainnet") {
+                if s.starts_with(&Network::Mainnet.to_string()) {
                     NetworkId::MAINNET
                 } else {
                     NetworkId::TESTNET
                 }
             })
-            .or(self.network.map(|s| {
-                if s == Network::Mainnet {
-                    NetworkId::MAINNET
-                } else {
-                    NetworkId::TESTNET
-                }
-            }))
+            .unwrap_or(NetworkId::from(self.network))
     }
 }

@@ -16,10 +16,13 @@ release = false
 [features]
 default = []
 wasm = ["dep:wasm-bindgen"]
+cli = ["dep:clap"]
 
 [dependencies]
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
 serde.workspace = true
-wasm-bindgen = { workspace = true, optional = true }
 web-time.workspace = true
+
+clap = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }

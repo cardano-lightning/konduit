@@ -1,7 +1,4 @@
-use crate::{
-    config::admin::Config,
-    env::{admin::Env, base::Setup},
-};
+use crate::{config::admin::Config, env::admin::Env, shared::Setup};
 
 mod show;
 mod tx;
@@ -9,8 +6,11 @@ mod tx;
 /// Admin CLI
 #[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
-    /// Show an example of environment variables.
-    Setup(Setup<Env>),
+    /// Create a configuration with sensible defaults.
+    ///
+    /// Defaults can be overridden manually via options or via environment variables.
+    /// See also admin --help.
+    Setup,
 
     /// Show current configuration.
     #[clap(subcommand)]
@@ -23,8 +23,8 @@ pub enum Cmd {
 
 impl Cmd {
     pub(crate) fn run(self, env: Env) -> anyhow::Result<()> {
-        if let Cmd::Setup(cmd) = self {
-            return cmd.run(env);
+        if let Cmd::Setup = self {
+            return env.setup();
         }
 
         let config = Config::try_from(env)?;
@@ -32,7 +32,7 @@ impl Cmd {
         match self {
             Cmd::Show(cmd) => cmd.run(&config),
             Cmd::Tx(cmd) => cmd.run(&config),
-            Cmd::Setup(_) => unreachable!(),
+            Cmd::Setup { .. } => unreachable!(),
         }
     }
 }

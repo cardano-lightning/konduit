@@ -1,9 +1,9 @@
 use crate::{
     config::{admin::Config, connector::Connector, signing_key::SigningKey},
     env::{base::signing_key_to_address, connector},
-    shared::{DefaultPath, Fill},
+    shared::{DefaultPath, Fill, Setup},
 };
-use cardano_tx_builder::{Address, NetworkId, address::kind};
+use cardano_tx_builder::{Address, address::kind};
 use connector::ConnectorEnv;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -50,30 +50,30 @@ impl TryFrom<Env> for Config {
     }
 }
 
+impl Setup for Env {}
+
 impl DefaultPath for Env {
     const DEFAULT_PATH: &str = ".env.admin";
 }
 
 impl Fill for Env {
-    fn fill(self, global: Env) -> Self {
-        let connector = self.connector.fill(global.connector);
+    type Error = anyhow::Error;
 
-        let network_id = connector.network_id().unwrap_or(NetworkId::MAINNET);
+    fn fill(self) -> anyhow::Result<Self> {
+        let connector = self.connector.fill()?;
 
-        let wallet = self
-            .wallet
-            .unwrap_or(global.wallet.unwrap_or(SigningKey::generate()));
+        let network_id = connector.network_id();
 
-        let host_address = self.host_address.unwrap_or(
-            global
-                .host_address
-                .unwrap_or(signing_key_to_address(&network_id, &wallet)),
-        );
+        let wallet = self.wallet.unwrap_or(SigningKey::generate());
 
-        Self {
+        let host_address = self
+            .host_address
+            .unwrap_or(signing_key_to_address(&network_id, &wallet));
+
+        Ok(Self {
             connector,
             wallet: Some(wallet),
             host_address: Some(host_address),
-        }
+        })
     }
 }
