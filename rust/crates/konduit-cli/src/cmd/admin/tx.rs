@@ -71,7 +71,7 @@ impl Cmd {
                         .utxos_at(&own_address.payment(), None)
                         .await?
                         .into_iter()
-                        .filter(|(_, o)| o.script().is_some() || !args.spend_all)
+                        .filter(|(_, o)| o.script().is_none() || args.spend_all)
                         .collect();
                     let protocol_parameters = &connector.protocol_parameters().await?;
                     let mut tx =
