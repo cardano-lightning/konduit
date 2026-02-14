@@ -1,32 +1,19 @@
-use crate::{
-    config::signing_key::SigningKey,
-    shared::{DefaultPath, Fill},
-};
+use crate::config::signing_key::SigningKey;
 use cardano_tx_builder::{Address, Credential, Hash, NetworkId, VerificationKey, address::kind};
-use std::{fs, io::IsTerminal};
-use toml;
+use std::fs;
 
-#[derive(Debug, Clone, clap::Args)]
-pub struct Setup<E: clap::Args> {
-    #[command(flatten)]
-    pub env: E,
-}
-
-impl<E: clap::Args + DefaultPath + Fill + serde::Serialize> Setup<E> {
-    pub fn run(self, env: E) -> anyhow::Result<()> {
-        if std::io::stdout().is_terminal() {
-            println!("./{}", E::DEFAULT_PATH);
-        }
-        println!(
-            "{:#}",
-            toml::to_string(&self.env.fill(env))?.replace(" = ", "=")
-        );
-        Ok(())
-    }
+pub fn default_wallet_and_address(
+    network_id: NetworkId,
+    wallet: Option<SigningKey>,
+    host_address: Option<Address<kind::Shelley>>,
+) -> (SigningKey, Address<kind::Shelley>) {
+    let wallet = wallet.unwrap_or(SigningKey::generate());
+    let host_address = host_address.unwrap_or(signing_key_to_address(network_id, &wallet));
+    (wallet, host_address)
 }
 
 pub fn signing_key_to_address(
-    network_id: &NetworkId,
+    network_id: NetworkId,
     wallet: &SigningKey,
 ) -> Address<kind::Shelley> {
     Address::new(

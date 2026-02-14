@@ -19,7 +19,7 @@ blockfrost = [ "dep:cardano-connect-blockfrost" ]
 
 [dependencies]
 anyhow.workspace = true
-cardano-connect.workspace = true
+cardano-connect = { workspace = true, features = ["cli"] }
 cardano-tx-builder.workspace = true
 clap.workspace = true
 dotenvy.workspace = true

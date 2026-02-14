@@ -1,7 +1,4 @@
-use crate::{
-    config::consumer::Config,
-    env::{base::Setup, consumer::Env},
-};
+use crate::{config::consumer::Config, env::consumer::Env, shared::Setup};
 
 mod make;
 mod show;
@@ -10,8 +7,11 @@ mod tx;
 /// Consumer CLI
 #[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
-    /// Show an example of environment variables.
-    Setup(Setup<Env>),
+    /// Create a configuration with sensible defaults.
+    ///
+    /// Defaults can be overridden manually via options or via environment variables.
+    /// See also consumer --help.
+    Setup,
 
     /// Show info (requires env)
     #[clap(subcommand)]
@@ -27,8 +27,8 @@ pub enum Cmd {
 
 impl Cmd {
     pub(crate) fn run(self, env: Env) -> anyhow::Result<()> {
-        if let Cmd::Setup(cmd) = self {
-            return cmd.run(env);
+        if let Cmd::Setup = self {
+            return env.setup();
         }
 
         let config = Config::try_from(env)?;
@@ -37,7 +37,7 @@ impl Cmd {
             Cmd::Make(cmd) => cmd.run(&config),
             Cmd::Show(cmd) => cmd.run(&config),
             Cmd::Tx(cmd) => cmd.run(&config),
-            Cmd::Setup(_) => unreachable!(),
+            Cmd::Setup { .. } => unreachable!(),
         }
     }
 }

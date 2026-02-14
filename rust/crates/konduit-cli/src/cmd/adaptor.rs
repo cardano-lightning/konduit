@@ -1,7 +1,4 @@
-use crate::{
-    config::adaptor::Config,
-    env::{adaptor::Env, base::Setup},
-};
+use crate::{config::adaptor::Config, env::adaptor::Env, shared::Setup};
 
 mod show;
 mod tx;
@@ -10,8 +7,11 @@ mod verify;
 /// Adaptor CLI
 #[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
-    /// Show an example of environment variables.
-    Setup(Setup<Env>),
+    /// Create a configuration with sensible defaults.
+    ///
+    /// Defaults can be overridden manually via options or via environment variables.
+    /// See also adaptor --help.
+    Setup,
 
     /// Show current configuration.
     #[clap(subcommand)]
@@ -27,8 +27,8 @@ pub enum Cmd {
 
 impl Cmd {
     pub(crate) fn run(self, env: Env) -> anyhow::Result<()> {
-        if let Cmd::Setup(cmd) = self {
-            return cmd.run(env);
+        if let Cmd::Setup = self {
+            return env.setup();
         }
 
         let config = Config::try_from(env)?;
@@ -37,7 +37,7 @@ impl Cmd {
             Cmd::Verify(cmd) => cmd.run(&config),
             Cmd::Show(cmd) => cmd.run(&config),
             Cmd::Tx(cmd) => cmd.run(&config),
-            Cmd::Setup(_) => unreachable!(),
+            Cmd::Setup { .. } => unreachable!(),
         }
     }
 }
