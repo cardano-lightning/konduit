@@ -1,6 +1,6 @@
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::Keytag;
+use konduit_data::{Keytag, Secret};
 use konduit_tx::{
     Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences, filter_channels,
 };
@@ -10,6 +10,7 @@ use crate::{admin::config::Config, channel::Retainer, common::ChannelParameters,
 
 #[derive(Clone)]
 pub struct Service<Connector: CardanoConnect + Send + Sync + 'static> {
+    bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
     cardano: Arc<Connector>,
     db: Arc<dyn db::Api + Send + Sync + 'static>,
     network_parameters: NetworkParameters,
@@ -22,6 +23,7 @@ pub struct Service<Connector: CardanoConnect + Send + Sync + 'static> {
 impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
     pub async fn new(
         config: Config,
+        bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
         cardano: Arc<Connector>,
         db: Arc<dyn db::Api + Send + Sync + 'static>,
     ) -> anyhow::Result<Self> {
@@ -55,6 +57,7 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
         };
 
         Ok(Self {
+            bln,
             cardano,
             db,
             network_parameters,
@@ -106,6 +109,29 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
         let credential = Credential::from_key(vkh);
         let utxos = self.cardano.utxos_at(&credential, None).await?;
         Ok(utxos)
+    }
+
+    pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
+        // This is a silly implementation.
+        let channels = self.db.get_all().await?;
+        for (keytag, channel) in channels.iter() {
+            if let Some(lockeds) = channel.receipt().map(|x| x.lockeds()) {
+                for locked in lockeds.iter() {
+                    if let bln_client::types::RevealResponse {
+                        secret: Some(secret),
+                    } = self
+                        .bln
+                        .reveal(bln_client::types::RevealRequest {
+                            lock: locked.lock().0.clone(),
+                        })
+                        .await?
+                    {
+                        self.db.unlock(keytag, Secret(secret.clone())).await?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     pub async fn sync(&self) -> Result<(), anyhow::Error> {

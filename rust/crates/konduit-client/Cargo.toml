@@ -1,0 +1,44 @@
+[package]
+name = "konduit-client"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64 = "0.22.1"
+bitcoin_hashes = "=0.14.0"
+bln-client = { workspace = true, features = ["cli", "namespaced"] }
+cardano-connect-blockfrost.workspace = true
+cardano-connect.workspace = true
+cardano-tx-builder.workspace = true
+clap = { workspace = true, features = ["env"] }
+dotenvy = "0.15.7"
+futures.workspace = true
+hex = { workspace = true, features = ["serde"] }
+humantime = "2.3.0"
+konduit-data.workspace = true
+konduit-tx.workspace = true
+lightning-invoice = { version = "0.33.2", features = ["serde"] }
+lightning-types = "0.2.0"
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+serde_json.workspace = true
+serde_with = { version = "3.15.1", features = ["base64", "hex", "json"] }
+thiserror.workspace = true
+tokio.workspace = true
+minicbor.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+proptest-derive = "0.7.0"
