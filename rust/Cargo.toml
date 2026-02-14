@@ -38,8 +38,8 @@ futures-util = "0.3.31"
 getrandom = "0.2.16"
 gloo-net = "0.6.0"
 gloo-timers = { features = ["futures"], version = "0.3.0" }
-humantime = "2.3.0"
 hex = "0.4.3"
+humantime = "2.3.0"
 indoc = "2.0.6"
 itertools = "0.14.0"
 js-sys = "0.3.82"
@@ -59,13 +59,13 @@ serde_json = { version = "1.0.145", features = ["std"] }
 serde_with = { version = "3.16.1", features = ["hex", "base64"] }
 thiserror = "2.0.17"
 tokio = { version = "1.47.1", features = ["full"] }
+toml = "0.9.10"
 trait-variant = "0.1.2"
 uplc = "1.1.19"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.55"
 web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
 web-time = "1.1.0"
-
 
 bln-client = { path = "crates/bln-client" }
 cardano-connect = { path = "crates/cardano-connect" }

@@ -20,5 +20,6 @@ wasm = ["dep:wasm-bindgen"]
 [dependencies]
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
+serde.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
 web-time.workspace = true
