@@ -1,12 +1,9 @@
-use core::fmt;
-use std::fmt::Display;
-
+use crate::config::{connector::Connector, signing_key::SigningKey};
 use cardano_tx_builder::{Address, NetworkId, address::kind};
-
+use core::fmt;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::config::{connector::Connector, signing_key::SigningKey};
+use std::fmt::Display;
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,8 +11,13 @@ pub struct Config {
     pub connector: Connector,
     #[serde_as(as = "serde_with::hex::Hex")]
     pub wallet: SigningKey,
+
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub host_address: Address<kind::Shelley>,
+}
+
+impl Config {
+    const LABEL: &str = "Admin";
 }
 
 impl Display for Config {
@@ -28,8 +30,4 @@ impl Display for Config {
         write!(f, "host_address = {}\n", self.host_address)?;
         Ok(())
     }
-}
-
-impl Config {
-    const LABEL: &str = "Admin";
 }

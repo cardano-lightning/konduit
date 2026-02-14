@@ -1,9 +1,8 @@
-use std::{fmt::Display, str::FromStr};
-
-use cardano_tx_builder::{Address, Credential, Hash, NetworkId, VerificationKey, address::kind};
-use rand::{TryRngCore, rngs::OsRng};
+use cardano_tx_builder::{address::kind, Address, Credential, Hash, NetworkId, VerificationKey};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::{fmt::Display, str::FromStr};
 
 /// No-holds-barred signing key.
 #[serde_as]
@@ -63,7 +62,8 @@ impl From<SigningKey> for cardano_tx_builder::SigningKey {
 impl SigningKey {
     pub fn generate() -> Self {
         let mut key = [0u8; 32];
-        OsRng.try_fill_bytes(&mut key).unwrap();
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(&mut key);
         Self(key)
     }
 

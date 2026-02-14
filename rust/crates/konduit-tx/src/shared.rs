@@ -1,19 +1,15 @@
 use std::{cmp, collections::BTreeMap, sync::LazyLock};
-
 // Standard system time breaks in wasm targets
-#[cfg(target_family = "wasm")]
-use web_time::{SystemTime, UNIX_EPOCH};
-
-#[cfg(not(target_family = "wasm"))]
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use crate::KONDUIT_VALIDATOR;
 use cardano_tx_builder::{
     Address, Credential, Hash, Input, NetworkId, Output, PlutusData, ProtocolParameters, Value,
     VerificationKey,
 };
 use konduit_data::{Constants, Datum, Duration, Keytag, L1Channel, Stage};
-
-use crate::KONDUIT_VALIDATOR;
+#[cfg(not(target_family = "wasm"))]
+use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(target_family = "wasm")]
+use web_time::{SystemTime, UNIX_EPOCH};
 
 pub type Lovelace = u64;
 

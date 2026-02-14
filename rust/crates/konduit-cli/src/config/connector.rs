@@ -1,7 +1,6 @@
-use std::fmt;
-
 use cardano_tx_builder::NetworkId;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Connector {

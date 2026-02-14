@@ -19,7 +19,8 @@ blockfrost = [ "dep:cardano-connect-blockfrost" ]
 
 [dependencies]
 anyhow.workspace = true
-cardano-connect = { workspace = true, features = ["cli"] }
+cardano-connect = { workspace = true, features = ["clap"] }
+cardano-connect-blockfrost = { workspace = true, optional = true }
 cardano-tx-builder.workspace = true
 clap.workspace = true
 dotenvy.workspace = true
@@ -33,5 +34,3 @@ serde_json.workspace = true
 serde_with.workspace = true
 tokio.workspace = true
 toml.workspace = true
-
-cardano-connect-blockfrost = { workspace = true, optional = true }

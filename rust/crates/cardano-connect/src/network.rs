@@ -1,12 +1,11 @@
 use anyhow::anyhow;
 use cardano_tx_builder::{NetworkId, ProtocolParameters};
 use std::fmt;
-
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, serde::Serialize, serde::Deserialize)]
 #[serde(into = "String", try_from = "&str")]
 pub enum Network {

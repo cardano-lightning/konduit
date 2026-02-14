@@ -15,14 +15,15 @@ release = false
 
 [features]
 default = []
+clap = ["dep:clap"]
 wasm = ["dep:wasm-bindgen"]
-cli = ["dep:clap"]
 
 [dependencies]
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
-serde.workspace = true
-web-time.workspace = true
-
 clap = { workspace = true, optional = true }
+serde.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
+
+[target.'cfg(target_family="wasm")'.dependencies]
+getrandom = { workspace = true, features = ["js"] }

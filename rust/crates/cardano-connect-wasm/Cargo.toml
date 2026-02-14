@@ -13,12 +13,16 @@ rust-version.workspace = true
 [package.metadata.release]
 release = false
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 anyhow.workspace = true
-cardano-connect = { workspace = true, features = ["wasm"] }
+cardano-connect = { workspace = true, features = ["wasm" ] }
 cardano-tx-builder = { workspace = true, features = ["wasm"] }
-futures.workspace = true
 futures-util.workspace = true
+futures.workspace = true
+getrandom = { workspace = true, features = ["js"] }
 gloo-net.workspace = true
 gloo-timers.workspace = true
 hex.workspace = true
@@ -30,9 +34,3 @@ wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 web-sys.workspace = true
 web-time.workspace = true
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { workspace = true, features = ["js"] }

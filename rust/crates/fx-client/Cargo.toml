@@ -13,6 +13,14 @@ rust-version.workspace = true
 [package.metadata.release]
 release = false
 
+[[bin]]
+name = "fx-print"
+path = "src/main.rs"
+
+[features]
+cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
+namespaced = []
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -29,11 +37,3 @@ clap = { workspace = true, features = ["derive", "env"], optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dotenvy = { workspace = true, optional = true }
 humantime = { workspace = true, optional = true }
-
-[features]
-cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
-namespaced = []
-
-[[bin]]
-name = "fx-print"
-path = "src/main.rs"

@@ -18,6 +18,9 @@ default = []
 test-utils = ["dep:proptest"]
 wasm = ["dep:wasm-bindgen"]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 anyhow.workspace = true
 hex.workspace = true
@@ -29,13 +32,13 @@ pallas-addresses.workspace = true
 pallas-codec.workspace = true
 pallas-crypto.workspace = true
 pallas-primitives.workspace = true
-uplc.workspace = true
-
 proptest = { workspace = true, optional = true }
+rand.workspace = true
+uplc.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
 
-[lib]
-crate-type = ["cdylib", "rlib"]
+[target.'cfg(target_family="wasm")'.dependencies]
+getrandom = { workspace = true, features = ["js"] }
 
 [dev-dependencies]
 indoc.workspace = true
