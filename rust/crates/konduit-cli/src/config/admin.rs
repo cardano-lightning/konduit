@@ -1,18 +1,14 @@
-use crate::config::{connector::Connector, signing_key::SigningKey};
-use cardano_tx_builder::{Address, NetworkId, address::kind};
+use crate::config::connector::Connector;
+use cardano_tx_builder::{Address, NetworkId, SigningKey, address::kind};
 use core::fmt;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::fmt::Display;
 
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub connector: Connector,
-    #[serde_as(as = "serde_with::hex::Hex")]
+
     pub wallet: SigningKey,
 
-    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub host_address: Address<kind::Shelley>,
 }
 
@@ -23,7 +19,7 @@ impl Config {
 impl Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let network_id = self.connector.network_id().unwrap_or(NetworkId::MAINNET);
-        let address = self.wallet.to_address(&network_id);
+        let address = self.wallet.to_verification_key().to_address(network_id);
         write!(f, "== {} ==\n", Self::LABEL)?;
         write!(f, "{}\n", self.connector)?;
         write!(f, "address = {}\n", address)?;

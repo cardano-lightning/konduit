@@ -59,7 +59,10 @@ pub struct DeployArgs {
 impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let own_address = config
+            .wallet
+            .to_verification_key()
+            .to_address(connector.network().into());
         match self {
             Cmd::Send(args) => {
                 let tos = args.to.iter().map(|a| a.clone().into()).collect::<Vec<_>>();
@@ -82,7 +85,10 @@ impl Cmd {
 
             Cmd::Deploy(args) => {
                 let host_address = Address::<kind::Any>::from(config.host_address.clone());
-                let own_address = config.wallet.to_address(&connector.network().into());
+                let own_address = config
+                    .wallet
+                    .to_verification_key()
+                    .to_address(connector.network().into());
                 let change_address = Address::<kind::Any>::from(own_address.clone());
                 Runtime::new()?.block_on(async {
                     let utxos = connector

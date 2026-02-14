@@ -20,7 +20,8 @@ impl Consumer {
         connector: &impl CardanoConnect,
         config: &config::consumer::Config,
     ) -> anyhow::Result<Self> {
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let add_vkey = config.wallet.to_verification_key();
+        let own_address = add_vkey.to_address(connector.network().into());
         let wallet = connector
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;
@@ -29,7 +30,6 @@ impl Consumer {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let add_vkey = config.wallet.to_verification_key();
         let channels = filter_channels(&konduit_utxos, |co| co.constants.add_vkey == add_vkey)
             .into_iter()
             .collect();
@@ -76,7 +76,8 @@ impl Adaptor {
         connector: &impl CardanoConnect,
         config: &config::adaptor::Config,
     ) -> anyhow::Result<Self> {
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let sub_vkey = config.wallet.to_verification_key();
+        let own_address = sub_vkey.to_address(connector.network().into());
         let wallet = connector
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;
@@ -84,7 +85,6 @@ impl Adaptor {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let sub_vkey = config.wallet.to_verification_key();
         let channels = filter_channels(&konduit_utxos, |co| co.constants.sub_vkey == sub_vkey)
             .into_iter()
             .collect();
@@ -130,7 +130,10 @@ impl Admin {
         connector: &impl CardanoConnect,
         config: &config::admin::Config,
     ) -> anyhow::Result<Self> {
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let own_address = config
+            .wallet
+            .to_verification_key()
+            .to_address(connector.network().into());
         let wallet = connector
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;

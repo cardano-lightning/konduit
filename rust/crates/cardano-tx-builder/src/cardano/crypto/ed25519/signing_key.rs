@@ -4,6 +4,7 @@
 
 use crate::{Signature, VerificationKey, pallas::ed25519};
 use anyhow::anyhow;
+use rand::RngCore;
 use std::str::FromStr;
 
 /// An ed25519 signing key (non-extended).
@@ -15,6 +16,13 @@ pub struct SigningKey(ed25519::SecretKey);
 
 impl SigningKey {
     pub const SIZE: usize = ed25519::SecretKey::SIZE;
+
+    /// Generate a new signing key using available system entropy.
+    pub fn new() -> Self {
+        let mut bytes = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut bytes);
+        Self::from(bytes)
+    }
 
     /// Convert the [`SecretKey`] into its compressed byte composition, and leak its bytes into
     /// memory. Only use for storing the key securely or for testing. Additional precautions are
@@ -45,6 +53,12 @@ impl SigningKey {
         T: AsRef<[u8]>,
     {
         Signature::from(self.0.sign(msg))
+    }
+}
+
+impl Default for SigningKey {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -80,6 +94,12 @@ impl FromStr for SigningKey {
 }
 
 // ------------------------------------------------------------- Converting (to)
+
+impl SigningKey {
+    pub fn to_verification_key(&self) -> VerificationKey {
+        VerificationKey::from(self)
+    }
+}
 
 impl From<&SigningKey> for VerificationKey {
     fn from(key: &SigningKey) -> Self {

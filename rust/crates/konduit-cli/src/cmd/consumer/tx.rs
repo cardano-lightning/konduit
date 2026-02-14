@@ -1,17 +1,13 @@
-use std::{collections::BTreeMap, str};
-
-use konduit_data::{Duration, Tag};
-use tokio::runtime::Runtime;
-
+use crate::{cardano::ADA, config::consumer::Config};
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{Credential, VerificationKey};
-
+use konduit_data::{Duration, Tag};
 use konduit_tx::{
     self, Bounds, KONDUIT_VALIDATOR, NetworkParameters,
     consumer::{Intent, OpenIntent},
 };
-
-use crate::{cardano::ADA, config::consumer::Config};
+use std::{collections::BTreeMap, str};
+use tokio::runtime::Runtime;
 
 /// Consumer tx. Can open, add, close, expire, elapse, and end.
 /// Only open add and close need to be declared, the other steps are inferred from the context.
@@ -94,7 +90,7 @@ impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
         let own_key = config.wallet.to_verification_key();
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let own_address = own_key.to_address(connector.network().into());
         let opens = self
             .open
             .into_iter()

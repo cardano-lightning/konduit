@@ -17,6 +17,7 @@ release = false
 default = []
 test-utils = ["dep:proptest"]
 wasm = ["dep:wasm-bindgen"]
+serde = ["dep:serde"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -34,6 +35,7 @@ pallas-crypto.workspace = true
 pallas-primitives.workspace = true
 proptest = { workspace = true, optional = true }
 rand.workspace = true
+serde = { workspace = true, optional = true }
 uplc.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
 

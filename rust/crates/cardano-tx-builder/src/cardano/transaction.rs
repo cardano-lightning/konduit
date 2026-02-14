@@ -285,9 +285,9 @@ impl Transaction<state::InConstruction> {
 // -------------------------------------------------------------------- Signing
 
 impl Transaction<state::ReadyForSigning> {
-    pub fn sign(&mut self, signing_key: SigningKey) -> &mut Self {
+    pub fn sign(&mut self, signing_key: &SigningKey) -> &mut Self {
         let public_key = pallas::Bytes::from(Vec::from(<[u8; VerificationKey::SIZE]>::from(
-            VerificationKey::from(&signing_key),
+            VerificationKey::from(signing_key),
         )));
 
         let witness = pallas::VKeyWitness {
@@ -1293,7 +1293,7 @@ mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
         ]);
-        transaction.sign(signing_key);
+        transaction.sign(&signing_key);
 
         assert_eq!(
             transaction.to_string(),

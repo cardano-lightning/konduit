@@ -724,6 +724,7 @@ dependencies = [
  "pallas-primitives",
  "proptest",
  "rand 0.6.5",
+ "serde",
  "uplc",
  "wasm-bindgen",
 ]

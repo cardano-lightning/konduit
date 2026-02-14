@@ -21,7 +21,7 @@ blockfrost = [ "dep:cardano-connect-blockfrost" ]
 anyhow.workspace = true
 cardano-connect = { workspace = true, features = ["clap"] }
 cardano-connect-blockfrost = { workspace = true, optional = true }
-cardano-tx-builder.workspace = true
+cardano-tx-builder = { workspace = true, features = ["serde"] }
 clap.workspace = true
 dotenvy.workspace = true
 envy.workspace = true

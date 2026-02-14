@@ -27,7 +27,7 @@ impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
         let own_key = config.wallet.to_verification_key();
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let own_address = own_key.to_address(connector.network().into());
         let receipts = self.receipt.into_iter().collect::<BTreeMap<_, _>>();
         let preferences = AdaptorPreferences {
             min_single: 10_000,
