@@ -1,6 +1,6 @@
 use crate::{
     config::{admin::Config, connector::Connector, signing_key::SigningKey},
-    env::{base::signing_key_to_address, connector},
+    env::{base::default_wallet_and_address, connector},
     shared::{DefaultPath, Fill, Setup},
 };
 use cardano_tx_builder::{Address, address::kind};
@@ -62,13 +62,8 @@ impl Fill for Env {
     fn fill(self) -> anyhow::Result<Self> {
         let connector = self.connector.fill()?;
 
-        let network_id = connector.network_id();
-
-        let wallet = self.wallet.unwrap_or(SigningKey::generate());
-
-        let host_address = self
-            .host_address
-            .unwrap_or(signing_key_to_address(&network_id, &wallet));
+        let (wallet, host_address) =
+            default_wallet_and_address(connector.network_id(), self.wallet, self.host_address);
 
         Ok(Self {
             connector,

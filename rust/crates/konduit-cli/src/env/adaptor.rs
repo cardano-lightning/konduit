@@ -1,6 +1,6 @@
 use crate::{
     config::{adaptor::Config, connector::Connector, signing_key::SigningKey},
-    env::{base::signing_key_to_address, connector},
+    env::{base::default_wallet_and_address, connector},
     shared::{DefaultPath, Fill, Setup},
 };
 use cardano_tx_builder::{Address, address::kind};
@@ -31,16 +31,16 @@ pub struct Env {
     pub host_address: Option<Address<kind::Shelley>>,
 
     /// (Minimum acceptable) Close period
-    #[arg(long, env = "KONDUIT_CLOSE_PERIOD")]
+    #[arg(long, default_value_t = Duration::from_secs(24 * 60 * 60), env = "KONDUIT_CLOSE_PERIOD")]
     #[serde(rename = "KONDUIT_CLOSE_PERIOD")]
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
-    pub close_period: Option<Duration>,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub close_period: Duration,
 
     /// (Flat) fee (lovelace)
-    #[arg(long, env = "KONDUIT_FEE")]
+    #[arg(long, default_value_t = 10000, env = "KONDUIT_FEE")]
     #[serde(rename = "KONDUIT_FEE")]
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
-    pub fee: Option<u64>,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub fee: u64,
 }
 
 impl TryFrom<Env> for Config {
@@ -55,18 +55,12 @@ impl TryFrom<Env> for Config {
             .host_address
             .ok_or(anyhow::anyhow!("Host address required"))?;
 
-        let close_period = env
-            .close_period
-            .ok_or(anyhow::anyhow!("Close period required"))?;
-
-        let fee = env.fee.ok_or(anyhow::anyhow!("Fee required"))?;
-
         Ok(Config {
             connector,
             wallet,
             host_address,
-            close_period,
-            fee,
+            close_period: env.close_period,
+            fee: env.fee,
         })
     }
 }
@@ -83,26 +77,15 @@ impl Fill for Env {
     fn fill(self) -> anyhow::Result<Self> {
         let connector = self.connector.fill()?;
 
-        let network_id = connector.network_id();
-
-        let wallet = self.wallet.unwrap_or(SigningKey::generate());
-
-        let host_address = self
-            .host_address
-            .unwrap_or(signing_key_to_address(&network_id, &wallet));
-
-        let close_period = self
-            .close_period
-            .unwrap_or(Duration::from_secs(24 * 60 * 60));
-
-        let fee = self.fee.unwrap_or(10000);
+        let (wallet, host_address) =
+            default_wallet_and_address(connector.network_id(), self.wallet, self.host_address);
 
         Ok(Self {
             connector,
             wallet: Some(wallet),
             host_address: Some(host_address),
-            close_period: Some(close_period),
-            fee: Some(fee),
+            close_period: self.close_period,
+            fee: self.fee,
         })
     }
 }
