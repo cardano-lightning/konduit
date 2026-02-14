@@ -33,7 +33,7 @@ impl CardanoConnector {
     pub async fn new(base_url: &str, http_timeout_ms: Option<u64>) -> crate::Result<Self> {
         let http_timeout = Duration::from_millis(http_timeout_ms.unwrap_or(10_000));
         let base_url = base_url.strip_suffix("/").unwrap_or(base_url).to_string();
-        let network = Network::mainnet();
+        let network = Network::Mainnet;
 
         let mut connector = Self {
             base_url,
@@ -91,8 +91,6 @@ impl CardanoConnector {
 }
 
 // -------------------------------------------------------------------- Internals
-
-#[wasm_bindgen]
 
 impl CardanoConnector {
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {

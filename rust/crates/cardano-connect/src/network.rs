@@ -61,9 +61,9 @@ impl TryFrom<&str> for Network {
 
     fn try_from(text: &str) -> anyhow::Result<Self> {
         match text {
-            mainnet if mainnet == Self::Mainnet.to_string() => Ok(Network::mainnet()),
-            preprod if preprod == Self::Preprod.to_string() => Ok(Network::preprod()),
-            preview if preview == Self::Preview.to_string() => Ok(Network::preview()),
+            mainnet if mainnet == Self::Mainnet.to_string() => Ok(Self::Mainnet),
+            preprod if preprod == Self::Preprod.to_string() => Ok(Self::Preprod),
+            preview if preview == Self::Preview.to_string() => Ok(Self::Preview),
             _ => Err(anyhow!(
                 "unsupported network: {text}; should be one of {}, {}, {}",
                 Self::Mainnet,
@@ -74,53 +74,40 @@ impl TryFrom<&str> for Network {
     }
 }
 
-// -------------------------------------------------------------------- Building
-
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl Network {
-    #[cfg_attr(feature = "wasm", wasm_bindgen)]
-    pub fn mainnet() -> Self {
-        Network::Mainnet
-    }
-
-    #[cfg_attr(feature = "wasm", wasm_bindgen)]
-    pub fn preprod() -> Self {
-        Network::Preprod
-    }
-
-    #[cfg_attr(feature = "wasm", wasm_bindgen)]
-    pub fn preview() -> Self {
-        Network::Preview
-    }
-}
-
 // ------------------------------------------------------------------ Inspecting
 
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Network {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "isMainnet"))]
-    pub fn is_mainnet(self) -> bool {
-        self == Network::Mainnet
+    pub fn is_mainnet(&self) -> bool {
+        self == &Network::Mainnet
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "isTestnet"))]
-    pub fn is_testnet(self) -> bool {
-        self != Network::Mainnet
+    pub fn is_testnet(&self) -> bool {
+        !self.is_mainnet()
     }
 }
 
 // --------------------------------------------------------------- WASM-specific
 
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-impl Network {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "asMagic"))]
-    pub fn _wasm_as_magic(self) -> u64 {
-        u64::from(self)
-    }
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkIsMainnet"))]
+pub fn _wasm_network_is_mainnet(network: Network) -> bool {
+    network.is_mainnet()
+}
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(self) -> String {
-        self.to_string()
-    }
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkIsTestnet"))]
+pub fn _wasm_network_is_testnet(network: Network) -> bool {
+    network.is_testnet()
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkAsMagic"))]
+pub fn _wasm_network_as_magic(network: Network) -> u64 {
+    u64::from(network)
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkToString"))]
+pub fn _wasm_network_to_string(network: Network) -> String {
+    network.to_string()
 }
