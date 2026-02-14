@@ -32,7 +32,7 @@ impl Cmd {
         match self {
             Cmd::Show(cmd) => cmd.run(&config),
             Cmd::Tx(cmd) => cmd.run(&config),
-            Cmd::Setup { .. } => unreachable!(),
+            Cmd::Setup => unreachable!(),
         }
     }
 }

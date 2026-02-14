@@ -20,7 +20,8 @@ impl Consumer {
         connector: &impl CardanoConnect,
         config: &config::consumer::Config,
     ) -> anyhow::Result<Self> {
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let add_vkey = config.wallet.to_verification_key();
+        let own_address = add_vkey.to_address(connector.network().into());
         let wallet = connector
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;
@@ -29,7 +30,6 @@ impl Consumer {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let add_vkey = config.wallet.to_verification_key();
         let channels = filter_channels(&konduit_utxos, |co| co.constants.add_vkey == add_vkey)
             .into_iter()
             .collect();
@@ -43,22 +43,22 @@ impl Consumer {
 
 impl fmt::Display for Consumer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "== Tip :: {} ==\n", Self::LABEL)?;
+        writeln!(f, "== Tip :: {} ==", Self::LABEL)?;
         write!(f, "Wallet ")?;
         display_utxos(f, &self.wallet)?;
         write!(f, "Reference script ")?;
         display_reference_script(f, &self.reference_script)?;
-        write!(f, "Channels : {}\n", self.channels.len())?;
+        writeln!(f, "Channels : {}", self.channels.len())?;
         for (input, channel) in self.channels.iter() {
-            write!(f, "  Input : {}\n", input)?;
-            write!(f, "  Tag : {}\n", channel.constants.tag)?;
-            write!(
+            writeln!(f, "  Input : {}", input)?;
+            writeln!(f, "  Tag : {}", channel.constants.tag)?;
+            writeln!(
                 f,
-                "  Sub : {} || Close Period : {} \n",
+                "  Sub : {} || Close Period : {}",
                 channel.constants.sub_vkey, channel.constants.close_period
             )?;
             display_stage(f, &channel.stage)?;
-            write!(f, "  Amt : {} \n", channel.amount)?;
+            writeln!(f, "  Amt : {}", channel.amount)?;
         }
         Ok(())
     }
@@ -76,7 +76,8 @@ impl Adaptor {
         connector: &impl CardanoConnect,
         config: &config::adaptor::Config,
     ) -> anyhow::Result<Self> {
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let sub_vkey = config.wallet.to_verification_key();
+        let own_address = sub_vkey.to_address(connector.network().into());
         let wallet = connector
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;
@@ -84,7 +85,6 @@ impl Adaptor {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let sub_vkey = config.wallet.to_verification_key();
         let channels = filter_channels(&konduit_utxos, |co| co.constants.sub_vkey == sub_vkey)
             .into_iter()
             .collect();
@@ -98,21 +98,21 @@ impl Adaptor {
 
 impl fmt::Display for Adaptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "== Tip :: {} ==\n", Self::LABEL)?;
+        writeln!(f, "== Tip :: {} ==", Self::LABEL)?;
         write!(f, "Wallet ")?;
         display_utxos(f, &self.wallet)?;
         write!(f, "Reference script ")?;
         display_reference_script(f, &self.reference_script)?;
-        write!(f, "Channels : {}\n", self.channels.len())?;
+        writeln!(f, "Channels : {}", self.channels.len())?;
         for (input, channel) in self.channels.iter() {
-            write!(f, "  Input : {}\n", input)?;
-            write!(
+            writeln!(f, "  Input : {}", input)?;
+            writeln!(
                 f,
-                "  Keytag : {}\n",
+                "  Keytag : {}",
                 Keytag::new(channel.constants.add_vkey, channel.constants.tag.clone())
             )?;
             display_stage(f, &channel.stage)?;
-            write!(f, "  Amt : {} \n", channel.amount)?;
+            writeln!(f, "  Amt : {}", channel.amount)?;
         }
         Ok(())
     }
@@ -130,7 +130,10 @@ impl Admin {
         connector: &impl CardanoConnect,
         config: &config::admin::Config,
     ) -> anyhow::Result<Self> {
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let own_address = config
+            .wallet
+            .to_verification_key()
+            .to_address(connector.network().into());
         let wallet = connector
             .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
             .await?;
@@ -144,7 +147,7 @@ impl Admin {
 
 impl fmt::Display for Admin {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "== Tip :: {} ==\n", Self::LABEL)?;
+        writeln!(f, "== Tip :: {} ==", Self::LABEL)?;
         write!(f, "Wallet ")?;
         display_utxos(f, &self.wallet)?;
         write!(f, "Reference script ")?;
@@ -170,14 +173,9 @@ fn display_reference_script(f: &mut fmt::Formatter, u: &Option<Utxo>) -> fmt::Re
     match u {
         Some(u) => {
             if let Some(script) = u.1.script() {
-                write!(f, "\n{}#{}\n", u.0.transaction_id(), u.0.output_index())?;
-                if f.alternate() {
-                    write!(f, " - script ver: {:#}\n", script.version())?;
-                    write!(f, " - script hash: {:#}\n", Hash::<28>::from(script))?;
-                } else {
-                    write!(f, " - script ver: {:#}\n", script.version())?;
-                    write!(f, " - script hash: {:#}\n", Hash::<28>::from(script))?;
-                }
+                writeln!(f, "\n{}#{}", u.0.transaction_id(), u.0.output_index())?;
+                writeln!(f, " - script ver: {:#}", script.version())?;
+                writeln!(f, " - script hash: {:#}", Hash::<28>::from(script))?;
             } else {
                 write!(f, "Utxo {} has no script!!", u.0)?;
             }
@@ -191,53 +189,47 @@ fn display_reference_script(f: &mut fmt::Formatter, u: &Option<Utxo>) -> fmt::Re
 fn display_utxos(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
     if f.alternate() {
         // Verbose
-        write!(f, "utxos:\n")?;
+        writeln!(f, "utxos:")?;
         for (i, o) in us.iter() {
-            write!(f, " => {}#{}\n", i.transaction_id(), i.output_index())?;
-            write!(f, " - value : {:#}\n", o.value())?;
+            writeln!(f, " => {}#{}", i.transaction_id(), i.output_index())?;
+            writeln!(f, " - value : {:#}", o.value())?;
             if let Some(datum) = o.datum() {
                 match datum {
                     cardano_tx_builder::Datum::Hash(hash) => write!(f, " - datum hash : {}", hash)?,
                     cardano_tx_builder::Datum::Inline(data) => {
-                        write!(f, " - datum inline: {}\n", &data.to_string()[0..100])?
+                        writeln!(f, " - datum inline: {}", &data.to_string()[0..100])?
                     }
                 }
             }
             if let Some(script) = o.script() {
-                write!(f, " - script ver: {:#}\n", script.version())?;
-                write!(f, " - script hash: {:#}\n", Hash::<28>::from(script))?;
+                writeln!(f, " - script ver: {:#}", script.version())?;
+                writeln!(f, " - script hash: {:#}", Hash::<28>::from(script))?;
             }
         }
     } else {
-        write!(f, "summary:\n")?;
+        writeln!(f, "summary:")?;
         let count = us.len();
         let value = us.values().fold(Value::new(0), |acc, curr| {
             let mut acc = acc;
             acc.add(curr.value());
             acc
         });
-        let datum = if us
-            .values()
-            .fold(false, |acc, curr| acc || curr.datum().is_some())
-        {
+        let datum = if us.values().any(|curr| curr.datum().is_some()) {
             "some"
         } else {
             "no"
         };
-        let script = if us
-            .values()
-            .fold(false, |acc, curr| acc || curr.script().is_some())
-        {
+        let script = if us.values().any(|curr| curr.script().is_some()) {
             "some"
         } else {
             "no"
         };
-        write!(
+        writeln!(
             f,
-            "{} Utxos with {} datum(s) and {} script(s)\n",
+            "{} Utxos with {} datum(s) and {} script(s)",
             count, datum, script
         )?;
-        write!(f, "Total : {}\n", value)?;
+        writeln!(f, "Total : {}", value)?;
     };
     Ok(())
 }
@@ -248,59 +240,55 @@ fn display_utxos(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
 fn display_channels(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
     if f.alternate() {
         // Verbose
-        write!(f, "utxos:\n")?;
+        writeln!(f, "utxos:")?;
         for (i, o) in us.iter() {
-            write!(f, " => {}#{}\n", i.transaction_id(), i.output_index())?;
-            write!(f, " - value : {:#}\n", o.value())?;
+            writeln!(f, " => {}#{}", i.transaction_id(), i.output_index())?;
+            writeln!(f, " - value : {:#}", o.value())?;
             if let Some(datum) = o.datum() {
                 match datum {
-                    cardano_tx_builder::Datum::Hash(hash) => write!(f, " - datum hash : {}", hash)?,
+                    cardano_tx_builder::Datum::Hash(hash) => {
+                        writeln!(f, " - datum hash : {}", hash)?
+                    }
                     cardano_tx_builder::Datum::Inline(data) => {
-                        write!(f, " - datum inline: {}\n", &data.to_string()[0..100])?
+                        writeln!(f, " - datum inline: {}", &data.to_string()[0..100])?
                     }
                 }
             }
             if let Some(script) = o.script() {
-                write!(f, " - script ver: {:#}\n", script.version())?;
-                write!(f, " - script hash: {:#}\n", Hash::<28>::from(script))?;
+                writeln!(f, " - script ver: {:#}", script.version())?;
+                writeln!(f, " - script hash: {:#}", Hash::<28>::from(script))?;
             }
         }
     } else {
-        write!(f, "summary:\n")?;
+        writeln!(f, "summary:")?;
         let count = us.len();
         let value = us.values().fold(Value::new(0), |acc, curr| {
             let mut acc = acc;
             acc.add(curr.value());
             acc
         });
-        let datum = if us
-            .values()
-            .fold(false, |acc, curr| acc || curr.datum().is_some())
-        {
+        let datum = if us.values().any(|curr| curr.datum().is_some()) {
             "some"
         } else {
             "no"
         };
-        let script = if us
-            .values()
-            .fold(false, |acc, curr| acc || curr.script().is_some())
-        {
+        let script = if us.values().any(|curr| curr.script().is_some()) {
             "some"
         } else {
             "no"
         };
-        write!(
+        writeln!(
             f,
-            "{} Utxos with {} datum(s) and {} script(s)\n",
+            "{} Utxos with {} datum(s) and {} script(s)",
             count, datum, script
         )?;
-        write!(f, "Total : {}\n", value)?;
+        writeln!(f, "Total : {}", value)?;
     };
     Ok(())
 }
 
-fn useds_to_string(useds: &Vec<Used>) -> String {
-    if useds.len() == 0 {
+fn useds_to_string(useds: &[Used]) -> String {
+    if useds.is_empty() {
         "[NONE]".to_string()
     } else {
         useds
@@ -311,8 +299,8 @@ fn useds_to_string(useds: &Vec<Used>) -> String {
     }
 }
 
-fn pendings_to_string(pendings: &Vec<Pending>) -> String {
-    if pendings.len() == 0 {
+fn pendings_to_string(pendings: &[Pending]) -> String {
+    if pendings.is_empty() {
         "[NONE]".to_string()
     } else {
         pendings
@@ -326,18 +314,18 @@ fn pendings_to_string(pendings: &Vec<Pending>) -> String {
 fn display_stage(f: &mut fmt::Formatter<'_>, stage: &konduit_data::Stage) -> fmt::Result {
     match stage {
         konduit_data::Stage::Opened(subbed, useds) => {
-            write!(f, "  Opened : {} : {} \n", subbed, useds_to_string(useds))
+            writeln!(f, "  Opened : {} : {}", subbed, useds_to_string(useds))
         }
         konduit_data::Stage::Closed(subbed, useds, elapse_at) => write!(
             f,
-            "  Closed : {} : {} : {} \n",
+            "  Closed : {} : {} : {}",
             subbed,
             useds_to_string(useds),
             elapse_at
         ),
         konduit_data::Stage::Responded(pendings_amount, pendings) => write!(
             f,
-            "  Responded : {} : {} \n",
+            "  Responded : {} : {}",
             pendings_amount,
             pendings_to_string(pendings)
         ),

@@ -1,6 +1,5 @@
 use crate::shared::{DefaultPath, Fill};
 use std::io::IsTerminal;
-use toml;
 
 pub trait Setup {
     fn setup(self) -> anyhow::Result<()>

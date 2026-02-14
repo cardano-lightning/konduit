@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     // ADMIN
-    let admin_every = args.admin.admin_every.clone();
+    let admin_every = args.admin.admin_every;
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(
         admin::Service::new(admin_config, bln.clone(), cardano.clone(), db.clone()).await?,

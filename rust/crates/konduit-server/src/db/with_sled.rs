@@ -132,7 +132,7 @@ impl WithSled {
     ) -> super::Result<Channel> {
         self.update_option_channel(keytag, move |opt| {
             let mut channel = opt.unwrap_or_else(|| Channel::new(keytag.clone()));
-            channel.update_retainer(retainers.clone());
+            channel.update_retainer(retainers.clone())?;
             Ok(channel)
         })
     }

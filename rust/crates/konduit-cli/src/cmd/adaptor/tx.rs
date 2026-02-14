@@ -27,7 +27,7 @@ impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
         let own_key = config.wallet.to_verification_key();
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let own_address = own_key.to_address(connector.network().into());
         let receipts = self.receipt.into_iter().collect::<BTreeMap<_, _>>();
         let preferences = AdaptorPreferences {
             min_single: 10_000,
@@ -52,14 +52,12 @@ impl Cmd {
                             &config.host_address.payment(),
                             config.host_address.delegation().as_ref(),
                         )
-                        .await?
-                        .into_iter(),
+                        .await?,
                 )
                 .chain(
                     connector
                         .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
-                        .await?
-                        .into_iter(),
+                        .await?,
                 )
                 .collect();
             let mut tx = konduit_tx::adaptor::tx(
@@ -71,7 +69,7 @@ impl Cmd {
                 &bounds.upper,
             )?;
             println!("Tx id :: {}", tx.id());
-            tx.sign(config.wallet.clone().into());
+            tx.sign(&config.wallet);
             connector.submit(&tx).await
         })
     }

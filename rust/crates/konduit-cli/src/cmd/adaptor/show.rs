@@ -25,33 +25,40 @@ impl Cmd {
         if let Cmd::Config = self {
             print!("{}", config);
             return Ok(());
-        } else if let Cmd::Constants = self {
+        }
+
+        if let Cmd::Constants = self {
             print!(
                 "{},{}",
                 config.wallet.to_verification_key(),
                 config.close_period
             );
             return Ok(());
-        } else {
-            let connector = config.connector.connector()?;
-            match self {
-                Cmd::Address => {
-                    print!("{}", config.wallet.to_address(&connector.network().into()));
-                    Ok(())
-                }
-                Cmd::Tip { verbose } => {
-                    let tip =
-                        Runtime::new()?.block_on(crate::tip::Adaptor::new(&connector, &config))?;
-                    if verbose {
-                        println!("{:#}", tip);
-                    } else {
-                        println!("{}", tip);
-                    }
-                    Ok(())
-                }
-                Cmd::Config => panic!("Impossible"),
-                Cmd::Constants => panic!("Impossible"),
+        }
+
+        let connector = config.connector.connector()?;
+
+        match self {
+            Cmd::Address => {
+                print!(
+                    "{}",
+                    config
+                        .wallet
+                        .to_verification_key()
+                        .to_address(connector.network().into())
+                );
+                Ok(())
             }
+            Cmd::Tip { verbose } => {
+                let tip = Runtime::new()?.block_on(crate::tip::Adaptor::new(&connector, config))?;
+                if verbose {
+                    println!("{:#}", tip);
+                } else {
+                    println!("{}", tip);
+                }
+                Ok(())
+            }
+            Cmd::Config | Cmd::Constants => unreachable!(),
         }
     }
 }

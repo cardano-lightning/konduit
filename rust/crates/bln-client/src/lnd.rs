@@ -1,7 +1,7 @@
 mod client;
-mod types;
-
 pub use client::Client;
+
+pub mod types;
 
 mod config;
 pub use config::*;

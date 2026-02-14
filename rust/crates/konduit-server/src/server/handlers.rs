@@ -47,7 +47,7 @@ impl ResponseError for HandlerError {
 const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60);
 /// "Grace" is extra time between the "quoted" rel time and the time that might be allowed for in a
 /// "pay"
-const ADAPTOR_TIME_GRACE: std::time::Duration = Duration::from_secs(1 * 10 * 60);
+const ADAPTOR_TIME_GRACE: std::time::Duration = Duration::from_secs(10 * 60);
 
 pub async fn info(data: Data) -> info::Info {
     (*data.info()).clone()
@@ -191,14 +191,14 @@ pub async fn pay(
         return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
     };
 
-    let payment_hash = locked.lock().0.clone();
+    let _payment_hash = locked.lock().0;
     if let Err(err) = data.db().append_locked(&keytag, locked).await {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
-    let pay_request = bln_client::types::PayRequest {
+    let _pay_request = bln_client::types::PayRequest {
         fee_limit,
         relative_timeout,
-        invoice: invoice,
+        invoice,
     };
 
     // let pay_response = match data.bln.pay(pay_request).await {

@@ -13,11 +13,7 @@ pub enum Stage {
 
 impl Stage {
     pub fn is_opened(&self) -> bool {
-        if let Stage::Opened(_, _) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Stage::Opened(_, _))
     }
 }
 

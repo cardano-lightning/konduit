@@ -27,29 +27,35 @@ impl Cmd {
             // Separated out since connector might not be setup correctly.
             print!("{}", config);
             return Ok(());
-        } else {
-            let connector = config.connector.connector()?;
-            match self {
-                Cmd::Address => {
-                    print!("{}", config.wallet.to_address(&connector.network().into()));
-                    Ok(())
-                }
-                Cmd::Keytag { tag } => {
-                    print!("{}", Keytag::new(config.wallet.to_verification_key(), tag));
-                    Ok(())
-                }
-                Cmd::Tip { verbose } => {
-                    let tip =
-                        Runtime::new()?.block_on(crate::tip::Consumer::new(&connector, &config))?;
-                    if verbose {
-                        println!("{:#}", tip);
-                    } else {
-                        println!("{}", tip);
-                    }
-                    Ok(())
-                }
-                Cmd::Config => panic!("Impossible"),
+        }
+
+        let connector = config.connector.connector()?;
+        match self {
+            Cmd::Address => {
+                print!(
+                    "{}",
+                    config
+                        .wallet
+                        .to_verification_key()
+                        .to_address(connector.network().into())
+                );
+                Ok(())
             }
+            Cmd::Keytag { tag } => {
+                print!("{}", Keytag::new(config.wallet.to_verification_key(), tag));
+                Ok(())
+            }
+            Cmd::Tip { verbose } => {
+                let tip =
+                    Runtime::new()?.block_on(crate::tip::Consumer::new(&connector, config))?;
+                if verbose {
+                    println!("{:#}", tip);
+                } else {
+                    println!("{}", tip);
+                }
+                Ok(())
+            }
+            Cmd::Config => unreachable!(),
         }
     }
 }

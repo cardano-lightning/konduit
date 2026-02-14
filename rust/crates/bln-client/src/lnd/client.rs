@@ -1,27 +1,25 @@
-use async_trait::async_trait;
-use futures::StreamExt;
-use reqwest::{Method, RequestBuilder};
-use serde::de::DeserializeOwned;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Mutex;
-
 use super::types::{get_info, graph_routes, payments, router_send, stream_wrapper};
-
 use crate::{
     Api, Error,
     lnd::Config,
     types::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse},
 };
+use async_trait::async_trait;
+use futures::StreamExt;
+use reqwest::{Method, RequestBuilder};
+use serde::de::DeserializeOwned;
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub struct Client {
     config: Config,
     client: reqwest::Client,
-    lookup_table: Arc<Mutex<HashMap<[u8; 32], ([u8; 32], u64)>>>,
+    lookup_table: ThreadSafeLookupTable<[u8; 32], ([u8; 32], u64)>,
     last_cache_update: Arc<Mutex<u64>>,
 }
+
+pub type ThreadSafeLookupTable<K, V> = Arc<Mutex<HashMap<K, V>>>;
 
 impl TryFrom<Config> for Client {
     type Error = Error;

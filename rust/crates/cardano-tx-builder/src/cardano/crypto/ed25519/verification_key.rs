@@ -2,7 +2,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{PlutusData, Signature, pallas::ed25519};
+use crate::{
+    Address, Credential, NetworkId, PlutusData, Signature, address::kind, pallas::ed25519,
+};
 use std::{cmp, fmt, str::FromStr};
 
 /// A ed25519 verification key (non-extended).
@@ -96,6 +98,28 @@ impl<'a> TryFrom<PlutusData<'a>> for VerificationKey {
 
 // ------------------------------------------------------------- Converting (to)
 
+impl VerificationKey {
+    pub fn to_address(&self, network_id: NetworkId) -> Address<kind::Shelley> {
+        Address::new(network_id, self.to_credential())
+    }
+
+    pub fn to_credential(&self) -> Credential {
+        Credential::from(self)
+    }
+
+    pub fn as_plutus_data<'a>(&'a self) -> PlutusData<'a> {
+        PlutusData::from(self)
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.as_ref()
+    }
+
+    pub fn into_bytes(self) -> [u8; 32] {
+        <[u8; 32]>::from(self)
+    }
+}
+
 impl AsRef<[u8]> for VerificationKey {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
@@ -120,8 +144,8 @@ impl<'a> From<&'a VerificationKey> for &'a ed25519::PublicKey {
     }
 }
 
-impl<'a> From<VerificationKey> for PlutusData<'a> {
-    fn from(key: VerificationKey) -> Self {
+impl<'a> From<&'a VerificationKey> for PlutusData<'a> {
+    fn from(key: &'a VerificationKey) -> Self {
         Self::bytes(key.0)
     }
 }

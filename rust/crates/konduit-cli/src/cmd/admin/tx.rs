@@ -59,7 +59,10 @@ pub struct DeployArgs {
 impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
-        let own_address = config.wallet.to_address(&connector.network().into());
+        let own_address = config
+            .wallet
+            .to_verification_key()
+            .to_address(connector.network().into());
         match self {
             Cmd::Send(args) => {
                 let tos = args.to.iter().map(|a| a.clone().into()).collect::<Vec<_>>();
@@ -73,16 +76,19 @@ impl Cmd {
                         .collect();
                     let protocol_parameters = &connector.protocol_parameters().await?;
                     let mut tx =
-                        konduit_tx::admin::send(&protocol_parameters, &utxos, tos, change_address)?;
+                        konduit_tx::admin::send(protocol_parameters, &utxos, tos, change_address)?;
                     println!("Tx id :: {}", tx.id());
-                    tx.sign(config.wallet.clone().into());
+                    tx.sign(&config.wallet);
                     connector.submit(&tx).await
                 })
             }
 
             Cmd::Deploy(args) => {
                 let host_address = Address::<kind::Any>::from(config.host_address.clone());
-                let own_address = config.wallet.to_address(&connector.network().into());
+                let own_address = config
+                    .wallet
+                    .to_verification_key()
+                    .to_address(connector.network().into());
                 let change_address = Address::<kind::Any>::from(own_address.clone());
                 Runtime::new()?.block_on(async {
                     let utxos = connector
@@ -91,7 +97,7 @@ impl Cmd {
                         .into_iter()
                         .filter(|(_, o)| o.script().is_some() || !args.spend_all)
                         .collect();
-                    let protocol_parameters = &connector.protocol_parameters().await?;
+                    let protocol_parameters = connector.protocol_parameters().await?;
                     let mut tx = konduit_tx::admin::deploy(
                         &protocol_parameters,
                         &utxos,
@@ -100,7 +106,7 @@ impl Cmd {
                         change_address,
                     )?;
                     println!("Tx id :: {}", tx.id());
-                    tx.sign(config.wallet.clone().into());
+                    tx.sign(&config.wallet);
                     connector.submit(&tx).await
                 })
             }

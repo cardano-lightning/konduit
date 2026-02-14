@@ -11,7 +11,7 @@ pub use cardano::{
     // line in the following import list; making diffs and extensions easier.
     address::{Address, IsAddressKind},
     credential::Credential,
-    crypto::ed25519::{Signature, SigningKey, VerificationKey},
+    crypto::ed25519::{LeakableSigningKey, Signature, SigningKey, VerificationKey},
     datum::Datum,
     execution_units::ExecutionUnits,
     hash::Hash,

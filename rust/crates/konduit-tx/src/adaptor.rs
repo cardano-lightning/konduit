@@ -87,12 +87,12 @@ pub fn tx(
         })
         .collect::<Vec<_>>();
     let wallet_hash = Hash::<28>::new(wallet);
-    let specified_signatories = vec![wallet_hash.clone()];
+    let specified_signatories = vec![wallet_hash];
     let inputs = wallet_ins
         .iter()
         .map(|i| (i.clone(), None))
         .chain(iter::once(main_input))
-        .chain(defer_inputs.into_iter())
+        .chain(defer_inputs)
         .collect::<Vec<_>>();
 
     // FIXME :: This bounds should not _necessarily_ be necessary.
@@ -108,7 +108,7 @@ pub fn tx(
         |transaction| {
             let wallet_address = Address::new(
                 network_parameters.network_id,
-                Credential::from_key(wallet_hash.clone()),
+                Credential::from_key(wallet_hash),
             );
             transaction
                 .with_inputs(inputs.clone())

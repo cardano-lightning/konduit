@@ -1,8 +1,7 @@
+use crate::{Api, BaseCurrency, Error, State};
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::process::Command;
-
-use crate::{Api, BaseCurrency, Error, State};
 
 #[derive(Debug, Clone)]
 pub struct Client {

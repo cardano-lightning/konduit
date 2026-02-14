@@ -1,10 +1,9 @@
 use crate::{
-    config::{adaptor::Config, connector::Connector, signing_key::SigningKey},
+    config::{adaptor::Config, connector::Connector},
     env::{base::default_wallet_and_address, connector},
     shared::{DefaultPath, Fill, Setup},
 };
-
-use cardano_tx_builder::{address::kind, Address};
+use cardano_tx_builder::{Address, LeakableSigningKey, address::kind};
 use connector::ConnectorEnv;
 use konduit_data::Duration;
 use serde::{Deserialize, Serialize};
@@ -21,8 +20,7 @@ pub struct Env {
     // Wallet signing key (32 byte hex)
     #[arg(long, env = "KONDUIT_WALLET")]
     #[serde(rename = "KONDUIT_WALLET")]
-    #[serde_as(as = "Option<serde_with::hex::Hex>")]
-    pub wallet: Option<SigningKey>,
+    pub wallet: Option<LeakableSigningKey>,
 
     /// Address of Konduit reference script
     /// This `fill`s to admin wallets address (with no delegation).
@@ -58,7 +56,7 @@ impl TryFrom<Env> for Config {
 
         Ok(Config {
             connector,
-            wallet,
+            wallet: wallet.into_signing_key(),
             host_address,
             close_period: env.close_period,
             fee: env.fee,

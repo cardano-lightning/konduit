@@ -61,7 +61,7 @@ impl CardanoConnector {
             .map_err(|_| anyhow!("invalid signing key length"))?
             .into();
 
-        transaction.sign(signing_key);
+        transaction.sign(&signing_key);
 
         let tx_hash = transaction.id();
         self.submit(transaction.deref()).await?;
@@ -75,7 +75,7 @@ impl CardanoConnector {
             .map_err(|_| anyhow!("invalid verification key length"))?
             .into();
 
-        let addr = Address::new(self.network().into(), Credential::from(verification_key));
+        let addr = verification_key.to_address(self.network().into());
 
         let balance = self
             .get::<balance::Response>(&format!("/balance/{addr}"))

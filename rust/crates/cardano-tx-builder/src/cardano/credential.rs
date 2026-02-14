@@ -140,8 +140,8 @@ impl From<&pallas::ShelleyPaymentPart> for Credential {
     }
 }
 
-impl From<VerificationKey> for Credential {
-    fn from(key: VerificationKey) -> Self {
+impl From<&VerificationKey> for Credential {
+    fn from(key: &VerificationKey) -> Self {
         Self::from_key(Hash::<28>::new(key))
     }
 }
