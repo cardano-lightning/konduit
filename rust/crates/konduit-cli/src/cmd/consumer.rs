@@ -8,7 +8,7 @@ mod show;
 mod tx;
 
 /// Consumer CLI
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
     /// Show an example of environment variables.
     Setup(Setup<Env>),

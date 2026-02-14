@@ -37,12 +37,9 @@ pub fn signing_key_to_address(
     )
 }
 
-pub fn load_dotenv(default_path: &str) -> anyhow::Result<()> {
-    if fs::exists(default_path)? {
-        dotenvy::from_filename(default_path).map_err(|err| anyhow::anyhow!("{}", err))?;
-    }
-    if fs::exists(".env")? {
-        dotenvy::from_filename(".env").map_err(|err| anyhow::anyhow!("{}", err))?;
+pub fn load_if_exists(path: &str) -> anyhow::Result<()> {
+    if fs::exists(path)? {
+        dotenvy::from_filename(path).map_err(|err| anyhow::anyhow!("{}", err))?;
     }
     Ok(())
 }

@@ -3,7 +3,7 @@ use cardano_connect::CardanoConnect;
 use tokio::runtime::Runtime;
 
 /// Show
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
     /// Show config. This is a parsed version of env
     Config,
