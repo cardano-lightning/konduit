@@ -17,7 +17,27 @@ Below is an entry template.
 
 ## Entries
 
-### 2025-05-31
+### 2026-02-14
+
+@waalge: Server running. Now syncs delayed revealed secrets with BLN client (not
+tested, and impl suboptimal). Able to manually drive server via
+[client](https://github.com/cardano-lightning/konduit/tree/4fc349e0df2f378bea25feb98a6ddb155a62fdf7/rust/crates/konduit-client).
+This flag few issues in the flow, which have been fixed as we go.
+
+OKRs:
+
+```
+roadmap // v1 // konduit server // second implementation
+roadmap // v1 // konduit server // tests
+```
+
+Next:
+
+- Clippy & other housekeeping.
+- TEST, TEST, TEST
+- Align with frontend dev
+
+### 2026-02-05
 
 @waalge:
 [fix-multi-unlocked](https://github.com/cardano-lightning/konduit/pull/69) is
@@ -36,7 +56,7 @@ Next:
 - Run manually driven testing of the bln-client
 - Re-do the konduit server handlers for pay and quote
 
-### 2025-01-31
+### 2026-01-31
 
 @waalge:
 [fix-multi-unlocked](https://github.com/cardano-lightning/konduit/pull/69/changes/0be1c46cb47e6e5a77cbd21ee9f5b9610b813ccd)
@@ -54,7 +74,7 @@ Next:
 
 - Complete refactor of konduit-server. Get thing running again
 
-### 2025-01-24
+### 2026-01-24
 
 @waalge:
 [fix-multi-unlocked](https://github.com/cardano-lightning/konduit/pull/69/commits/982fcc1c29e98e100c37b41ef142c7bac91249ae)
@@ -73,7 +93,7 @@ Next:
 
 - Find pragmatic solution(s) to get adaptor server back on track
 
-### 2025-01-17
+### 2026-01-17
 
 @paluh:
 [Basic TS app organization + typing](https://github.com/cardano-lightning/konduit-js/pull/2/commits/f8a2702f527084242094d000ca98f79c370626e6)
@@ -121,7 +141,7 @@ Next:
 - First draft of quantified risk assessment
 - Find pragmatic solution to get adaptor server back on track
 
-### 2025-01-10
+### 2026-01-10
 
 **What** did you work on this week? (little prose, mostly links to PR, docs,
 source code, ..)
