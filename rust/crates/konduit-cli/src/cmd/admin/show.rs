@@ -1,10 +1,9 @@
+use crate::config::admin::Config;
 use cardano_connect::CardanoConnect;
 use tokio::runtime::Runtime;
 
-use crate::config::admin::Config;
-
 /// Show
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
     /// Show config. This is a parsed version of env
     Config,

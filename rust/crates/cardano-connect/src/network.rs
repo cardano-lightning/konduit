@@ -6,7 +6,8 @@ use std::fmt;
 use wasm_bindgen::prelude::*;
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[serde(into = "String", try_from = "&str")]
 pub enum Network {
     Mainnet,
     Preview,
@@ -56,14 +57,24 @@ impl fmt::Display for Network {
     }
 }
 
+impl From<Network> for String {
+    fn from(network: Network) -> Self {
+        network.to_string()
+    }
+}
+
 impl TryFrom<&str> for Network {
     type Error = anyhow::Error;
 
     fn try_from(text: &str) -> anyhow::Result<Self> {
+        fn match_str(candidate: &str, target: Network) -> bool {
+            candidate.to_lowercase() == target.to_string()
+        }
+
         match text {
-            mainnet if mainnet == Self::Mainnet.to_string() => Ok(Self::Mainnet),
-            preprod if preprod == Self::Preprod.to_string() => Ok(Self::Preprod),
-            preview if preview == Self::Preview.to_string() => Ok(Self::Preview),
+            mainnet if match_str(mainnet, Self::Mainnet) => Ok(Self::Mainnet),
+            preprod if match_str(preprod, Self::Preprod) => Ok(Self::Preprod),
+            preview if match_str(preview, Self::Preview) => Ok(Self::Preview),
             _ => Err(anyhow!(
                 "unsupported network: {text}; should be one of {}, {}, {}",
                 Self::Mainnet,

@@ -1,32 +1,30 @@
-use std::str;
-
-use tokio::runtime::Runtime;
-
+use crate::{cardano::ADA, config::admin::Config};
 use cardano_connect::CardanoConnect;
 use cardano_tx_builder::{Address, Value, address::kind};
-
 use konduit_tx::{self, KONDUIT_VALIDATOR};
-
-use crate::{cardano::ADA, config::admin::Config};
+use std::str;
+use tokio::runtime::Runtime;
 
 /// Create and submit Konduit transactions
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum Cmd {
     /// Send ada to addresses. Note that this will spend any reference script
     Send(SendArgs),
+
     /// "Deploy" aka upload tx
     Deploy(DeployArgs),
 }
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct SendArgs {
-    /// If true, will spend utxos with scripts. Defaults to false
+    /// If set, will spend utxos with scripts. Unset by default.
     #[arg(long, default_value_t = false)]
     spend_all: bool,
 
     /// The amounts are in ada (not lovelace!)
     #[arg(long, value_names = ["ADDRESS,ADA"])]
     to: Vec<AddressAmount>,
+
     /// Where the rest of the value goes. Defaults to own address
     #[arg(long)]
     rest: Option<Address<kind::Shelley>>,

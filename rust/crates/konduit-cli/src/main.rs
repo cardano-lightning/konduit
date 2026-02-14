@@ -1,12 +1,11 @@
-use clap::Parser;
-
 mod cardano;
 mod cmd;
 mod config;
 mod connector;
 mod env;
+mod shared;
 mod tip;
 
-fn main() {
-    cmd::Cmd::parse().run().unwrap();
+fn main() -> anyhow::Result<()> {
+    cmd::Cmd::init()?.run()
 }

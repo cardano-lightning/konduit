@@ -1,34 +1,38 @@
-use crate::env::admin::Env;
+use crate::{
+    config::admin::Config,
+    env::{admin::Env, base::Setup},
+};
 
-mod setup;
 mod show;
 mod tx;
 
 /// Admin CLI
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
-    /// Setup env.
-    Setup(setup::Cmd),
-    /// Show info (requires env)
+    /// Show an example of environment variables.
+    Setup(Setup<Env>),
+
+    /// Show current configuration.
     #[clap(subcommand)]
     Show(show::Cmd),
-    /// Txs
+
+    /// Build transactions related to admin duties.
     #[clap(subcommand)]
     Tx(tx::Cmd),
 }
 
 impl Cmd {
-    pub(crate) fn run(self) -> anyhow::Result<()> {
+    pub(crate) fn run(self, env: Env) -> anyhow::Result<()> {
         if let Cmd::Setup(cmd) = self {
-            cmd.run()
-        } else {
-            let e = Env::load()?;
-            let config = e.to_config()?;
-            match self {
-                Cmd::Show(cmd) => cmd.run(&config),
-                Cmd::Tx(cmd) => cmd.run(&config),
-                Cmd::Setup(_) => panic!("Impossible"),
-            }
+            return cmd.run(env);
+        }
+
+        let config = Config::try_from(env)?;
+
+        match self {
+            Cmd::Show(cmd) => cmd.run(&config),
+            Cmd::Tx(cmd) => cmd.run(&config),
+            Cmd::Setup(_) => unreachable!(),
         }
     }
 }

@@ -1,37 +1,43 @@
-use crate::env::consumer::Env;
+use crate::{
+    config::consumer::Config,
+    env::{base::Setup, consumer::Env},
+};
 
 mod make;
-mod setup;
 mod show;
 mod tx;
 
 /// Consumer CLI
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
-    /// Make cheques and squashes
-    #[clap(subcommand)]
-    Make(make::Cmd),
-    /// Setup env.
-    Setup(setup::Cmd),
+    /// Show an example of environment variables.
+    Setup(Setup<Env>),
+
     /// Show info (requires env)
     #[clap(subcommand)]
     Show(show::Cmd),
-    /// Txs
+
+    /// Make cheques and squashes
+    #[clap(subcommand)]
+    Make(make::Cmd),
+
+    /// Build transactions useful to a consumer.
     Tx(tx::Cmd),
 }
 
 impl Cmd {
-    pub(crate) fn run(self) -> anyhow::Result<()> {
+    pub(crate) fn run(self, env: Env) -> anyhow::Result<()> {
         if let Cmd::Setup(cmd) = self {
-            cmd.run()
-        } else {
-            let config = Env::load()?.to_config()?;
-            match self {
-                Cmd::Make(cmd) => cmd.run(&config),
-                Cmd::Show(cmd) => cmd.run(&config),
-                Cmd::Tx(cmd) => cmd.run(&config),
-                Cmd::Setup(_) => panic!("oops"),
-            }
+            return cmd.run(env);
+        }
+
+        let config = Config::try_from(env)?;
+
+        match self {
+            Cmd::Make(cmd) => cmd.run(&config),
+            Cmd::Show(cmd) => cmd.run(&config),
+            Cmd::Tx(cmd) => cmd.run(&config),
+            Cmd::Setup(_) => unreachable!(),
         }
     }
 }

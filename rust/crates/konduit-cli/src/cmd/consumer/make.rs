@@ -14,7 +14,7 @@ fn duration_from_relative(duration: Duration) -> Duration {
 }
 
 /// Show
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
     /// Make a squash
     Squash {

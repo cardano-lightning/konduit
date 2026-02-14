@@ -1,10 +1,29 @@
-use std::{collections::HashMap, fs};
-
+use crate::{
+    config::signing_key::SigningKey,
+    shared::{DefaultPath, Fill},
+};
 use cardano_tx_builder::{Address, Credential, Hash, NetworkId, VerificationKey, address::kind};
+use std::{fs, io::IsTerminal};
+use toml;
 
-use crate::config::signing_key::SigningKey;
+#[derive(Debug, Clone, clap::Args)]
+pub struct Setup<E: clap::Args> {
+    #[command(flatten)]
+    pub env: E,
+}
 
-pub const PREFIX: &str = "KONDUIT_";
+impl<E: clap::Args + DefaultPath + Fill + serde::Serialize> Setup<E> {
+    pub fn run(self, env: E) -> anyhow::Result<()> {
+        if std::io::stdout().is_terminal() {
+            println!("./{}", E::DEFAULT_PATH);
+        }
+        println!(
+            "{:#}",
+            toml::to_string(&self.env.fill(env))?.replace(" = ", "=")
+        );
+        Ok(())
+    }
+}
 
 pub fn signing_key_to_address(
     network_id: &NetworkId,
@@ -18,24 +37,9 @@ pub fn signing_key_to_address(
     )
 }
 
-pub fn load<T: serde::de::DeserializeOwned>() -> anyhow::Result<T> {
-    let mut map = HashMap::new();
-    for (key, value) in std::env::vars() {
-        if key.starts_with(PREFIX) {
-            map.insert(key, value);
-        }
-    }
-    let json = serde_json::to_value(map).expect("Failed to map env vars");
-    let x = serde_json::from_value(json)?;
-    Ok(x)
-}
-
-pub fn load_dotenv(default_path: &str) -> anyhow::Result<()> {
-    if fs::exists(default_path)? {
-        dotenvy::from_filename(default_path).map_err(|err| anyhow::anyhow!("{}", err))?;
-    }
-    if fs::exists(".env")? {
-        dotenvy::from_filename(".env").map_err(|err| anyhow::anyhow!("{}", err))?;
+pub fn load_if_exists(path: &str) -> anyhow::Result<()> {
+    if fs::exists(path)? {
+        dotenvy::from_filename(path).map_err(|err| anyhow::anyhow!("{}", err))?;
     }
     Ok(())
 }

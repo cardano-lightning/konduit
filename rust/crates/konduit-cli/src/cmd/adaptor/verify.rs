@@ -1,10 +1,12 @@
 use konduit_data::{Keytag, Locked, Squash};
 
-use crate::cmd::parsers::{parse_locked, parse_squash};
-use crate::config::adaptor::Config;
+use crate::{
+    cmd::parsers::{parse_locked, parse_squash},
+    config::adaptor::Config,
+};
 
 /// Verify
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
     /// Verify a squash
     Squash {

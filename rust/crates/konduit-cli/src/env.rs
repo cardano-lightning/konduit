@@ -1,4 +1,4 @@
-mod base;
+pub(crate) mod base;
 
 pub mod adaptor;
 pub mod admin;
