@@ -108,8 +108,11 @@ pub async fn quote(
     let Some(channel) = data.db().get_channel(&keytag).await? else {
         return Ok(HttpResponse::BadRequest().body("No channel found"));
     };
-    let Ok(capacity) = channel.capacity() else {
+    let Ok(_capacity) = channel.capacity() else {
         return Ok(HttpResponse::BadRequest().body("No capacity"));
+    };
+    let Ok(index) = channel.next_index() else {
+        return Ok(HttpResponse::BadRequest().body("No next index"));
     };
     let quote_request = match body.into_inner() {
         QuoteBody::Simple(simple_quote) => bln_client::types::QuoteRequest {
@@ -126,14 +129,20 @@ pub async fn quote(
             }
         }
     };
-    let Ok(bln_quote) = data.bln().quote(quote_request.clone()).await else {
-        return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
+    let bln_quote = match data.bln().quote(quote_request.clone()).await {
+        Ok(y) => y,
+        Err(err) => {
+            log::info!("ERR : {:?}", err);
+            return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
+        }
     };
+    // FIXME :: we need to sort out the Tos
     let amount =
         fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + FEE_PLACEHOLDER + 1;
     // fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info().fee + 1;
     let relative_timeout = (ADAPTOR_TIME_DELTA + bln_quote.relative_timeout).as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
+        index,
         amount,
         relative_timeout,
         routing_fee: bln_quote.fee_msat,

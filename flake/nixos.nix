@@ -6,61 +6,61 @@ self: {
 }: let
   inherit (lib) mkOption types mapAttrs';
 
-  konduitAdaptorOptions = {name, ...}: {
+  konduitServerOptions = {name, ...}: {
     options = {
       domain = mkOption {
         type = types.str;
         default = name;
-        description = "The domain to host the konduit adaptor";
+        description = "The domain to host the konduit server";
       };
 
       env-file = mkOption {
         type = types.path;
-        description = "An env file containing the konduit adaptor configuration";
+        description = "An env file containing the konduit server configuration";
       };
 
       useSSL = mkOption {
         type = types.bool;
         default = true;
-        description = "Whether to use SSL for the adaptor";
+        description = "Whether to use SSL for the server";
       };
 
       flake = mkOption {
         type = types.attrs;
         default = self;
-        description = "A Nix Flake for the konduit adaptor application";
+        description = "A Nix Flake for the konduit server application";
       };
     };
   };
 
-  cfg = builtins.trace (builtins.attrNames config) config.konduit-adaptors;
+  cfg = builtins.trace (builtins.attrNames config) config.konduit-servers;
 in {
   options = {
-    konduit-adaptors = mkOption {
-      type = types.attrsOf (types.submodule konduitAdaptorOptions);
+    konduit-servers = mkOption {
+      type = types.attrsOf (types.submodule konduitServerOptions);
       default = {};
-      description = "Konduit adaptors to run";
+      description = "Konduit servers to run";
     };
   };
   config = {
     http-services.proxied-services =
       mapAttrs'
-      (name: konduit-adaptor: let
-        flakePkgs = konduit-adaptor.flake.packages.x86_64-linux;
+      (name: konduit-server: let
+        flakePkgs = konduit-server.flake.packages.x86_64-linux;
       in {
         name = "konduit-adatpor-${name}";
         value = {
-          inherit (konduit-adaptor) domain;
+          inherit (konduit-server) domain;
           systemdConfig = port: {
-            description = "Konduit adaptor (${name})";
+            description = "Konduit server (${name})";
             serviceConfig = {
-              ExecSearchPath = "${flakePkgs.konduit-adaptor}/bin";
+              ExecSearchPath = "${flakePkgs.konduit-server}/bin";
               DynamicUser = true;
               PrivateTmp = true;
-              EnvironmentFile = "${konduit-adaptor.env-file}";
-              ExecStart = "konduit-adaptor --path \${STATE_DIRECTORY}/db --port \"${toString port}\" --host \"127.0.0.1\"";
-              StateDirectory = "konduit-adaptor-${name}";
-              RuntimeDirectory = "konduit-adaptor-${name}";
+              EnvironmentFile = "${konduit-server.env-file}";
+              ExecStart = "konduit-server --path \${STATE_DIRECTORY}/db --port \"${toString port}\" --host \"127.0.0.1\"";
+              StateDirectory = "konduit-server-${name}";
+              RuntimeDirectory = "konduit-server-${name}";
             };
           };
         };

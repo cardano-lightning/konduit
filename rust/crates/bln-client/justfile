@@ -42,6 +42,9 @@ health:
     @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain}'
 
 # --- Invoice Commands ---
+# Decode a bolt11 invoice to see destination and amount
+decode-invoice invoice:
+    @just node={{node}} _request GET "/v1/payreq/{{invoice}}" | jq '{destination: .destination, amount_msat: .num_msat}' 
 
 # List invoices
 invoices short="":
@@ -60,6 +63,19 @@ pay invoice:
         just encode-hash $B64_PREIMAGE; \
     else \
         echo "Payment failed."; \
+    fi
+
+# V2 Payment (Streaming) - Updated to handle LND stream states
+pay2 invoice:
+    @echo "Paying via v2/router/send (Streaming)..."
+    @RAW_RESPONSE=$(just _request POST "/v2/router/send" "{\"payment_request\": \"{{invoice}}\"}"); \
+    PREIMAGE=$(echo "$RAW_RESPONSE" | jq -r 'select(.result.status == "SUCCEEDED") | .result.payment_preimage'); \
+    if [ -n "$PREIMAGE" ] && [ "$PREIMAGE" != "null" ]; then \
+        echo "Success! Preimage: $PREIMAGE"; \
+    else \
+        echo "--- PAYMENT NOT SUCCEEDED ---"; \
+        echo "Could not find a SUCCEEDED status in the stream. Full response follows:"; \
+        echo "$RAW_RESPONSE"; \
     fi
 
 # List payments

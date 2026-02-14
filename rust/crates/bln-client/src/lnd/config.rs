@@ -13,6 +13,27 @@ pub struct Config {
     pub block_time: Duration,
     pub min_cltv: u64,
     pub tls_certificate: Option<Vec<u8>>,
+    pub max_cache_size: usize,
+}
+
+impl Config {
+    pub fn new(
+        base_url: String,
+        macaroon: Macaroon,
+        block_time: Duration,
+        min_cltv: u64,
+        tls_certificate: Option<Vec<u8>>,
+        max_cache_size: usize,
+    ) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches("/").to_string(),
+            macaroon,
+            block_time,
+            min_cltv,
+            tls_certificate,
+            max_cache_size,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

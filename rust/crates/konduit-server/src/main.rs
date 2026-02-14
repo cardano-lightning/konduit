@@ -47,7 +47,9 @@ async fn main() -> anyhow::Result<()> {
     // ADMIN
     let admin_every = args.admin.admin_every.clone();
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
-    let admin = Arc::new(admin::Service::new(admin_config, cardano.clone(), db.clone()).await?);
+    let admin = Arc::new(
+        admin::Service::new(admin_config, bln.clone(), cardano.clone(), db.clone()).await?,
+    );
     tokio::spawn(async move {
         let admin = Arc::clone(&admin);
         let mut ticker = interval(admin_every);
