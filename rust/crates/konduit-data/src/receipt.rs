@@ -134,7 +134,7 @@ impl Receipt {
         self.squash.amount() + self.cheques.iter().map(|x| x.amount()).sum::<u64>()
     }
 
-    pub fn potentially_subable(&self, useds: &Vec<Used>) -> u64 {
+    pub fn potentially_subable(&self, useds: &[Used]) -> u64 {
         let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
         let unused: u64 = self
             .cheques
@@ -150,7 +150,7 @@ impl Receipt {
         self.squash.amount() + unused + unsquashed
     }
 
-    pub fn currently_subable(&self, useds: &Vec<Used>) -> u64 {
+    pub fn currently_subable(&self, useds: &[Used]) -> u64 {
         let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
         let unused: u64 = self
             .unlockeds()
@@ -249,20 +249,17 @@ impl Receipt {
                     .unlockeds()
                     .iter()
                     .filter(|c| !used_indexes.contains(&c.index()))
-                    .map(|c| c.clone())
+                    .cloned()
                     .collect::<Vec<_>>();
                 let mut useds = useds
                     .iter()
                     .filter(|u| !squash.is_index_squashed(u.index))
-                    .map(|u| u.clone())
+                    .cloned()
                     .chain(unlockeds.iter().map(|u| Used::new(u.index(), u.amount())))
                     .collect::<Vec<_>>();
                 useds.sort_by_key(|i| i.index);
                 let abs = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
-                let rel = abs.saturating_sub(*subbed);
-                if rel <= 0 {
-                    return None;
-                }
+                let rel = abs.checked_sub(*subbed)?;
                 let actually_subable = cmp::min(rel, l1.amount);
                 let subbed = subbed + actually_subable;
                 let amount = l1.amount.saturating_sub(actually_subable);
@@ -277,17 +274,18 @@ impl Receipt {
             Stage::Closed(subbed, useds, _) => {
                 let squash = self.squash.clone();
                 let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
+
                 let cheques = self
                     .cheques
                     .iter()
                     .filter(|c| !used_indexes.contains(&c.index()))
-                    .map(|c| c.clone())
+                    .cloned()
                     .collect::<Vec<_>>();
 
                 let pendings = cheques
                     .iter()
                     .filter_map(|c| c.as_locked())
-                    .map(|l| Pending::from(l))
+                    .map(Pending::from)
                     .collect::<Vec<_>>();
                 let pendings_amount = pendings.iter().map(|p| p.amount).sum::<u64>();
 
@@ -296,16 +294,21 @@ impl Receipt {
                     .filter_map(|c| c.as_unlocked())
                     .map(|c| c.amount())
                     .sum::<u64>();
+
                 let unsquashed = useds
                     .iter()
                     .filter(|u| !squash.is_index_squashed(u.index))
                     .map(|u| u.amount)
                     .sum::<u64>();
+
                 let abs = squash.amount() + unsquashed + unused;
-                let rel = abs.saturating_sub(*subbed);
-                if rel <= 0 && pendings_amount == 0 {
+
+                if *subbed > abs && pendings_amount == 0 {
                     return None;
                 }
+
+                let rel = abs.saturating_sub(*subbed);
+
                 let actually_subable = cmp::min(rel, l1.amount);
                 let amount = l1.amount.saturating_sub(actually_subable);
                 Some((
@@ -325,11 +328,7 @@ impl Receipt {
                 let unpends: Vec<Unpend> = pendings
                     .iter()
                     .filter(|p| p.timeout > *upper_bound)
-                    .map(|u| {
-                        known
-                            .get(&u.lock)
-                            .map_or(Unpend::Continue, |s| Unpend::from(s))
-                    })
+                    .map(|u| known.get(&u.lock).map_or(Unpend::Continue, Unpend::from))
                     .collect::<Vec<_>>();
                 let claim = pendings
                     .iter()

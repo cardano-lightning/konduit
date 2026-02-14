@@ -1,4 +1,4 @@
-/// Declaration of variable names.
+// Declaration of variable names.
 
 /// # Adaptor wallet
 pub const SIGNING_KEY: &str = "KONDUIT_SIGNING_KEY";

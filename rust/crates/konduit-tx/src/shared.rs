@@ -94,7 +94,7 @@ impl ChannelOutput {
 
     pub fn to_l1_channel(&self) -> L1Channel {
         L1Channel {
-            amount: self.amount.clone(),
+            amount: self.amount,
             stage: self.stage.clone(),
         }
     }
@@ -138,10 +138,8 @@ impl ChannelOutput {
     }
 
     pub fn to_output(&self, network_id: &NetworkId, credential: &Option<Credential>) -> Output {
-        let mut address = Address::new(
-            network_id.clone(),
-            Credential::from_script(KONDUIT_VALIDATOR.hash),
-        );
+        let mut address =
+            Address::new(*network_id, Credential::from_script(KONDUIT_VALIDATOR.hash));
         if let Some(credential) = credential {
             address = address.with_delegation(credential.clone());
         };
@@ -175,7 +173,7 @@ pub fn filter_channels(
         .iter()
         .filter_map(|(i, o)| {
             ChannelOutput::from_output(o)
-                .filter(|c| filter(&c))
+                .filter(|c| filter(c))
                 .map(|c| (i.clone(), c))
         })
         .collect::<Vec<_>>()

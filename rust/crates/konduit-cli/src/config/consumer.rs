@@ -21,11 +21,11 @@ impl Display for Config {
         let network_id = self.connector.network_id().unwrap_or(NetworkId::MAINNET);
         let key = self.wallet.to_verification_key();
         let address = key.to_address(network_id);
-        write!(f, "== {} ==\n", Self::LABEL)?;
-        write!(f, "{}\n", self.connector)?;
-        write!(f, "host_address = {}\n", self.host_address)?;
-        write!(f, "own_address = {}\n", address)?;
-        write!(f, "own_key = {}\n", key)?;
+        writeln!(f, "== {} ==", Self::LABEL)?;
+        writeln!(f, "{}", self.connector)?;
+        writeln!(f, "host_address = {}", self.host_address)?;
+        writeln!(f, "own_address = {}", address)?;
+        writeln!(f, "own_key = {}", key)?;
         Ok(())
     }
 }

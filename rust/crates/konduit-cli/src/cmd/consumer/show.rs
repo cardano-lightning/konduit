@@ -47,7 +47,7 @@ impl Cmd {
             }
             Cmd::Tip { verbose } => {
                 let tip =
-                    Runtime::new()?.block_on(crate::tip::Consumer::new(&connector, &config))?;
+                    Runtime::new()?.block_on(crate::tip::Consumer::new(&connector, config))?;
                 if verbose {
                     println!("{:#}", tip);
                 } else {

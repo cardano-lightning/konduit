@@ -26,13 +26,13 @@ impl Display for Config {
         let network_id = self.connector.network_id().unwrap_or(NetworkId::MAINNET);
         let vk = self.wallet.to_verification_key();
         let address = vk.to_address(network_id);
-        write!(f, "== {} ==\n", Self::LABEL)?;
-        write!(f, "{}\n", self.connector)?;
-        write!(f, "address = {}\n", address)?;
-        write!(f, "host_address = {}\n", self.host_address)?;
-        write!(f, "adaptor_key = {}\n", vk)?;
-        write!(f, "close_period = {}\n", self.close_period)?;
-        write!(f, "fee = {}\n", self.fee)?;
+        writeln!(f, "== {} ==", Self::LABEL)?;
+        writeln!(f, "{}", self.connector)?;
+        writeln!(f, "address = {}", address)?;
+        writeln!(f, "host_address = {}", self.host_address)?;
+        writeln!(f, "adaptor_key = {}", vk)?;
+        writeln!(f, "close_period = {}", self.close_period)?;
+        writeln!(f, "fee = {}", self.fee)?;
         Ok(())
     }
 }

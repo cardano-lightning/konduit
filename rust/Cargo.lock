@@ -3,31 +3,6 @@
 version = 4
 
 [[package]]
-name = "actix"
-version = "0.13.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de7fa236829ba0841304542f7614c42b80fca007455315c45c785ccfa873a85b"
-dependencies = [
- "actix-macros",
- "actix-rt",
- "actix_derive",
- "bitflags 2.10.0",
- "bytes",
- "crossbeam-channel",
- "futures-core",
- "futures-sink",
- "futures-task",
- "futures-util",
- "log",
- "once_cell",
- "parking_lot 0.12.5",
- "pin-project-lite",
- "smallvec 1.15.1",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "actix-codec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -56,7 +31,7 @@ dependencies = [
  "futures-util",
  "log",
  "once_cell",
- "smallvec 1.15.1",
+ "smallvec",
 ]
 
 [[package]]
@@ -91,7 +66,7 @@ dependencies = [
  "pin-project-lite",
  "rand 0.9.2",
  "sha1",
- "smallvec 1.15.1",
+ "smallvec",
  "tokio",
  "tokio-util",
  "tracing",
@@ -206,7 +181,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "smallvec 1.15.1",
+ "smallvec",
  "socket2 0.5.10",
  "time",
  "tracing",
@@ -220,17 +195,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f591380e2e68490b5dfaf1dd1aa0ebe78d84ba7067078512b4ea6e4492d622b8"
 dependencies = [
  "actix-router",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "actix_derive"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6ac1e58cded18cb28ddc17143c4dea5345b3ad575e14f32f66e4054a56eb271"
-dependencies = [
  "proc-macro2",
  "quote",
  "syn",
@@ -332,15 +296,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
-name = "array-init"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23589ecb866b460d3a0f1278834750268c607e8e28a1b982c907219f3178cd72"
-dependencies = [
- "nodrop",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -440,15 +395,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d965446196e3b7decd44aa7ee49e31d630118f90ef12f97900f262eb915c951d"
 
 [[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -539,7 +485,6 @@ dependencies = [
 name = "bln-client"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "base64",
  "bitcoin",
@@ -690,9 +635,6 @@ dependencies = [
  "anyhow",
  "cardano-connect",
  "cardano-tx-builder",
- "futures",
- "futures-util",
- "getrandom 0.2.16",
  "gloo-net",
  "gloo-timers",
  "hex",
@@ -916,15 +858,6 @@ name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
-
-[[package]]
-name = "crossbeam-channel"
-version = "0.5.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
-dependencies = [
- "crossbeam-utils",
-]
 
 [[package]]
 name = "crossbeam-epoch"
@@ -1176,15 +1109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "envy"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f47e0157f2cb54f5ae1bd371b30a2ae4311e1c028f575cd4e81de7353215965"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1394,12 +1318,10 @@ dependencies = [
  "chrono",
  "clap",
  "dotenvy",
- "hex",
  "humantime",
  "reqwest",
  "serde",
  "serde_json",
- "serde_with",
  "thiserror 2.0.17",
  "tokio",
 ]
@@ -1727,7 +1649,7 @@ dependencies = [
  "itoa",
  "pin-project-lite",
  "pin-utils",
- "smallvec 1.15.1",
+ "smallvec",
  "tokio",
  "want",
 ]
@@ -1850,7 +1772,7 @@ dependencies = [
  "icu_normalizer_data",
  "icu_properties",
  "icu_provider",
- "smallvec 1.15.1",
+ "smallvec",
  "zerovec",
 ]
 
@@ -1908,7 +1830,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b0875f23caa03898994f6ddc501886a45c7d3d62d04d2d90788d47be1b1e4de"
 dependencies = [
  "idna_adapter",
- "smallvec 1.15.1",
+ "smallvec",
  "utf8_iter",
 ]
 
@@ -2092,13 +2014,10 @@ dependencies = [
  "cardano-tx-builder",
  "clap",
  "dotenvy",
- "envy",
  "hex",
  "konduit-data",
  "konduit-tx",
- "rand 0.6.5",
  "serde",
- "serde_json",
  "serde_with",
  "tokio",
  "toml",
@@ -2109,30 +2028,17 @@ name = "konduit-client"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "async-trait",
- "base64",
- "bitcoin_hashes",
  "bln-client",
- "cardano-connect",
- "cardano-connect-blockfrost",
  "cardano-tx-builder",
  "clap",
  "dotenvy",
- "futures",
  "hex",
- "humantime",
  "konduit-data",
- "konduit-tx",
- "lightning-invoice",
- "lightning-types",
- "minicbor",
  "proptest",
  "proptest-derive",
  "reqwest",
  "serde",
  "serde_json",
- "serde_with",
- "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -2141,7 +2047,6 @@ name = "konduit-data"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bincode",
  "cardano-tx-builder",
  "chrono",
  "cryptoxide 0.5.1",
@@ -2157,18 +2062,14 @@ dependencies = [
 name = "konduit-server"
 version = "0.0.0"
 dependencies = [
- "actix",
  "actix-cors",
  "actix-web",
  "anyhow",
  "async-trait",
- "base64",
- "bitcoin_hashes",
  "bln-client",
  "cardano-connect",
  "cardano-connect-blockfrost",
  "cardano-tx-builder",
- "chrono",
  "clap",
  "dotenvy",
  "env_logger",
@@ -2178,15 +2079,12 @@ dependencies = [
  "humantime",
  "konduit-data",
  "konduit-tx",
- "lightning-invoice",
- "lightning-types",
  "log",
  "postcard",
  "proptest",
  "proptest-derive",
  "reqwest",
  "serde",
- "serde-hex",
  "serde_json",
  "serde_with",
  "sled",
@@ -2199,9 +2097,7 @@ name = "konduit-tx"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "cardano-connect",
  "cardano-tx-builder",
- "chrono",
  "hex",
  "konduit-data",
  "serde_json",
@@ -2218,18 +2114,11 @@ dependencies = [
  "cardano-tx-builder",
  "console_error_panic_hook",
  "console_log",
- "futures",
- "getrandom 0.2.16",
- "gloo-net",
- "hex",
  "konduit-data",
  "konduit-tx",
  "log",
- "serde",
- "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
@@ -2308,12 +2197,6 @@ name = "log"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
-
-[[package]]
-name = "maybe-uninit"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
 name = "memchr"
@@ -2419,12 +2302,6 @@ dependencies = [
  "security-framework-sys",
  "tempfile",
 ]
-
-[[package]]
-name = "nodrop"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 
 [[package]]
 name = "num"
@@ -2679,7 +2556,7 @@ dependencies = [
  "instant",
  "libc",
  "redox_syscall 0.2.16",
- "smallvec 1.15.1",
+ "smallvec",
  "winapi",
 ]
 
@@ -2692,7 +2569,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall 0.5.18",
- "smallvec 1.15.1",
+ "smallvec",
  "windows-link 0.2.1",
 ]
 
@@ -3437,17 +3314,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-hex"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca37e3e4d1b39afd7ff11ee4e947efae85adfddf4841787bfa47c470e96dc26d"
-dependencies = [
- "array-init",
- "serde",
- "smallvec 0.6.14",
-]
-
-[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3605,15 +3471,6 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
-]
-
-[[package]]
-name = "smallvec"
-version = "0.6.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b97fcaeba89edba30f044a10c6a3cc39df9c3f17d7cd829dd1446cab35f890e0"
-dependencies = [
- "maybe-uninit",
 ]
 
 [[package]]

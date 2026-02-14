@@ -2,7 +2,7 @@ mod error;
 pub use error::*;
 
 mod channel;
-pub use channel::{Channel, ChannelError};
+pub use channel::{Channel, ChannelError, Quote};
 
 pub mod admin;
 

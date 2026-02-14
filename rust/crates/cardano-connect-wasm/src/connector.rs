@@ -61,7 +61,7 @@ impl CardanoConnector {
             .map_err(|_| anyhow!("invalid signing key length"))?
             .into();
 
-        transaction.sign(signing_key);
+        transaction.sign(&signing_key);
 
         let tx_hash = transaction.id();
         self.submit(transaction.deref()).await?;

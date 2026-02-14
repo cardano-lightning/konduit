@@ -1,18 +1,11 @@
 use cardano_tx_builder::{
     PlutusData,
-    cbor::{self, ToCbor},
+    cbor::{self},
 };
-use std::convert::{From, TryFrom};
-use std::fmt::{self, Display};
-
-pub fn encode_to_cbor<T>(data: T) -> Vec<u8>
-where
-    T: Clone + Into<PlutusData<'static>>,
-    PlutusData<'static>: ToCbor,
-{
-    let data: PlutusData<'static> = data.clone().into();
-    data.to_cbor()
-}
+use std::{
+    convert::{From, TryFrom},
+    fmt::{self, Display},
+};
 
 #[derive(Debug)]
 pub enum DecodeCborError<TError> {

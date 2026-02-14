@@ -15,28 +15,15 @@ release = false
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
-base64.workspace = true
-bitcoin_hashes.workspace = true
 bln-client = { workspace = true, features = ["cli", "namespaced"] }
-cardano-connect-blockfrost.workspace = true
-cardano-connect.workspace = true
 cardano-tx-builder.workspace = true
 clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
-futures.workspace = true
 hex = { workspace = true, features = ["serde"] }
-humantime.workspace = true
 konduit-data.workspace = true
-konduit-tx.workspace = true
-lightning-invoice = { workspace = true, features = ["serde"] }
-lightning-types.workspace = true
-minicbor.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
-serde_with = { workspace = true, features = ["base64", "hex", "json"] }
-thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]

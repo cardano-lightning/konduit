@@ -13,6 +13,9 @@ rust-version.workspace = true
 [package.metadata.release]
 release = false
 
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen-futures"]
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -23,15 +26,8 @@ cardano-connect = { workspace = true, features = ["wasm"] }
 cardano-tx-builder = { workspace = true, features = ["wasm"] }
 console_error_panic_hook.workspace = true
 console_log.workspace = true
-futures.workspace = true
-getrandom = { workspace = true, features = ["js"] }
-gloo-net.workspace = true
-hex.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
-web-sys.workspace = true

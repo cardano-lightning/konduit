@@ -1,13 +1,11 @@
+use cardano_tx_builder::VerificationKey;
+use konduit_data::{
+    Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
+};
 use konduit_tx::ChannelOutput;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::cmp;
-
-use cardano_tx_builder::VerificationKey;
-
-use konduit_data::{
-    Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
-};
 
 /// A channel is an edge in the Lightning network.
 /// In Konduit, a channel is from Consumer to Adaptor.
@@ -64,7 +62,7 @@ impl Channel {
     }
 
     pub fn assert_active(&self) -> Result<(), ChannelError> {
-        if self.aux.is_active == false {
+        if !self.aux.is_active {
             return Err(ChannelError::NotActive);
         }
         Ok(())
@@ -114,7 +112,7 @@ impl Channel {
 
     pub fn capacity(&self) -> Result<u64, ChannelError> {
         // FIXME :: NEED A MAX UNSQUASHED VERIFICATION STEP
-        let _ = self.assert_active()?;
+        self.assert_active()?;
         let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
         let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
         let abs = receipt.potentially_subable(&retainer.useds);
@@ -123,7 +121,7 @@ impl Channel {
     }
 
     pub fn next_index(&self) -> Result<u64, ChannelError> {
-        let _ = self.assert_active()?;
+        self.assert_active()?;
         let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
         let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
         let index = match retainer.useds.last() {
@@ -135,9 +133,9 @@ impl Channel {
 
     pub fn append_locked(&mut self, locked: Locked) -> Result<(), ChannelError> {
         if !locked.verify(&self.key, &self.tag) {
-            return Err(ChannelError::BadInput);
+            Err(ChannelError::BadInput)
         } else if locked.amount() > self.capacity()? {
-            return Err(ChannelError::Amount);
+            Err(ChannelError::Amount)
         } else {
             self.receipt
                 .as_mut()

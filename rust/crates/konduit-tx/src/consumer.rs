@@ -35,12 +35,12 @@ pub fn tx(
     let reference_input = konduit_reference(utxos);
     let reference_inputs = match reference_input {
         None => {
-            if intents.len() > 0 {
+            if !intents.is_empty() {
                 return Err(anyhow!(
                     "No reference script found. Cannot close without reference script"
                 ));
             }
-            if opens.len() == 0 {
+            if opens.is_empty() {
                 return Err(anyhow!(
                     "No reference script found. Can only open but none given"
                 ));
@@ -91,15 +91,15 @@ pub fn tx(
             own_hash: KONDUIT_VALIDATOR.hash,
             constants: Constants {
                 tag: o.tag.clone(),
-                add_vkey: wallet.clone(),
+                add_vkey: *wallet,
                 sub_vkey: o.sub_vkey,
-                close_period: o.close_period.clone(),
+                close_period: o.close_period,
             },
             stage: Stage::Opened(0, vec![]),
         }))
     });
 
-    if channel_inputs.len() == 0 && opens.len() == 0 {
+    if channel_inputs.is_empty() && opens.len() == 0 {
         return Err(anyhow::anyhow!("Transaction does nothing!"));
     }
 
@@ -123,15 +123,15 @@ pub fn tx(
         .collect::<Vec<_>>();
     println!("OUTPUTS {}", outputs[0].address());
     let wallet_hash = Hash::<28>::new(wallet);
-    let specified_signatories = if channels_in.len() > 0 {
-        vec![wallet_hash.clone()]
+    let specified_signatories = if !channels_in.is_empty() {
+        vec![wallet_hash]
     } else {
         vec![]
     };
     let inputs = wallet_ins
         .iter()
         .map(|i| (i.clone(), None))
-        .chain(channel_inputs.into_iter())
+        .chain(channel_inputs)
         .collect::<Vec<_>>();
 
     // FIXME :: These bounds should not be necessary,
@@ -153,7 +153,7 @@ pub fn tx(
         |transaction| {
             let wallet_address = Address::new(
                 network_parameters.network_id,
-                Credential::from_key(wallet_hash.clone()),
+                Credential::from_key(wallet_hash),
             );
             transaction
                 .with_inputs(inputs.clone())
@@ -169,7 +169,7 @@ pub fn tx(
 }
 
 pub enum StepTo {
-    Cont(Cont, ChannelOutput),
+    Cont(Cont, Box<ChannelOutput>),
     Eol(Eol),
 }
 
@@ -182,7 +182,7 @@ impl StepTo {
     }
     pub fn to_output(&self) -> Option<ChannelOutput> {
         match &self {
-            StepTo::Cont(_, o) => Some(o.clone()),
+            StepTo::Cont(_, o) => Some(o.as_ref().clone()),
             StepTo::Eol(_) => None,
         }
     }
@@ -191,17 +191,14 @@ impl StepTo {
 fn mk_step(bounds: &Bounds, intents: &BTreeMap<Tag, Intent>, c: &ChannelOutput) -> Option<StepTo> {
     match &c.stage {
         Stage::Opened(subbed, useds) => {
-            let Some(intent) = intents.get(&c.constants.tag) else {
-                return None;
-            };
-            match intent {
+            match intents.get(&c.constants.tag)? {
                 Intent::Add(add) => Some(StepTo::Cont(
                     Cont::Add,
-                    ChannelOutput {
+                    Box::new(ChannelOutput {
                         amount: add + c.amount,
                         constants: c.constants.clone(),
-                        stage: Stage::Opened(subbed.clone(), useds.clone()),
-                    },
+                        stage: Stage::Opened(*subbed, useds.clone()),
+                    }),
                 )),
                 Intent::Close => {
                     // FIXME :: This coersion should not be necessary. Upstream a fix
@@ -211,11 +208,11 @@ fn mk_step(bounds: &Bounds, intents: &BTreeMap<Tag, Intent>, c: &ChannelOutput) 
                     );
                     Some(StepTo::Cont(
                         Cont::Close,
-                        ChannelOutput {
+                        Box::new(ChannelOutput {
                             amount: c.amount,
                             constants: c.constants.clone(),
-                            stage: Stage::Closed(subbed.clone(), useds.clone(), elapse_at),
-                        },
+                            stage: Stage::Closed(*subbed, useds.clone(), elapse_at),
+                        }),
                     ))
                 }
             }
@@ -257,11 +254,11 @@ fn mk_step(bounds: &Bounds, intents: &BTreeMap<Tag, Intent>, c: &ChannelOutput) 
                 } else {
                     Some(StepTo::Cont(
                         Cont::Expire(unpends),
-                        ChannelOutput {
+                        Box::new(ChannelOutput {
                             amount: c.amount - claimable,
                             constants: c.constants.clone(),
                             stage: Stage::Responded(pendings_amount - claimable, cont_pendings),
-                        },
+                        }),
                     ))
                 }
             } else {

@@ -22,7 +22,6 @@ cli = ["dep:clap", "dep:dotenvy", "dep:humantime"]
 namespaced = []
 
 [dependencies]
-anyhow.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 bitcoin.workspace = true

@@ -6,7 +6,7 @@ use konduit_data::{
 pub fn parse_squash(s: &str) -> anyhow::Result<Squash> {
     match s.split(",").collect::<Vec<_>>().as_slice() {
         [] => Err(anyhow::anyhow!("Cannot coerce from empty")),
-        [x0] => Ok(Squash::try_from(PlutusData::try_from(hex::decode(x0)?)?)?),
+        [x0] => Ok(Squash::try_from(PlutusData::from(hex::decode(x0)?))?),
         [x0, x1] => Ok(Squash::new(
             SquashBody::try_from(decode::<PlutusData>(&hex::decode(x0)?)?)?,
             x1.parse()?,
@@ -18,7 +18,7 @@ pub fn parse_squash(s: &str) -> anyhow::Result<Squash> {
 pub fn parse_locked(s: &str) -> anyhow::Result<Locked> {
     match s.split(",").collect::<Vec<_>>().as_slice() {
         [] => Err(anyhow::anyhow!("Cannot coerce from empty")),
-        [x0] => Ok(Cheque::try_from(PlutusData::try_from(hex::decode(x0)?)?)?
+        [x0] => Ok(Cheque::try_from(PlutusData::from(hex::decode(x0)?))?
             .as_locked()
             .ok_or(anyhow::anyhow!("Not a Locked"))?),
         [x0, x1] => Ok(Locked::new(
@@ -32,7 +32,7 @@ pub fn parse_locked(s: &str) -> anyhow::Result<Locked> {
 pub fn parse_cheque(s: &str) -> anyhow::Result<Cheque> {
     match s.split(",").collect::<Vec<_>>().as_slice() {
         [] => Err(anyhow::anyhow!("Cannot coerce from empty")),
-        [x0] => Cheque::try_from(PlutusData::try_from(hex::decode(x0)?)?),
+        [x0] => Cheque::try_from(PlutusData::from(hex::decode(x0)?)),
         [x0, x1] => Ok(Cheque::from(Locked::new(
             ChequeBody::try_from(decode::<PlutusData>(&hex::decode(x0)?)?)?,
             x1.parse()?,

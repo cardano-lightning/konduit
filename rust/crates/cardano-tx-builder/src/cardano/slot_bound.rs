@@ -7,15 +7,10 @@ use pallas_addresses::Slot;
 
 /// A slot boundary to define validity intervals on transactions. The given argument is expressed
 /// in (absolute) slot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SlotBound {
+    #[default]
     None,
     Inclusive(Slot),
     Exclusive(Slot),
-}
-
-impl Default for SlotBound {
-    fn default() -> Self {
-        Self::None
-    }
 }

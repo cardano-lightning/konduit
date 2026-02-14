@@ -76,9 +76,9 @@ impl Cmd {
                         .collect();
                     let protocol_parameters = &connector.protocol_parameters().await?;
                     let mut tx =
-                        konduit_tx::admin::send(&protocol_parameters, &utxos, tos, change_address)?;
+                        konduit_tx::admin::send(protocol_parameters, &utxos, tos, change_address)?;
                     println!("Tx id :: {}", tx.id());
-                    tx.sign(config.wallet.clone().into());
+                    tx.sign(&config.wallet);
                     connector.submit(&tx).await
                 })
             }
@@ -97,7 +97,7 @@ impl Cmd {
                         .into_iter()
                         .filter(|(_, o)| o.script().is_some() || !args.spend_all)
                         .collect();
-                    let protocol_parameters = &connector.protocol_parameters().await?;
+                    let protocol_parameters = connector.protocol_parameters().await?;
                     let mut tx = konduit_tx::admin::deploy(
                         &protocol_parameters,
                         &utxos,
@@ -106,7 +106,7 @@ impl Cmd {
                         change_address,
                     )?;
                     println!("Tx id :: {}", tx.id());
-                    tx.sign(config.wallet.clone().into());
+                    tx.sign(&config.wallet);
                     connector.submit(&tx).await
                 })
             }

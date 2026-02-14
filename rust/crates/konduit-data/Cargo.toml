@@ -15,7 +15,6 @@ release = false
 
 [dependencies]
 anyhow.workspace = true
-bincode.workspace = true
 cardano-tx-builder.workspace = true
 chrono.workspace = true
 cryptoxide.workspace = true

@@ -124,7 +124,7 @@ mod tests {
     #[test]
     fn test_roundtrip_fixed_array() {
         let inner = [0; 64];
-        let sig = Signature::from(inner.clone());
+        let sig = Signature::from(inner);
         let re_inner = <[u8; 64]>::from(sig);
         assert_eq!(inner, re_inner, "Failed roundtrip");
     }

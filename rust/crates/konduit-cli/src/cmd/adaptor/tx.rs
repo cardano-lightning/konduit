@@ -52,14 +52,12 @@ impl Cmd {
                             &config.host_address.payment(),
                             config.host_address.delegation().as_ref(),
                         )
-                        .await?
-                        .into_iter(),
+                        .await?,
                 )
                 .chain(
                     connector
                         .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
-                        .await?
-                        .into_iter(),
+                        .await?,
                 )
                 .collect();
             let mut tx = konduit_tx::adaptor::tx(
@@ -71,7 +69,7 @@ impl Cmd {
                 &bounds.upper,
             )?;
             println!("Tx id :: {}", tx.id());
-            tx.sign(config.wallet.clone().into());
+            tx.sign(&config.wallet);
             connector.submit(&tx).await
         })
     }

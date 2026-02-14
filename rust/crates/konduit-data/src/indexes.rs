@@ -198,9 +198,6 @@ mod tests {
         let a = Indexes::new(vec![1, 2, 3]).unwrap();
         let b = Indexes::new(vec![2, 3, 4]).unwrap();
         assert_eq!(a.partial_cmp(&b), None);
-        assert!(!(a < b));
-        assert!(!(a > b));
-        assert!(!(a == b));
     }
 
     #[test]

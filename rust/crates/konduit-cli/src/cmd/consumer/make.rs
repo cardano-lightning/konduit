@@ -67,11 +67,7 @@ impl Cmd {
                 exclude,
             } => {
                 let body = SquashBody::new(amount, index, exclude)?;
-                let squash = Squash::make(
-                    &cardano_tx_builder::SigningKey::from(config.wallet.clone()),
-                    &tag,
-                    body,
-                );
+                let squash = Squash::make(&config.wallet, &tag, body);
                 println!(
                     "{},{}",
                     hex::encode(PlutusData::from(squash.body).to_cbor()),
@@ -95,11 +91,7 @@ impl Cmd {
                     .or_else(|| duration.map(duration_from_relative))
                     .ok_or(anyhow::anyhow!("timeout or duration required"))?;
                 let body = ChequeBody::new(index, amount, timeout, lock);
-                let locked = Locked::make(
-                    &cardano_tx_builder::SigningKey::from(config.wallet.clone()),
-                    &tag,
-                    body,
-                );
+                let locked = Locked::make(&config.wallet, &tag, body);
                 println!(
                     "{},{}",
                     hex::encode(PlutusData::from(locked.body).to_cbor()),

@@ -72,7 +72,7 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
         let close_period = self.channel_parameters.close_period;
         let tag_length = self.channel_parameters.tag_length;
         let own_vkey = VerificationKey::from(&self.wallet);
-        let candidates = filter_channels(&utxos, |co| {
+        let candidates = filter_channels(utxos, |co| {
             [
                 co.constants.sub_vkey == own_vkey,
                 co.constants.close_period >= close_period,
@@ -105,7 +105,7 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
     /// These should be considered confirmed utxos,
     /// acceptable to be treated as retainers.
     async fn wallet_utxos(&self) -> anyhow::Result<BTreeMap<Input, Output>> {
-        let vkh = Hash::<28>::new(&VerificationKey::from(&self.wallet));
+        let vkh = Hash::<28>::new(VerificationKey::from(&self.wallet));
         let credential = Credential::from_key(vkh);
         let utxos = self.cardano.utxos_at(&credential, None).await?;
         Ok(utxos)
@@ -122,11 +122,11 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
                     } = self
                         .bln
                         .reveal(bln_client::types::RevealRequest {
-                            lock: locked.lock().0.clone(),
+                            lock: locked.lock().0,
                         })
                         .await?
                     {
-                        self.db.unlock(keytag, Secret(secret.clone())).await?;
+                        self.db.unlock(keytag, Secret(secret)).await?;
                     }
                 }
             }
@@ -166,7 +166,7 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
             &tip,
             &upper_bound,
         )?;
-        tx.sign(self.wallet.clone());
+        tx.sign(&self.wallet);
         self.cardano.submit(&tx).await?;
         Ok(())
     }

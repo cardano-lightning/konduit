@@ -18,7 +18,7 @@ impl Unpend {
 
 impl From<&Secret> for Unpend {
     fn from(value: &Secret) -> Self {
-        Self::Unlock(value.0.clone())
+        Self::Unlock(value.0)
     }
 }
 
