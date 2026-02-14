@@ -21,20 +21,21 @@ bitcoin = "0.32.8"
 hex.workspace = true
 lightning-invoice = { version = "0.34.0", features = ["serde"] }
 lightning-types = "0.3.0"
-reqwest = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json", "stream"] }
 serde.workspace = true
 serde_with = { workspace = true, features = ["hex", "base64"] }
 thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 # Binary-only dependencies (marked as optional)
 clap = { workspace = true, features = ["derive", "env"], optional = true }
-tokio = { workspace = true, features = ["full"], optional = true }
 dotenvy = { workspace = true, optional = true }
 humantime = { workspace = true, optional = true }
 serde_json.workspace = true
+futures.workspace = true
 
 [features]
-cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
+cli = ["dep:clap", "dep:dotenvy", "dep:humantime"]
 namespaced = []
 
 [[bin]]

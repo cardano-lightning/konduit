@@ -50,6 +50,7 @@
               config.rust-project.toolchain
               pkgs.wasm-pack
               clang-unwrapped
+              pkgs.just
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
           buildInputs =
@@ -78,7 +79,7 @@
           cargoToml = builtins.fromTOML (builtins.readFile ./rust/Cargo.toml);
           toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust/rust-toolchain.toml;
           crates = {
-            konduit-adaptor = {
+            konduit-server = {
               crane = {
                 args = {
                   nativeBuildInputs = [pkgs.pkg-config pkgs.openssl.dev];
