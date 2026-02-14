@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
 pub struct ConnectorEnv {
     /// Network. This is the fallback if cardano connector not.
-    #[arg(long, env = "KONDUIT_NETWORK")]
+    #[arg(long, env = "KONDUIT_NETWORK", ignore_case = true)]
     #[serde(rename = "KONDUIT_NETWORK")]
     pub network: Option<Network>,
 
