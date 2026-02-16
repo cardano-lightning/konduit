@@ -1228,6 +1228,16 @@ impl<'d, C> cbor::Decode<'d, C> for Transaction<state::ReadyForSigning> {
     }
 }
 
+impl Clone for Transaction<state::ReadyForSigning> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            state: PhantomData,
+            change_strategy: (),
+        }
+    }
+}
+
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
@@ -1257,6 +1267,41 @@ impl TransactionReadyForSigning {
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         self.0.to_string()
+    }
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
+impl TransactionReadyForSigning {
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toCbor"))]
+    pub fn _wasm_to_cbor(&self) -> Vec<u8> {
+        cbor::ToCbor::to_cbor(&self.0)
+    }
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
+impl TransactionReadyForSigning {
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "getId"))]
+    pub fn _wasm_id(&self) -> Vec<u8> {
+        self.id().as_ref().into()
+    }
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
+impl TransactionReadyForSigning {
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "sign"))]
+    pub fn _wasm_sign(&self, secret_key: &[u8]) -> Result<TransactionReadyForSigning, String> {
+        let mut tx = Clone::clone(&self.0);
+        let signing_key: SigningKey = <[u8; 32]>::try_from(secret_key)
+            .map_err(|_| "invalid signing key length")?
+            .into();
+        tx.sign(signing_key);
+        Ok(TransactionReadyForSigning(tx))
     }
 }
 

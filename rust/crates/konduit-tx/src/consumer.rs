@@ -32,22 +32,29 @@ pub fn tx(
     utxos: &Utxos,
     bounds: Bounds,
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
-    let reference_input = konduit_reference(utxos);
-    let reference_inputs = match reference_input {
-        None => {
-            if intents.len() > 0 {
-                return Err(anyhow!(
-                    "No reference script found. Cannot close without reference script"
-                ));
+    let are_all_open_intents = opens
+        .iter()
+        .all(|o| matches!(intents.get(&o.tag), Some(Intent::Add(_))));
+    let reference_inputs = if are_all_open_intents {
+        vec![]
+    } else {
+        let reference_input = konduit_reference(utxos);
+        match reference_input {
+            None => {
+                if intents.len() > 0 {
+                    return Err(anyhow!(
+                        "No reference script found. Cannot close without reference script"
+                    ));
+                }
+                if opens.len() == 0 {
+                    return Err(anyhow!(
+                        "No reference script found. Can only open but none given"
+                    ));
+                }
+                vec![]
             }
-            if opens.len() == 0 {
-                return Err(anyhow!(
-                    "No reference script found. Can only open but none given"
-                ));
-            }
-            vec![]
+            Some(reference_input) => vec![reference_input],
         }
-        Some(reference_input) => vec![reference_input],
     };
     let wallet_ins = wallet_inputs(wallet, utxos);
     let channels_in = filter_channels(utxos, |c| c.constants.add_vkey == *wallet);

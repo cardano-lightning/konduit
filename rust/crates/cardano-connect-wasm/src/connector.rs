@@ -1,8 +1,7 @@
 use anyhow::anyhow;
 use cardano_connect::{CardanoConnect, Network};
 use cardano_tx_builder::{
-    Address, Credential, Input, Output, ProtocolParameters, SigningKey, Transaction,
-    VerificationKey,
+    Address, Credential, Input, Output, ProtocolParameters, Transaction, VerificationKey,
     cbor::ToCbor,
     transaction::{TransactionReadyForSigning, state},
 };
@@ -51,21 +50,13 @@ impl CardanoConnector {
         Ok(connector)
     }
 
-    #[wasm_bindgen(js_name = "signAndSubmit")]
-    pub async fn sign_and_submit(
+    #[wasm_bindgen(js_name = "submit")]
+    pub async fn submit_tx(
         &self,
         transaction: &mut TransactionReadyForSigning,
-        signing_key: &[u8],
     ) -> crate::Result<Vec<u8>> {
-        let signing_key: SigningKey = <[u8; 32]>::try_from(signing_key)
-            .map_err(|_| anyhow!("invalid signing key length"))?
-            .into();
-
-        transaction.sign(signing_key);
-
         let tx_hash = transaction.id();
         self.submit(transaction.deref()).await?;
-
         Ok(tx_hash.as_ref().into())
     }
 
