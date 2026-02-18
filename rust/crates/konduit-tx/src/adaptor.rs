@@ -48,13 +48,16 @@ pub fn tx(
         })
         .collect::<Vec<_>>();
 
-    if steps
+    let gain = steps
         .iter()
         .map(|triple| extract_amount(utxos.get(&triple.0).unwrap().value()) - triple.2.amount)
-        .sum::<u64>()
-        < preferences.min_total
-    {
-        return Err(anyhow::anyhow!("Insufficient total gain"));
+        .sum::<u64>();
+
+    if gain < preferences.min_total {
+        return Err(anyhow::anyhow!(
+            "insufficient total gain: preferences.min_total = {}, gain = {gain}",
+            preferences.min_total
+        ));
     }
     steps.sort_by_key(|(i, _, _)| i.clone());
     let [main_step, rest @ ..] = &steps[..] else {

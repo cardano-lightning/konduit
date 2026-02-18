@@ -1,10 +1,10 @@
 use crate::{
     db, info,
-    models::{IncompleteSquashResponse, PayBody, QuoteBody, SquashResponse},
+    models::{PayBody, QuoteBody, SquashResponse},
     server::{self, cbor::decode_from_cbor},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_data::{Keytag, Locked, Squash};
+use konduit_data::{Keytag, Locked, Secret, Squash};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 type Data = web::Data<server::Data>;
@@ -72,8 +72,12 @@ pub async fn squash(
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
-    let Ok(squash): Result<Squash, _> = decode_from_cbor(body.as_ref()) else {
-        return Ok(HttpResponse::BadRequest().body("Cannot decode squash"));
+
+    let squash: Squash = match decode_from_cbor(body.as_ref()) {
+        Ok(squash) => squash,
+        Err(err) => {
+            return Ok(HttpResponse::BadRequest().body(format!("cannot decode squash: {err}")));
+        }
     };
     let (key, tag) = keytag.split();
     if !squash.verify(&key, &tag) {
@@ -83,15 +87,12 @@ pub async fn squash(
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
     };
-    // FIXME :: This should be moved to a single method eg `squashable`
-    let response_body = if !receipt.unlockeds().is_empty() {
-        // FIXME :: Should include possible expire
-        SquashResponse::Incomplete(IncompleteSquashResponse {
-            receipt,
-            expire: None,
-        })
-    } else {
-        SquashResponse::Complete
+    let response_body = match receipt.squash_proposal() {
+        Ok(Some(propose)) => SquashResponse::Incomplete(propose),
+        Ok(None) => SquashResponse::Complete,
+        Err(_) => {
+            return Ok(HttpResponse::InternalServerError().body("Failed to resolve squash"));
+        }
     };
     Ok(HttpResponse::Ok().json(response_body))
 }
@@ -169,9 +170,20 @@ pub async fn pay(
     if !locked.verify(&key, &tag) {
         return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
     };
+    if invoice.payment_hash != locked.lock().0 {
+        return Ok(HttpResponse::BadRequest().body(format!(
+            "provided lock's secret={} does not match invoice's payment_hash={}",
+            hex::encode(locked.lock().0),
+            hex::encode(invoice.payment_hash),
+        )));
+    }
+
     let effective_amount_msat = fx.lovelace_to_msat(locked.amount() - FEE_PLACEHOLDER);
     if effective_amount_msat < invoice.amount_msat {
-        return Ok(HttpResponse::BadRequest().body("Cheque does not cover payment"));
+        return Ok(HttpResponse::BadRequest().body(format!(
+            "cheque does not cover payment: minimum required={}, effective amount={}",
+            invoice.amount_msat, effective_amount_msat
+        )));
     }
     let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
 
@@ -182,39 +194,56 @@ pub async fn pay(
     let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
         return Ok(HttpResponse::InternalServerError().body("System time not available"));
     };
+
     let relative_timeout = locked
         .timeout()
         .saturating_sub(now)
         .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
 
     if relative_timeout.is_zero() {
-        return Ok(HttpResponse::InternalServerError().body("Timeout too soon"));
+        let min_timeout = (now + ADAPTOR_TIME_DELTA + ADAPTOR_TIME_GRACE).as_secs();
+        return Ok(HttpResponse::InternalServerError().body(format!(
+            "timeout too soon: minimum acceptable timeout={min_timeout}, provided timeout={}",
+            locked.timeout().as_secs(),
+        )));
     };
 
-    let _payment_hash = locked.lock().0;
     if let Err(err) = data.db().append_locked(&keytag, locked).await {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
-    let _pay_request = bln_client::types::PayRequest {
+    let pay_request = bln_client::types::PayRequest {
         fee_limit,
         relative_timeout,
         invoice,
     };
-
-    // let pay_response = match data.bln.pay(pay_request).await {
-    //     Ok(res) => res,
-    //     Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
-    // };
-    // let channel = match data.db.unlock(&keytag, Secret(pay_response.secret)).await {
-    //     Ok(channel) => channel,
-    //     Err(err) => {
-    //         return Ok(HttpResponse::BadRequest()
-    //             .body(format!("Error handling secret: {}", err.to_string())));
-    //     }
-    // };
-    // let Some(receipt) = channel.receipt() else {
-    //     return Ok(HttpResponse::InternalServerError().body("Logic failure"));
-    // };
-    // Ok(HttpResponse::Ok().json(receipt))
-    todo!("Not yet reimplemented")
+    let pay_response = match data.bln().pay(pay_request).await {
+        Ok(res) => res,
+        Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
+    };
+    let channel = if let Some(secret) = pay_response.secret {
+        data.db().unlock(&keytag, Secret(secret)).await
+    } else {
+        match data.db().get_channel(&keytag).await {
+            Ok(Some(c)) => Ok(c),
+            Ok(None) => return Ok(HttpResponse::InternalServerError().body("Impossible")),
+            Err(err) => Err(err),
+        }
+    };
+    let channel = match channel {
+        Ok(channel) => channel,
+        Err(err) => {
+            return Ok(HttpResponse::BadRequest().body(format!("Error handling secret: {}", err)));
+        }
+    };
+    let Some(receipt) = channel.receipt() else {
+        return Ok(HttpResponse::InternalServerError().body("Failure to recover receipt"));
+    };
+    let response_body = match receipt.squash_proposal() {
+        Ok(Some(propose)) => SquashResponse::Incomplete(propose),
+        Ok(None) => SquashResponse::Complete,
+        Err(_) => {
+            return Ok(HttpResponse::InternalServerError().body("Failed to resolve squash"));
+        }
+    };
+    Ok(HttpResponse::Ok().json(response_body))
 }

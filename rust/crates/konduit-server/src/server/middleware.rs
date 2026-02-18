@@ -74,12 +74,18 @@ where
                     }
                     Err(_) => {
                         // Invalid hex
-                        error = Some(actix_web::error::ErrorForbidden("Invalid token format."));
+                        error = Some(actix_web::error::ErrorForbidden(format!(
+                            "invalid '{}' token format",
+                            self.header_name
+                        )));
                     }
                 }
             }
             None => {
-                error = Some(actix_web::error::ErrorForbidden("Missing token."));
+                error = Some(actix_web::error::ErrorForbidden(format!(
+                    "missing '{}' header token",
+                    self.header_name
+                )));
             }
         }
 
