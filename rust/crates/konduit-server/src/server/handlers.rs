@@ -232,8 +232,7 @@ pub async fn pay(
     let channel = match channel {
         Ok(channel) => channel,
         Err(err) => {
-            return Ok(HttpResponse::BadRequest()
-                .body(format!("Error handling secret: {}", err.to_string())));
+            return Ok(HttpResponse::BadRequest().body(format!("Error handling secret: {}", err)));
         }
     };
     let Some(receipt) = channel.receipt() else {
