@@ -4,8 +4,8 @@
 
 use crate::{
     Address, BoxedIterator, ChangeStrategy, ExecutionUnits, Hash, Input, NetworkId, Output,
-    PlutusData, PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, SigningKey,
-    SlotBound, Value, VerificationKey, cbor, pallas, pretty,
+    PlutusData, PlutusScript, PlutusVersion, ProtocolParameters, RedeemerPointer, Signature,
+    SigningKey, SlotBound, Value, VerificationKey, cbor, pallas, pretty,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -286,13 +286,23 @@ impl Transaction<state::InConstruction> {
 
 impl Transaction<state::ReadyForSigning> {
     pub fn sign(&mut self, signing_key: &SigningKey) -> &mut Self {
+        self.sign_with(|msg| (signing_key.to_verification_key(), signing_key.sign(msg)))
+    }
+
+    /// Like 'sign', but allows signing through a callback to avoid leaking the signing key.
+    pub fn sign_with(
+        &mut self,
+        sign: impl FnOnce(Hash<32>) -> (VerificationKey, Signature),
+    ) -> &mut Self {
+        let (verification_key, signature) = sign(self.id());
+
         let public_key = pallas::Bytes::from(Vec::from(<[u8; VerificationKey::SIZE]>::from(
-            VerificationKey::from(signing_key),
+            verification_key,
         )));
 
         let witness = pallas::VKeyWitness {
             vkey: public_key.clone(),
-            signature: pallas::Bytes::from(Vec::from(signing_key.sign(self.id()).as_ref())),
+            signature: pallas::Bytes::from(Vec::from(signature.as_ref())),
         };
 
         if let Some(signatures) = mem::take(&mut self.inner.transaction_witness_set.vkeywitness) {

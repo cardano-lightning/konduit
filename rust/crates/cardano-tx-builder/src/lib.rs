@@ -27,6 +27,7 @@ pub use cardano::{
     slot_bound::SlotBound,
     transaction::{IsTransactionBodyState, Transaction},
     value::Value,
+    with_network_id::WithNetworkId,
 };
 
 /// A namespace for address-related sub-modules.
@@ -46,7 +47,7 @@ pub mod any {
     };
 }
 
-mod cardano;
+pub(crate) mod cardano;
 mod non_extensible;
 mod pallas;
 mod pretty;

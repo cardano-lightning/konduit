@@ -4,7 +4,10 @@
 
 use crate::{cbor, pallas};
 use anyhow::anyhow;
-use std::{fmt, str::FromStr};
+use std::{fmt, ops::Deref, str::FromStr};
+
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
 
 /// A _blake2b_ hash digest; typically 28 or 32 bytes long.
 ///
@@ -164,6 +167,68 @@ impl<const SIZE: usize> From<Hash<SIZE>> for [u8; SIZE] {
 impl<const SIZE: usize> AsRef<[u8]> for Hash<SIZE> {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode)]
+#[repr(transparent)]
+#[cbor(transparent)]
+pub struct Hash28(#[n(0)] Hash<28>);
+
+#[cfg(feature = "wasm")]
+impl From<Hash<28>> for Hash28 {
+    fn from(hash28: Hash<28>) -> Self {
+        Self(hash28)
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl Deref for Hash28 {
+    type Target = Hash<28>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl Hash28 {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode)]
+#[repr(transparent)]
+#[cbor(transparent)]
+pub struct Hash32(#[n(0)] Hash<32>);
+
+#[cfg(feature = "wasm")]
+impl From<Hash<32>> for Hash32 {
+    fn from(hash32: Hash<32>) -> Self {
+        Self(hash32)
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl Deref for Hash32 {
+    type Target = Hash<32>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl Hash32 {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        self.0.to_string()
     }
 }
 

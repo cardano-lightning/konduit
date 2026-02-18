@@ -1,17 +1,32 @@
 use anyhow::anyhow;
-use cardano_tx_builder::{NetworkId, ProtocolParameters};
+use cardano_tx_builder::{NetworkId, ProtocolParameters, cbor, cbor as minicbor};
 use std::fmt;
+
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    serde::Serialize,
+    serde::Deserialize,
+    cbor::Encode,
+    cbor::Decode,
+)]
 #[serde(into = "String", try_from = "&str")]
 pub enum Network {
+    #[n(0)]
     Mainnet,
-    Preview,
+    #[n(1)]
     Preprod,
+    #[n(2)]
+    Preview,
 }
 
 pub const MAINNET_MAGIC: u64 = 764824073;

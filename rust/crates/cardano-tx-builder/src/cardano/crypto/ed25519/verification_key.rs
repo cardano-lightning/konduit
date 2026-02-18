@@ -7,10 +7,14 @@ use crate::{
 };
 use std::{cmp, fmt, str::FromStr};
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 /// A ed25519 verification key (non-extended).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct VerificationKey(pub ed25519::PublicKey);
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub struct VerificationKey(ed25519::PublicKey);
 
 impl fmt::Display for VerificationKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -147,5 +151,21 @@ impl<'a> From<&'a VerificationKey> for &'a ed25519::PublicKey {
 impl<'a> From<&'a VerificationKey> for PlutusData<'a> {
     fn from(key: &'a VerificationKey) -> Self {
         Self::bytes(key.0)
+    }
+}
+
+// ------------------------------------------------------------------------ Wasm
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl VerificationKey {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
+    pub fn _wasm_new(value: &str) -> Result<Self, String> {
+        Self::from_str(value).map_err(|e| e.to_string())
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        self.to_string()
     }
 }
