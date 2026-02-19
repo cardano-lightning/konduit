@@ -13,14 +13,23 @@ rust-version.workspace = true
 [package.metadata.release]
 release = false
 
+[features]
+default = []
+wasm = ["dep:wasm-bindgen"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 anyhow.workspace = true
 cardano-tx-builder.workspace = true
 chrono.workspace = true
 cryptoxide.workspace = true
 hex.workspace = true
+rand_core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
 uplc.workspace = true
+wasm-bindgen = { workspace = true, optional = true }
