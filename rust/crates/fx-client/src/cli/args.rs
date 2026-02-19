@@ -12,7 +12,9 @@ use crate::BaseCurrency;
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct FxArgs {
-    #[arg(long, env = "FX_EVERY", value_parser = humantime::parse_duration, default_value = "2s")]
+    // If set to 0, then a single response given and program exits, else the endpoint
+    // is queried until interrupted
+    #[arg(long, env = "FX_EVERY", value_parser = humantime::parse_duration, default_value = "0s")]
     #[cfg_attr(feature = "namespaced", arg(long("fx-every")))]
     pub every: Duration,
 

@@ -2,6 +2,7 @@
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use clap::Parser;
+    use serde_json::json;
     use tokio::time::interval;
 
     dotenvy::dotenv().ok();
@@ -11,13 +12,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = fx_client::cli::Config::from_args(args)
         .expect("Insufficient arguments to determine a valid FX client.");
     let client = config.build()?;
-    let mut ticker = interval(every);
 
-    loop {
-        ticker.tick().await;
+    let fetch_and_print = || async {
         match client.get().await {
-            Ok(output) => println!("Success! Output: {:?}", output),
-            Err(e) => eprintln!("Service failed: {}", e),
+            Ok(output) => {
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            }
+            Err(e) => {
+                let log = json!({ "status": "error", "message": e.to_string() });
+                eprintln!("{}", serde_json::to_string_pretty(&log)?);
+            }
+        }
+        Ok::<(), serde_json::Error>(())
+    };
+
+    if every.is_zero() {
+        fetch_and_print().await?;
+        return Ok(());
+    } else {
+        let mut ticker = interval(every);
+        loop {
+            ticker.tick().await;
+            fetch_and_print().await?;
         }
     }
 }
