@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 3. Build the specific backend client (e.g., LndClient)
-    let client = config.build()?;
+    let client = config.build().await?;
 
     // 4. Handle the specific command
     match args.command {

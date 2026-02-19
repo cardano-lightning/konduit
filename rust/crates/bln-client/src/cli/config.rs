@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use crate::{Api, lnd, mock};
+use crate::{Api, cli::args::Transport, lnd, lnd_rpc, mock};
 
 /// Internal configuration enum representing the chosen backend and its settings.
 pub enum Config {
     Mock,
-    Lnd(lnd::Config),
+    LndRest(lnd::Config),
+    LndRpc(lnd_rpc::Config),
 }
 
 impl Config {
@@ -15,30 +16,44 @@ impl Config {
         if args.mock {
             Ok(Config::Mock)
         } else if let (Some(base_url), Some(macaroon)) = (args.lnd_base_url, args.lnd_macaroon) {
-            Ok(Config::Lnd(lnd::Config::new(
-                base_url,
-                macaroon,
-                args.block_time,
-                84,
-                None,
-                // FIXME :: This may be insufficient in some contexts
-                // It should be double the server's capacity.
-                1000,
-            )))
+            if Some(Transport::Rpc) == args.lnd_type {
+                Ok(Config::LndRpc(lnd_rpc::Config::new(
+                    base_url,
+                    None,
+                    macaroon,
+                    args.block_time,
+                    84,
+                )))
+            } else {
+                Ok(Config::LndRest(lnd::Config::new(
+                    base_url,
+                    macaroon,
+                    args.block_time,
+                    84,
+                    None,
+                    // FIXME :: This may be insufficient in some contexts
+                    // It should be double the server's capacity.
+                    1000,
+                )))
+            }
         } else {
             Err("Missing required LND configuration (base URL and Macaroon).".to_string())
         }
     }
 
     /// Consumes the config and initializes the appropriate API client.
-    pub fn build(self) -> crate::Result<Arc<dyn Api>> {
+    pub async fn build(self) -> crate::Result<Arc<dyn Api>> {
         match self {
-            Config::Lnd(config) => {
+            Config::Mock => {
+                let client = mock::Client::new();
+                Ok(Arc::new(client))
+            }
+            Config::LndRest(config) => {
                 let client = lnd::Client::try_from(config)?;
                 Ok(Arc::new(client))
             }
-            Config::Mock => {
-                let client = mock::Client::new();
+            Config::LndRpc(config) => {
+                let client = lnd_rpc::Client::new(config).await?;
                 Ok(Arc::new(client))
             }
         }
