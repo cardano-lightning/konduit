@@ -1,8 +1,4 @@
-use bln_client::{
-    Api,
-    lnd::{self, Macaroon},
-    types::RevealRequest,
-};
+use bln_client::{Api, lnd, macaroon::Macaroon, types::RevealRequest};
 use dotenvy::dotenv;
 use std::{env, time::Duration};
 
