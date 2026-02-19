@@ -4,7 +4,7 @@ mod error;
 pub use bln_sdk::types;
 pub use error::*;
 
-mod macaroon;
+pub mod macaroon;
 
 // Clients
 pub mod lnd;
