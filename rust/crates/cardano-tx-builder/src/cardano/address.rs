@@ -363,6 +363,13 @@ impl<T: IsAddressKind> From<&Address<T>> for Vec<u8> {
 pub struct ShelleyAddress(Address<kind::Shelley>);
 
 #[cfg(feature = "wasm")]
+impl From<Address<kind::Shelley>> for ShelleyAddress {
+    fn from(address: Address<kind::Shelley>) -> Self {
+        Self(address)
+    }
+}
+
+#[cfg(feature = "wasm")]
 impl Deref for ShelleyAddress {
     type Target = Address<kind::Shelley>;
     fn deref(&self) -> &Self::Target {
@@ -403,6 +410,19 @@ impl ShelleyAddress {
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         self.0.to_string()
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(getter, js_name = "payment_credential"))]
+    pub fn _wasm_payment_credential(&self) -> Credential {
+        self.payment()
+    }
+
+    #[cfg_attr(
+        feature = "wasm",
+        wasm_bindgen(getter, js_name = "delegation_credential")
+    )]
+    pub fn _wasm_delegation_credential(&self) -> Option<Credential> {
+        self.delegation()
     }
 }
 
