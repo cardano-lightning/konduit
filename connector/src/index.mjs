@@ -4,6 +4,7 @@ import { endpointBalance } from "./endpoints/balance.mjs";
 import { endpointNetwork } from "./endpoints/network.mjs";
 import { endpointSubmit } from "./endpoints/submit.mjs";
 import { endpointUtxosAt } from "./endpoints/utxos_at.mjs";
+import { endpointTransactions } from "./endpoints/transactions.mjs";
 
 import blockfrost from "./middleware/blockfrost.mjs";
 import koios from "./middleware/koios.mjs";
@@ -21,5 +22,6 @@ app.get("/balance/:address", endpointBalance);
 app.get("/network", endpointNetwork);
 app.post("/submit", endpointSubmit);
 app.get("/utxos_at/:address", endpointUtxosAt);
+app.get("/transactions/:address", endpointTransactions);
 
 export default app;
