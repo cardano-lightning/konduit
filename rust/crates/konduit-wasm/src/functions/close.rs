@@ -7,7 +7,7 @@ use konduit_tx::{
     Bounds, KONDUIT_VALIDATOR, NetworkParameters,
     consumer::{self, Intent},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -41,7 +41,7 @@ pub async fn close(
     utxos.append(&mut script_utxos);
 
     let network_parameters = NetworkParameters {
-        network_id: NetworkId::from(connector.network()),
+        network_id: NetworkId::from(*connector.network().deref()),
         protocol_parameters: connector.protocol_parameters().await?,
     };
 

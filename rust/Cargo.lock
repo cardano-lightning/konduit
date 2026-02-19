@@ -2093,14 +2093,11 @@ dependencies = [
  "cardano-tx-builder",
  "console_error_panic_hook",
  "console_log",
- "hex",
- "js-sys",
  "konduit-data",
  "konduit-tx",
  "log",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-time",
 ]
 
 [[package]]
