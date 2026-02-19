@@ -38,12 +38,14 @@ encode-hash hash:
 
 # Check node health (shows which node is active)
 health:
-    @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain, block_height : .block_height}'
+    @echo "Connecting to node using {{dot_file}}..."
+    @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain, block_height: .block_height}'
+    @just node={{node}} _request GET "/v1/getinfo" | jq
 
 # --- Invoice Commands ---
 # Decode a bolt11 invoice to see destination and amount
 decode-invoice invoice:
-    @just node={{node}} _request GET "/v1/payreq/{{invoice}}" | jq '{destination: .destination, amount_msat: .num_msat}' 
+    @just node={{node}} _request GET "/v1/payreq/{{invoice}}" | jq '{destination: .destination, amount_msat: .num_msat}'
 
 # List invoices
 invoices short="":
@@ -95,3 +97,90 @@ init-node name:
     @echo "LND_MACAROON=<hex_macaroon>" >> .env.{{name}}
     @echo "LND_TLS_CERT=~/.lnd/tls.cert" >> .env.{{name}}
     @echo ".env.{{name}} created."
+
+
+# The current version we are using for LND nodes
+LND_VERSION := "v0-20-1-rc1"
+# Where the proto files are
+BASE_URL    := "https://raw.githubusercontent.com/lightningnetwork/lnd/refs/heads/" + LND_VERSION + "/lnrpc"
+
+# Usage: just lnd-pull-all [--force] [--recursive]
+[group('lnd proto')]
+lnd-pull-all *flags="":
+  @just lnd-pull "routerrpc/router.proto" {{flags}}
+
+# Fetch a single proto file based on its internal path
+[group('lnd proto')]
+lnd-pull path *flags="":
+  @just _lnd-pull {{path}} \
+    $(just _parse_force {{flags}}) \
+    $(just _parse_recursive {{flags}})
+
+# True if --force present
+@_parse_force *flags="":
+  just _parse_flag "--force" {{flags}}
+
+# True if --recursive present
+@_parse_recursive *flags="":
+  just _parse_flag "--recursive" {{flags}}
+
+# Parses flags to determine if force is active
+@_parse_flag target *flags="":
+  if [[ "{{flags}}" == *"{{target}}"* ]]; then echo "true"; else echo "false"; fi
+
+@_lnd-pull path force recursive:
+  just _lnd-pull-one {{path}} {{force}}
+  just _lnd-resolve-deps {{force}} {{recursive}}
+
+_lnd-pull-one path force:
+  #!/usr/bin/env bash
+  lpath="proto/{{path}}"
+  url="{{BASE_URL}}/{{path}}"
+  mkdir -p $(dirname ${lpath})
+  if [ "{{force}}" = "true" ] || [ ! -f ${lpath} ]; then
+      echo "Downloading: ${url} ";
+      if ! curl -sSL --fail ${url} -o ${lpath}; then
+          echo "Error: Failed to download {{path}} (curl exited with $?)" >&2
+          exit 1
+      fi
+  else
+      echo "Skipping: ${lpath} (already exists)"
+  fi
+
+# Extracts missing imports from the proto/ directory
+_lnd-list-missing:
+  #!/usr/bin/env bash
+  # Extracts strings like 'lnrpc/rpc.proto' from import lines
+  grep -rh '^import "' proto/ 2>/dev/null | sed -e 's/import "//' -e 's/";//' | sort | uniq | while read -r dep; do
+      if [ ! -f "proto/$dep" ]; then
+          echo "$dep"
+      fi
+  done
+
+# Iteratively resolve and fetch dependencies
+_lnd-resolve-deps force recursive:
+    #!/usr/bin/env bash
+    missing=$(just _lnd-list-missing)
+    if [ -z "${missing}" ]; then
+        echo "✅ All dependencies satisfied."
+        exit 0
+    fi
+
+    echo "--- Found Missing Dependencies ---"
+    echo "${missing}"
+    echo "----------------------------------"
+
+    if [ "{{recursive}}" = "true" ]; then
+        confirm="y"
+    else
+        read -p "Pull these files? [y/N] " confirm
+    fi
+
+    if [[ "${confirm}" == [yY] ]] && [[ ! ${missing} == "" ]]; then
+      for file in ${missing}; do
+        just _lnd-pull-one ${file} {{force}} || exit 1;
+      done
+      just _lnd-resolve-deps {{force}} {{recursive}}
+    else
+        echo "Aborted."
+    fi

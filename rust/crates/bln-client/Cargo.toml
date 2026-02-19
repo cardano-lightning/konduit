@@ -33,13 +33,19 @@ serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex", "base64"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tonic = { version = "0.14.4", features = ["tls-ring"] }
+tonic-prost = "0.14.4"
 
 # Binary-only dependencies (marked as optional)
 clap = { workspace = true, features = ["derive", "env"], optional = true }
 dotenvy = { workspace = true, optional = true }
 humantime = { workspace = true, optional = true }
+prost = "0.14.3"
 
 [dev-dependencies]
 clap = { workspace = true, features = ["derive", "env"]}
 dotenvy = { workspace = true}
 humantime = { workspace = true}
+
+[build-dependencies]
+tonic-prost-build = "0.14.4"
