@@ -4,6 +4,7 @@ use crate::{
     server::{self, cbor::decode_from_cbor},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
+use cardano_tx_builder::cbor;
 use konduit_data::{Keytag, Locked, Secret, Squash};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -73,12 +74,29 @@ pub async fn squash(
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
-    let squash: Squash = match decode_from_cbor(body.as_ref()) {
+
+    let decode_result: Result<Squash, _> = if let Some(content_type) =
+        req.headers().get("Content-Type")
+        && content_type == "application/json"
+    {
+        serde_json::from_slice::<String>(body.as_ref())
+            .map_err(|e| cbor::decode::Error::message(e).into())
+            .and_then(|s| hex::decode(s).map_err(|e| cbor::decode::Error::message(e).into()))
+            .and_then(|bytes| decode_from_cbor(&bytes))
+    } else {
+        decode_from_cbor(body.as_ref())
+    };
+
+    let squash: Squash = match decode_result {
         Ok(squash) => squash,
         Err(err) => {
-            return Ok(HttpResponse::BadRequest().body(format!("Cannot decode squash: {err}")));
+            return Ok(HttpResponse::BadRequest().body(format!(
+                "cannot decode squash: {err}, {}",
+                hex::encode(body.as_ref())
+            )));
         }
     };
+
     let (key, tag) = keytag.split();
     if !squash.verify(&key, &tag) {
         return Ok(HttpResponse::BadRequest().body("Invalid squash"));
@@ -97,7 +115,7 @@ pub async fn squash(
     let response_body = if squash.body == proposal.proposal {
         // Consumer up-to-date
         SquashResponse::Complete
-    } else if proposal.proposal == proposal.current.body {
+    } else if Some(&proposal.proposal) == proposal.current.as_ref().map(|p| &p.body) {
         // Consumer not up-to-date, but nothing to squash
         SquashResponse::Stale(proposal)
     } else {
@@ -262,7 +280,7 @@ pub async fn pay(
                 .body(format!("Failed to resolve squash: {}", err)));
         }
     };
-    let response_body = if proposal.current.body == proposal.proposal {
+    let response_body = if proposal.current.as_ref().map(|p| &p.body) == Some(&proposal.proposal) {
         SquashResponse::Complete
     } else {
         SquashResponse::Incomplete(proposal)
