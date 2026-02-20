@@ -36,19 +36,18 @@ impl TryFrom<Vec<u8>> for Keytag {
 impl Keytag {
     pub fn new(key: VerificationKey, tag: Tag) -> Self {
         Self(
-            key.0
-                .as_ref()
+            key.as_ref()
                 .to_vec()
                 .into_iter()
-                .chain(tag.0.clone())
+                .chain(tag.as_ref().to_vec())
                 .collect::<Vec<u8>>(),
         )
     }
 
     pub fn split(&self) -> (VerificationKey, Tag) {
         (
-            VerificationKey::from(<[u8; 32]>::try_from(self.0[0..32].to_vec()).unwrap()),
-            Tag(self.0[32..].to_vec()),
+            VerificationKey::from(<[u8; 32]>::try_from(self.as_ref()[0..32].to_vec()).unwrap()),
+            Tag::from(self.as_ref()[32..].to_vec()),
         )
     }
 }

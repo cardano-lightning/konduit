@@ -114,7 +114,7 @@ impl Config {
         let key = SigningKey::from_str(&cli.signing_key)
             .context("Invalid signing key format or length")?;
         let tag_bytes = hex::decode(&cli.tag).context("Invalid hex for tag")?;
-        let tag = Tag(tag_bytes);
+        let tag = Tag::from(tag_bytes);
 
         let lnd = if let (Some(url), Some(mac)) = (&cli.lnd_url, &cli.lnd_macaroon) {
             Some(LndConfig {

@@ -7,7 +7,7 @@ use konduit_tx::{
     Bounds, NetworkParameters,
     consumer::{self, OpenIntent},
 };
-use std::collections::btree_map::BTreeMap;
+use std::{collections::btree_map::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -40,7 +40,7 @@ pub async fn open(
     let consumer_credential = Credential::from_key(Hash::<28>::new(consumer));
 
     let network_parameters = NetworkParameters {
-        network_id: NetworkId::from(connector.network()),
+        network_id: NetworkId::from(*connector.network().deref()),
         protocol_parameters: connector.protocol_parameters().await?,
     };
 

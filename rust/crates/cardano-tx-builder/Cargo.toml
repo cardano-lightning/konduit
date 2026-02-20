@@ -24,6 +24,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
+bech32.workspace = true
 hex.workspace = true
 itertools.workspace = true
 minicbor.workspace = true
@@ -34,7 +35,7 @@ pallas-codec.workspace = true
 pallas-crypto.workspace = true
 pallas-primitives.workspace = true
 proptest = { workspace = true, optional = true }
-rand.workspace = true
+rand_core.workspace = true
 serde = { workspace = true, optional = true }
 uplc.workspace = true
 wasm-bindgen = { workspace = true, optional = true }

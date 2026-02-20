@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_connect::{CardanoConnect, Network};
+use cardano_connect::{CardanoConnect, Network, NetworkName};
 use cardano_tx_builder::{
     Address, Credential, Input, Output, ProtocolParameters, SigningKey, Transaction,
     VerificationKey,
@@ -75,7 +75,7 @@ impl CardanoConnector {
             .map_err(|_| anyhow!("invalid verification key length"))?
             .into();
 
-        let addr = verification_key.to_address(self.network().into());
+        let addr = verification_key.to_address(self.network.into());
 
         let balance = self
             .get::<balance::Response>(&format!("/balance/{addr}"))
@@ -85,8 +85,8 @@ impl CardanoConnector {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn network(&self) -> Network {
-        self.network
+    pub fn network(&self) -> NetworkName {
+        NetworkName::from(self.network)
     }
 }
 
@@ -194,7 +194,7 @@ impl CardanoConnect for CardanoConnector {
         payment: &Credential,
         delegation: Option<&Credential>,
     ) -> anyhow::Result<BTreeMap<Input, Output>> {
-        let mut addr = Address::new(self.network().into(), payment.clone());
+        let mut addr = Address::new(self.network.into(), payment.clone());
         if let Some(delegation) = delegation {
             addr = addr.with_delegation(delegation.clone());
         }

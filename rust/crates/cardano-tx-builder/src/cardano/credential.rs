@@ -2,9 +2,14 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Hash, VerificationKey, cbor, pallas};
+use crate::{Hash, NetworkId, VerificationKey, WithNetworkId, cbor, pallas};
 use anyhow::anyhow;
-use std::fmt;
+use std::{fmt, str::FromStr};
+
+#[cfg(feature = "wasm")]
+use crate::cardano::hash::Hash28;
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
 
 /// A wrapper around the _blake2b-224_ hash digest of a key or script.
 ///
@@ -21,6 +26,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Credential(#[n(0)] pallas::StakeCredential);
 
 impl fmt::Display for Credential {
@@ -30,6 +36,27 @@ impl fmt::Display for Credential {
                 |hash| format!("Key({hash})"),
                 |hash| format!("Script({hash})"),
             )
+            .as_str(),
+        )
+    }
+}
+
+impl fmt::Display for WithNetworkId<'_, Credential> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        let addr_type = self.inner.select(|_| 0b1110, |_| 0b1111) << 4;
+        let header = addr_type | u8::from(self.network_id);
+        let payload = [&[header], Hash::from(self.inner).as_ref()].concat();
+        f.write_str(
+            bech32::encode(
+                if self.network_id.is_mainnet() {
+                    "stake"
+                } else {
+                    "stake_test"
+                },
+                bech32::ToBase32::to_base32(&payload),
+                bech32::Variant::Bech32,
+            )
+            .expect("invalid bech32 string")
             .as_str(),
         )
     }
@@ -121,6 +148,27 @@ impl Credential {
 
 // ----------------------------------------------------------- Converting (from)
 
+impl FromStr for Credential {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        match pallas::Address::from_bech32(s)? {
+            pallas::Address::Stake(stake) => Ok(Self::from(stake.payload())),
+            pallas::Address::Byron { .. } | pallas::Address::Shelley { .. } => {
+                Err(anyhow!("invalid stake address type"))
+            }
+        }
+    }
+}
+
+impl From<&pallas::StakePayload> for Credential {
+    fn from(stake_payload: &pallas::StakePayload) -> Self {
+        match stake_payload {
+            pallas::StakePayload::Stake(hash) => Self::from_key(Hash::from(hash)),
+            pallas::StakePayload::Script(hash) => Self::from_script(Hash::from(hash)),
+        }
+    }
+}
+
 impl From<pallas::StakeCredential> for Credential {
     fn from(credential: pallas::StakeCredential) -> Self {
         Self(credential)
@@ -194,8 +242,8 @@ impl From<Credential> for pallas::ShelleyDelegationPart {
     }
 }
 
-impl From<Credential> for [u8; 28] {
-    fn from(credential: Credential) -> Self {
+impl From<&Credential> for [u8; 28] {
+    fn from(credential: &Credential) -> Self {
         match credential.0 {
             pallas::StakeCredential::AddrKeyhash(hash)
             | pallas::StakeCredential::ScriptHash(hash) => <[u8; 28]>::try_from(hash.to_vec())
@@ -203,6 +251,42 @@ impl From<Credential> for [u8; 28] {
                     unreachable!("Hash<28> held something else than 28 bytes: {e:?}")
                 }),
         }
+    }
+}
+
+impl From<&Credential> for Hash<28> {
+    fn from(credential: &Credential) -> Self {
+        Hash::from(<[u8; 28]>::from(credential))
+    }
+}
+
+// ------------------------------------------------------------------ WASM
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl Credential {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
+    pub fn _wasm_new(credential: &str) -> Result<Self, String> {
+        Self::from_str(credential).map_err(|e| e.to_string())
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toStringWithNetworkId"))]
+    pub fn _wasm_to_string_with_network_id(&self, network_id: NetworkId) -> String {
+        WithNetworkId {
+            inner: self,
+            network_id,
+        }
+        .to_string()
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "asKey"))]
+    pub fn _wasm_as_key(&self) -> Option<Hash28> {
+        self.as_key().map(Hash28::from)
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "asScript"))]
+    pub fn _wasm_as_script(&self) -> Option<Hash28> {
+        self.as_script().map(Hash28::from)
     }
 }
 

@@ -22,3 +22,16 @@ impl<T: Encode<()>> ToCbor for T {
         bytes
     }
 }
+
+/// A trait mostly for convenience, as we often end up writing bytes to CBOR.
+pub trait FromCbor<'d> {
+    fn from_cbor(bytes: &'d [u8]) -> Result<Self, decode::Error>
+    where
+        Self: Sized;
+}
+
+impl<'d, T: Decode<'d, ()>> FromCbor<'d> for T {
+    fn from_cbor(bytes: &'d [u8]) -> Result<Self, decode::Error> {
+        decode(bytes)
+    }
+}

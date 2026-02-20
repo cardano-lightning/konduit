@@ -4,7 +4,7 @@
 
 use crate::{Signature, VerificationKey, pallas::ed25519};
 use anyhow::anyhow;
-use rand::RngCore;
+use rand_core::RngCore;
 use std::str::FromStr;
 
 /// An ed25519 signing key (non-extended).
@@ -20,7 +20,7 @@ impl SigningKey {
     /// Generate a new signing key using available system entropy.
     pub fn new() -> Self {
         let mut bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand_core::OsRng.fill_bytes(&mut bytes);
         Self::from(bytes)
     }
 
@@ -75,7 +75,6 @@ impl TryFrom<Vec<u8>> for SigningKey {
 
     fn try_from(bytes: Vec<u8>) -> anyhow::Result<Self> {
         let array = <[u8; 32]>::try_from(bytes).map_err(|_| anyhow!("invalid signing key"))?;
-
         Ok(Self::from(array))
     }
 }

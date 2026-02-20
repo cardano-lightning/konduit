@@ -12,7 +12,7 @@ pub struct Constants {
 
 impl Constants {
     pub fn verify(&self, max_tag_length: usize, min_close_period: u64) -> bool {
-        self.tag.0.len() <= max_tag_length
+        self.tag.len() <= max_tag_length
             && self.close_period.as_millis() >= min_close_period as u128
     }
 }

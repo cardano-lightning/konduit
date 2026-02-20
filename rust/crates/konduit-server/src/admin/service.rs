@@ -76,7 +76,7 @@ impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
             [
                 co.constants.sub_vkey == own_vkey,
                 co.constants.close_period >= close_period,
-                co.constants.tag.0.len() <= tag_length,
+                co.constants.tag.len() <= tag_length,
                 co.stage.is_opened(),
             ]
             .iter()

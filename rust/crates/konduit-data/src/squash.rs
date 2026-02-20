@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn test_squash_round_trip() {
         let sk = SigningKey::from([0; 32]);
-        let tag = Tag([1; 20].to_vec());
+        let tag = Tag::from([1; 20].to_vec());
         let body = SquashBody::new_no_verify(120309, 123, Indexes::new([22].to_vec()).unwrap());
         let original = Squash::make(&sk, &tag, body);
 

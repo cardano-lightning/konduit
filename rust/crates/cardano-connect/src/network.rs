@@ -1,17 +1,33 @@
 use anyhow::anyhow;
-use cardano_tx_builder::{NetworkId, ProtocolParameters};
+use cardano_tx_builder::{NetworkId, ProtocolParameters, cbor, cbor as minicbor};
 use std::fmt;
+
+#[cfg(feature = "wasm")]
+use std::ops::Deref;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    serde::Serialize,
+    serde::Deserialize,
+    cbor::Encode,
+    cbor::Decode,
+)]
 #[serde(into = "String", try_from = "&str")]
 pub enum Network {
+    #[n(0)]
     Mainnet,
-    Preview,
+    #[n(1)]
     Preprod,
+    #[n(2)]
+    Preview,
 }
 
 pub const MAINNET_MAGIC: u64 = 764824073;
@@ -100,25 +116,72 @@ impl Network {
 // --------------------------------------------------------------- WASM-specific
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkIsMainnet"))]
-pub fn _wasm_network_is_mainnet(network: Network) -> bool {
-    network.is_mainnet()
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    serde::Serialize,
+    serde::Deserialize,
+    cbor::Encode,
+    cbor::Decode,
+)]
+pub struct NetworkName(#[n(0)] Network);
+
+#[cfg(feature = "wasm")]
+impl From<Network> for NetworkName {
+    fn from(network: Network) -> Self {
+        Self(network)
+    }
 }
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkIsTestnet"))]
-pub fn _wasm_network_is_testnet(network: Network) -> bool {
-    network.is_testnet()
+impl Deref for NetworkName {
+    type Target = Network;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkAsMagic"))]
-pub fn _wasm_network_as_magic(network: Network) -> u64 {
-    u64::from(network)
-}
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl NetworkName {
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
+    pub fn _wasm_new(network: &str) -> Result<Self, String> {
+        Ok(Self(Network::try_from(network).map_err(|e| e.to_string())?))
+    }
 
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "networkToString"))]
-pub fn _wasm_network_to_string(network: Network) -> String {
-    network.to_string()
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "isMainnet"))]
+    pub fn _wasm_is_mainnet(&self) -> bool {
+        self.is_mainnet()
+    }
+
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "isTestnet"))]
+    pub fn _wasm_is_testnet(&self) -> bool {
+        self.is_testnet()
+    }
+
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toMagic"))]
+    pub fn _wasm_to_magic(&self) -> u64 {
+        u64::from(self.0)
+    }
+
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toNetworkId"))]
+    pub fn _wasm_to_network_id(&self) -> NetworkId {
+        NetworkId::from(self.0)
+    }
+
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "displayName"))]
+    pub fn _wasm_display_name(&self) -> String {
+        self.to_string()
+    }
 }

@@ -4,6 +4,9 @@
 
 /// A re-export of [`minicbor`](https://docs.rs/minicbor/latest/minicbor/index.html).
 pub mod cbor;
+
+mod cardano;
+pub use cardano::*;
 pub use cardano::{
     // Re-export types for easier consumption.
     //
@@ -27,15 +30,8 @@ pub use cardano::{
     slot_bound::SlotBound,
     transaction::{IsTransactionBodyState, Transaction},
     value::Value,
+    with_network_id::WithNetworkId,
 };
-
-/// A namespace for address-related sub-modules.
-pub use cardano::address;
-
-/// A namespace for transaction-related sub-modules.
-pub use cardano::transaction;
-
-pub use cardano::macros;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod any {
@@ -46,7 +42,6 @@ pub mod any {
     };
 }
 
-mod cardano;
 mod non_extensible;
 mod pallas;
 mod pretty;
