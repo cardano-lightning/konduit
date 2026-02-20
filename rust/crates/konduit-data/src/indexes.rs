@@ -19,7 +19,7 @@ pub enum IndexesError {
     NoIndex,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Indexes(pub Vec<u64>);
 
 impl fmt::Display for Indexes {
