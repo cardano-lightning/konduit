@@ -1,8 +1,7 @@
 use std::cmp;
 
 use anyhow::anyhow;
-use cardano_tx_builder::cbor::ToCbor;
-use cardano_tx_builder::{PlutusData, cbor};
+use cardano_tx_builder::{PlutusData, cbor, cbor::ToCbor};
 use serde::{Deserialize, Serialize};
 
 use crate::{ChequeBody, Indexes, IndexesError, Tag};
@@ -16,7 +15,7 @@ pub enum SquashBodyError {
     Exclude(IndexesError),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SquashBody {
     pub amount: u64,
     pub index: u64,

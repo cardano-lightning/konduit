@@ -7,9 +7,13 @@ use anyhow::anyhow;
 use rand_core::RngCore;
 use std::str::FromStr;
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 /// An ed25519 signing key (non-extended).
 #[derive(Debug, Clone)]
 #[repr(transparent)]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct SigningKey(ed25519::SecretKey);
 
 // ----------------------------------------------------------------------- Using
@@ -103,5 +107,21 @@ impl SigningKey {
 impl From<&SigningKey> for VerificationKey {
     fn from(key: &SigningKey) -> Self {
         VerificationKey::from(key.0.public_key())
+    }
+}
+
+// ------------------------------------------------------------------------ Wasm
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl SigningKey {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
+    pub fn _wasm_new(value: &str) -> Result<Self, String> {
+        Self::from_str(value).map_err(|e| e.to_string())
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "sign"))]
+    pub fn _wasm_sign(&self, msg: &[u8]) -> Signature {
+        self.sign(msg)
     }
 }

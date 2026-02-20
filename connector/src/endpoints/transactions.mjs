@@ -18,12 +18,16 @@ export async function endpointTransactions(ctx) {
             timestamp: tx.block_time,
             invalid_before: meta.invalid_before,
             invalid_after: meta.invalid_after,
-            inputs: utxos.inputs.map((i) => ({
-              transaction_id: i.tx_hash,
-              output_index: i.output_index,
-              ...toOutput(i),
-            })),
-            outputs: utxos.outputs.map(toOutput),
+            inputs: utxos.inputs
+              .filter(i => !i.reference && (meta.valid_contract ? !i.collateral : i.collateral))
+              .map((i) => ({
+                transaction_id: i.tx_hash,
+                output_index: i.output_index,
+                ...toOutput(i),
+              })),
+            outputs: utxos.outputs
+              .filter(o => meta.valid_contract ? !o.collateral : o.collateral)
+              .map(toOutput),
           };
         }),
       ),

@@ -270,6 +270,11 @@ impl Credential {
         Self::from_str(credential).map_err(|e| e.to_string())
     }
 
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "equals"))]
+    pub fn _wasm_equals(&self, other: &Self) -> bool {
+        self == other
+    }
+
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toStringWithNetworkId"))]
     pub fn _wasm_to_string_with_network_id(&self, network_id: NetworkId) -> String {
         WithNetworkId {

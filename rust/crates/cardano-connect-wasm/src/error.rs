@@ -1,3 +1,4 @@
+use std::{fmt, fmt::Display};
 use wasm_bindgen::prelude::*;
 
 pub type Result<T> = std::result::Result<T, StrError>;
@@ -5,6 +6,12 @@ pub type Result<T> = std::result::Result<T, StrError>;
 #[wasm_bindgen]
 #[repr(transparent)]
 pub struct StrError(String);
+
+impl Display for StrError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 #[wasm_bindgen]
 impl StrError {

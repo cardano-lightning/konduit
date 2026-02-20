@@ -238,7 +238,7 @@ impl Receipt {
         } else {
             Ok(Some(SquashProposal {
                 proposal,
-                current,
+                current: Some(current),
                 unlockeds,
             }))
         }
