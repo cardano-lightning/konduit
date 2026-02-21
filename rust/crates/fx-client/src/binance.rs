@@ -94,7 +94,7 @@ async fn curl_get_raw(url: &str) -> Result<Vec<u8>, Error> {
         .arg("-s")
         .arg(url)
         .output()
-        .map_err(Error::Io)?;
+        .map_err(Error::CurlIo)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

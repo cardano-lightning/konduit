@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use reqwest;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::process::Command;
+use std::{collections::HashMap, process::Command};
 
 use crate::{Api, BaseCurrency, Error, State};
 
@@ -59,7 +58,7 @@ async fn with_curl(base: &BaseCurrency, token: &Option<String>) -> Result<Vec<Co
             .arg("-H")
             .arg(format!("x_cg_demo_api_key : {}", token));
     };
-    let output = output.output().map_err(Error::Io)?;
+    let output = output.output().map_err(Error::CurlIo)?;
     if output.status.success() {
         // If the API fails, we still only pick this up as a failure to deserialize.
         let response_data: Vec<CoinMarket> =

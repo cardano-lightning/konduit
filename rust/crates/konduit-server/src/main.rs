@@ -15,10 +15,12 @@ async fn main() -> anyhow::Result<()> {
     let fx_every = args.fx.every;
     let fx_config = fx_client::cli::Config::from_args(args.fx)
         .ok_or_else(|| anyhow::anyhow!("Failed to resolve FX configuration from provided flags"))?;
+
     let fx_client = fx_config.build()?;
     let fx_init_state = fx_client.get().await?;
     let fx_state = Arc::new(RwLock::new(fx_init_state));
     let fx_state_clone = fx_state.clone();
+
     tokio::spawn(async move {
         let mut ticker = interval(fx_every);
         loop {
@@ -50,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
     let admin = Arc::new(
         admin::Service::new(admin_config, bln.clone(), cardano.clone(), db.clone()).await?,
     );
+
     tokio::spawn(async move {
         let admin = Arc::clone(&admin);
         let mut ticker = interval(admin_every);
@@ -64,9 +67,10 @@ async fn main() -> anyhow::Result<()> {
 
     // INFO
     let info = Arc::new(info::Info::from_args(&args.common));
-
     let server_data = server::Data::new(bln, db, fx_state, info);
     let server = server::Service::new(args.server, server_data);
+
     server.run().await?;
+
     Ok(())
 }

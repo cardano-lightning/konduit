@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::process::Command;
+use std::{collections::HashMap, process::Command};
 
 use crate::{Api, BaseCurrency, Error, State};
 
@@ -102,7 +101,7 @@ async fn curl_get<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T, Error> {
         .arg("-s")
         .arg(url)
         .output()
-        .map_err(Error::Io)?;
+        .map_err(Error::CurlIo)?;
 
     if !output.status.success() {
         let msg = String::from_utf8_lossy(&output.stderr);
