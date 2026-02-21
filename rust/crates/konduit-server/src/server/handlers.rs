@@ -107,11 +107,12 @@ pub async fn quote(
     };
     let fx = data.fx().read().await.clone();
     let Some(channel) = data.db().get_channel(&keytag).await? else {
-        return Ok(HttpResponse::BadRequest().body("No channel found"));
+        return Ok(HttpResponse::BadRequest().body(format!("no channel found for keytag={keytag}")));
     };
     let Ok(_capacity) = channel.capacity() else {
         return Ok(HttpResponse::BadRequest().body("No capacity"));
     };
+
     let Ok(index) = channel.next_index() else {
         return Ok(HttpResponse::BadRequest().body("No next index"));
     };

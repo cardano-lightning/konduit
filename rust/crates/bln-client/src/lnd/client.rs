@@ -224,7 +224,14 @@ impl Api for Client {
     async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
         let blocks = req.relative_timeout.as_secs() / self.config.block_time.as_secs();
         let body = router_send::Request {
-            cltv_limit: Some(std::cmp::max(blocks, self.config.min_cltv)),
+            cltv_limit: Some(
+                req.invoice
+                    .min_final_cltv_expiry_delta
+                    .as_ref()
+                    .map(|min_final| min_final.0)
+                    .unwrap_or(self.config.min_cltv)
+                    + blocks,
+            ),
             fee_limit_msat: Some(req.fee_limit),
             payment_request: Some(req.invoice.into()),
             ..Default::default()
@@ -234,7 +241,7 @@ impl Api for Client {
         if res.status == "FAILED" {
             Err(Error::ApiError {
                 status: 500,
-                message: format!("LND Payment Failed: {}", res.payment_error),
+                message: format!("LND Payment Failed: {:?}", res),
             })
         } else if res.payment_preimage.is_empty() {
             Err(Error::ApiError {
