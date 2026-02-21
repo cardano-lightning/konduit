@@ -4,7 +4,8 @@ use clap::Parser;
 mod adaptor;
 mod admin;
 mod consumer;
-mod parsers;
+mod hammer;
+pub mod parsers;
 
 /// A utility for constructing and driving Konduit's stages
 #[derive(Debug, clap::Parser)]
@@ -13,6 +14,7 @@ pub(crate) enum Cmd {
     Adaptor(WithEnv<env::adaptor::Env, adaptor::Cmd>),
     Admin(WithEnv<env::admin::Env, admin::Cmd>),
     Consumer(WithEnv<env::consumer::Env, consumer::Cmd>),
+    Hammer(WithEnv<env::hammer::Env, hammer::Cmd>),
 }
 
 #[derive(Debug, clap::Parser)]
@@ -30,6 +32,7 @@ impl Cmd {
             Self::Adaptor(WithEnv { env, cmd }) => cmd.run(env),
             Self::Admin(WithEnv { env, cmd }) => cmd.run(env),
             Self::Consumer(WithEnv { env, cmd }) => cmd.run(env),
+            Self::Hammer(WithEnv { env, cmd }) => cmd.run(env),
         }
     }
 

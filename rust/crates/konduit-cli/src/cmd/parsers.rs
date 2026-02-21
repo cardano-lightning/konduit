@@ -68,3 +68,9 @@ pub fn parse_keytag_receipt(s: &str) -> anyhow::Result<(Keytag, Receipt)> {
     let receipt = Receipt::new_with_cheques(parse_squash(x1)?, cheques)?;
     Ok((keytag, receipt))
 }
+
+pub fn parse_hex_32(s: &str) -> Result<[u8; 32], String> {
+    let mut bytes = [0u8; 32];
+    hex::decode_to_slice(s, &mut bytes).map_err(|e| format!("Invalid hex: {}", e))?;
+    Ok(bytes)
+}
