@@ -1,4 +1,4 @@
-use crate::HttpClient;
+use crate::{HttpClient, helpers::singleton};
 use anyhow::anyhow;
 use cardano_connect::{CardanoConnect, Network, NetworkName};
 use cardano_tx_builder::{
@@ -119,18 +119,4 @@ impl CardanoConnect for CardanoConnector {
 
         Ok(())
     }
-}
-
-// --------------------------------------------------------------------- Helpers
-
-fn singleton(key: &str, value: impl Into<JsValue>) -> anyhow::Result<JsValue> {
-    let obj = js_sys::Object::new();
-    js_sys::Reflect::set(&obj, &(key.into()), &(value.into())).map_err(|e| {
-        anyhow!(
-            "failed to construct singleton object with key '{}': {:?}",
-            key,
-            e
-        )
-    })?;
-    Ok(obj.into())
 }
