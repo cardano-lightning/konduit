@@ -5,7 +5,7 @@ use crate::{
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use cardano_tx_builder::cbor;
-use konduit_data::{Keytag, Locked, Secret, Squash, SquashProposal};
+use konduit_data::{Keytag, Locked, Secret, Squash};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 type Data = web::Data<server::Data>;
@@ -66,14 +66,14 @@ pub async fn show(data: Data) -> Result<HttpResponse, HandlerError> {
     Ok(HttpResponse::Ok().json(results))
 }
 
-/// Retrieve the latest squash state from the adaptor standpoint. This can be used by the consumer
+/// Retrieve the latest receipt from the adaptor standpoint. This can be used by the consumer
 /// to recover its own state without "fear":
 ///
 /// - the squash is signed by their key, so necessarily originated from them.
 /// - the adaptor is free to send an earlier receipt, which is only to the advantage of the
 ///   consumer for they will owe the adaptor *less* money. In practice, the adaptor has no
 ///   incentives to do that.
-pub async fn get_squash(req: HttpRequest, data: Data) -> Result<HttpResponse, HandlerError> {
+pub async fn receipt(req: HttpRequest, data: Data) -> Result<HttpResponse, HandlerError> {
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
@@ -84,22 +84,7 @@ pub async fn get_squash(req: HttpRequest, data: Data) -> Result<HttpResponse, Ha
         return Ok(HttpResponse::NotFound().body(format!("no channel for keytag={}", keytag)));
     };
 
-    let proposal = if let Some(receipt) = channel.receipt() {
-        match receipt.squash_proposal() {
-            Err(e) => {
-                return Ok(HttpResponse::InternalServerError()
-                    .body(format!("failed to resolve squash: {}", e)));
-            }
-            Ok(proposal) => proposal,
-        }
-    } else {
-        return Ok(HttpResponse::Ok().json(SquashResponse::Incomplete(SquashProposal::default())));
-    };
-
-    Ok(HttpResponse::Ok().json(match proposal {
-        Some(propose) => SquashResponse::Incomplete(propose),
-        None => SquashResponse::Complete,
-    }))
+    Ok(HttpResponse::Ok().json(channel.receipt()))
 }
 
 pub async fn squash(
@@ -151,7 +136,7 @@ pub async fn squash(
     let response_body = if squash.body == proposal.proposal {
         // Consumer up-to-date
         SquashResponse::Complete
-    } else if Some(&proposal.proposal) == proposal.current.as_ref().map(|p| &p.body) {
+    } else if proposal.proposal == proposal.current.body {
         // Consumer not up-to-date, but nothing to squash
         SquashResponse::Stale(proposal)
     } else {
@@ -287,6 +272,7 @@ pub async fn pay(
         relative_timeout,
         invoice,
     };
+
     let pay_response = match data.bln().pay(pay_request).await {
         Ok(res) => res,
         Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
@@ -316,7 +302,7 @@ pub async fn pay(
                 .body(format!("Failed to resolve squash: {}", err)));
         }
     };
-    let response_body = if proposal.current.as_ref().map(|p| &p.body) == Some(&proposal.proposal) {
+    let response_body = if proposal.current.body == proposal.proposal {
         SquashResponse::Complete
     } else {
         SquashResponse::Incomplete(proposal)

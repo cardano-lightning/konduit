@@ -1,10 +1,10 @@
 use crate::{Locked, Squash, SquashBody, Unlocked};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SquashProposal {
     pub proposal: SquashBody,
-    pub current: Option<Squash>,
+    pub current: Squash,
     pub unlockeds: Vec<Unlocked>,
     pub lockeds: Vec<Locked>,
 }

@@ -37,7 +37,7 @@ impl Service {
                     // FIXME : Implement auth
                     web::scope("/ch")
                         .wrap(middleware::KeytagAuth::new("KONDUIT"))
-                        .route("/squash", web::get().to(handlers::get_squash))
+                        .route("/receipt", web::get().to(handlers::receipt))
                         .route("/squash", web::post().to(handlers::squash))
                         .route("/quote", web::post().to(handlers::quote))
                         .route("/pay", web::post().to(handlers::pay)),

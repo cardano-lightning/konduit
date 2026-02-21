@@ -232,7 +232,7 @@ impl Receipt {
             .map_err(|_e| ReceiptError::NotReproduced)?;
         Ok(SquashProposal {
             proposal,
-            current: Some(current),
+            current,
             unlockeds,
             lockeds: self.lockeds(),
         })
