@@ -66,6 +66,11 @@ impl CardanoConnector {
     pub fn network(&self) -> NetworkName {
         NetworkName::from(self.network)
     }
+
+    #[wasm_bindgen(js_name = "health")]
+    pub async fn _wasm_health(&self) -> crate::Result<String> {
+        Ok(self.health().await?)
+    }
 }
 
 // -------------------------------------------------------- CardanoConnect Trait
