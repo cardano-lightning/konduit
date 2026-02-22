@@ -2097,16 +2097,21 @@ name = "konduit-wasm"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bln-sdk",
  "cardano-connect",
  "cardano-connect-wasm",
  "cardano-tx-builder",
  "console_error_panic_hook",
  "console_log",
+ "hex",
  "konduit-data",
  "konduit-tx",
  "log",
+ "serde",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]

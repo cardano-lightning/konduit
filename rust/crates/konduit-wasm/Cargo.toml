@@ -21,13 +21,20 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-cardano-connect-wasm.workspace = true
+bln-sdk.workspace = true
 cardano-connect = { workspace = true, features = ["wasm"] }
+cardano-connect-wasm.workspace = true
 cardano-tx-builder = { workspace = true, features = ["wasm"] }
 console_error_panic_hook.workspace = true
 console_log.workspace = true
-konduit-data.workspace = true
+hex.workspace = true
+konduit-data = { workspace = true, features = ["wasm"] }
 konduit-tx.workspace = true
 log.workspace = true
+serde.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
+web-time.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

@@ -1,7 +1,10 @@
+use crate::{
+    asset_object::{AssetObject, from_asset_objects},
+    helpers::try_into_array,
+};
 use anyhow::anyhow;
 use cardano_tx_builder::{
-    Address, Credential, Hash, Input, Output, PlutusScript, PlutusVersion, Value, address::kind,
-    cbor,
+    Address, Hash, Input, Output, PlutusScript, PlutusVersion, address::kind, cbor,
 };
 
 #[derive(Debug, serde::Deserialize)]
@@ -52,45 +55,4 @@ impl TryFrom<Response> for (Input, Output) {
 
         Ok((input, output))
     }
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct AssetObject {
-    pub unit: String,
-    pub quantity: String,
-}
-
-impl AssetObject {
-    const UNIT_LOVELACE: &str = "lovelace";
-}
-
-fn from_asset_objects(assets: &[AssetObject]) -> anyhow::Result<Value<u64>> {
-    fn from_asset_unit(unit: &str) -> anyhow::Result<(Hash<28>, Vec<u8>)> {
-        let script_hash: [u8; Credential::DIGEST_SIZE] =
-            try_into_array(hex::decode(&unit[0..2 * Credential::DIGEST_SIZE])?)?;
-
-        let asset_name: Vec<u8> = hex::decode(&unit[2 * Credential::DIGEST_SIZE..])?;
-
-        Ok((Hash::from(script_hash), asset_name))
-    }
-
-    let mut lovelace = None;
-    let mut value = Vec::new();
-
-    for asset in assets {
-        let amount: u64 = asset.quantity.parse()?;
-        if asset.unit == AssetObject::UNIT_LOVELACE {
-            lovelace = Some(amount);
-        } else {
-            let (script_hash, asset_name) = from_asset_unit(&asset.unit)?;
-            value.push((script_hash, [(asset_name, amount)]));
-        }
-    }
-
-    Ok(Value::new(lovelace.unwrap_or_default()).with_assets(value))
-}
-
-fn try_into_array<T, const N: usize>(v: Vec<T>) -> anyhow::Result<[T; N]> {
-    <[T; N]>::try_from(v)
-        .map_err(|v: Vec<T>| anyhow!("Expected a Vec of length {}, but got {}", N, v.len()))
 }

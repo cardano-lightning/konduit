@@ -1,5 +1,5 @@
 MAKEFLAGS += -j
-OUT := konduit-wasm
+OUT := konduit-wasm-nightly
 
 .PHONY: all browser nodejs clean
 
