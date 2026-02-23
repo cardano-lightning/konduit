@@ -73,7 +73,6 @@ pub async fn squash(
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
-
     let squash: Squash = match decode_from_cbor(body.as_ref()) {
         Ok(squash) => squash,
         Err(err) => {
@@ -84,18 +83,28 @@ pub async fn squash(
     if !squash.verify(&key, &tag) {
         return Ok(HttpResponse::BadRequest().body("Invalid squash"));
     }
-    let channel = data.db().update_squash(&keytag, squash).await?;
+    let channel = data.db().update_squash(&keytag, squash.clone()).await?;
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
     };
-    let response_body = match receipt.squash_proposal() {
-        Ok(Some(propose)) => SquashResponse::Incomplete(propose),
-        Ok(None) => SquashResponse::Complete,
+    let proposal = match receipt.squash_proposal() {
+        Ok(proposal) => proposal,
         Err(err) => {
             return Ok(HttpResponse::InternalServerError()
                 .body(format!("Failed to resolve squash: {}", err)));
         }
     };
+    let response_body = if squash.body == proposal.proposal {
+        // Consumer up-to-date
+        SquashResponse::Complete
+    } else if proposal.proposal == proposal.current.body {
+        // Consumer not up-to-date, but nothing to squash
+        SquashResponse::Stale(proposal)
+    } else {
+        // Something to squash
+        SquashResponse::Incomplete(proposal)
+    };
+
     Ok(HttpResponse::Ok().json(response_body))
 }
 
@@ -246,12 +255,17 @@ pub async fn pay(
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Failure to recover receipt"));
     };
-    let response_body = match receipt.squash_proposal() {
-        Ok(Some(propose)) => SquashResponse::Incomplete(propose),
-        Ok(None) => SquashResponse::Complete,
-        Err(_) => {
-            return Ok(HttpResponse::InternalServerError().body("Failed to resolve squash"));
+    let proposal = match receipt.squash_proposal() {
+        Ok(proposal) => proposal,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError()
+                .body(format!("Failed to resolve squash: {}", err)));
         }
+    };
+    let response_body = if proposal.current.body == proposal.proposal {
+        SquashResponse::Complete
+    } else {
+        SquashResponse::Incomplete(proposal)
     };
     Ok(HttpResponse::Ok().json(response_body))
 }

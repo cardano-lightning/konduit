@@ -216,7 +216,7 @@ impl Receipt {
         }
     }
 
-    pub fn squash_proposal(&self) -> Result<Option<SquashProposal>, ReceiptError> {
+    pub fn squash_proposal(&self) -> Result<SquashProposal, ReceiptError> {
         let current = self.squash.clone();
         let unlockeds = self.unlockeds();
         let index = match unlockeds.last() {
@@ -233,15 +233,12 @@ impl Receipt {
         .map_err(|_e| ReceiptError::NotReproduced)?;
         let proposal = SquashBody::new(self.owed(), index, exclude)
             .map_err(|_e| ReceiptError::NotReproduced)?;
-        if proposal == self.squash.body {
-            Ok(None)
-        } else {
-            Ok(Some(SquashProposal {
-                proposal,
-                current,
-                unlockeds,
-            }))
-        }
+        Ok(SquashProposal {
+            proposal,
+            current,
+            unlockeds,
+            lockeds: self.lockeds(),
+        })
     }
 
     pub fn step(&self, upper_bound: &Duration, l1: &L1Channel) -> Option<(Cont, L1Channel)> {

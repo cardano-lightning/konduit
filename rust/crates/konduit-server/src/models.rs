@@ -40,6 +40,7 @@ pub struct Secrets(Vec<[u8; 32]>);
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum QuoteBody {
     Simple(SimpleQuote),
     Bolt11(#[serde_as(as = "DisplayFromStr")] Invoice),
@@ -113,6 +114,10 @@ pub struct UnlockedCheque {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum SquashResponse {
+    /// Consumer up-to-date
     Complete,
+    /// Something to squash
     Incomplete(SquashProposal),
+    /// Consumer not up-to-date, but nothing to squash
+    Stale(SquashProposal),
 }

@@ -76,6 +76,7 @@ pub struct QuoteResponse {
 pub enum SquashResponse {
     Complete,
     Incomplete(SquashProposal),
+    Stale(SquashProposal),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,6 +84,7 @@ pub struct SquashProposal {
     pub proposal: SquashBody,
     pub current: Squash,
     pub unlockeds: Vec<Unlocked>,
+    pub lockeds: Vec<Locked>,
 }
 
 impl fmt::Display for QuoteResponse {
@@ -291,6 +293,11 @@ impl Config {
                 } else {
                     Err(anyhow!("User aborted squash synchronization"))
                 }
+            }
+            SquashResponse::Stale(proposal) => {
+                eprintln!("Squash stale.");
+                println!("{}", serde_json::to_string_pretty(&proposal).unwrap());
+                Ok(())
             }
         }
     }
