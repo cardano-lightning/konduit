@@ -45,9 +45,10 @@ impl ResponseError for HandlerError {
 // TODO :: MOVE TO CONFIG
 /// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
 const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60);
-/// "Grace" is extra time between the "quoted" rel time and the time that might be allowed for in a
-/// "pay"
-const ADAPTOR_TIME_GRACE: std::time::Duration = Duration::from_secs(10 * 60);
+/// Extra time between the "quoted" rel time and the time that might be allowed for in a
+/// "pay". I don't know why this has to be so high.
+/// LND fails for values much smaller than this.
+const QUOTE_PAY_TIME_MARGIN: std::time::Duration = Duration::from_secs(4 * 10 * 60);
 
 pub async fn info(data: Data) -> info::Info {
     (*data.info()).clone()
@@ -76,7 +77,7 @@ pub async fn squash(
     let squash: Squash = match decode_from_cbor(body.as_ref()) {
         Ok(squash) => squash,
         Err(err) => {
-            return Ok(HttpResponse::BadRequest().body(format!("cannot decode squash: {err}")));
+            return Ok(HttpResponse::BadRequest().body(format!("Cannot decode squash: {err}")));
         }
     };
     let (key, tag) = keytag.split();
@@ -90,8 +91,9 @@ pub async fn squash(
     let response_body = match receipt.squash_proposal() {
         Ok(Some(propose)) => SquashResponse::Incomplete(propose),
         Ok(None) => SquashResponse::Complete,
-        Err(_) => {
-            return Ok(HttpResponse::InternalServerError().body("Failed to resolve squash"));
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError()
+                .body(format!("Failed to resolve squash: {}", err)));
         }
     };
     Ok(HttpResponse::Ok().json(response_body))
@@ -109,26 +111,23 @@ pub async fn quote(
     let Some(channel) = data.db().get_channel(&keytag).await? else {
         return Ok(HttpResponse::BadRequest().body("No channel found"));
     };
-    let Ok(_capacity) = channel.capacity() else {
-        return Ok(HttpResponse::BadRequest().body("No capacity"));
+    let potentially_subable = match channel.potentially_subable() {
+        Ok(amt) => amt,
+        Err(err) => {
+            return Ok(HttpResponse::BadRequest().body(err.to_string()));
+        }
     };
     let Ok(index) = channel.next_index() else {
         return Ok(HttpResponse::BadRequest().body("No next index"));
     };
-    let quote_request = match body.into_inner() {
-        QuoteBody::Simple(simple_quote) => bln_client::types::QuoteRequest {
-            amount_msat: simple_quote.amount_msat,
-            payee: simple_quote.payee,
-        },
-        QuoteBody::Bolt11(s) => {
-            let Ok(invoice) = bln_client::types::Invoice::try_from(s.as_str()) else {
-                return Ok(HttpResponse::BadRequest().body("Bad invoice"));
-            };
-            bln_client::types::QuoteRequest {
-                amount_msat: invoice.amount_msat,
-                payee: invoice.payee_compressed,
-            }
-        }
+    let request = body.into_inner();
+    let min_amount = fx.msat_to_lovelace(request.amount_msat()) + FEE_PLACEHOLDER + 1;
+    if min_amount > potentially_subable {
+        return Ok(HttpResponse::BadRequest().body("Insufficient funds"));
+    }
+    let quote_request = bln_client::types::QuoteRequest {
+        amount_msat: request.amount_msat(),
+        payee: request.payee(),
     };
     let bln_quote = match data.bln().quote(quote_request.clone()).await {
         Ok(y) => y,
@@ -137,11 +136,18 @@ pub async fn quote(
             return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
         }
     };
+    log::info!(
+        "bln quote (hours) :{}",
+        bln_quote.relative_timeout.as_secs() / (60 * 60)
+    );
     // FIXME :: we need to sort out the Tos
     let amount =
         fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + FEE_PLACEHOLDER + 1;
-    // fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + data.info().fee + 1;
-    let relative_timeout = (ADAPTOR_TIME_DELTA + bln_quote.relative_timeout).as_millis() as u64;
+    if amount > potentially_subable {
+        return Ok(HttpResponse::BadRequest().body("Insufficient funds"));
+    }
+    let relative_timeout = (ADAPTOR_TIME_DELTA + QUOTE_PAY_TIME_MARGIN + bln_quote.relative_timeout)
+        .as_millis() as u64;
     let response_body = crate::models::QuoteResponse {
         index,
         amount,
@@ -198,10 +204,12 @@ pub async fn pay(
     let relative_timeout = locked
         .timeout()
         .saturating_sub(now)
-        .saturating_sub(ADAPTOR_TIME_DELTA.saturating_add(ADAPTOR_TIME_GRACE));
+        .saturating_sub(ADAPTOR_TIME_DELTA);
 
     if relative_timeout.is_zero() {
-        let min_timeout = (now + ADAPTOR_TIME_DELTA + ADAPTOR_TIME_GRACE).as_secs();
+        let min_timeout = (now + ADAPTOR_TIME_DELTA).as_secs();
+        // FIXME :: this error is kinda meaningless.
+        // The effective min acceptable timeout is attained only for routes no-one will use.
         return Ok(HttpResponse::InternalServerError().body(format!(
             "timeout too soon: minimum acceptable timeout={min_timeout}, provided timeout={}",
             locked.timeout().as_secs(),

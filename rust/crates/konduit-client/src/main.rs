@@ -88,10 +88,14 @@ pub struct SquashProposal {
 impl fmt::Display for QuoteResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "\n--- Quote ---")?;
-        writeln!(f, "Index:    {}", self.index)?;
-        writeln!(f, "Lovelace: {}", self.amount)?;
-        writeln!(f, "Fee:      {} msat", self.routing_fee)?;
-        write!(f, "Timeout:  {} ms", self.relative_timeout)
+        writeln!(f, "Index          :  {}", self.index)?;
+        writeln!(f, "Amount    (Ada):  {}", self.amount)?;
+        writeln!(f, "Fee      (msat):  {}", self.routing_fee)?;
+        writeln!(
+            f,
+            "Timeout (hours):  {:.2}",
+            self.relative_timeout / (1000 * 60 * 60)
+        )
     }
 }
 
@@ -223,7 +227,7 @@ impl Config {
         invoice_str: &str,
         quote: &QuoteResponse,
     ) -> anyhow::Result<SquashResponse> {
-        let invoice = bln_client::types::Invoice::try_from(invoice_str)?;
+        let invoice = invoice_str.parse::<bln_client::types::Invoice>()?;
         let lock = Lock(invoice.payment_hash);
 
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
@@ -271,7 +275,15 @@ impl Config {
                 // 3. Verify 'current' matches local expectations if applicable
                 println!("(Verification steps omitted...)");
 
-                if self.auto_confirm || confirm("Verify proposal and execute squash?")? {
+                if self.auto_confirm
+                    || confirm(
+                        format!(
+                            "Verify proposal and execute squash?\n{}",
+                            serde_json::to_string_pretty(&proposal).unwrap()
+                        )
+                        .as_str(),
+                    )?
+                {
                     println!("Executing squash with proposed body...");
                     let next_res = self.execute_squash(proposal.proposal).await?;
                     // Recursively handle if it's still incomplete (e.g. multi-step sync)
@@ -314,10 +326,8 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Pay { invoice } => config.handle_full_pay_flow(invoice).await?,
         Commands::Squash => {
-            if config.auto_confirm || confirm("Manually squash latest state?")? {
-                let res = config.execute_squash(SquashBody::zero()).await?;
-                config.handle_squash_response(res).await?;
-            }
+            let res = config.execute_squash(SquashBody::zero()).await?;
+            config.handle_squash_response(res).await?;
         }
     }
 

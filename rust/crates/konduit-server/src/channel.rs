@@ -33,8 +33,10 @@ pub enum ChannelError {
     NotActive,
     #[error("Input not well-formed")]
     BadInput,
-    #[error("Not enough funds")]
-    Amount,
+    #[error("Insufficient capacity")]
+    Capacity,
+    #[error("Insufficient funds")]
+    Funds,
 }
 
 #[serde_as]
@@ -110,11 +112,15 @@ impl Channel {
         }
     }
 
-    pub fn capacity(&self) -> Result<u64, ChannelError> {
-        // FIXME :: NEED A MAX UNSQUASHED VERIFICATION STEP
+    /// How much funds are currently unspent, uncommitted.
+    /// Error if no funds can be spent because of other reasons.
+    pub fn potentially_subable(&self) -> Result<u64, ChannelError> {
         self.assert_active()?;
         let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
         let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
+        if receipt.capacity() == 0 {
+            return Err(ChannelError::Capacity);
+        };
         let abs = receipt.potentially_subable(&retainer.useds);
         let rel = abs.saturating_sub(retainer.subbed);
         Ok(retainer.amount.saturating_sub(rel))
@@ -134,8 +140,8 @@ impl Channel {
     pub fn append_locked(&mut self, locked: Locked) -> Result<(), ChannelError> {
         if !locked.verify(&self.key, &self.tag) {
             Err(ChannelError::BadInput)
-        } else if locked.amount() > self.capacity()? {
-            Err(ChannelError::Amount)
+        } else if locked.amount() > self.potentially_subable()? {
+            Err(ChannelError::Funds)
         } else {
             self.receipt
                 .as_mut()

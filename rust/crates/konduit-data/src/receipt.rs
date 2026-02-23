@@ -81,7 +81,7 @@ impl Receipt {
 
     // FIXME :: Not currently used
     pub fn capacity(&self) -> usize {
-        MAX_UNSQUASHED - self.cheques.len()
+        MAX_UNSQUASHED.saturating_sub(self.cheques.len())
     }
 
     pub fn useds(&self, useds: Vec<Used>) -> Vec<Used> {
