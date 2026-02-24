@@ -7,6 +7,62 @@ use konduit_tx::{ChannelOutput, KONDUIT_VALIDATOR, Utxo, Utxos, filter_channels}
 
 use crate::config::{self};
 
+pub struct Hammer {
+    wallet: Utxos,
+    reference_script: Option<Utxo>,
+    channels: BTreeMap<Input, ChannelOutput>,
+}
+
+impl Hammer {
+    pub const LABEL: &str = "Hammer";
+
+    pub async fn new(
+        connector: &impl CardanoConnect,
+        config: &config::hammer::Config,
+    ) -> anyhow::Result<Self> {
+        let add_vkey = config.wallet().to_verification_key();
+        let own_address = add_vkey.to_address(connector.network().into());
+        let wallet = connector
+            .utxos_at(&own_address.payment(), own_address.delegation().as_ref())
+            .await?;
+        let reference_script = get_script(connector, &config.host_address).await?;
+        // FIXME :: NO STAKING
+        let konduit_utxos = connector
+            .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
+            .await?;
+        let channels = filter_channels(&konduit_utxos, |co| co.constants.add_vkey == add_vkey)
+            .into_iter()
+            .collect();
+        Ok(Self {
+            wallet,
+            reference_script,
+            channels,
+        })
+    }
+}
+
+impl fmt::Display for Hammer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "== Tip :: {} ==", Self::LABEL)?;
+        write!(f, "Wallet ")?;
+        display_utxos(f, &self.wallet)?;
+        write!(f, "Reference script ")?;
+        display_reference_script(f, &self.reference_script)?;
+        writeln!(f, "Channels : {}", self.channels.len())?;
+        for (input, channel) in self.channels.iter() {
+            writeln!(f, "  Input : {}", input)?;
+            writeln!(f, "  Tag : {}", channel.constants.tag)?;
+            writeln!(
+                f,
+                "  Sub : {} || Close Period : {}",
+                channel.constants.sub_vkey, channel.constants.close_period
+            )?;
+            display_stage(f, &channel.stage)?;
+            writeln!(f, "  Amt : {}", channel.amount)?;
+        }
+        Ok(())
+    }
+}
 pub struct Consumer {
     wallet: Utxos,
     reference_script: Option<Utxo>,

@@ -10,9 +10,11 @@ pub fn do(
   value_out: Value,
   stage_out: t.Stage,
 ) -> VerificationKey {
+  trace @"A": @"Add"
   let t.Constants { add_vkey, .. } = constants
   expect t.Opened(_, _) = stage_in
-  expect stage_in == stage_out
-  expect amount_in(value_in) < amount_out(value_out)
+  expect (stage_in == stage_out)?
+  expect (amount_in(value_in) < amount_out(value_out))?
+  trace @"-A": @"End Add"
   add_vkey
 }

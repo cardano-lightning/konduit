@@ -46,11 +46,11 @@ pub fn drop_until_int(l: List<Int>, threshold: Int) {
 /// else will insert into the correct place
 pub fn ordered_insert(xs: List<ByteArray>, item: ByteArray) {
   when xs is {
-    [x, ..xs] ->
+    [x, ..rest] ->
       when bytearray.compare(x, item) is {
-        Less -> [x, ..ordered_insert(xs, item)]
-        Equal -> [x, ..xs]
-        Greater -> fail @"Impossible"
+        Less -> [x, ..ordered_insert(rest, item)]
+        Equal -> xs
+        Greater -> [item, ..xs]
       }
     _ -> [item]
   }
