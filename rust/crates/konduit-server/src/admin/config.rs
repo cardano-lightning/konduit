@@ -1,4 +1,4 @@
-use cardano_tx_builder::{Address, SigningKey, VerificationKey, address::kind};
+use cardano_sdk::{Address, SigningKey, VerificationKey, address::kind};
 use konduit_tx::adaptor::AdaptorPreferences;
 
 use crate::common::{self, ChannelParameters};

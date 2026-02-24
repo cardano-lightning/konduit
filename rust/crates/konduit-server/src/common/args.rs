@@ -1,4 +1,4 @@
-use cardano_tx_builder::{Address, SigningKey, address::kind};
+use cardano_sdk::{Address, SigningKey, address::kind};
 use konduit_data::Duration;
 
 use crate::{common::metavar, env};

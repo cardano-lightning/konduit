@@ -1,7 +1,7 @@
 use std::cmp;
 
 use anyhow::anyhow;
-use cardano_tx_builder::{PlutusData, cbor, cbor::ToCbor};
+use cardano_sdk::{PlutusData, cbor, cbor::ToCbor};
 use serde::{Deserialize, Serialize};
 
 use crate::{ChequeBody, Indexes, IndexesError, Tag};

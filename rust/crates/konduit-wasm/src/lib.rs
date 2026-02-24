@@ -1,10 +1,6 @@
 mod adaptor;
 pub use adaptor::Adaptor;
 
-pub use cardano_connect_wasm::{
-    CardanoConnector, HttpClient, InputSummary, OutputSummary, Result, StrError, TransactionSummary,
-};
-
 mod channel;
 pub use channel::Channel;
 

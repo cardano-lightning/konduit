@@ -1,5 +1,6 @@
 use anyhow::anyhow;
-use cardano_tx_builder::cbor::{self, FromCbor, ToCbor};
+use cardano_connector_client::wasm;
+use cardano_sdk::cbor::{self, FromCbor, ToCbor};
 
 pub(crate) trait Marshall {
     fn marshall(&self) -> String
@@ -37,7 +38,7 @@ where
 }
 
 pub(crate) trait Unmarshall {
-    fn unmarshall(data: &str) -> crate::Result<Self>
+    fn unmarshall(data: &str) -> wasm::Result<Self>
     where
         Self: Sized + for<'d> cbor::Decode<'d, ()>,
     {

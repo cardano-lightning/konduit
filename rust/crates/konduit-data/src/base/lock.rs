@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
+use cardano_sdk::PlutusData;
 use cryptoxide::hashing::sha256;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

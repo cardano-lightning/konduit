@@ -4,7 +4,7 @@ use crate::{
     server::{self, cbor::decode_from_cbor},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use cardano_tx_builder::cbor;
+use cardano_sdk::cbor;
 use konduit_data::{Keytag, Locked, Secret, Squash};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

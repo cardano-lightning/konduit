@@ -1,11 +1,14 @@
 use crate::{
-    Adaptor, CardanoConnector, StrError, Wallet,
+    Adaptor, Wallet,
     adaptor::{QuoteResponse, SquashResponse},
 };
 use anyhow::anyhow;
 use bln_sdk::types as bln;
-use cardano_connect::CardanoConnect;
-use cardano_tx_builder::{
+use cardano_connector_client::{
+    CardanoConnector,
+    wasm::{self, StrError},
+};
+use cardano_sdk::{
     Credential, Input, Output, VerificationKey, address::ShelleyAddress, hash::Hash32,
 };
 use konduit_data::{ChequeBody, Duration, Lock, Locked, Squash, SquashBody, Stage, Tag};
@@ -43,7 +46,7 @@ impl Channel {
     }
 
     #[wasm_bindgen(js_name = "receipt")]
-    pub async fn receipt(&self, consumer: &Wallet, adaptor: &Adaptor) -> crate::Result<u64> {
+    pub async fn receipt(&self, consumer: &Wallet, adaptor: &Adaptor) -> wasm::Result<u64> {
         let vk = consumer.verification_key();
         let tag = self.tag();
 
@@ -94,7 +97,7 @@ impl Channel {
         adaptor: &Adaptor,
         consumer: &Wallet,
         invoice: &str,
-    ) -> crate::Result<QuoteResponse> {
+    ) -> wasm::Result<QuoteResponse> {
         adaptor
             .quote(invoice, &consumer.verification_key(), &self.tag())
             .await
@@ -106,7 +109,7 @@ impl Channel {
         consumer: &Wallet,
         invoice: &str,
         quote: &QuoteResponse,
-    ) -> crate::Result<()> {
+    ) -> wasm::Result<()> {
         debug!("quote = {quote:?}");
 
         let payment_hash = bln::Invoice::from_str(invoice)
@@ -144,10 +147,10 @@ impl Channel {
     /// Find currently opened channels.
     #[wasm_bindgen(js_name = "opened")]
     pub async fn opened(
-        connector: &CardanoConnector,
+        connector: &wasm::Connector,
         consumer: &Wallet,
         konduit_validator: &Credential,
-    ) -> crate::Result<Vec<Channel>> {
+    ) -> wasm::Result<Vec<Channel>> {
         let consumer_key = consumer.verification_key();
 
         let utxos_konduit = utxos_at_address(
@@ -170,16 +173,16 @@ impl Channel {
 
     #[wasm_bindgen(js_name = "open")]
     pub async fn open(
-        connector: &CardanoConnector,
+        connector: &wasm::Connector,
         consumer: &Wallet,
         script_deployment_address: &ShelleyAddress,
         tag: &Tag,
         adaptor_key: &VerificationKey,
         close_period_secs: u64,
         amount: u64,
-    ) -> crate::Result<Hash32> {
+    ) -> wasm::Result<Hash32> {
         let network_parameters = NetworkParameters {
-            network_id: (*connector.network()).into(),
+            network_id: connector.network_id(),
             protocol_parameters: connector.protocol_parameters().await?,
         };
 
@@ -226,14 +229,14 @@ impl Channel {
 
     #[wasm_bindgen(js_name = "close")]
     pub async fn close(
-        connector: &CardanoConnector,
+        connector: &wasm::Connector,
         consumer: &Wallet,
         konduit_validator: &Credential,
         script_deployment_address: &ShelleyAddress,
         tag: &Tag,
-    ) -> crate::Result<Hash32> {
+    ) -> wasm::Result<Hash32> {
         let network_parameters = NetworkParameters {
-            network_id: (*connector.network()).into(),
+            network_id: connector.network_id(),
             protocol_parameters: connector.protocol_parameters().await?,
         };
 
@@ -288,7 +291,7 @@ impl Channel {
         squash_response: SquashResponse,
         consumer: &Wallet,
         adaptor: &Adaptor,
-    ) -> crate::Result<()> {
+    ) -> wasm::Result<()> {
         match squash_response {
             SquashResponse::Complete => {
                 debug!("nothing to squash");
@@ -350,10 +353,10 @@ impl Channel {
 }
 
 async fn utxos_at_address(
-    connector: &CardanoConnector,
+    connector: &wasm::Connector,
     payment_credential: &Credential,
     stake_credential_opt: Option<&Credential>,
-) -> crate::Result<impl Iterator<Item = (Input, Output)> + use<>> {
+) -> wasm::Result<impl Iterator<Item = (Input, Output)> + use<>> {
     Ok(connector
         .utxos_at(payment_credential, None)
         .await?

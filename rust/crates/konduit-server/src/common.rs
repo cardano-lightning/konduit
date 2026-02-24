@@ -1,4 +1,4 @@
-use cardano_tx_builder::VerificationKey;
+use cardano_sdk::VerificationKey;
 use konduit_data::Duration;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

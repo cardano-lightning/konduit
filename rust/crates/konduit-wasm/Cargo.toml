@@ -22,9 +22,8 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow.workspace = true
 bln-sdk.workspace = true
-cardano-connect = { workspace = true, features = ["wasm"] }
-cardano-connect-wasm.workspace = true
-cardano-tx-builder = { workspace = true, features = ["wasm"] }
+cardano-connector-client = { workspace = true, features = ["wasm"] }
+cardano-sdk = { workspace = true, features = ["wasm"] }
 console_error_panic_hook.workspace = true
 console_log.workspace = true
 hex.workspace = true

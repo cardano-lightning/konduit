@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::{PlutusData, Signature};
+use cardano_sdk::{PlutusData, Signature};
 /// Handles the map error
 pub fn try_into_array<T: Copy, const N: usize>(v: &[T]) -> anyhow::Result<[T; N]> {
     <[T; N]>::try_from(v).map_err(|_err| anyhow!("Expected a Vec of length {}", N,))

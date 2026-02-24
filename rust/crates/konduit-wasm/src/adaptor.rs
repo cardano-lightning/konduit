@@ -1,6 +1,8 @@
-use crate::HttpClient;
-use cardano_connect_wasm::helpers::{singleton, to_js_object};
-use cardano_tx_builder::{PlutusData, VerificationKey, cbor::ToCbor};
+use cardano_connector_client::wasm::{
+    self, HttpClient,
+    helpers::{singleton, to_js_object},
+};
+use cardano_sdk::{PlutusData, VerificationKey, cbor::ToCbor};
 use konduit_data::{Locked, Receipt, Squash, SquashProposal, Tag};
 use std::{ops::Deref, str::FromStr};
 use wasm_bindgen::prelude::*;
@@ -31,7 +33,7 @@ pub struct AdaptorInfo {
 #[wasm_bindgen]
 impl Adaptor {
     #[wasm_bindgen(js_name = "create")]
-    pub async fn new(url: &str) -> crate::Result<Self> {
+    pub async fn new(url: &str) -> wasm::Result<Self> {
         let http_client = HttpClient::new(
             url.strip_suffix("/").unwrap_or(url).to_string(),
             Duration::from_secs(10),
@@ -58,7 +60,7 @@ impl Adaptor {
         &self,
         consumer_key: &VerificationKey,
         channel_tag: &Tag,
-    ) -> crate::Result<ReceiptResponse> {
+    ) -> wasm::Result<ReceiptResponse> {
         let key_tag = format!("{consumer_key}{channel_tag}");
         Ok(self
             .http_client
@@ -72,7 +74,7 @@ impl Adaptor {
         invoice: &str,
         consumer_key: &VerificationKey,
         channel_tag: &Tag,
-    ) -> crate::Result<QuoteResponse> {
+    ) -> wasm::Result<QuoteResponse> {
         let key_tag = format!("{consumer_key}{channel_tag}");
         let invoice: JsValue = singleton("Bolt11", invoice)?;
         Ok(self
@@ -91,7 +93,7 @@ impl Adaptor {
         locked: Locked,
         consumer_key: &VerificationKey,
         channel_tag: &Tag,
-    ) -> crate::Result<SquashResponse> {
+    ) -> wasm::Result<SquashResponse> {
         let key_tag = format!("{consumer_key}{channel_tag}");
 
         let data = to_js_object(&[
@@ -118,7 +120,7 @@ impl Adaptor {
         squash: Squash,
         consumer_key: &VerificationKey,
         channel_tag: &Tag,
-    ) -> crate::Result<SquashResponse> {
+    ) -> wasm::Result<SquashResponse> {
         let key_tag = format!("{consumer_key}{channel_tag}");
         let data = hex::encode(PlutusData::from(squash).to_cbor());
         Ok(self

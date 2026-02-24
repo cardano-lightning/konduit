@@ -1,7 +1,7 @@
 use std::{cmp, collections::BTreeMap, sync::LazyLock};
 // Standard system time breaks in wasm targets
 use crate::KONDUIT_VALIDATOR;
-use cardano_tx_builder::{
+use cardano_sdk::{
     Address, Credential, Hash, Input, NetworkId, Output, PlutusData, ProtocolParameters, Value,
     VerificationKey,
 };
@@ -119,7 +119,7 @@ impl ChannelOutput {
         if o.address().as_shelley()?.payment().as_script()? != KONDUIT_VALIDATOR.hash {
             return None;
         }
-        let cardano_tx_builder::Datum::Inline(data) = o.datum()? else {
+        let cardano_sdk::Datum::Inline(data) = o.datum()? else {
             return None;
         };
         let Datum {
@@ -148,7 +148,7 @@ impl ChannelOutput {
     }
 }
 
-pub fn extract_amount(value: &cardano_tx_builder::Value<u64>) -> u64 {
+pub fn extract_amount(value: &cardano_sdk::Value<u64>) -> u64 {
     value.lovelace().saturating_sub(MIN_ADA_BUFFER)
 }
 

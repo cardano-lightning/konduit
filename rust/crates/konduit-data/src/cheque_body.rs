@@ -1,6 +1,6 @@
 use crate::{Duration, Lock, Secret, Tag};
 use anyhow::{Error, Result};
-use cardano_tx_builder::{
+use cardano_sdk::{
     PlutusData,
     cbor::{self, ToCbor},
 };

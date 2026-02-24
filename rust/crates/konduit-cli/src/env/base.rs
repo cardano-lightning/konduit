@@ -1,4 +1,4 @@
-use cardano_tx_builder::{Address, LeakableSigningKey, NetworkId, SigningKey, address::kind};
+use cardano_sdk::{Address, LeakableSigningKey, NetworkId, SigningKey, address::kind};
 use std::fs;
 
 pub fn default_wallet_and_address(

@@ -1,4 +1,4 @@
-use cardano_tx_builder::{
+use cardano_sdk::{
     PlutusData,
     cbor::{self},
 };

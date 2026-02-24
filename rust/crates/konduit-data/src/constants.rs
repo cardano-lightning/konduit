@@ -1,6 +1,6 @@
 use crate::{Duration, Tag};
 use anyhow::anyhow;
-use cardano_tx_builder::{PlutusData, VerificationKey, constr};
+use cardano_sdk::{PlutusData, VerificationKey, constr};
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Constants {

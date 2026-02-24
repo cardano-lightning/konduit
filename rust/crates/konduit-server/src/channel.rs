@@ -1,4 +1,4 @@
-use cardano_tx_builder::VerificationKey;
+use cardano_sdk::VerificationKey;
 use konduit_data::{
     Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
 };

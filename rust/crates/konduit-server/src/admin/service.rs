@@ -1,5 +1,5 @@
-use cardano_connect::CardanoConnect;
-use cardano_tx_builder::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
+use cardano_connector_client::CardanoConnector;
+use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
 use konduit_data::{Keytag, Secret};
 use konduit_tx::{
     Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences, filter_channels,
@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, iter, sync::Arc};
 use crate::{admin::config::Config, channel::Retainer, common::ChannelParameters, db};
 
 #[derive(Clone)]
-pub struct Service<Connector: CardanoConnect + Send + Sync + 'static> {
+pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
     cardano: Arc<Connector>,
     db: Arc<dyn db::Api + Send + Sync + 'static>,
@@ -20,7 +20,7 @@ pub struct Service<Connector: CardanoConnect + Send + Sync + 'static> {
     wallet: SigningKey,
 }
 
-impl<Connector: CardanoConnect + Send + Sync + 'static> Service<Connector> {
+impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     pub async fn new(
         config: Config,
         bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,

@@ -1,4 +1,4 @@
-use cardano_tx_builder::{PlutusData, cbor::decode};
+use cardano_sdk::{PlutusData, cbor::decode};
 use konduit_data::{
     Cheque, ChequeBody, Keytag, Locked, Receipt, Secret, Squash, SquashBody, Unlocked,
 };

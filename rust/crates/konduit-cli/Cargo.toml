@@ -15,13 +15,12 @@ release = false
 
 [features]
 default = [ "blockfrost" ]
-blockfrost = [ "dep:cardano-connect-blockfrost" ]
+blockfrost = [ "cardano-connector-client/blockfrost" ]
 
 [dependencies]
 anyhow.workspace = true
-cardano-connect = { workspace = true, features = ["clap"] }
-cardano-connect-blockfrost = { workspace = true, optional = true }
-cardano-tx-builder = { workspace = true, features = ["serde"] }
+cardano-connector-client.workspace = true
+cardano-sdk = { workspace = true, features = ["clap", "serde"] }
 clap.workspace = true
 dotenvy.workspace = true
 hex.workspace = true
