@@ -9,6 +9,7 @@ use konduit/types as t
 /// precisely, the lexicographical first validator input in the tx inputs must have
 /// redeemer `Main`, and all the rest are spent with `Defer`.
 pub fn handle(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
+  trace @"D": @"Defer"
   own_oref != main_oref(Script(datum.1st), tx.inputs)
 }
 
