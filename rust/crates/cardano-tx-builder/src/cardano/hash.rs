@@ -52,7 +52,7 @@ use wasm_bindgen::prelude::*;
 ///   ```
 ///
 /// - For the latter, we also provide the [`hash!`](crate::hash) macro.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
 pub struct Hash<const SIZE: usize>(#[n(0)] pallas::Hash<SIZE>);
