@@ -33,12 +33,15 @@
         ...
       }: let
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
+        protobuf = pkgs.protobuf_33;
         devShell = {
           name = "konduit-shell";
           shellHook = ''
             ${config.pre-commit.installationScript}
             echo 1>&2 "Welcome to the development shell!"
             export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
+            export PROTOC="${protobuf}/bin/protoc"
+            export PROTOC_INCLUDE="${protobuf}/include"
           '';
           packages =
             [
@@ -51,6 +54,7 @@
               pkgs.wasm-pack
               clang-unwrapped
               pkgs.just
+              protobuf
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
           buildInputs =
