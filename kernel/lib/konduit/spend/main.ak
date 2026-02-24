@@ -19,6 +19,7 @@ use konduit/types as t
 /// In a standard tx, the "main" invocation does all the verification steps for all
 /// channels.
 pub fn handle(datum: t.Datum, steps: List<t.Step>, tx: Transaction) {
+  trace @"M": @"Main"
   let Transaction { inputs, outputs, validity_range, extra_signatories, .. } =
     tx
   let Interval {

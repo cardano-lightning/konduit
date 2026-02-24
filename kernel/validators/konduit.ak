@@ -9,6 +9,7 @@ validator konduit {
     own_oref: OutputReference,
     tx: Transaction,
   ) {
+    trace @"X": @"Start"
     expect Some(datum) = datum
     do(datum, redeemer, own_oref, tx)
   }
