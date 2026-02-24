@@ -16,7 +16,7 @@ release = false
 [dependencies]
 anyhow.workspace = true
 bln-client = { workspace = true, features = ["cli", "namespaced"] }
-cardano-tx-builder.workspace = true
+cardano-sdk.workspace = true
 clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
 hex = { workspace = true, features = ["serde"] }

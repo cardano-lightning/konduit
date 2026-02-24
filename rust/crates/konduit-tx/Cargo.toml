@@ -15,7 +15,7 @@ release = false
 
 [dependencies]
 anyhow.workspace = true
-cardano-tx-builder.workspace = true
+cardano-sdk.workspace = true
 hex.workspace = true
 konduit-data.workspace = true
 serde_json.workspace = true

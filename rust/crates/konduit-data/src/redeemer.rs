@@ -1,6 +1,6 @@
 use crate::{Cheque, Squash, Unlocked, Unpend};
 use anyhow::anyhow;
-use cardano_tx_builder::{PlutusData, constr};
+use cardano_sdk::{PlutusData, constr};
 
 #[derive(Debug, Clone)]
 pub enum Redeemer {

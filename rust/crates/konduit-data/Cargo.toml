@@ -22,7 +22,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
-cardano-tx-builder.workspace = true
+cardano-sdk.workspace = true
 chrono.workspace = true
 cryptoxide.workspace = true
 hex.workspace = true

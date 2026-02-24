@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use cardano_tx_builder::{PlutusData, cbor::ToCbor};
+use cardano_sdk::{PlutusData, cbor::ToCbor};
 use konduit_data::{ChequeBody, Duration, Indexes, Lock, Locked, Secret, Squash, SquashBody, Tag};
 
 use crate::config::consumer::Config;

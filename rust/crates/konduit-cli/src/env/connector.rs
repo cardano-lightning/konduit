@@ -3,8 +3,7 @@ use crate::{
     shared::Fill,
 };
 use anyhow::anyhow;
-use cardano_connect::Network;
-use cardano_tx_builder::NetworkId;
+use cardano_sdk::{Network, NetworkId};
 use serde::{Deserialize, Serialize};
 
 const ENV_BLOCKFROST_PROJECT_ID: &str = "KONDUIT_BLOCKFROST_PROJECT_ID";

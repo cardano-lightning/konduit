@@ -1,4 +1,4 @@
-use cardano_connect::CardanoConnect;
+use cardano_connector_client::CardanoConnector;
 use konduit_data::{Keytag, Tag};
 use tokio::runtime::Runtime;
 

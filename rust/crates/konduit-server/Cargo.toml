@@ -19,9 +19,8 @@ actix-web.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 bln-client = { workspace = true, features = ["cli", "namespaced"] }
-cardano-connect-blockfrost.workspace = true
-cardano-connect.workspace = true
-cardano-tx-builder.workspace = true
+cardano-connector-client = { workspace = true, features = ["blockfrost"] }
+cardano-sdk.workspace = true
 clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
 env_logger.workspace = true

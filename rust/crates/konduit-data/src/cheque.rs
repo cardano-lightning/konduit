@@ -1,6 +1,6 @@
 use crate::{ChequeBody, Duration, Lock, Tag, locked::Locked, unlocked::Unlocked};
 use anyhow::anyhow;
-use cardano_tx_builder::{PlutusData, VerificationKey};
+use cardano_sdk::{PlutusData, VerificationKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

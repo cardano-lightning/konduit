@@ -4,7 +4,7 @@ use crate::{
     Used,
 };
 use anyhow::anyhow;
-use cardano_tx_builder::VerificationKey;
+use cardano_sdk::VerificationKey;
 use serde::{Deserialize, Serialize};
 use std::{cmp, collections::BTreeMap};
 

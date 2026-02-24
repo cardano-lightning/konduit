@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::{Hash, PlutusScript, PlutusVersion};
+use cardano_sdk::{Hash, PlutusScript, PlutusVersion};
 use std::{collections::BTreeMap, sync::LazyLock};
 
 // TODO: embed the whole blueprint? blueprint_json

@@ -1,5 +1,5 @@
 use crate::config::connector::Connector;
-use cardano_tx_builder::{Address, NetworkId, SigningKey, address::kind};
+use cardano_sdk::{Address, NetworkId, SigningKey, address::kind};
 use core::fmt;
 use konduit_data::Duration;
 use std::fmt::Display;

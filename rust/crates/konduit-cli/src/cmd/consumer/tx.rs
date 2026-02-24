@@ -1,6 +1,6 @@
 use crate::{cardano::ADA, config::consumer::Config};
-use cardano_connect::CardanoConnect;
-use cardano_tx_builder::{Credential, VerificationKey};
+use cardano_connector_client::CardanoConnector;
+use cardano_sdk::{Credential, VerificationKey};
 use konduit_data::{Duration, Tag};
 use konduit_tx::{
     self, Bounds, KONDUIT_VALIDATOR, NetworkParameters,

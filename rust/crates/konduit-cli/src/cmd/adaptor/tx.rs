@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use konduit_data::{Keytag, Receipt};
 use tokio::runtime::Runtime;
 
-use cardano_connect::CardanoConnect;
-use cardano_tx_builder::Credential;
+use cardano_connector_client::CardanoConnector;
+use cardano_sdk::Credential;
 
 use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 

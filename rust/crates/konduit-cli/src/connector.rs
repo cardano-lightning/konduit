@@ -1,15 +1,20 @@
 use anyhow::{Result, bail};
-use cardano_connect::{CardanoConnect, Network};
-use cardano_tx_builder::transaction::state::ReadyForSigning;
-use cardano_tx_builder::{Credential, Input, Output, ProtocolParameters, Transaction};
+use cardano_connector_client::CardanoConnector;
+use cardano_sdk::{
+    Credential, Input, Network, Output, ProtocolParameters, Transaction,
+    transaction::state::ReadyForSigning,
+};
 use std::collections::BTreeMap;
+
+#[cfg(feature = "blockfrost")]
+use cardano_connector_client::blockfrost;
 
 /// A wrapper enum that allows switching between different Cardano connection
 /// implementations based on configuration and enabled features.
 #[allow(dead_code)]
 pub enum Connector {
     #[cfg(feature = "blockfrost")]
-    Blockfrost(cardano_connect_blockfrost::Blockfrost),
+    Blockfrost(blockfrost::Connector),
     None,
 }
 
@@ -17,9 +22,9 @@ impl Connector {
     pub fn new_blockfrost(project_id: &str) -> anyhow::Result<Connector> {
         #[cfg(feature = "blockfrost")]
         {
-            Ok(Connector::Blockfrost(
-                cardano_connect_blockfrost::Blockfrost::new(project_id.to_string()),
-            ))
+            Ok(Connector::Blockfrost(blockfrost::Connector::new(
+                project_id.to_string(),
+            )))
         }
         #[cfg(not(feature = "blockfrost"))]
         {
@@ -28,7 +33,7 @@ impl Connector {
     }
 }
 
-impl CardanoConnect for Connector {
+impl CardanoConnector for Connector {
     fn network(&self) -> Network {
         match self {
             #[cfg(feature = "blockfrost")]

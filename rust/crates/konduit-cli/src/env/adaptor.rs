@@ -3,7 +3,7 @@ use crate::{
     env::{base::default_wallet_and_address, connector},
     shared::{DefaultPath, Fill, Setup},
 };
-use cardano_tx_builder::{Address, LeakableSigningKey, address::kind};
+use cardano_sdk::{Address, LeakableSigningKey, address::kind};
 use connector::ConnectorEnv;
 use konduit_data::Duration;
 use serde::{Deserialize, Serialize};

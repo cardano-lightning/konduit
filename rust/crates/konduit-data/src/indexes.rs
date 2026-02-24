@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_tx_builder::PlutusData;
+use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt, str};
 
