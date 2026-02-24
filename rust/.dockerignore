@@ -1,0 +1,8 @@
+**/target
+**/tests
+.env*
+Dockerfile
+fly.toml
+konduit.db
+
+crates/konduit-wasm

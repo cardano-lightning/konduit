@@ -21,12 +21,10 @@ pub fn plutus_version_from_str(s: &str) -> anyhow::Result<PlutusVersion> {
 
 /// Get the validator blueprint at compile-time, and make the validator hash available on-demand.
 pub static KONDUIT_VALIDATOR: LazyLock<KonduitValidator> = LazyLock::new(|| {
-    let blueprint: BTreeMap<String, serde_json::Value> =
-        serde_json::from_str(include_str!(concat!(
-            std::env!("CARGO_MANIFEST_DIR"),
-            "/../../../kernel/plutus.json",
-        )))
-        .unwrap_or_else(|e| panic!("failed to parse blueprint: {e}"));
+    let blueprint: BTreeMap<String, serde_json::Value> = serde_json::from_str(include_str!(
+        concat!(std::env!("CARGO_MANIFEST_DIR"), "/plutus.json")
+    ))
+    .unwrap_or_else(|e| panic!("failed to parse blueprint: {e}"));
 
     let validator = blueprint
         .get("validators")
