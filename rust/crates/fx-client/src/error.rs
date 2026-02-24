@@ -1,7 +1,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Process error")]
-    Io(#[from] std::io::Error),
+    #[error("Error performing curl command; is curl available on the host machine? {0}")]
+    CurlIo(#[from] std::io::Error),
 
     #[error("Network or HTTP error: {0}")]
     Network(#[from] reqwest::Error),

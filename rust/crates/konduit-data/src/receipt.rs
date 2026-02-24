@@ -1,15 +1,12 @@
-use std::{cmp, collections::BTreeMap};
-
-use anyhow::anyhow;
-
-use cardano_tx_builder::VerificationKey;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     Cheque, ChequeBody, Cont, Duration, Indexes, L1Channel, Lock, Locked, MAX_UNSQUASHED, Pending,
     Secret, Squash, SquashBody, SquashBodyError, SquashProposal, Stage, Tag, Unlocked, Unpend,
     Used,
 };
+use anyhow::anyhow;
+use cardano_tx_builder::VerificationKey;
+use serde::{Deserialize, Serialize};
+use std::{cmp, collections::BTreeMap};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ReceiptError {

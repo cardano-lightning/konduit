@@ -1,6 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 use crate::{Locked, Squash, SquashBody, Unlocked};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SquashProposal {

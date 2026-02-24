@@ -223,6 +223,9 @@ impl Api for Client {
 
     async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
         let blocks = req.relative_timeout.as_secs() / self.config.block_time.as_secs();
+
+        println!("{:?}", req.invoice);
+
         let body = router_send::Request {
             cltv_limit: Some(blocks),
             fee_limit_msat: Some(req.fee_limit),
@@ -232,6 +235,7 @@ impl Api for Client {
 
         let res = self.v2_router_send(body).await?;
         if res.status == "FAILED" {
+            println!("{res:?}");
             Err(Error::ApiError {
                 status: 500,
                 message: format!("LND Payment Failed: {}", res.payment_error),

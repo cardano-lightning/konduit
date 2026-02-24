@@ -407,19 +407,24 @@ impl ShelleyAddress {
         Ok(Self(Address::from_str(addr).map_err(|e| e.to_string())?))
     }
 
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "equals"))]
+    pub fn _wasm_equals(&self, other: &Self) -> bool {
+        self == other
+    }
+
     #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
     pub fn _wasm_to_string(&self) -> String {
         self.0.to_string()
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(getter, js_name = "payment_credential"))]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(getter, js_name = "paymentCredential"))]
     pub fn _wasm_payment_credential(&self) -> Credential {
         self.payment()
     }
 
     #[cfg_attr(
         feature = "wasm",
-        wasm_bindgen(getter, js_name = "delegation_credential")
+        wasm_bindgen(getter, js_name = "delegationCredential")
     )]
     pub fn _wasm_delegation_credential(&self) -> Option<Credential> {
         self.delegation()

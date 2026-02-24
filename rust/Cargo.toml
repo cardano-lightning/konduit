@@ -83,6 +83,7 @@ web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
 web-time = "1.1.0"
 
 bln-client = { path = "crates/bln-client" }
+bln-sdk = { path = "crates/bln-sdk" }
 cardano-connect = { path = "crates/cardano-connect" }
 cardano-connect-blockfrost = { path = "crates/cardano-connect-blockfrost" }
 cardano-connect-wasm = { path = "crates/cardano-connect-wasm" }

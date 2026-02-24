@@ -5,10 +5,14 @@
 use crate::{PlutusData, pallas::ed25519};
 use std::{cmp, fmt, str::FromStr};
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 /// An EdDSA signature on Curve25519.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(transparent)]
-pub struct Signature(pub ed25519::Signature);
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub struct Signature(ed25519::Signature);
 
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -114,6 +118,22 @@ impl<'a> From<&'a Signature> for &'a ed25519::Signature {
 impl<'a> From<Signature> for PlutusData<'a> {
     fn from(key: Signature) -> Self {
         Self::bytes(key.0)
+    }
+}
+
+// ------------------------------------------------------------------------ Wasm
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+impl Signature {
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
+    pub fn _wasm_new(value: &str) -> Result<Self, String> {
+        Self::from_str(value).map_err(|e| e.to_string())
+    }
+
+    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
+    pub fn _wasm_to_string(&self) -> String {
+        self.to_string()
     }
 }
 

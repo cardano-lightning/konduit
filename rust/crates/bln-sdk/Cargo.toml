@@ -1,0 +1,21 @@
+[package]
+name = "bln-sdk"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+bitcoin.workspace = true
+hex.workspace = true
+lightning-invoice = { workspace = true, features = ["serde"] }
+lightning-types.workspace = true
+thiserror.workspace = true

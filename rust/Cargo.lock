@@ -478,20 +478,29 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "base64",
- "bitcoin",
+ "bln-sdk",
  "clap",
  "dotenvy",
  "futures",
  "hex",
  "humantime",
- "lightning-invoice",
- "lightning-types",
  "reqwest",
  "serde",
  "serde_json",
  "serde_with",
  "thiserror 2.0.17",
  "tokio",
+]
+
+[[package]]
+name = "bln-sdk"
+version = "0.0.0"
+dependencies = [
+ "bitcoin",
+ "hex",
+ "lightning-invoice",
+ "lightning-types",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

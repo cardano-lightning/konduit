@@ -1,7 +1,7 @@
 mod api;
 pub use api::*;
 mod error;
-pub mod types;
+pub use bln_sdk::types;
 pub use error::*;
 
 // Clients
