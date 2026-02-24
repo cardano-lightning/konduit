@@ -38,8 +38,7 @@ encode-hash hash:
 
 # Check node health (shows which node is active)
 health:
-    @echo "Connecting to node using {{dot_file}}..."
-    @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain}'
+    @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain, block_height : .block_height}'
 
 # --- Invoice Commands ---
 # Decode a bolt11 invoice to see destination and amount
@@ -56,6 +55,9 @@ add-invoice amt_msat memo="":
 
 # --- Payment Commands ---
 
+get-routes pub_key amt:
+    @just node={{node}} _request GET "/v1/graph/routes/{{pub_key}}/{{amt}}"
+
 # Pay a lightning invoice
 pay invoice:
     @B64_PREIMAGE=$(just node={{node}} _request POST "/v1/channels/transactions" "{\"payment_request\": \"{{invoice}}\"}" | jq -r '.payment_preimage'); \
@@ -71,7 +73,7 @@ pay2 invoice:
     @RAW_RESPONSE=$(just _request POST "/v2/router/send" "{\"payment_request\": \"{{invoice}}\"}"); \
     PREIMAGE=$(echo "$RAW_RESPONSE" | jq -r 'select(.result.status == "SUCCEEDED") | .result.payment_preimage'); \
     if [ -n "$PREIMAGE" ] && [ "$PREIMAGE" != "null" ]; then \
-        echo "Success! Preimage: $PREIMAGE"; \
+        echo "$PREIMAGE"; \
     else \
         echo "--- PAYMENT NOT SUCCEEDED ---"; \
         echo "Could not find a SUCCEEDED status in the stream. Full response follows:"; \
@@ -81,6 +83,8 @@ pay2 invoice:
 # List payments
 payments short="":
     @just node={{node}} _request GET "/v1/payments" | jq 'if .payments then (if "{{short}}" == "--short" then .payments[] | {status: .status, hash: .payment_hash, value: .value_sat} else . end) else . end'
+
+
 
 # --- Utility ---
 

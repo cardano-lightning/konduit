@@ -1,8 +1,9 @@
 use crate::Channel;
+use bln_client::types::Invoice;
 use cardano_tx_builder::Signature;
 use konduit_data::{ChequeBody, L1Channel, Receipt, SquashProposal};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde_with::{DisplayFromStr, serde_as};
 use std::collections::BTreeMap;
 
 pub use konduit_data::{Keytag, Stage};
@@ -10,7 +11,7 @@ pub use konduit_data::{Keytag, Stage};
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Info {
-    #[serde(with = "hex")]
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub adaptor_key: [u8; 32],
     pub close_period: u64,
     pub fee: u64,
@@ -37,10 +38,28 @@ pub type ShowResponse = BTreeMap<Keytag, Channel>;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Secrets(Vec<[u8; 32]>);
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum QuoteBody {
     Simple(SimpleQuote),
-    Bolt11(String),
+    Bolt11(#[serde_as(as = "DisplayFromStr")] Invoice),
+}
+
+impl QuoteBody {
+    pub fn amount_msat(&self) -> u64 {
+        match self {
+            QuoteBody::Simple(simple_quote) => simple_quote.amount_msat,
+            QuoteBody::Bolt11(invoice) => invoice.amount_msat,
+        }
+    }
+
+    pub fn payee(&self) -> [u8; 33] {
+        match self {
+            QuoteBody::Simple(simple_quote) => simple_quote.payee,
+            QuoteBody::Bolt11(invoice) => invoice.payee_compressed,
+        }
+    }
 }
 
 #[serde_as]
@@ -95,6 +114,10 @@ pub struct UnlockedCheque {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum SquashResponse {
+    /// Consumer up-to-date
     Complete,
+    /// Something to squash
     Incomplete(SquashProposal),
+    /// Consumer not up-to-date, but nothing to squash
+    Stale(SquashProposal),
 }

@@ -5,7 +5,7 @@ use lightning_invoice::{
     SignedRawBolt11Invoice,
 };
 use lightning_types::features::Bolt11InvoiceFeatures;
-use std::time::Duration;
+use std::{fmt::Display, str::FromStr, time::Duration};
 
 pub mod error;
 
@@ -28,18 +28,24 @@ pub struct Invoice {
     pub payment_metadata: Option<Vec<u8>>,
 }
 
-impl TryFrom<&str> for Invoice {
-    type Error = InvoiceError;
+impl Display for Invoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.__raw)
+    }
+}
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+impl FromStr for Invoice {
+    type Err = InvoiceError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Invoice::try_from(
-            value
-                .parse::<SignedRawBolt11Invoice>()
+            s.parse::<SignedRawBolt11Invoice>()
                 .map_err(|_| InvoiceError::Parse)?,
         )
     }
 }
 
+// FIXME :: This should be removed
 impl TryFrom<&String> for Invoice {
     type Error = InvoiceError;
 
