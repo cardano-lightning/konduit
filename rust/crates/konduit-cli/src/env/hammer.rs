@@ -4,7 +4,7 @@ use crate::{
     env::{base::default_wallet_and_address, connector},
     shared::{DefaultPath, Fill, Setup},
 };
-use cardano_tx_builder::{Address, address::kind};
+use cardano_sdk::{Address, address::kind};
 use connector::ConnectorEnv;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};

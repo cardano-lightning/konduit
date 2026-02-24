@@ -15,7 +15,7 @@ impl Hammer {
     pub const LABEL: &str = "Hammer";
 
     pub async fn new(
-        connector: &impl CardanoConnect,
+        connector: &impl CardanoConnector,
         config: &config::hammer::Config,
     ) -> anyhow::Result<Self> {
         let add_vkey = config.wallet().to_verification_key();

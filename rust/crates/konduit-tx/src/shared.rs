@@ -48,7 +48,7 @@ impl Bounds {
                 .unwrap()
                 .as_secs()
                 // Hack to handle blockfrost slots not aligning with current time.
-                .saturating_sub(60),
+                .saturating_sub(180),
         );
         let upper = Duration::from_secs(lower.as_secs() + 19 * 60);
         Bounds { lower, upper }

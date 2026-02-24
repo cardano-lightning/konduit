@@ -11,7 +11,7 @@ use std::{cmp, fmt, str::FromStr};
 use wasm_bindgen::prelude::*;
 
 /// A ed25519 verification key (non-extended).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct VerificationKey(ed25519::PublicKey);
