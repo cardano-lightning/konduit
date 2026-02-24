@@ -1,11 +1,14 @@
-use crate::{HttpClient, helpers::singleton};
+use crate::{HttpClient, TransactionSummary, helpers::singleton};
 use anyhow::anyhow;
 use cardano_connect::{CardanoConnect, Network, NetworkName};
 use cardano_tx_builder::{
-    Address, Credential, Input, Output, ProtocolParameters, Transaction, VerificationKey,
-    cbor::ToCbor, transaction::state,
+    Address, Credential, Input, Output, ProtocolParameters, SigningKey, Transaction,
+    VerificationKey,
+    cbor::ToCbor,
+    hash::Hash32,
+    transaction::{TransactionReadyForSigning, state},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
 use web_time::Duration;
 
@@ -45,6 +48,29 @@ impl CardanoConnector {
         })
     }
 
+    #[wasm_bindgen(getter)]
+    pub fn network(&self) -> NetworkName {
+        NetworkName::from(self.network)
+    }
+
+    #[wasm_bindgen(js_name = "signAndSubmit")]
+    pub async fn sign_and_submit(
+        &self,
+        transaction: &mut TransactionReadyForSigning,
+        signing_key: &[u8],
+    ) -> crate::Result<Hash32> {
+        let signing_key: SigningKey = <[u8; 32]>::try_from(signing_key)
+            .map_err(|_| anyhow!("invalid signing key length"))?
+            .into();
+
+        transaction.sign(&signing_key);
+
+        let tx_hash = transaction.id();
+        self.submit(transaction.deref()).await?;
+
+        Ok(tx_hash.into())
+    }
+
     // TODO: move 'balance' under the Connector trait.
     #[wasm_bindgen]
     pub async fn balance(&self, verification_key: &[u8]) -> crate::Result<u64> {
@@ -62,9 +88,16 @@ impl CardanoConnector {
         Ok(balance.lovelace.parse::<u64>().map_err(|e| anyhow!(e))?)
     }
 
-    #[wasm_bindgen(getter)]
-    pub fn network(&self) -> NetworkName {
-        NetworkName::from(self.network)
+    #[wasm_bindgen]
+    pub async fn transactions(
+        &self,
+        payment: &Credential,
+    ) -> crate::Result<Vec<TransactionSummary>> {
+        let addr = Address::new((*self.network()).into(), payment.clone());
+        Ok(self
+            .http_client
+            .get(&format!("/transactions/{addr}"))
+            .await?)
     }
 
     #[wasm_bindgen(js_name = "health")]

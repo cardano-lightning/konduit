@@ -90,4 +90,5 @@ cardano-connect-wasm = { path = "crates/cardano-connect-wasm" }
 cardano-tx-builder = { path = "crates/cardano-tx-builder" }
 fx-client = { path = "crates/fx-client" }
 konduit-data = { path = "crates/konduit-data" }
+konduit-server = { path = "crates/konduit-server" }
 konduit-tx = { path = "crates/konduit-tx" }

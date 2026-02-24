@@ -1,11 +1,18 @@
+mod adaptor;
+pub use adaptor::Adaptor;
+
+pub use cardano_connect_wasm::{
+    CardanoConnector, HttpClient, InputSummary, OutputSummary, Result, StrError, TransactionSummary,
+};
+
+mod channel;
+pub use channel::Channel;
+
 mod debug;
 pub use debug::{LogLevel, enable_logs};
 
-mod functions;
-pub use functions::open::*;
+mod marshall;
+pub(crate) use marshall::Marshall;
 
-mod resolved_input;
-pub use resolved_input::*;
-
-mod util;
-pub use util::*;
+mod wallet;
+pub use wallet::Wallet;
