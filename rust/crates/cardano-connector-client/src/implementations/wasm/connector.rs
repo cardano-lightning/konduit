@@ -11,7 +11,6 @@ use cardano_sdk::{
 use http_client::{HttpClient as _, wasm::HttpClient};
 use std::{collections::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
-use web_time::Duration;
 
 mod balance;
 mod health;
@@ -29,11 +28,8 @@ pub struct Connector {
 #[wasm_bindgen]
 impl Connector {
     #[wasm_bindgen]
-    pub async fn new(base_url: &str, http_timeout_ms: Option<u64>) -> wasm::Result<Self> {
-        let http_client = HttpClient::new(
-            base_url.strip_suffix("/").unwrap_or(base_url).to_string(),
-            Duration::from_millis(http_timeout_ms.unwrap_or(10_000)),
-        );
+    pub async fn new(base_url: &str) -> wasm::Result<Self> {
+        let http_client = HttpClient::new(base_url);
 
         let network = Network::try_from(
             http_client

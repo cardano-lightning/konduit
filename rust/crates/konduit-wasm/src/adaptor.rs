@@ -35,10 +35,7 @@ pub struct AdaptorInfo {
 impl Adaptor {
     #[wasm_bindgen(js_name = "create")]
     pub async fn new(url: &str) -> wasm::Result<Self> {
-        let http_client = HttpClient::new(
-            url.strip_suffix("/").unwrap_or(url).to_string(),
-            Duration::from_secs(10),
-        );
+        let http_client = HttpClient::new(url);
 
         let info = http_client.get::<AdaptorInfo>("/info").await?;
 
