@@ -1,14 +1,13 @@
-use anyhow::{Error, Result, anyhow};
-use cardano_sdk::{PlutusData, Signature, VerificationKey};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-
 use crate::{
     Duration, Lock, Secret, Tag,
     cheque_body::ChequeBody,
     locked::Locked,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
+use anyhow::{Error, Result, anyhow};
+use cardano_sdk::{PlutusData, Signature, VerificationKey};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

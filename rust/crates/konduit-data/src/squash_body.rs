@@ -1,10 +1,8 @@
-use std::cmp;
-
+use crate::{ChequeBody, Indexes, IndexesError, Tag};
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, cbor, cbor::ToCbor};
 use serde::{Deserialize, Serialize};
-
-use crate::{ChequeBody, Indexes, IndexesError, Tag};
+use std::cmp;
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum SquashBodyError {

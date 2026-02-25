@@ -1,6 +1,6 @@
 use actix_web::{App, test, web};
 use cardano_sdk::{SigningKey, address_test, key_credential};
-use konduit_data::Duration;
+use konduit_data::{AdaptorInfo, Duration};
 use konduit_server::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -28,7 +28,7 @@ async fn test_handler_scenario() {
             key_credential!("bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777"),
         ),
     };
-    let info = Arc::new(info::Info::from_args(&common_args));
+    let info = Arc::new(AdaptorInfo::from(common_args));
 
     // 2. Initialize the Data struct
     let data = server::Data::new(bln, db, fx, info);

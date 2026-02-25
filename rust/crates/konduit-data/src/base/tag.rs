@@ -3,17 +3,11 @@ use cardano_sdk::PlutusData;
 use rand_core::RngCore;
 use std::{fmt, ops::Deref, str::FromStr};
 
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Tag(Vec<u8>);
 
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Tag {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "generate"))]
     pub fn generate(length: usize) -> Self {
         let mut bytes = vec![0; length];
         rand_core::OsRng.fill_bytes(&mut bytes);
@@ -98,15 +92,46 @@ impl From<&Tag> for Vec<u8> {
 }
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl Tag {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(value: &str) -> Result<Self, String> {
-        Self::from_str(value).map_err(|e| e.to_string())
+pub mod wasm {
+    use std::{ops::Deref, str::FromStr};
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen]
+    #[repr(transparent)]
+    #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+    pub struct Tag(super::Tag);
+
+    impl Deref for Tag {
+        type Target = super::Tag;
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.to_string()
+    impl From<Tag> for super::Tag {
+        fn from(tag: Tag) -> Self {
+            tag.0
+        }
+    }
+
+    #[wasm_bindgen]
+    impl Tag {
+        #[wasm_bindgen(constructor)]
+        pub fn new(value: &str) -> Result<Self, String> {
+            super::Tag::from_str(value)
+                .map_err(|e| e.to_string())
+                .map(Self)
+        }
+
+        #[wasm_bindgen(constructor)]
+        pub fn generate(length: usize) -> Self {
+            Self(super::Tag::generate(length))
+        }
+
+        #[allow(clippy::inherent_to_string)]
+        #[wasm_bindgen(js_name = "toString")]
+        pub fn to_string(&self) -> String {
+            self.deref().to_string()
+        }
     }
 }

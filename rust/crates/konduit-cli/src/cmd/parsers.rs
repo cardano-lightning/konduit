@@ -2,6 +2,7 @@ use cardano_sdk::{PlutusData, cbor::decode};
 use konduit_data::{
     Cheque, ChequeBody, Keytag, Locked, Receipt, Secret, Squash, SquashBody, Unlocked,
 };
+use std::str::FromStr;
 
 pub fn parse_squash(s: &str) -> anyhow::Result<Squash> {
     match s.split(",").collect::<Vec<_>>().as_slice() {
@@ -55,7 +56,7 @@ pub fn parse_keytag_receipt(s: &str) -> anyhow::Result<(Keytag, Receipt)> {
             "Must have at least keytag, squash, semicolon separated"
         ));
     };
-    let keytag = Keytag(hex::decode(x0)?);
+    let keytag = Keytag::from_str(x0)?;
     let (key, tag) = keytag.split();
     let mut cheques = vec![];
     for x in x2 {

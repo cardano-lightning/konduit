@@ -213,10 +213,12 @@ const CHANNEL: u8 = 10;
 const CHANNEL_END: u8 = 19;
 
 fn to_db_key(keytag: &Keytag) -> Vec<u8> {
-    std::iter::once(CHANNEL).chain(keytag.0.clone()).collect()
+    std::iter::once(CHANNEL)
+        .chain(keytag.as_ref().to_vec())
+        .collect()
 }
 
 fn to_keytag(db_key: &[u8]) -> Keytag {
-    Keytag(db_key[1..].to_vec())
+    Keytag::try_from(db_key[1..].to_vec()).expect("invalid keytag in database")
 }
 // END OF DB_KEYS

@@ -1,7 +1,7 @@
-use std::sync::Arc;
-
 use clap::Parser;
-use konduit_server::{admin, args, info, server};
+use konduit_data::AdaptorInfo;
+use konduit_server::{admin, args, server};
+use std::sync::Arc;
 use tokio::{sync::RwLock, time::interval};
 
 #[actix_web::main]
@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let info = Arc::new(info::Info::from_args(&args.common));
+    let info = Arc::new(AdaptorInfo::from(args.common));
     let server_data = server::Data::new(bln, db, fx_state, info);
     let server = server::Service::new(args.server, server_data);
 

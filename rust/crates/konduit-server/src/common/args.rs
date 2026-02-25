@@ -1,7 +1,7 @@
-use cardano_sdk::{Address, SigningKey, address::kind};
-use konduit_data::Duration;
-
 use crate::{common::metavar, env};
+use cardano_sdk::{Address, SigningKey, VerificationKey, address::kind};
+use konduit_data::{AdaptorInfo, ChannelParameters, Duration, TosInfo, TxHelp};
+use konduit_tx::KONDUIT_VALIDATOR;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct CommonArgs {
@@ -22,4 +22,34 @@ pub struct CommonArgs {
     // Amount in channel currency (eg lovelace)
     #[arg(long, env = env::FEE, default_value = "1000")]
     pub fee: u64,
+}
+
+impl From<CommonArgs> for ChannelParameters {
+    fn from(args: CommonArgs) -> Self {
+        let adaptor_key = VerificationKey::from(&args.signing_key);
+        Self {
+            adaptor_key,
+            close_period: args.close_period,
+            tag_length: args.tag_length,
+        }
+    }
+}
+
+impl From<CommonArgs> for AdaptorInfo {
+    fn from(args: CommonArgs) -> Self {
+        let tos = TosInfo { flat_fee: args.fee };
+
+        let tx_help = TxHelp {
+            host_address: args.host_address.clone(),
+            validator: KONDUIT_VALIDATOR.hash,
+        };
+
+        let channel_parameters = args.into();
+
+        Self {
+            tos,
+            tx_help,
+            channel_parameters,
+        }
+    }
 }
