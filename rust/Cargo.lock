@@ -613,6 +613,7 @@ dependencies = [
  "gloo-net",
  "gloo-timers",
  "hex",
+ "http-client",
  "js-sys",
  "log",
  "reqwest",
@@ -1578,6 +1579,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "gloo-net",
+ "gloo-timers",
+ "js-sys",
+ "log",
+ "serde",
+ "wasm-bindgen",
+ "web-sys",
+ "web-time",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2078,6 +2094,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "hex",
+ "http-client",
  "konduit-data",
  "konduit-tx",
  "log",

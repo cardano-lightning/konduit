@@ -22,6 +22,7 @@ default = []
 # Exports a wasm-based cardano-connector client (incompatible with 'blockfrost')
 wasm = [
   "cardano-sdk/wasm",
+  "http-client/wasm",
   "dep:gloo-net",
   "dep:gloo-timers",
   "dep:hex",
@@ -47,6 +48,7 @@ blockfrost = [
 anyhow.workspace = true
 cardano-sdk.workspace = true
 serde.workspace = true
+http-client.workspace = true
 
 # -F wasm | -F blockfrost
 hex = { workspace = true, optional = true }
