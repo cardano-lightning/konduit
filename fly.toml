@@ -1,3 +1,5 @@
+# Fly.io example deployment configuration for the konduit-server.
+
 app = 'konduit-server'
 primary_region = 'ams'
 
@@ -9,7 +11,6 @@ primary_region = 'ams'
   FX_EVERY = '60s'
   KONDUIT_DB_PATH = '/var/konduit-server/db'
   KONDUIT_SERVER_HOST = '0.0.0.0'
-  LND_BASE_URL = '<insert LND_BASE_URL>'
   # Secrets can be declared and pushed using 'fly secrets set' and `fly secrets deploy'.
   # For example:
   #
