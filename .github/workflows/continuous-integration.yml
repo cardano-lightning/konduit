@@ -248,7 +248,7 @@ jobs:
           <body>
               <h1>📚 Workspace Documentation</h1>
               <ul>
-                <li><a href="./cardano_tx_builder">cardano-tx-builder</a></li>
+                <li><a href="./cardano_sdk">cardano-sdk</a></li>
                 <li><a href="./konduit_wasm">konduit-wasm</a></li>
               </ul>
           </body>

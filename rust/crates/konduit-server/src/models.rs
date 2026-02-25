@@ -1,6 +1,6 @@
 use crate::Channel;
 use bln_client::types::Invoice;
-use cardano_tx_builder::Signature;
+use cardano_sdk::Signature;
 use konduit_data::{ChequeBody, L1Channel, Receipt, SquashProposal};
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};

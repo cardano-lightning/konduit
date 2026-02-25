@@ -601,45 +601,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "cardano-connect"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "cardano-tx-builder",
- "clap",
- "getrandom 0.2.16",
- "serde",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "cardano-connect-blockfrost"
+name = "cardano-connector-client"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "blockfrost",
  "blockfrost-openapi",
- "cardano-connect",
- "cardano-tx-builder",
+ "cardano-sdk",
  "futures",
- "hex",
- "reqwest",
- "serde",
- "tokio",
-]
-
-[[package]]
-name = "cardano-connect-wasm"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "cardano-connect",
- "cardano-tx-builder",
+ "getrandom 0.2.16",
  "gloo-net",
  "gloo-timers",
  "hex",
  "js-sys",
  "log",
+ "reqwest",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -649,11 +625,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "cardano-tx-builder"
+name = "cardano-sdk"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
+ "clap",
  "getrandom 0.2.16",
  "hex",
  "indoc",
@@ -1995,9 +1972,8 @@ name = "konduit-cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "cardano-connect",
- "cardano-connect-blockfrost",
- "cardano-tx-builder",
+ "cardano-connector-client",
+ "cardano-sdk",
  "clap",
  "dotenvy",
  "hex",
@@ -2015,7 +1991,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bln-client",
- "cardano-tx-builder",
+ "cardano-sdk",
  "clap",
  "dotenvy",
  "hex",
@@ -2033,7 +2009,7 @@ name = "konduit-data"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "cardano-tx-builder",
+ "cardano-sdk",
  "chrono",
  "cryptoxide 0.5.1",
  "hex",
@@ -2055,9 +2031,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bln-client",
- "cardano-connect",
- "cardano-connect-blockfrost",
- "cardano-tx-builder",
+ "cardano-connector-client",
+ "cardano-sdk",
  "clap",
  "dotenvy",
  "env_logger",
@@ -2085,7 +2060,7 @@ name = "konduit-tx"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "cardano-tx-builder",
+ "cardano-sdk",
  "hex",
  "konduit-data",
  "serde_json",
@@ -2098,9 +2073,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bln-sdk",
- "cardano-connect",
- "cardano-connect-wasm",
- "cardano-tx-builder",
+ "cardano-connector-client",
+ "cardano-sdk",
  "console_error_panic_hook",
  "console_log",
  "hex",

@@ -1,5 +1,5 @@
 use anyhow::{Error, Result, anyhow};
-use cardano_tx_builder::{PlutusData, Signature, VerificationKey};
+use cardano_sdk::{PlutusData, Signature, VerificationKey};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 

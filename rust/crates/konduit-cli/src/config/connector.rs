@@ -1,4 +1,4 @@
-use cardano_tx_builder::NetworkId;
+use cardano_sdk::NetworkId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

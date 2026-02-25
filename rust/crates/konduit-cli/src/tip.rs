@@ -1,11 +1,9 @@
-use std::{collections::BTreeMap, fmt};
-
-use cardano_connect::CardanoConnect;
-use cardano_tx_builder::{Address, Credential, Hash, Input, Value, address::kind};
+use crate::config::{self};
+use cardano_connector_client::CardanoConnector;
+use cardano_sdk::{Address, Credential, Hash, Input, Value, address::kind};
 use konduit_data::{Keytag, Pending, Used};
 use konduit_tx::{ChannelOutput, KONDUIT_VALIDATOR, Utxo, Utxos, filter_channels};
-
-use crate::config::{self};
+use std::{collections::BTreeMap, fmt};
 
 pub struct Consumer {
     wallet: Utxos,
@@ -17,7 +15,7 @@ impl Consumer {
     pub const LABEL: &str = "Consumer";
 
     pub async fn new(
-        connector: &impl CardanoConnect,
+        connector: &impl CardanoConnector,
         config: &config::consumer::Config,
     ) -> anyhow::Result<Self> {
         let add_vkey = config.wallet.to_verification_key();
@@ -73,7 +71,7 @@ impl Adaptor {
     pub const LABEL: &str = "Adaptor";
 
     pub async fn new(
-        connector: &impl CardanoConnect,
+        connector: &impl CardanoConnector,
         config: &config::adaptor::Config,
     ) -> anyhow::Result<Self> {
         let sub_vkey = config.wallet.to_verification_key();
@@ -127,7 +125,7 @@ impl Admin {
     pub const LABEL: &str = "ADMIN";
 
     pub async fn new(
-        connector: &impl CardanoConnect,
+        connector: &impl CardanoConnector,
         config: &config::admin::Config,
     ) -> anyhow::Result<Self> {
         let own_address = config
@@ -157,7 +155,7 @@ impl fmt::Display for Admin {
 }
 
 async fn get_script(
-    connector: &impl CardanoConnect,
+    connector: &impl CardanoConnector,
     host_address: &Address<kind::Shelley>,
 ) -> anyhow::Result<Option<Utxo>> {
     let payment = host_address.payment();
@@ -195,8 +193,8 @@ fn display_utxos(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
             writeln!(f, " - value : {:#}", o.value())?;
             if let Some(datum) = o.datum() {
                 match datum {
-                    cardano_tx_builder::Datum::Hash(hash) => write!(f, " - datum hash : {}", hash)?,
-                    cardano_tx_builder::Datum::Inline(data) => {
+                    cardano_sdk::Datum::Hash(hash) => write!(f, " - datum hash : {}", hash)?,
+                    cardano_sdk::Datum::Inline(data) => {
                         writeln!(f, " - datum inline: {}", &data.to_string()[0..100])?
                     }
                 }
@@ -246,10 +244,8 @@ fn display_channels(f: &mut fmt::Formatter, us: &Utxos) -> fmt::Result {
             writeln!(f, " - value : {:#}", o.value())?;
             if let Some(datum) = o.datum() {
                 match datum {
-                    cardano_tx_builder::Datum::Hash(hash) => {
-                        writeln!(f, " - datum hash : {}", hash)?
-                    }
-                    cardano_tx_builder::Datum::Inline(data) => {
+                    cardano_sdk::Datum::Hash(hash) => writeln!(f, " - datum hash : {}", hash)?,
+                    cardano_sdk::Datum::Inline(data) => {
                         writeln!(f, " - datum inline: {}", &data.to_string()[0..100])?
                     }
                 }

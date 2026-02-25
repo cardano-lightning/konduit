@@ -1,0 +1,72 @@
+[package]
+name = "cardano-connector-client"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[package.metadata.release]
+release = false
+
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen-futures"]
+
+[features]
+default = []
+
+# Exports a wasm-based cardano-connector client (incompatible with 'blockfrost')
+wasm = [
+  "cardano-sdk/wasm",
+  "dep:gloo-net",
+  "dep:gloo-timers",
+  "dep:hex",
+  "dep:js-sys",
+  "dep:log",
+  "dep:serde_json",
+  "dep:wasm-bindgen",
+  "dep:wasm-bindgen-futures",
+  "dep:web-sys",
+  "dep:web-time",
+]
+
+# Exports a blockfrost-based cardano-connector client (incompatible with 'wasm')
+blockfrost = [
+  "dep:blockfrost-openapi",
+  "dep:blockfrost",
+  "dep:futures",
+  "dep:hex",
+  "dep:reqwest",
+]
+
+[dependencies]
+anyhow.workspace = true
+cardano-sdk.workspace = true
+serde.workspace = true
+
+# -F wasm | -F blockfrost
+hex = { workspace = true, optional = true }
+
+# -F wasm
+gloo-net = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
+
+# -F blockfrost
+blockfrost-openapi = { workspace = true, optional = true }
+blockfrost = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+
+[target.'cfg(target_family="wasm")'.dependencies]
+getrandom = { workspace = true, features = ["js"] }

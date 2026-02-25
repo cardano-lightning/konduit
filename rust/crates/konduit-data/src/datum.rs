@@ -1,5 +1,5 @@
 use crate::{Constants, Stage};
-use cardano_tx_builder::{Hash, PlutusData};
+use cardano_sdk::{Hash, PlutusData};
 
 #[derive(Debug, Clone)]
 pub struct Datum {

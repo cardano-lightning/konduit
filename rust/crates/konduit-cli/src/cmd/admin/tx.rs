@@ -1,6 +1,6 @@
 use crate::{cardano::ADA, config::admin::Config};
-use cardano_connect::CardanoConnect;
-use cardano_tx_builder::{Address, Value, address::kind};
+use cardano_connector_client::CardanoConnector;
+use cardano_sdk::{Address, Value, address::kind};
 use konduit_tx::{self, KONDUIT_VALIDATOR};
 use std::str;
 use tokio::runtime::Runtime;

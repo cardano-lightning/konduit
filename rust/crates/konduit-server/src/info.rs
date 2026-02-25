@@ -1,5 +1,5 @@
 use actix_web::{HttpRequest, HttpResponse, Responder, body::BoxBody};
-use cardano_tx_builder::{Address, Hash, address::kind::Shelley};
+use cardano_sdk::{Address, Hash, address::kind::Shelley};
 use konduit_tx::KONDUIT_VALIDATOR;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

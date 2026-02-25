@@ -1,5 +1,5 @@
 use anyhow::{Error, Result, anyhow};
-use cardano_tx_builder::PlutusData;
+use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

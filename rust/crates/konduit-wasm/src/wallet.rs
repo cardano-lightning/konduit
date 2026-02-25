@@ -1,10 +1,8 @@
-use crate::{CardanoConnector, Channel, Marshall, TransactionSummary, marshall::Unmarshall};
-use cardano_connect::NetworkName;
-use cardano_connect_wasm as wasm;
-use cardano_tx_builder::{
+use crate::{Channel, Marshall, marshall::Unmarshall};
+use cardano_connector_client::wasm::{self, TransactionSummary};
+use cardano_sdk::{
     Credential, NetworkId, Signature, SigningKey, VerificationKey, address::ShelleyAddress,
 };
-use std::ops::Deref;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -13,16 +11,16 @@ pub struct Wallet {
     signing_key: SigningKey,
     stake_credential: Option<Credential>,
     exit_address: Option<ShelleyAddress>,
-    network: NetworkName,
+    network_id: NetworkId,
 }
 
 impl Wallet {
-    pub(crate) fn new(signing_key: SigningKey, network: NetworkName) -> wasm::Result<Self> {
+    pub(crate) fn new(signing_key: SigningKey, network_id: NetworkId) -> wasm::Result<Self> {
         Ok(Self {
             signing_key,
             stake_credential: None,
             exit_address: None,
-            network,
+            network_id,
         })
     }
 
@@ -39,13 +37,13 @@ impl Wallet {
     // ------------------------------------------------------------------------ Initialize
 
     #[wasm_bindgen(js_name = "create")]
-    pub fn create(network: NetworkName) -> wasm::Result<Self> {
-        Self::restore(SigningKey::new(), network)
+    pub fn create(network_id: NetworkId) -> wasm::Result<Self> {
+        Self::restore(SigningKey::new(), network_id)
     }
 
     #[wasm_bindgen(js_name = "restore")]
-    pub fn restore(signing_key: SigningKey, network: NetworkName) -> wasm::Result<Self> {
-        Self::new(signing_key, network)
+    pub fn restore(signing_key: SigningKey, network_id: NetworkId) -> wasm::Result<Self> {
+        Self::new(signing_key, network_id)
     }
 
     // ------------------------------------------------------------------------ Inspecting
@@ -65,7 +63,7 @@ impl Wallet {
         let mut address = self
             .signing_key
             .to_verification_key()
-            .to_address(NetworkId::from(*self.network.deref()));
+            .to_address(self.network_id);
 
         if let Some(stake_credential) = self.stake_credential.as_ref() {
             address = address.with_delegation(stake_credential.clone());
@@ -94,14 +92,9 @@ impl Wallet {
         self.exit_address = exit_address;
     }
 
-    #[wasm_bindgen(getter, js_name = "networkName")]
-    pub fn network_name(&self) -> NetworkName {
-        self.network
-    }
-
     #[wasm_bindgen(getter, js_name = "networkId")]
     pub fn network_id(&self) -> NetworkId {
-        self.network._wasm_to_network_id()
+        self.network_id
     }
 
     // ------------------------------------------------------------------------ Querying
@@ -109,11 +102,11 @@ impl Wallet {
     #[wasm_bindgen(js_name = "balance")]
     pub async fn balance(
         &self,
-        connector: &CardanoConnector,
+        connector: &wasm::Connector,
         konduit_validator: &Credential,
     ) -> wasm::Result<u64> {
         let l1_balance = connector
-            .balance(self.signing_key.to_verification_key().as_ref())
+            ._wasm_balance(self.signing_key.to_verification_key().as_ref())
             .await?;
 
         let l2_balance = Channel::opened(connector, self, konduit_validator)
@@ -127,9 +120,11 @@ impl Wallet {
     #[wasm_bindgen(js_name = "transactions")]
     pub async fn transactions(
         &self,
-        connector: &CardanoConnector,
+        connector: &wasm::Connector,
     ) -> wasm::Result<Vec<TransactionSummary>> {
-        connector.transactions(&self.payment_credential()).await
+        connector
+            ._wasm_transactions(&self.payment_credential())
+            .await
     }
 
     // ------------------------------------------------------------------------ Marshalling
@@ -140,7 +135,7 @@ impl Wallet {
         let signing_key = unsafe { SigningKey::leak(self.signing_key.clone()) };
 
         (
-            self.network,
+            self.network_id,
             signing_key,
             &self.stake_credential,
             &self.exit_address,
@@ -150,13 +145,13 @@ impl Wallet {
 
     #[wasm_bindgen(js_name = "deserialize")]
     pub fn deserialize(serialized: &str) -> wasm::Result<Wallet> {
-        let (network, signing_key, stake_credential, exit_address) =
+        let (network_id, signing_key, stake_credential, exit_address) =
             Unmarshall::unmarshall(serialized)?;
 
         let signing_key = <[u8; 32]>::into(signing_key);
 
         Ok(Self {
-            network,
+            network_id,
             signing_key,
             stake_credential,
             exit_address,

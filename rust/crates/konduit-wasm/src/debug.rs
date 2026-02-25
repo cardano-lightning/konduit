@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_connect_wasm::{self as wasm};
+use cardano_connector_client::wasm;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

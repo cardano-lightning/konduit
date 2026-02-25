@@ -1,4 +1,4 @@
-use cardano_connect::CardanoConnect;
+use cardano_connector_client::CardanoConnector;
 use tokio::runtime::Runtime;
 
 use crate::config::adaptor::Config;

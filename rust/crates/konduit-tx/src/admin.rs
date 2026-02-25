@@ -1,4 +1,4 @@
-use cardano_tx_builder::{
+use cardano_sdk::{
     Address, ChangeStrategy, Output, PlutusScript, ProtocolParameters, Transaction, Value, address,
     transaction::state::ReadyForSigning,
 };

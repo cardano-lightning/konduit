@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, iter};
 
-use cardano_tx_builder::{
+use cardano_sdk::{
     Address, ChangeStrategy, Credential, Hash, Input, PlutusData, SlotBound, Transaction,
     VerificationKey, transaction::state::ReadyForSigning,
 };
