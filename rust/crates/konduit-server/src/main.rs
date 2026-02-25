@@ -1,13 +1,18 @@
-use std::sync::Arc;
-
 use clap::Parser;
 use konduit_server::{admin, args, info, server};
+use std::sync::Arc;
 use tokio::{sync::RwLock, time::interval};
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+
     dotenvy::dotenv().ok();
+    if std::fs::exists(".env.adaptor")? {
+        dotenvy::from_filename(".env.adaptor").map_err(|err| {
+            anyhow::anyhow!("{err}").context("failed to load adaptor-specific environment")
+        })?;
+    }
 
     let args = args::Args::parse();
 
