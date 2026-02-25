@@ -34,6 +34,8 @@ pub use cardano::{
     with_network_id::WithNetworkId,
 };
 
+pub mod wasm;
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod any {
     pub use super::cardano::{
