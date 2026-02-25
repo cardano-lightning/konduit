@@ -1,6 +1,6 @@
 ---
 title: Cardano Connector Unification
-status: proposed
+status: accepted
 authors: @KtorZ
 date: 2026-02-24
 tags:
