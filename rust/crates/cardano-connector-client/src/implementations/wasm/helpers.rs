@@ -33,8 +33,8 @@ pub fn to_js_object(kvs: &[(&str, JsValue)]) -> anyhow::Result<JsValue> {
 }
 
 pub fn json_stringify(value: impl Into<JsValue>) -> anyhow::Result<String> {
-    Ok(js_sys::JSON::stringify(&value.into())
+    js_sys::JSON::stringify(&value.into())
         .map_err(|e| anyhow!("failed to convert js value to JSON {:?}", e.as_string()))?
         .as_string()
-        .ok_or_else(|| anyhow!("JSON.stringify produced invalid string?"))?)
+        .ok_or_else(|| anyhow!("JSON.stringify produced invalid string?"))
 }
