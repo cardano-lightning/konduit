@@ -1,5 +1,5 @@
-use super::{HttpClient, TransactionSummary, helpers::singleton};
-use crate::{CardanoConnector, wasm};
+use super::{TransactionSummary, helpers::singleton};
+use crate::{CardanoConnector, wasm, wasm::helpers::json_stringify};
 use anyhow::anyhow;
 use cardano_sdk::{
     Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, SigningKey,
@@ -8,6 +8,7 @@ use cardano_sdk::{
     hash::Hash32,
     transaction::{TransactionReadyForSigning, state},
 };
+use http_client::{HttpClient as _, wasm::HttpClient};
 use std::{collections::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
 use web_time::Duration;
@@ -149,10 +150,13 @@ impl CardanoConnector for Connector {
         &self,
         transaction: &Transaction<state::ReadyForSigning>,
     ) -> anyhow::Result<()> {
-        let body = singleton("transaction", hex::encode(transaction.to_cbor()))?;
+        let body = json_stringify(singleton(
+            "transaction",
+            hex::encode(transaction.to_cbor()),
+        )?)?;
 
         self.http_client
-            .post::<serde_json::Value>("/submit", body)
+            .post::<serde_json::Value>("/submit", body.as_bytes())
             .await?;
 
         Ok(())

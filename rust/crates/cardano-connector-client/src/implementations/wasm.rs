@@ -8,9 +8,6 @@ pub use error::{Result, StrError};
 
 pub mod helpers;
 
-pub mod http_client;
-pub use http_client::HttpClient;
-
 mod input_summary;
 pub use input_summary::InputSummary;
 

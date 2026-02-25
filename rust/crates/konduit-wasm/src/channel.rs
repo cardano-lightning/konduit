@@ -297,7 +297,7 @@ impl Channel {
                 debug!("nothing to squash");
                 Ok(())
             }
-            SquashResponse::Incomplete(st) => {
+            SquashResponse::Incomplete(st) | SquashResponse::Stale(st) => {
                 // 1. Verify the current squash
                 if !st.current.verify(&consumer.verification_key(), &self.tag()) {
                     return Err(anyhow!("current squash does not verify").into());

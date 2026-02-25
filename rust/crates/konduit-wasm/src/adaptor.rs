@@ -1,8 +1,9 @@
 use cardano_connector_client::wasm::{
-    self, HttpClient,
-    helpers::{singleton, to_js_object},
+    self,
+    helpers::{json_stringify, singleton, to_js_object},
 };
 use cardano_sdk::{PlutusData, VerificationKey, cbor::ToCbor};
+use http_client::{HttpClient as _, wasm::HttpClient};
 use konduit_data::{Locked, Receipt, Squash, SquashProposal, Tag};
 use std::{ops::Deref, str::FromStr};
 use wasm_bindgen::prelude::*;
@@ -76,13 +77,13 @@ impl Adaptor {
         channel_tag: &Tag,
     ) -> wasm::Result<QuoteResponse> {
         let key_tag = format!("{consumer_key}{channel_tag}");
-        let invoice: JsValue = singleton("Bolt11", invoice)?;
+        let invoice = json_stringify(singleton("Bolt11", invoice)?)?;
         Ok(self
             .http_client
             .post_with_headers::<QuoteResponse>(
                 "/ch/quote",
                 &[("konduit", &key_tag), ("Content-Type", "application/json")],
-                invoice,
+                invoice.as_bytes(),
             )
             .await?)
     }
@@ -96,21 +97,21 @@ impl Adaptor {
     ) -> wasm::Result<SquashResponse> {
         let key_tag = format!("{consumer_key}{channel_tag}");
 
-        let data = to_js_object(&[
+        let data = json_stringify(to_js_object(&[
             ("invoice", invoice.into()),
             (
                 "cheque_body",
                 hex::encode(PlutusData::from(locked.body).to_cbor()).into(),
             ),
             ("signature", hex::encode(locked.signature.as_ref()).into()),
-        ])?;
+        ])?)?;
 
         Ok(self
             .http_client
             .post_with_headers::<SquashResponse>(
                 "/ch/pay",
                 &[("konduit", &key_tag), ("Content-Type", "application/json")],
-                data,
+                data.as_bytes(),
             )
             .await?)
     }
@@ -122,13 +123,13 @@ impl Adaptor {
         channel_tag: &Tag,
     ) -> wasm::Result<SquashResponse> {
         let key_tag = format!("{consumer_key}{channel_tag}");
-        let data = hex::encode(PlutusData::from(squash).to_cbor());
+        let data = PlutusData::from(squash).to_cbor();
         Ok(self
             .http_client
             .post_with_headers::<SquashResponse>(
                 "/ch/squash",
-                &[("konduit", &key_tag), ("Content-Type", "application/json")],
-                data,
+                &[("konduit", &key_tag), ("Content-Type", "application/cbor")],
+                data.as_slice(),
             )
             .await?)
     }
@@ -188,6 +189,7 @@ impl Deref for ReceiptResponse {
 pub enum SquashResponse {
     Complete,
     Incomplete(SquashProposal),
+    Stale(SquashProposal),
 }
 
 // TODO: resolve duplication with konduit-client

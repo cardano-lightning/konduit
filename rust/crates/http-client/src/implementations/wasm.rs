@@ -1,7 +1,6 @@
 use anyhow::anyhow;
 use gloo_net::http::{Request, Response};
 use gloo_timers::callback::Timeout;
-use wasm_bindgen::prelude::*;
 use web_sys::{AbortController, AbortSignal};
 use web_time::Duration;
 
@@ -72,12 +71,12 @@ impl HttpClient {
 
         Ok(())
     }
+}
 
-    pub async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
-        self.get_with_headers(path, &[]).await
-    }
+impl crate::HttpClient for HttpClient {
+    type Error = anyhow::Error;
 
-    pub async fn get_with_headers<T: serde::de::DeserializeOwned>(
+    async fn get_with_headers<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
         headers: &[(&str, &str)],
@@ -96,14 +95,13 @@ impl HttpClient {
         result
     }
 
-    pub async fn post_with_headers<T: serde::de::DeserializeOwned>(
+    async fn post_with_headers<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
         headers: &[(&str, &str)],
-        body: impl Into<JsValue>,
+        body: impl AsRef<[u8]>,
     ) -> anyhow::Result<T> {
-        let body = js_sys::JSON::stringify(&body.into())
-            .map_err(|e| anyhow!("failed to serialize request body: {:?}", e))?;
+        let body = js_sys::Uint8Array::from(body.as_ref());
         let (abort_on_timeout, timeout_handle) = Self::mk_abort_on_timeout(&self.http_timeout)?;
         let request = headers
             .iter()
@@ -116,13 +114,5 @@ impl HttpClient {
         let result = self.send::<T>(request).await;
         timeout_handle.cancel();
         result
-    }
-
-    pub async fn post<T: serde::de::DeserializeOwned>(
-        &self,
-        path: &str,
-        body: impl Into<JsValue>,
-    ) -> anyhow::Result<T> {
-        self.post_with_headers(path, &[], body).await
     }
 }
