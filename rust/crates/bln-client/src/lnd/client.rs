@@ -27,7 +27,7 @@ impl TryFrom<Config> for Client {
     fn try_from(value: Config) -> crate::Result<Self> {
         let mut client_builder = reqwest::Client::builder().timeout(Duration::from_secs(30));
         if let Some(cert_bytes) = value.tls_certificate.as_ref() {
-            let cert = reqwest::Certificate::from_pem(cert_bytes)
+            let cert = reqwest::Certificate::from_pem(cert_bytes.as_ref())
                 .map_err(|e| Error::Init(format!("Failed to parse PEM: {}", e)))?;
             client_builder = client_builder.add_root_certificate(cert);
         } else {

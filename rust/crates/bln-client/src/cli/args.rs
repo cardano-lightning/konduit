@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::macaroon::Macaroon;
+use crate::tls_certificate::TlsCertificate;
 
 /// Flat structure for backend client configuration.
 #[derive(Debug, clap::Args)]
@@ -30,6 +31,11 @@ pub struct ClientArgs {
     #[arg(long, env = "LND_BASE_URL")]
     #[cfg_attr(feature = "namespaced", arg(long("bln-lnd-base-url")))]
     pub lnd_base_url: Option<String>,
+
+    /// LND TLS in base64 format
+    #[arg(long, env = "LND_TLS")]
+    #[cfg_attr(feature = "namespaced", arg(long("bln-lnd-tls")))]
+    pub lnd_tls: Option<TlsCertificate>,
 
     /// LND Macaroon in hex format. Pulled from LND_MACAROON env var.
     #[arg(long, env = "LND_MACAROON", hide_env_values = true)]

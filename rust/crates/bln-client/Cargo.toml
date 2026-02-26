@@ -43,6 +43,7 @@ clap = { workspace = true, features = ["derive", "env"], optional = true }
 dotenvy = { workspace = true, optional = true }
 humantime = { workspace = true, optional = true }
 prost = "0.14.3"
+rustls = "0.23.37"
 
 [dev-dependencies]
 clap = { workspace = true, features = ["derive", "env"]}

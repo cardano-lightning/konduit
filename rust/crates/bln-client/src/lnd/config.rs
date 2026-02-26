@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::macaroon::Macaroon;
+use crate::{macaroon::Macaroon, tls_certificate::TlsCertificate};
 
 /// FIXME :: [NOTE ON TIME]
 /// The average block is ~10 minutes = 600seconds.
@@ -11,20 +11,20 @@ use crate::macaroon::Macaroon;
 #[derive(Debug)]
 pub struct Config {
     pub base_url: String,
+    pub tls_certificate: Option<TlsCertificate>,
     pub macaroon: Macaroon,
     pub block_time: Duration,
     pub min_cltv: u64,
-    pub tls_certificate: Option<Vec<u8>>,
     pub max_cache_size: usize,
 }
 
 impl Config {
     pub fn new(
         base_url: String,
+        tls_certificate: Option<TlsCertificate>,
         macaroon: Macaroon,
         block_time: Duration,
         min_cltv: u64,
-        tls_certificate: Option<Vec<u8>>,
         max_cache_size: usize,
     ) -> Self {
         Self {

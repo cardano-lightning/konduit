@@ -5,6 +5,7 @@ pub mod types;
 pub use error::*;
 
 pub mod macaroon;
+pub mod tls_certificate;
 
 // Clients
 pub mod lnd;

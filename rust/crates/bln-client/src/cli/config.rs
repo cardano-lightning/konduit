@@ -19,7 +19,7 @@ impl Config {
             if Some(Transport::Rpc) == args.lnd_type {
                 Ok(Config::LndRpc(lnd_rpc::Config::new(
                     base_url,
-                    None,
+                    args.lnd_tls,
                     macaroon,
                     args.block_time,
                     84,
@@ -27,10 +27,10 @@ impl Config {
             } else {
                 Ok(Config::LndRest(lnd::Config::new(
                     base_url,
+                    args.lnd_tls,
                     macaroon,
                     args.block_time,
                     84,
-                    None,
                     // FIXME :: This may be insufficient in some contexts
                     // It should be double the server's capacity.
                     1000,

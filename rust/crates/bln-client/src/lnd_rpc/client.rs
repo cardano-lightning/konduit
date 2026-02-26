@@ -29,10 +29,8 @@ impl Client {
     /// Create a new RPC client from configuration.
     pub async fn new(config: Config) -> crate::Result<Self> {
         // 1. Setup TLS if provided
-        let tls_config = if let Some(tls_path) = &config.tls_path {
-            let pem = std::fs::read(tls_path)
-                .map_err(|e| Error::Init(format!("Failed to read TLS cert: {}", e)))?;
-            let ca = Certificate::from_pem(pem);
+        let tls = if let Some(tls) = &config.tls {
+            let ca = Certificate::from_pem(tls);
             Some(ClientTlsConfig::new().ca_certificate(ca))
         } else {
             None
@@ -43,7 +41,7 @@ impl Client {
             .map_err(|e| Error::Init(format!("Invalid base URL: {}", e)))?
             .connect_timeout(Duration::from_secs(10));
 
-        if let Some(tls) = tls_config {
+        if let Some(tls) = tls {
             endpoint = endpoint
                 .tls_config(tls)
                 .map_err(|e| Error::Init(format!("TLS error: {}", e)))?;
