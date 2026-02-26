@@ -1,12 +1,11 @@
-use anyhow::anyhow;
-use cardano_sdk::{PlutusData, Signature, SigningKey, VerificationKey};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-
 use crate::{
     SquashBody, Tag,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
+use anyhow::anyhow;
+use cardano_sdk::{PlutusData, Signature, SigningKey, VerificationKey};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

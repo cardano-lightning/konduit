@@ -1,6 +1,6 @@
-pub use crate::interface::HttpClient;
+pub use interface::HttpClient;
 mod interface;
 
 #[cfg(any(feature = "wasm", feature = "reqwest"))]
-pub use crate::implementations::*;
+pub use implementations::*;
 mod implementations;

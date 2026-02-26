@@ -17,7 +17,7 @@ impl Deref for HttpClient {
 impl HttpClient {
     pub fn new(url: &str) -> Self {
         Self {
-            base_url: url.to_string(),
+            base_url: url.strip_suffix("/").unwrap_or(url).to_string(),
             http_client: reqwest::Client::new(),
         }
     }
@@ -33,9 +33,7 @@ impl HttpClient {
             .http_client
             .request(method, format!("{}{}", self.base_url, path));
 
-        req = headers
-            .into_iter()
-            .fold(req, |req, (k, v)| req.header(*k, *v));
+        req = headers.iter().fold(req, |req, (k, v)| req.header(*k, *v));
 
         if let Some(bytes) = body {
             req = req.body(bytes);
@@ -65,6 +63,11 @@ impl HttpClient {
 
 impl crate::HttpClient for HttpClient {
     type Error = anyhow::Error;
+
+    fn to_json<V: serde::Serialize>(value: &V) -> Vec<u8> {
+        serde_json::to_vec(value)
+            .unwrap_or_else(|e| unreachable!("failed to serialised to vector? {e}"))
+    }
 
     async fn get_with_headers<T: serde::de::DeserializeOwned>(
         &self,

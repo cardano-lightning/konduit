@@ -15,13 +15,17 @@ release = false
 
 [features]
 default = []
-wasm = ["dep:wasm-bindgen"]
+wasm = [
+  "cardano-sdk/wasm",
+  "dep:wasm-bindgen"
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
+bln-sdk.workspace = true
 cardano-sdk.workspace = true
 chrono.workspace = true
 cryptoxide.workspace = true
@@ -32,4 +36,5 @@ serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
 uplc.workspace = true
+# -F wasm
 wasm-bindgen = { workspace = true, optional = true }

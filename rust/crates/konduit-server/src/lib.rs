@@ -12,8 +12,6 @@ pub mod cardano;
 
 pub mod args;
 
-pub mod info;
-
 pub mod db;
 
 pub mod env;

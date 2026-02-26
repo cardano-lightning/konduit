@@ -1,7 +1,7 @@
+use crate::common;
 use cardano_sdk::{Address, SigningKey, VerificationKey, address::kind};
+use konduit_data::ChannelParameters;
 use konduit_tx::adaptor::AdaptorPreferences;
-
-use crate::common::{self, ChannelParameters};
 
 pub struct Config {
     pub wallet: SigningKey,

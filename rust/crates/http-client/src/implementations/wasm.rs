@@ -10,9 +10,13 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub fn new(base_url: String, http_timeout: Duration) -> Self {
+    pub fn new(url: &str) -> Self {
+        Self::new_with(url, Duration::from_secs(10))
+    }
+
+    pub fn new_with(url: &str, http_timeout: Duration) -> Self {
         Self {
-            base_url,
+            base_url: url.strip_suffix("/").unwrap_or(url).to_string(),
             http_timeout,
         }
     }
@@ -75,6 +79,17 @@ impl HttpClient {
 
 impl crate::HttpClient for HttpClient {
     type Error = anyhow::Error;
+
+    fn to_json<T: serde::Serialize>(value: &T) -> Vec<u8> {
+        js_sys::JSON::stringify(
+            &serde_wasm_bindgen::to_value(value)
+                .unwrap_or_else(|e| panic!("failed to convert Rust value to JsValue: {e}")),
+        )
+        .unwrap_or_else(|e| panic!("failed to convert js value to JSON: {:?}", e.as_string()))
+        .as_string()
+        .unwrap_or_else(|| panic!("JSON.stringify produced invalid string?"))
+        .into_bytes()
+    }
 
     async fn get_with_headers<T: serde::de::DeserializeOwned>(
         &self,

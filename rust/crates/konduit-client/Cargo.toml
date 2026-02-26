@@ -10,21 +10,53 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
+[[bin]]
+name = "konduit-client"
+path = "src/main.rs"
+doc = false
+required-features = ["cli"]
+
+[features]
+default = []
+reqwest = [
+  "http-client/reqwest",
+  "dep:reqwest",
+]
+wasm = [
+  "http-client/wasm",
+  "konduit-data/wasm",
+  "dep:wasm-bindgen",
+  "dep:wasm-bindgen-futures",
+  "dep:web-time",
+]
+cli = [
+  "reqwest",
+  "dep:clap",
+  "dep:dotenvy",
+  "dep:tokio",
+]
+
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen-futures"]
 
 [dependencies]
 anyhow.workspace = true
-bln-client = { workspace = true, features = ["cli", "namespaced"] }
+bln-sdk.workspace = true
 cardano-sdk.workspace = true
-clap = { workspace = true, features = ["env"] }
-dotenvy.workspace = true
-hex = { workspace = true, features = ["serde"] }
+http-client.workspace = true
 konduit-data.workspace = true
-reqwest = { workspace = true, features = ["json"] }
-serde.workspace = true
+log.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+# -F reqwest
+reqwest = { workspace = true, features = ["json"], optional = true }
+# -F wasm
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
+# -F cli
+clap = { workspace = true, features = ["env"], optional = true }
+dotenvy = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true

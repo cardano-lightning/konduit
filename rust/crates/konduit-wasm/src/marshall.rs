@@ -1,6 +1,8 @@
+use crate::{
+    core::cbor::{self, FromCbor, ToCbor},
+    wasm,
+};
 use anyhow::anyhow;
-use cardano_connector_client::wasm;
-use cardano_sdk::cbor::{self, FromCbor, ToCbor};
 
 pub(crate) trait Marshall {
     fn marshall(&self) -> String

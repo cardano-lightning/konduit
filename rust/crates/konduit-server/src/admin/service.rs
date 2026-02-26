@@ -1,12 +1,11 @@
+use crate::{admin::config::Config, channel::Retainer, db};
 use cardano_connector_client::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::{Keytag, Secret};
+use konduit_data::{ChannelParameters, Keytag, Secret};
 use konduit_tx::{
     Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences, filter_channels,
 };
 use std::{collections::BTreeMap, iter, sync::Arc};
-
-use crate::{admin::config::Config, channel::Retainer, common::ChannelParameters, db};
 
 #[derive(Clone)]
 pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
