@@ -127,6 +127,25 @@ impl Receipt {
         self.squash.amount() + self.unlockeds().iter().map(|x| x.body.amount).sum::<u64>()
     }
 
+    pub fn provably_owed(&self, vk: &VerificationKey, tag: &Tag) -> u64 {
+        let squash_amount = if self.squash.verify(vk, tag) {
+            self.squash.amount()
+        } else {
+            0
+        };
+
+        let cheques_amount = self.cheques.iter().fold(0, |total, cheque| {
+            total
+                + if cheque.verify(vk, tag) {
+                    cheque.amount()
+                } else {
+                    0
+                }
+        });
+
+        squash_amount + cheques_amount
+    }
+
     pub fn committed(&self) -> u64 {
         self.squash.amount() + self.cheques.iter().map(|x| x.amount()).sum::<u64>()
     }

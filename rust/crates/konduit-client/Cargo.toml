@@ -17,7 +17,7 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = ["cli"]
+default = []
 reqwest = [
   "http-client/reqwest",
   "dep:reqwest",
@@ -31,21 +31,21 @@ wasm = [
 ]
 cli = [
   "reqwest",
-  "dep:bln-client",
   "dep:clap",
   "dep:dotenvy",
   "dep:tokio",
 ]
 
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen-futures"]
+
 [dependencies]
 anyhow.workspace = true
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
-hex = { workspace = true, features = ["serde"] }
 http-client.workspace = true
 konduit-data.workspace = true
 log.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 # -F reqwest
 reqwest = { workspace = true, features = ["json"], optional = true }
@@ -54,7 +54,6 @@ wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 # -F cli
-bln-client = { workspace = true, features = ["cli", "namespaced"], optional = true }
 clap = { workspace = true, features = ["env"], optional = true }
 dotenvy = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }

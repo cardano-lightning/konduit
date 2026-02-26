@@ -123,21 +123,20 @@ pub mod wasm {
     #[wasm_bindgen]
     impl Tag {
         #[wasm_bindgen(constructor)]
-        pub fn new(value: &str) -> Result<Self, String> {
+        pub fn _wasm_new(value: &str) -> Result<Self, String> {
             super::Tag::from_str(value)
                 .map_err(|e| e.to_string())
                 .map(Self)
         }
 
-        #[wasm_bindgen(constructor)]
-        pub fn generate(length: usize) -> Self {
+        #[wasm_bindgen(js_name = "generate")]
+        pub fn _wasm_generate(length: usize) -> Self {
             Self(super::Tag::generate(length))
         }
 
-        #[allow(clippy::inherent_to_string)]
         #[wasm_bindgen(js_name = "toString")]
-        pub fn to_string(&self) -> String {
-            self.deref().to_string()
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
         }
     }
 }

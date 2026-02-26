@@ -14,6 +14,9 @@ pub mod time {
     pub use web_time::{SystemTime, UNIX_EPOCH};
 }
 
+#[cfg(feature = "wasm")]
+pub use cardano_sdk::wasm_proxy;
+
 pub mod core {
     pub use bln_sdk::types::*;
     pub use cardano_sdk::*;
@@ -21,7 +24,7 @@ pub mod core {
 
     #[cfg(feature = "wasm")]
     pub mod wasm {
-        pub use cardano_sdk::{wasm::Result, wasm_proxy};
+        pub use cardano_sdk::wasm::Result;
         pub use konduit_data::wasm::*;
     }
 }

@@ -79,3 +79,38 @@ impl Adaptor {
             .await
     }
 }
+
+#[cfg(feature = "wasm")]
+pub mod wasm {
+    use crate::{
+        HttpClient,
+        core::wasm::{self, AdaptorInfo, Keytag},
+        wasm_proxy,
+    };
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy!(Adaptor);
+
+    impl Clone for Adaptor {
+        fn clone(&self) -> Self {
+            Self(super::Adaptor {
+                http_client: HttpClient::new(&self.http_client.base_url),
+                info: self.info.clone(),
+                keytag: self.keytag.clone(),
+            })
+        }
+    }
+
+    #[wasm_bindgen]
+    impl Adaptor {
+        #[wasm_bindgen(js_name = "new")]
+        pub async fn _wasm_new(base_url: &str, keytag: &Keytag) -> wasm::Result<Self> {
+            Ok(Self::from(super::Adaptor::new(base_url, keytag).await?))
+        }
+
+        #[wasm_bindgen(getter, js_name = "info")]
+        pub fn _wasm_info(&self) -> AdaptorInfo {
+            AdaptorInfo::from(self.info().clone())
+        }
+    }
+}

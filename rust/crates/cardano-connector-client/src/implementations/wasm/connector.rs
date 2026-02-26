@@ -1,5 +1,5 @@
 use super::{TransactionSummary, helpers::singleton};
-use crate::{CardanoConnector, wasm, wasm::helpers::json_stringify};
+use crate::{CardanoConnector, wasm::helpers::json_stringify};
 use anyhow::anyhow;
 use cardano_sdk::{
     Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, SigningKey,
@@ -7,6 +7,7 @@ use cardano_sdk::{
     cbor::ToCbor,
     hash::Hash32,
     transaction::{TransactionReadyForSigning, state},
+    wasm,
 };
 use http_client::{HttpClient as _, wasm::HttpClient};
 use std::{collections::BTreeMap, ops::Deref};

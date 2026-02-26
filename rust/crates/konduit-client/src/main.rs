@@ -51,12 +51,12 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Quote { invoice } => {
-            let quote = client.get_quote(&invoice).await?;
+            let quote = client.quote(&invoice).await?;
             println!("{}", serde_json::to_string_pretty(&quote)?);
         }
 
         Commands::Pay { invoice } => {
-            let quote = client.get_quote(&invoice).await?;
+            let quote = client.quote(&invoice).await?;
 
             log::info!("quote = {}", serde_json::to_string(&quote)?);
 
@@ -64,17 +64,17 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            let res = client.execute_payment(&invoice, &quote).await?;
+            let res = client.pay(&invoice, &quote).await?;
 
             let and_confirm = prompt_if_incomplete(&res, cli.yes)?;
 
-            client.handle_squash_response(res, and_confirm).await?;
+            client.sync(res, and_confirm).await?;
         }
 
         Commands::Squash => {
-            let res = client.execute_squash(SquashBody::default()).await?;
+            let res = client.squash(SquashBody::default()).await?;
             let and_confirm = prompt_if_incomplete(&res, cli.yes)?;
-            client.handle_squash_response(res, and_confirm).await?;
+            client.sync(res, and_confirm).await?;
         }
     }
 

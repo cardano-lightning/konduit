@@ -2004,19 +2004,16 @@ name = "konduit-client"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bln-client",
  "bln-sdk",
  "cardano-sdk",
  "clap",
  "dotenvy",
- "hex",
  "http-client",
  "konduit-data",
  "log",
  "proptest",
  "proptest-derive",
  "reqwest",
- "serde",
  "serde_json",
  "tokio",
  "wasm-bindgen",
@@ -2093,22 +2090,18 @@ name = "konduit-wasm"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bln-sdk",
  "cardano-connector-client",
  "cardano-sdk",
  "console_error_panic_hook",
  "console_log",
  "hex",
- "http-client",
  "konduit-client",
  "konduit-data",
  "konduit-tx",
  "log",
- "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-time",
 ]
 
 [[package]]

@@ -3,9 +3,6 @@ pub(crate) mod asset_object;
 mod connector;
 pub use connector::Connector;
 
-mod error;
-pub use error::{Result, StrError};
-
 pub mod helpers;
 
 mod input_summary;

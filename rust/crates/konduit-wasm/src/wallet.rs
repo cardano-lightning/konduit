@@ -1,7 +1,11 @@
-use crate::{Channel, Marshall, marshall::Unmarshall};
-use cardano_connector_client::wasm::{self, TransactionSummary};
-use cardano_sdk::{
-    Credential, NetworkId, Signature, SigningKey, VerificationKey, address::ShelleyAddress,
+use crate::{
+    Channel, Connector, Marshall,
+    core::{
+        Credential, NetworkId, ShelleyAddress, Signature, SigningKey, TransactionSummary,
+        VerificationKey,
+    },
+    marshall::Unmarshall,
+    wasm,
 };
 use wasm_bindgen::prelude::*;
 
@@ -47,6 +51,11 @@ impl Wallet {
     }
 
     // ------------------------------------------------------------------------ Inspecting
+
+    #[wasm_bindgen(getter, js_name = "signingKey")]
+    pub fn signing_key(&self) -> SigningKey {
+        self.signing_key.clone()
+    }
 
     #[wasm_bindgen(getter, js_name = "verificationKey")]
     pub fn verification_key(&self) -> VerificationKey {
@@ -102,7 +111,7 @@ impl Wallet {
     #[wasm_bindgen(js_name = "balance")]
     pub async fn balance(
         &self,
-        connector: &wasm::Connector,
+        connector: &Connector,
         konduit_validator: &Credential,
     ) -> wasm::Result<u64> {
         let l1_balance = connector
@@ -120,7 +129,7 @@ impl Wallet {
     #[wasm_bindgen(js_name = "transactions")]
     pub async fn transactions(
         &self,
-        connector: &wasm::Connector,
+        connector: &Connector,
     ) -> wasm::Result<Vec<TransactionSummary>> {
         connector
             ._wasm_transactions(&self.payment_credential())
