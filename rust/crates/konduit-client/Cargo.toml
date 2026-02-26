@@ -17,7 +17,7 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = []
+default = ["cli"]
 reqwest = [
   "http-client/reqwest",
   "dep:reqwest",
@@ -27,6 +27,7 @@ wasm = [
   "konduit-data/wasm",
   "dep:wasm-bindgen",
   "dep:wasm-bindgen-futures",
+  "dep:web-time",
 ]
 cli = [
   "reqwest",
@@ -43,6 +44,7 @@ cardano-sdk.workspace = true
 hex = { workspace = true, features = ["serde"] }
 http-client.workspace = true
 konduit-data.workspace = true
+log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # -F reqwest
@@ -50,6 +52,7 @@ reqwest = { workspace = true, features = ["json"], optional = true }
 # -F wasm
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
 # -F cli
 bln-client = { workspace = true, features = ["cli", "namespaced"], optional = true }
 clap = { workspace = true, features = ["env"], optional = true }

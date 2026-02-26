@@ -1,21 +1,17 @@
-#[cfg(all(not(feature = "wasm"), not(feature = "reqwest")))]
-compile_error!(
-    r#"No platform target selected; please enable either the `reqwest` or `wasm` feature.
-
-If you're building a desktop application or command-line, you likely want:
-
-    -F reqwest
-
-If you're building for the browser, you likely want:
-
-    -F wasm"#
-);
-
-#[cfg(all(feature = "wasm", feature = "reqwest"))]
-compile_error!("Features `reqwest` and `wasm` are mutually exclusive. Enable only one.");
-
-#[cfg(any(
-    all(feature = "wasm", not(feature = "reqwest")),
-    all(not(feature = "wasm"), feature = "reqwest")
-))]
 mod adaptor;
+pub use adaptor::Adaptor;
+
+#[cfg(feature = "cli")]
+pub mod cli;
+
+mod l2;
+pub use l2::Client;
+
+mod prelude;
+pub(crate) use prelude::*;
+
+#[cfg(feature = "wasm")]
+pub mod wasm {
+    use super::*;
+    pub use l2::wasm::Client;
+}

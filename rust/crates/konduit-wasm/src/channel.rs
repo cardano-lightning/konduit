@@ -11,7 +11,7 @@ use cardano_connector_client::{
 use cardano_sdk::{
     Credential, Input, Output, VerificationKey, address::ShelleyAddress, hash::Hash32,
 };
-use konduit_data::{ChequeBody, Duration, Lock, Locked, Squash, SquashBody, Stage, Tag};
+use konduit_data::{ChequeBody, Duration, Lock, Locked, Squash, SquashBody, Stage, wasm::Tag};
 use konduit_tx::{
     Bounds, ChannelOutput, NetworkParameters,
     consumer::{Intent, OpenIntent},
@@ -30,7 +30,7 @@ pub struct Channel(ChannelOutput);
 impl Channel {
     #[wasm_bindgen(getter, js_name = "tag")]
     pub fn tag(&self) -> Tag {
-        self.0.constants.tag.clone()
+        Tag::from(self.0.constants.tag.clone())
     }
 
     /// Return the initial amount deposited in the channel. We track the remainder using receipts.
@@ -122,6 +122,7 @@ impl Channel {
             .duration_since(UNIX_EPOCH)
             .expect("failed calculate duration since UNIX epoch ?!")
             .as_millis() as u64;
+
         let timeout = Duration::from_millis(now + quote.relative_timeout);
 
         let body = ChequeBody::new(
@@ -189,7 +190,7 @@ impl Channel {
         let consumer_key = consumer.verification_key();
 
         let opens = vec![OpenIntent {
-            tag: tag.clone(),
+            tag: tag.clone().into(),
             sub_vkey: *adaptor_key,
             close_period: Duration::from_secs(close_period_secs),
             amount,
@@ -244,7 +245,7 @@ impl Channel {
 
         let opens = vec![];
 
-        let intents = BTreeMap::from([(tag.clone(), Intent::Close)]);
+        let intents = BTreeMap::from([(tag.clone().into(), Intent::Close)]);
 
         let stake_credential = consumer.stake_credential();
 

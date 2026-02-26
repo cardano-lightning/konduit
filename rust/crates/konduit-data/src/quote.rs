@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Quote {
     pub index: u64,
     pub amount: u64,
@@ -14,4 +14,15 @@ pub struct Quote {
     // #[serde(with = "hex")]
     // pub payment_secret: [u8; 32],
     pub routing_fee: u64,
+}
+
+#[cfg(feature = "wasm")]
+pub mod wasm {
+    use cardano_sdk::wasm_proxy;
+    use serde::{Deserialize, Serialize};
+
+    wasm_proxy! {
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        Quote
+    }
 }

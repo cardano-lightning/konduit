@@ -2012,6 +2012,7 @@ dependencies = [
  "hex",
  "http-client",
  "konduit-data",
+ "log",
  "proptest",
  "proptest-derive",
  "reqwest",
@@ -2020,6 +2021,7 @@ dependencies = [
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]
@@ -2098,6 +2100,7 @@ dependencies = [
  "console_log",
  "hex",
  "http-client",
+ "konduit-client",
  "konduit-data",
  "konduit-tx",
  "log",

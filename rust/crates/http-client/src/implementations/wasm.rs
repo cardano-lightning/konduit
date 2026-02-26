@@ -21,17 +21,6 @@ impl HttpClient {
         }
     }
 
-    pub fn to_json(value: impl serde::Serialize) -> Vec<u8> {
-        js_sys::JSON::stringify(
-            &serde_wasm_bindgen::to_value(&value)
-                .unwrap_or_else(|e| panic!("failed to convert Rust value to JsValue: {e}")),
-        )
-        .unwrap_or_else(|e| panic!("failed to convert js value to JSON: {:?}", e.as_string()))
-        .as_string()
-        .unwrap_or_else(|| panic!("JSON.stringify produced invalid string?"))
-        .into_bytes()
-    }
-
     fn mk_abort_on_timeout(timeout: &Duration) -> anyhow::Result<(AbortSignal, Timeout)> {
         let controller =
             AbortController::new().map_err(|_| anyhow!("Failed to create AbortController"))?;
@@ -90,6 +79,17 @@ impl HttpClient {
 
 impl crate::HttpClient for HttpClient {
     type Error = anyhow::Error;
+
+    fn to_json<T: serde::Serialize>(value: &T) -> Vec<u8> {
+        js_sys::JSON::stringify(
+            &serde_wasm_bindgen::to_value(value)
+                .unwrap_or_else(|e| panic!("failed to convert Rust value to JsValue: {e}")),
+        )
+        .unwrap_or_else(|e| panic!("failed to convert js value to JSON: {:?}", e.as_string()))
+        .as_string()
+        .unwrap_or_else(|| panic!("JSON.stringify produced invalid string?"))
+        .into_bytes()
+    }
 
     async fn get_with_headers<T: serde::de::DeserializeOwned>(
         &self,

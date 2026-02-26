@@ -114,6 +114,12 @@ pub mod wasm {
         }
     }
 
+    impl From<super::Tag> for Tag {
+        fn from(tag: super::Tag) -> Self {
+            Self(tag)
+        }
+    }
+
     #[wasm_bindgen]
     impl Tag {
         #[wasm_bindgen(constructor)]

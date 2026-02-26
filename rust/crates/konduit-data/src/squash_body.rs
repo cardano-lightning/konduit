@@ -51,14 +51,6 @@ impl<'de> Deserialize<'de> for SquashBody {
 }
 
 impl SquashBody {
-    pub fn zero() -> Self {
-        SquashBody {
-            amount: 0,
-            index: 0,
-            exclude: Indexes::empty(),
-        }
-    }
-
     pub fn new(amount: u64, index: u64, exclude: Indexes) -> anyhow::Result<Self> {
         match SquashBody::verify_new(&index, &exclude) {
             true => Ok(SquashBody::new_no_verify(amount, index, exclude)),
@@ -150,5 +142,15 @@ impl<'a> From<SquashBody> for PlutusData<'a> {
             PlutusData::from(value.index),
             PlutusData::from(&value.exclude),
         ])
+    }
+}
+
+#[cfg(feature = "wasm")]
+pub mod wasm {
+    use cardano_sdk::wasm_proxy;
+
+    wasm_proxy! {
+        #[derive(Debug, Clone, PartialEq, Eq, Default)]
+        SquashBody
     }
 }

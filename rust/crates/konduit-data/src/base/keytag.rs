@@ -90,26 +90,13 @@ impl<'a> From<Keytag> for PlutusData<'a> {
 #[cfg(feature = "wasm")]
 pub mod wasm {
     use crate::wasm::Tag;
-    use cardano_sdk::{VerificationKey, wasm};
+    use cardano_sdk::{VerificationKey, wasm, wasm_proxy};
     use std::{ops::Deref, str::FromStr};
     use wasm_bindgen::prelude::*;
 
-    #[wasm_bindgen]
-    #[repr(transparent)]
-    #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
-    pub struct Keytag(super::Keytag);
-
-    impl Deref for Keytag {
-        type Target = super::Keytag;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
-    impl From<Keytag> for super::Keytag {
-        fn from(keytag: Keytag) -> Self {
-            keytag.0
-        }
+    wasm_proxy! {
+        #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+        Keytag
     }
 
     #[wasm_bindgen]
@@ -119,14 +106,13 @@ pub mod wasm {
             Self(super::Keytag::new(key, tag.into()))
         }
 
-        #[wasm_bindgen(js_name = "toString")]
-        pub fn from_string(s: &str) -> wasm::Result<Self> {
+        #[wasm_bindgen(constructor)]
+        pub fn _from_str(s: &str) -> wasm::Result<Self> {
             Ok(Self(super::Keytag::from_str(s)?))
         }
 
-        #[allow(clippy::inherent_to_string)]
         #[wasm_bindgen(js_name = "toString")]
-        pub fn to_string(&self) -> String {
+        pub fn _to_string(&self) -> String {
             self.deref().to_string()
         }
     }

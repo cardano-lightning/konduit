@@ -1,6 +1,6 @@
 use crate::{
-    SquashBody, Tag,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
+    SquashBody, Tag,
 };
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, Signature, SigningKey, VerificationKey};

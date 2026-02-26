@@ -29,22 +29,14 @@ pub struct TxHelp {
 
 #[cfg(feature = "wasm")]
 pub(crate) mod wasm {
-    use cardano_sdk::VerificationKey;
+    use cardano_sdk::{VerificationKey, wasm_proxy};
     use serde::{Deserialize, Serialize};
-    use std::ops::Deref;
     use wasm_bindgen::prelude::*;
 
-    #[wasm_bindgen]
-    #[repr(transparent)]
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct AdaptorInfo(super::AdaptorInfo);
-
-    impl Deref for AdaptorInfo {
-        type Target = super::AdaptorInfo;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
+    wasm_proxy!(
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        AdaptorInfo
+    );
 
     #[wasm_bindgen]
     impl AdaptorInfo {

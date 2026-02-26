@@ -102,7 +102,7 @@ cardano-connector-client = { path = "crates/cardano-connector-client" }
 cardano-sdk = { path = "crates/cardano-sdk" }
 fx-client = { path = "crates/fx-client" }
 http-client = { path = "crates/http-client" }
-konduit-client = { path = "crates/konduit-client" }
+konduit-client = { path = "crates/konduit-client", default-features = false }
 konduit-data = { path = "crates/konduit-data" }
 konduit-server = { path = "crates/konduit-server" }
 konduit-tx = { path = "crates/konduit-tx" }

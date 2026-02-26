@@ -22,11 +22,6 @@ impl HttpClient {
         }
     }
 
-    pub fn to_json<V: serde::Serialize>(value: V) -> Vec<u8> {
-        serde_json::to_vec(&value)
-            .unwrap_or_else(|e| unreachable!("failed to serialised to vector? {e}"))
-    }
-
     async fn request<T: serde::de::DeserializeOwned>(
         &self,
         method: Method,
@@ -68,6 +63,11 @@ impl HttpClient {
 
 impl crate::HttpClient for HttpClient {
     type Error = anyhow::Error;
+
+    fn to_json<V: serde::Serialize>(value: &V) -> Vec<u8> {
+        serde_json::to_vec(value)
+            .unwrap_or_else(|e| unreachable!("failed to serialised to vector? {e}"))
+    }
 
     async fn get_with_headers<T: serde::de::DeserializeOwned>(
         &self,
