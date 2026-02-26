@@ -28,6 +28,7 @@ anyhow.workspace = true
 bech32.workspace = true
 hex.workspace = true
 itertools.workspace = true
+log.workspace = true
 minicbor.workspace = true
 num-bigint.workspace = true
 num.workspace = true
@@ -47,7 +48,12 @@ proptest = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 
 [target.'cfg(target_family="wasm")'.dependencies]
+console_error_panic_hook.workspace = true
+console_log.workspace = true
 getrandom = { workspace = true, features = ["js"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+env_logger.workspace = true
 
 [dev-dependencies]
 indoc.workspace = true
