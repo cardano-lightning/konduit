@@ -29,20 +29,21 @@ pub struct TxHelp {
 
 #[cfg(feature = "wasm")]
 pub(crate) mod wasm {
-    use cardano_sdk::{VerificationKey, wasm_proxy};
+    use cardano_sdk::{wasm::VerificationKey, wasm_proxy};
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
 
-    wasm_proxy!(
+    wasm_proxy! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
+        /// Channel parameters and ToS of a given adaptor.
         AdaptorInfo
-    );
+    }
 
     #[wasm_bindgen]
     impl AdaptorInfo {
         #[wasm_bindgen(getter, js_name = "verificationKey")]
         pub fn verification_key(&self) -> VerificationKey {
-            self.channel_parameters.adaptor_key
+            self.channel_parameters.adaptor_key.into()
         }
 
         #[wasm_bindgen(getter, js_name = "closePeriod")]

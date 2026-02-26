@@ -9,13 +9,6 @@ use crate::{
 use anyhow::anyhow;
 use std::{fmt, sync::Arc};
 
-#[cfg(feature = "wasm")]
-use crate::cardano::value::OutputAssets;
-#[cfg(feature = "wasm")]
-use std::str::FromStr;
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 pub mod change_strategy;
 
 /// Technically, this is a protocol parameter. It is however usually the same on all networks, and
@@ -37,11 +30,6 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 /// <div class="warning">Native scripts as reference scripts aren't yet supported. Only Plutus
 /// scripts are.</div>
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(
-    feature = "wasm",
-    wasm_bindgen,
-    doc = "A transaction output, which comprises of at least an Address and a Value."
-)]
 pub struct Output {
     address: Address<Any>,
     value: DeferredValue,
@@ -380,33 +368,52 @@ impl<'d, C> cbor::Decode<'d, C> for Output {
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-impl Output {
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "new"))]
-    pub fn _wasm_new(address: &str, amount: u64) -> Self {
-        Self::new(
-            Address::from_str(address).expect("invalid address"),
-            Value::new(amount),
-        )
+pub mod wasm {
+    use crate::{Address, Value, wasm::OutputAssets, wasm_proxy};
+    use std::{str::FromStr, sync::Arc};
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy! {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        /// A transaction output, which comprises of at least an `Address` and a `Value`.
+        Output
     }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "to"))]
-    pub fn _wasm_to(address: &str) -> Self {
-        Self::to(Address::from_str(address).expect("invalid address"))
+    impl ::std::ops::DerefMut for Output {
+        #[inline]
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
     }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withAssets"))]
-    pub fn _wasm_with_assets(&mut self, assets: &OutputAssets) {
-        self.value = DeferredValue::Minimum(Arc::new(Value::default().with_assets(assets.clone())));
-        self.set_minimum_utxo_value();
-    }
+    #[wasm_bindgen]
+    impl Output {
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new(address: &str, lovelace: u64) -> Self {
+            Self(super::Output::new(
+                Address::from_str(address).expect("invalid address"),
+                Value::new(lovelace),
+            ))
+        }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.to_string()
+        #[wasm_bindgen(setter, js_name = "address")]
+        pub fn _wasm_set_address(address: &str) -> Self {
+            Self(super::Output::to(
+                Address::from_str(address).expect("invalid address"),
+            ))
+        }
+
+        #[wasm_bindgen(js_name = "withAssets")]
+        pub fn _wasm_with_assets(&mut self, assets: &OutputAssets) {
+            self.0.value = super::DeferredValue::Minimum(Arc::new(
+                Value::default().with_assets(assets.clone()),
+            ));
+            self.set_minimum_utxo_value();
+        }
+
+        #[wasm_bindgen(js_name = "toString")]
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
+        }
     }
 }

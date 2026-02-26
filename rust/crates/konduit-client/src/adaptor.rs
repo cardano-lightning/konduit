@@ -89,7 +89,10 @@ pub mod wasm {
     };
     use wasm_bindgen::prelude::*;
 
-    wasm_proxy!(Adaptor);
+    wasm_proxy! {
+        /// A facade for the Adaptor server.
+        Adaptor
+    }
 
     impl Clone for Adaptor {
         fn clone(&self) -> Self {

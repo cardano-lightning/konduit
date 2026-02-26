@@ -8,6 +8,7 @@ pub type Result<T> = std::result::Result<T, AsJsError>;
 
 #[wasm_bindgen]
 #[repr(transparent)]
+/// @hidden
 pub struct AsJsError(JsError);
 
 impl From<anyhow::Error> for AsJsError {

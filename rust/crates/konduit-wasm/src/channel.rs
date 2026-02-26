@@ -1,13 +1,13 @@
 use crate::{
     CardanoConnector as _, Client, Connector, Wallet,
     core::{
-        Bounds, ChannelOutput, Credential, Duration, Hash32, Input, Intent, NetworkParameters,
-        OpenIntent, Output, Quote, ShelleyAddress, SquashBody, Stage, Tag, VerificationKey,
-        filter_channels,
+        Bounds, ChannelOutput, Credential, Duration, Input, NetworkParameters, Output, SquashBody,
+        Stage, VerificationKey,
+        consumer::{Intent, OpenIntent},
+        filter_channels, wasm,
     },
-    wasm,
 };
-use std::{collections::BTreeMap, ops::Deref};
+use std::{borrow::Borrow, collections::BTreeMap, ops::Deref};
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug)]
@@ -17,8 +17,8 @@ pub struct Channel(ChannelOutput);
 #[wasm_bindgen]
 impl Channel {
     #[wasm_bindgen(getter, js_name = "tag")]
-    pub fn tag(&self) -> Tag {
-        Tag::from(self.0.constants.tag.clone())
+    pub fn tag(&self) -> wasm::Tag {
+        self.0.constants.tag.clone().into()
     }
 
     /// Return the initial amount deposited in the channel. We track the remainder using receipts.
@@ -34,7 +34,7 @@ impl Channel {
     }
 
     #[wasm_bindgen(js_name = "receipt")]
-    pub async fn receipt(&self, consumer: &Wallet, client: &Client) -> wasm::Result<u64> {
+    pub async fn receipt(&self, consumer: &Wallet, client: &Client) -> crate::Result<u64> {
         // 1. Inspect the receipt to collect the amount we owe the adaptor, but only trust squash
         //    and cheques that verify.
         let owed = if let Some(receipt) = client.receipt().await? {
@@ -51,11 +51,16 @@ impl Channel {
         Ok(owed)
     }
 
-    pub async fn get_quote(&self, client: &Client, invoice: &str) -> wasm::Result<Quote> {
-        Ok(Quote::from(client.quote(invoice).await?))
+    pub async fn get_quote(&self, client: &Client, invoice: &str) -> crate::Result<wasm::Quote> {
+        Ok(client.quote(invoice).await?.into())
     }
 
-    pub async fn pay(&self, client: &Client, invoice: &str, quote: &Quote) -> wasm::Result<()> {
+    pub async fn pay(
+        &self,
+        client: &Client,
+        invoice: &str,
+        quote: &wasm::Quote,
+    ) -> crate::Result<()> {
         let squash_status = client.pay(invoice, quote.deref()).await?;
         client.sync(squash_status, true).await?;
         Ok(())
@@ -66,19 +71,16 @@ impl Channel {
     pub async fn opened(
         connector: &Connector,
         consumer: &Wallet,
-        konduit_validator: &Credential,
-    ) -> wasm::Result<Vec<Self>> {
+        konduit_validator: &wasm::Credential,
+    ) -> crate::Result<Vec<Self>> {
         let consumer_key = consumer.verification_key();
+        let stake_credential = consumer.stake_credential();
 
-        let utxos_konduit = utxos_at_address(
-            connector,
-            konduit_validator,
-            consumer.stake_credential().as_ref(),
-        )
-        .await?;
+        let utxos_konduit =
+            utxos_at_address(connector, konduit_validator, stake_credential.as_deref()).await?;
 
         Ok(filter_channels(&utxos_konduit.collect(), |channel| {
-            channel.constants.add_vkey == consumer_key
+            &channel.constants.add_vkey == consumer_key.borrow()
         })
         .into_iter()
         .filter_map(|(_, channel)| match channel.stage {
@@ -92,22 +94,22 @@ impl Channel {
     pub async fn open(
         connector: &Connector,
         consumer: &Wallet,
-        script_deployment_address: &ShelleyAddress,
-        tag: &Tag,
-        adaptor_key: &VerificationKey,
+        script_deployment_address: &wasm::ShelleyAddress,
+        tag: &wasm::Tag,
+        adaptor_key: &wasm::VerificationKey,
         close_period_secs: u64,
         amount: u64,
-    ) -> wasm::Result<Hash32> {
+    ) -> crate::Result<wasm::Hash32> {
         let network_parameters = NetworkParameters {
-            network_id: connector.network_id(),
+            network_id: connector.network_id().into(),
             protocol_parameters: connector.protocol_parameters().await?,
         };
 
-        let consumer_key = consumer.verification_key();
+        let consumer_key = consumer.verification_key().into();
 
         let opens = vec![OpenIntent {
             tag: tag.clone().into(),
-            sub_vkey: *adaptor_key,
+            sub_vkey: (*adaptor_key).into(),
             close_period: Duration::from_secs(close_period_secs),
             amount,
         }];
@@ -117,7 +119,7 @@ impl Channel {
         let utxos_consumer = utxos_at_address(
             connector,
             &consumer.payment_credential(),
-            consumer.stake_credential().as_ref(),
+            consumer.stake_credential().as_deref(),
         )
         .await?;
 
@@ -148,16 +150,16 @@ impl Channel {
     pub async fn close(
         connector: &Connector,
         consumer: &Wallet,
-        konduit_validator: &Credential,
-        script_deployment_address: &ShelleyAddress,
-        tag: &Tag,
-    ) -> wasm::Result<Hash32> {
+        konduit_validator: &wasm::Credential,
+        script_deployment_address: &wasm::ShelleyAddress,
+        tag: &wasm::Tag,
+    ) -> crate::Result<wasm::Hash32> {
         let network_parameters = NetworkParameters {
-            network_id: connector.network_id(),
+            network_id: connector.network_id().into(),
             protocol_parameters: connector.protocol_parameters().await?,
         };
 
-        let consumer_key = consumer.verification_key();
+        let consumer_key: VerificationKey = consumer.verification_key().into();
 
         let opens = vec![];
 
@@ -166,12 +168,12 @@ impl Channel {
         let stake_credential = consumer.stake_credential();
 
         let utxos_konduit =
-            utxos_at_address(connector, konduit_validator, stake_credential.as_ref()).await?;
+            utxos_at_address(connector, konduit_validator, stake_credential.as_deref()).await?;
 
         let utxos_consumer = utxos_at_address(
             connector,
-            &Credential::from(&consumer.verification_key()),
-            stake_credential.as_ref(),
+            &Credential::from(consumer.verification_key().deref()),
+            stake_credential.as_deref(),
         )
         .await?;
 
@@ -206,7 +208,7 @@ async fn utxos_at_address(
     connector: &Connector,
     payment_credential: &Credential,
     stake_credential_opt: Option<&Credential>,
-) -> wasm::Result<impl Iterator<Item = (Input, Output)> + use<>> {
+) -> crate::Result<impl Iterator<Item = (Input, Output)> + use<>> {
     Ok(connector
         .utxos_at(payment_credential, None)
         .await?

@@ -7,13 +7,9 @@ use crate::{
 };
 use std::{cmp, fmt, str::FromStr};
 
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 /// A ed25519 verification key (non-extended).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct VerificationKey(ed25519::PublicKey);
 
 impl fmt::Display for VerificationKey {
@@ -154,18 +150,31 @@ impl<'a> From<&'a VerificationKey> for PlutusData<'a> {
     }
 }
 
-// ------------------------------------------------------------------------ Wasm
-
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl VerificationKey {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(value: &str) -> Result<Self, String> {
-        Self::from_str(value).map_err(|e| e.to_string())
+pub mod wasm {
+    use crate::{wasm, wasm_proxy};
+    use std::str::FromStr;
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy! {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        /// A ed25519 verification key (non-extended).
+        VerificationKey
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.to_string()
+    #[wasm_bindgen]
+    impl VerificationKey {
+        #[wasm_bindgen(constructor)]
+        /// Construct a `VerificationKey` from a 64-digit hex-encoded text string. Throws if the
+        /// string is malformed.
+        pub fn _wasm_new(value: &str) -> wasm::Result<Self> {
+            Ok(super::VerificationKey::from_str(value)?.into())
+        }
+
+        #[wasm_bindgen(js_name = "toString")]
+        /// Encode the `VerificationKey` as a 64-digit hex-encoded text string.
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
+        }
     }
 }

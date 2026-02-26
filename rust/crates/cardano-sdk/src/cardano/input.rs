@@ -6,13 +6,9 @@ use crate::{Hash, cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr, sync::Arc};
 
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 /// A reference to a past transaction output.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Input(Arc<pallas::TransactionInput>);
 
 impl fmt::Display for Input {
@@ -101,24 +97,33 @@ impl<'d, C> cbor::Decode<'d, C> for Input {
     }
 }
 
-// ------------------------------------------------------------------------ WASM
-
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-impl Input {
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(transaction_id: &[u8], output_index: u64) -> Self {
-        Self::new(
-            Hash::try_from(Vec::from(transaction_id)).unwrap(),
-            output_index,
-        )
+pub mod wasm {
+    use crate::{wasm::Hash32, wasm_proxy};
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy! {
+        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+        /// A reference to a past transaction output.
+        Input
     }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.to_string()
+    #[wasm_bindgen]
+    impl Input {
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new(transaction_id: &Hash32, output_index: u64) -> Self {
+            super::Input::new((*transaction_id).into(), output_index).into()
+        }
+
+        #[wasm_bindgen(getter, js_name = "transactionId")]
+        pub fn _wasm_transaction_id(&self) -> Hash32 {
+            self.transaction_id().into()
+        }
+
+        #[wasm_bindgen(getter, js_name = "outputIndex")]
+        pub fn _wasm_output_index(&self) -> u64 {
+            self.output_index()
+        }
     }
 }
 
