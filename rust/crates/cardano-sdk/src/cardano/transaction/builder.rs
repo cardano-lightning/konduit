@@ -5,9 +5,11 @@
 use crate::{
     ExecutionUnits, Hash, Input, Output, ProtocolParameters, RedeemerPointer, Transaction,
     cardano::transaction::{IsTransactionBodyState, state},
-    cbor, pallas,
+    cbor::{self, ToCbor},
+    pallas,
 };
 use anyhow::anyhow;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     marker::PhantomData,
@@ -262,10 +264,13 @@ impl Transaction<state::InConstruction> {
                 into_uplc_inputs(&tx, resolved_inputs)?;
             redeemers = evaluate_plutus_scripts(
                 &serialized_tx,
-                uplc_resolved_inputs,
+                uplc_resolved_inputs.clone(),
                 &required_scripts,
                 params,
-            )?;
+            )
+            .inspect_err(|err| {
+                dump_tx_context(&tx.id(), &serialized_tx, &uplc_resolved_inputs);
+            })?;
 
             // This estimation is a best-effort and assumes that one (non-script) input requires one signature
             // witness. This means that it possibly UNDER-estimate fees for Native-script-locked inputs;
@@ -460,15 +465,70 @@ fn evaluate_plutus_scripts(
     Ok(BTreeMap::new())
 }
 
+/// Internal helper to handle the platform-specific writing logic.
+fn write(filename: &str, content: String) {
+    #[cfg(all(not(target_family = "wasm"), debug_assertions))]
+    {
+        // On native debug, write to the filesystem.
+        _ = std::fs::write(filename, &content);
+    }
+
+    #[cfg(any(target_family = "wasm", not(debug_assertions)))]
+    {
+        // On WASM or release, log the "file" metadata followed by the content.
+        log::info!("File: {}", filename);
+        log::info!("{}", content);
+    }
+}
+
+/// Dumps transaction data for inspection.
+/// Note that this occurs only if the log level sufficiently verbose (info or debug)
+fn dump_tx_context(tx_id: &Hash<32>, serialized_tx: &[u8], inputs: &[uplc::tx::ResolvedInput]) {
+    if log::log_enabled!(log::Level::Info) {
+        let dump_base = format!("./tx-dump-{:.6}", hex::encode(tx_id));
+
+        // Dump Serialized TX
+        write(&format!("{}-tx.txt", dump_base), hex::encode(serialized_tx));
+
+        // Dump Inputs
+        let inputs_cbor = inputs
+            .iter()
+            .map(|ri| ri.input.clone())
+            .collect::<Vec<_>>()
+            .to_cbor();
+        write(
+            &format!("{}-inputs.txt", dump_base),
+            hex::encode(inputs_cbor),
+        );
+
+        // Dump Outputs
+        let outputs_cbor = inputs
+            .iter()
+            .map(|ri| ri.output.clone())
+            .collect::<Vec<_>>()
+            .to_cbor();
+        write(
+            &format!("{}-outputs.txt", dump_base),
+            hex::encode(outputs_cbor),
+        );
+
+        #[cfg(all(not(target_family = "wasm"), debug_assertions))]
+        eprintln!("Debug: Transaction context dumped to {}*", dump_base);
+    } else {
+        #[cfg(all(not(target_family = "wasm"), debug_assertions))]
+        eprintln!("Dump tx skipped. Set log::level = Info to enable");
+    }
+}
+
 // ----------------------------------------------------------------------- Tests
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        Address, ChangeStrategy, Input, Output, PlutusData, PlutusScript, PlutusVersion,
+        Address, ChangeStrategy, Hash, Input, Output, PlutusData, PlutusScript, PlutusVersion,
         ProtocolParameters, SlotBound, Transaction, address, address::kind::*, address_test,
-        assets, cbor::ToCbor, hash, input, output, plutus_data, plutus_script, script_credential,
-        value,
+        assets, cbor::ToCbor, hash, input, key_credential, output, plutus_data, plutus_script,
+        script_credential, value,
     };
     use indoc::indoc;
     use std::{cell::LazyCell, collections::BTreeMap, sync::LazyLock};
@@ -877,6 +937,92 @@ mod tests {
              57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f245b11\
              1a00040ae7a105a18200018280821906411a0004d2f5f5f6",
             "unpublish_script no longer matches expected bytes."
+        );
+    }
+
+    /// This test confirms that when a script fails and log leve is info, then the `dump_tx_context`
+    /// function is triggered.
+    ///
+    /// Since the function has side effects, the test is ignored by default.
+    ///
+    /// "Why not just tidy up after?" Because having the test available
+    /// to generate example output is also helpful.
+    ///
+    /// **Usage**: This test is ignored by default as it writes files to the disk.
+    /// Run with `cargo test test_tx_dump -- --ignored --nocapture`.
+    ///
+    /// Then:
+    ///
+    /// ```bash
+    ///     aiken tx simulate \
+    ///         tx-dump-097acb-tx.txt \
+    ///         tx-dump-097acb-inputs.txt \
+    ///         tx-dump-097acb-outputs.txt \
+    ///         --zero-time 1666656000000 \
+    ///         --zero-slot 0 \
+    ///         --script-override
+    ///         "22c9a103ed3f2fa97c982d76d6e2af50c5d54ac306983b196c8fcdab:<your-script>" \
+    ///         --blueprint ../../../kernel/plutus.json
+    /// ```
+    ///
+    /// Unless your override is always succeed or similar, this will probably fail.
+    /// But instructively.
+    #[test]
+    #[ignore]
+    fn test_tx_dump() {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Info)
+            .is_test(true)
+            .try_init();
+
+        let crash_script = plutus_script!(PlutusVersion::V3, "5001010023259800b452689b2b20025735");
+        let crash_address = Address::from(address_test!(script_credential!(
+            "22c9a103ed3f2fa97c982d76d6e2af50c5d54ac306983b196c8fcdab"
+        )));
+        let script_utxo = (
+            Input::new(Hash::<32>::new([0; 32]), 0),
+            Output::new(crash_address, value!(5_000_000))
+                .with_datum(PlutusData::list::<PlutusData>([])),
+        );
+        let user_address = Address::from(address_test!(key_credential!(
+            "00000000000000000000000000000000000000000000000000000000"
+        )));
+        let user_utxo = (
+            Input::new(Hash::<32>::new([1; 32]), 0),
+            Output::new(user_address.clone(), value!(5_000_000)),
+        );
+        let ref_utxo = (
+            Input::new(Hash::<32>::new([2; 32]), 0),
+            Output::new(user_address.clone(), value!(20_000_000)).with_plutus_script(crash_script),
+        );
+
+        let resolved_inputs = [script_utxo.clone(), user_utxo.clone(), ref_utxo.clone()];
+
+        let result = Transaction::build(
+            &FIXTURE_PROTOCOL_PARAMETERS,
+            &BTreeMap::from(resolved_inputs.clone()),
+            |tx| {
+                tx.with_inputs(vec![
+                    (
+                        script_utxo.0.clone(),
+                        Some(PlutusData::list::<PlutusData>([])),
+                    ),
+                    (user_utxo.0.clone(), None),
+                ])
+                .with_collaterals(vec![user_utxo.0.clone()])
+                .with_reference_inputs(vec![ref_utxo.0.clone()])
+                .with_outputs(vec![])
+                .with_change_strategy(ChangeStrategy::as_last_output(user_address.clone()))
+                .ok()
+            },
+        );
+
+        assert!(
+            result.is_err(),
+            "Transaction should have failed due to 'crash' script"
+        );
+        log::info!(
+            "Test finished. Check your local directory (Native) or Console (WASM) for hex dumps."
         );
     }
 }
