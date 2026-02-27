@@ -6,11 +6,6 @@ use crate::{Hash, VerificationKey, WithNetworkId, cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
-#[cfg(feature = "wasm")]
-use crate::{NetworkId, cardano::hash::Hash28};
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 /// A wrapper around the _blake2b-224_ hash digest of a key or script.
 ///
 /// It behaves like a enum with two variants, although the constructors are kept private to avoid
@@ -26,7 +21,6 @@ use wasm_bindgen::prelude::*;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Credential(#[n(0)] pallas::StakeCredential);
 
 impl fmt::Display for Credential {
@@ -260,38 +254,58 @@ impl From<&Credential> for Hash<28> {
     }
 }
 
-// ------------------------------------------------------------------ WASM
-
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl Credential {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(credential: &str) -> Result<Self, String> {
-        Self::from_str(credential).map_err(|e| e.to_string())
+pub mod wasm {
+    use crate::{
+        WithNetworkId,
+        wasm::{self, Hash28, NetworkId},
+        wasm_proxy,
+    };
+    use std::{ops::Deref, str::FromStr};
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy! {
+        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+        /// A wrapper around the _blake2b-224_ hash digest of a key or script.
+        Credential
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "equals"))]
-    pub fn _wasm_equals(&self, other: &Self) -> bool {
-        self == other
-    }
-
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toStringWithNetworkId"))]
-    pub fn _wasm_to_string_with_network_id(&self, network_id: NetworkId) -> String {
-        WithNetworkId {
-            inner: self,
-            network_id,
+    #[wasm_bindgen]
+    impl Credential {
+        /// Construct a new credential from a bech32 stake address. Throws if the
+        /// string is malformed.
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new(credential: &str) -> wasm::Result<Self> {
+            Ok(Self(super::Credential::from_str(credential)?))
         }
-        .to_string()
-    }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "asKey"))]
-    pub fn _wasm_as_key(&self) -> Option<Hash28> {
-        self.as_key().map(Hash28::from)
-    }
+        /// Compare two credentials together. Important as `===` only compare pointers.
+        #[wasm_bindgen(js_name = "equals")]
+        pub fn _wasm_equals(&self, other: &Self) -> bool {
+            self == other
+        }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "asScript"))]
-    pub fn _wasm_as_script(&self) -> Option<Hash28> {
-        self.as_script().map(Hash28::from)
+        /// Encode the credential as a stake address for the given `NetworkId`.
+        #[wasm_bindgen(js_name = "toStringWithNetworkId")]
+        pub fn _wasm_to_string_with_network_id(&self, network_id: NetworkId) -> String {
+            WithNetworkId {
+                inner: self.deref(),
+                network_id: network_id.into(),
+            }
+            .to_string()
+        }
+
+        /// Downcast the credential as a key hash, or `null` if the credential is a script.
+        #[wasm_bindgen(js_name = "asKey")]
+        pub fn _wasm_as_key(&self) -> Option<Hash28> {
+            self.as_key().map(From::from)
+        }
+
+        /// Downcast the credential as a script hash, or `null` if the credential is a key.
+        #[wasm_bindgen(js_name = "asScript")]
+        pub fn _wasm_as_script(&self) -> Option<Hash28> {
+            self.as_script().map(From::from)
+        }
     }
 }
 

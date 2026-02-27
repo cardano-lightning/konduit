@@ -6,13 +6,6 @@ use crate::{Credential, NetworkId, pallas};
 use anyhow::anyhow;
 use std::{cmp::Ordering, fmt, marker::PhantomData, str::FromStr, sync::Arc};
 
-#[cfg(feature = "wasm")]
-use crate::cbor;
-#[cfg(feature = "wasm")]
-use std::ops::Deref;
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 pub mod kind;
 pub use kind::IsAddressKind;
 
@@ -359,77 +352,93 @@ impl<T: IsAddressKind> From<&Address<T>> for Vec<u8> {
 
 // --------------------------------------------------------------- Wasm
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub struct ShelleyAddress(Address<kind::Shelley>);
+pub mod wasm {
+    use crate::{address::kind, cbor, wasm, wasm::WasmProxy};
+    use std::{borrow::Borrow, ops::Deref, str::FromStr};
+    use wasm_bindgen::prelude::*;
 
-#[cfg(feature = "wasm")]
-impl From<Address<kind::Shelley>> for ShelleyAddress {
-    fn from(address: Address<kind::Shelley>) -> Self {
-        Self(address)
-    }
-}
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[cfg(feature = "wasm")]
+    #[cfg_attr(feature = "wasm", wasm_bindgen)]
+    pub struct ShelleyAddress(super::Address<kind::Shelley>);
 
-#[cfg(feature = "wasm")]
-impl Deref for ShelleyAddress {
-    type Target = Address<kind::Shelley>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(feature = "wasm")]
-impl<C> cbor::Encode<C> for ShelleyAddress {
-    fn encode<W: cbor::encode::Write>(
-        &self,
-        e: &mut cbor::Encoder<W>,
-        _ctx: &mut C,
-    ) -> Result<(), cbor::encode::Error<W::Error>> {
-        e.bytes(<Vec<u8>>::from(&self.0).as_slice())?;
-        Ok(())
-    }
-}
-
-#[cfg(feature = "wasm")]
-impl<'d, C> cbor::Decode<'d, C> for ShelleyAddress {
-    fn decode(d: &mut cbor::Decoder<'d>, _ctx: &mut C) -> Result<Self, cbor::decode::Error> {
-        let bytes = d.bytes()?;
-        Address::try_from(bytes)
-            .map_err(cbor::decode::Error::message)
-            .map(Self)
-    }
-}
-
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl ShelleyAddress {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(addr: &str) -> Result<Self, String> {
-        Ok(Self(Address::from_str(addr).map_err(|e| e.to_string())?))
+    impl WasmProxy for ShelleyAddress {
+        type OriginalType = super::Address<kind::Shelley>;
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "equals"))]
-    pub fn _wasm_equals(&self, other: &Self) -> bool {
-        self == other
+    impl From<super::Address<kind::Shelley>> for ShelleyAddress {
+        fn from(address: super::Address<kind::Shelley>) -> Self {
+            Self(address)
+        }
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.0.to_string()
+    impl From<ShelleyAddress> for super::Address<kind::Shelley> {
+        fn from(address: ShelleyAddress) -> Self {
+            address.0
+        }
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(getter, js_name = "paymentCredential"))]
-    pub fn _wasm_payment_credential(&self) -> Credential {
-        self.payment()
+    impl Deref for ShelleyAddress {
+        type Target = super::Address<kind::Shelley>;
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
     }
 
-    #[cfg_attr(
-        feature = "wasm",
-        wasm_bindgen(getter, js_name = "delegationCredential")
-    )]
-    pub fn _wasm_delegation_credential(&self) -> Option<Credential> {
-        self.delegation()
+    impl Borrow<super::Address<kind::Shelley>> for ShelleyAddress {
+        #[inline]
+        fn borrow(&self) -> &super::Address<kind::Shelley> {
+            &self.0
+        }
+    }
+
+    impl<C> cbor::Encode<C> for ShelleyAddress {
+        fn encode<W: cbor::encode::Write>(
+            &self,
+            e: &mut cbor::Encoder<W>,
+            _ctx: &mut C,
+        ) -> Result<(), cbor::encode::Error<W::Error>> {
+            e.bytes(<Vec<u8>>::from(&self.0).as_slice())?;
+            Ok(())
+        }
+    }
+
+    impl<'d, C> cbor::Decode<'d, C> for ShelleyAddress {
+        fn decode(d: &mut cbor::Decoder<'d>, _ctx: &mut C) -> Result<Self, cbor::decode::Error> {
+            let bytes = d.bytes()?;
+            super::Address::try_from(bytes)
+                .map_err(cbor::decode::Error::message)
+                .map(Self)
+        }
+    }
+
+    #[wasm_bindgen]
+    impl ShelleyAddress {
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new(addr: &str) -> wasm::Result<Self> {
+            Ok(super::Address::from_str(addr)?.into())
+        }
+
+        #[wasm_bindgen(js_name = "equals")]
+        pub fn _wasm_equals(&self, other: &Self) -> bool {
+            self == other
+        }
+
+        #[wasm_bindgen(js_name = "toString")]
+        pub fn _wasm_to_string(&self) -> String {
+            self.0.to_string()
+        }
+
+        #[wasm_bindgen(getter, js_name = "paymentCredential")]
+        pub fn _wasm_payment_credential(&self) -> crate::wasm::Credential {
+            self.payment().into()
+        }
+
+        #[wasm_bindgen(getter, js_name = "delegationCredential")]
+        pub fn _wasm_delegation_credential(&self) -> Option<crate::wasm::Credential> {
+            self.delegation().map(Into::into)
+        }
     }
 }
 

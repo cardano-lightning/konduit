@@ -5,13 +5,9 @@
 use crate::{PlutusData, pallas::ed25519};
 use std::{cmp, fmt, str::FromStr};
 
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 /// An EdDSA signature on Curve25519.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(transparent)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct Signature(ed25519::Signature);
 
 impl fmt::Display for Signature {
@@ -121,19 +117,32 @@ impl<'a> From<Signature> for PlutusData<'a> {
     }
 }
 
-// ------------------------------------------------------------------------ Wasm
-
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl Signature {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(value: &str) -> Result<Self, String> {
-        Self::from_str(value).map_err(|e| e.to_string())
+pub mod wasm {
+    use crate::{wasm, wasm_proxy};
+    use std::str::FromStr;
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy! {
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        /// An EdDSA signature on Curve25519.
+        Signature
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.to_string()
+    #[wasm_bindgen]
+    impl Signature {
+        /// Construct a new signature from a 64-digit hex-encoded text string. Throws if the string
+        /// is malformed.
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new(value: &str) -> wasm::Result<Self> {
+            Ok(Self(super::Signature::from_str(value)?))
+        }
+
+        /// Show the signature as a 64-digit hex-encoded text string.
+        #[wasm_bindgen(js_name = "toString")]
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
+        }
     }
 }
 

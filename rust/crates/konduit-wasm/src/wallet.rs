@@ -1,11 +1,7 @@
 use crate::{
     Channel, Connector, Marshall,
-    core::{
-        Credential, NetworkId, ShelleyAddress, Signature, SigningKey, TransactionSummary,
-        VerificationKey,
-    },
+    core::{Credential, NetworkId, Signature, SigningKey, VerificationKey, wasm},
     marshall::Unmarshall,
-    wasm,
 };
 use wasm_bindgen::prelude::*;
 
@@ -14,12 +10,12 @@ use wasm_bindgen::prelude::*;
 pub struct Wallet {
     signing_key: SigningKey,
     stake_credential: Option<Credential>,
-    exit_address: Option<ShelleyAddress>,
+    exit_address: Option<wasm::ShelleyAddress>,
     network_id: NetworkId,
 }
 
 impl Wallet {
-    pub(crate) fn new(signing_key: SigningKey, network_id: NetworkId) -> wasm::Result<Self> {
+    pub(crate) fn new(signing_key: SigningKey, network_id: NetworkId) -> crate::Result<Self> {
         Ok(Self {
             signing_key,
             stake_credential: None,
@@ -29,10 +25,7 @@ impl Wallet {
     }
 
     pub(crate) fn sign(&self, msg: impl AsRef<[u8]>) -> (VerificationKey, Signature) {
-        (
-            self.signing_key.to_verification_key(),
-            self.signing_key.sign(msg),
-        )
+        (self.verification_key().into(), self.signing_key.sign(msg))
     }
 }
 
@@ -41,38 +34,38 @@ impl Wallet {
     // ------------------------------------------------------------------------ Initialize
 
     #[wasm_bindgen(js_name = "create")]
-    pub fn create(network_id: NetworkId) -> wasm::Result<Self> {
-        Self::restore(SigningKey::new(), network_id)
+    pub fn create(network_id: wasm::NetworkId) -> crate::Result<Self> {
+        Self::new(SigningKey::new(), network_id.into())
     }
 
     #[wasm_bindgen(js_name = "restore")]
-    pub fn restore(signing_key: SigningKey, network_id: NetworkId) -> wasm::Result<Self> {
-        Self::new(signing_key, network_id)
+    pub fn restore(
+        signing_key: wasm::SigningKey,
+        network_id: wasm::NetworkId,
+    ) -> crate::Result<Self> {
+        Self::new(signing_key.into(), network_id.into())
     }
 
     // ------------------------------------------------------------------------ Inspecting
 
     #[wasm_bindgen(getter, js_name = "signingKey")]
-    pub fn signing_key(&self) -> SigningKey {
-        self.signing_key.clone()
+    pub fn signing_key(&self) -> wasm::SigningKey {
+        self.signing_key.clone().into()
     }
 
     #[wasm_bindgen(getter, js_name = "verificationKey")]
-    pub fn verification_key(&self) -> VerificationKey {
-        self.signing_key.to_verification_key()
+    pub fn verification_key(&self) -> wasm::VerificationKey {
+        self.signing_key().to_verification_key().into()
     }
 
     #[wasm_bindgen(getter, js_name = "paymentCredential")]
-    pub fn payment_credential(&self) -> Credential {
-        self.verification_key().to_credential()
+    pub fn payment_credential(&self) -> wasm::Credential {
+        self.verification_key().to_credential().into()
     }
 
     #[wasm_bindgen(getter)]
-    pub fn address(&self) -> ShelleyAddress {
-        let mut address = self
-            .signing_key
-            .to_verification_key()
-            .to_address(self.network_id);
+    pub fn address(&self) -> wasm::ShelleyAddress {
+        let mut address = self.verification_key().to_address(self.network_id);
 
         if let Some(stake_credential) = self.stake_credential.as_ref() {
             address = address.with_delegation(stake_credential.clone());
@@ -82,28 +75,28 @@ impl Wallet {
     }
 
     #[wasm_bindgen(getter, js_name = "stakeCredential")]
-    pub fn stake_credential(&self) -> Option<Credential> {
-        self.stake_credential.clone()
+    pub fn stake_credential(&self) -> Option<wasm::Credential> {
+        self.stake_credential.clone().map(Into::into)
     }
 
     #[wasm_bindgen(setter, js_name = "stakeCredential")]
-    pub fn set_stake_credential(&mut self, stake_credential: Option<Credential>) {
-        self.stake_credential = stake_credential;
+    pub fn set_stake_credential(&mut self, stake_credential: Option<wasm::Credential>) {
+        self.stake_credential = stake_credential.map(Into::into);
     }
 
     #[wasm_bindgen(getter, js_name = "exitAddress")]
-    pub fn exit_address(&self) -> Option<ShelleyAddress> {
+    pub fn exit_address(&self) -> Option<wasm::ShelleyAddress> {
         self.exit_address.clone()
     }
 
     #[wasm_bindgen(setter, js_name = "exitAddress")]
-    pub fn set_exit_address(&mut self, exit_address: Option<ShelleyAddress>) {
+    pub fn set_exit_address(&mut self, exit_address: Option<wasm::ShelleyAddress>) {
         self.exit_address = exit_address;
     }
 
     #[wasm_bindgen(getter, js_name = "networkId")]
-    pub fn network_id(&self) -> NetworkId {
-        self.network_id
+    pub fn network_id(&self) -> wasm::NetworkId {
+        self.network_id.into()
     }
 
     // ------------------------------------------------------------------------ Querying
@@ -112,11 +105,9 @@ impl Wallet {
     pub async fn balance(
         &self,
         connector: &Connector,
-        konduit_validator: &Credential,
-    ) -> wasm::Result<u64> {
-        let l1_balance = connector
-            ._wasm_balance(self.signing_key.to_verification_key().as_ref())
-            .await?;
+        konduit_validator: &wasm::Credential,
+    ) -> crate::Result<u64> {
+        let l1_balance = connector._wasm_balance(&self.verification_key()).await?;
 
         let l2_balance = Channel::opened(connector, self, konduit_validator)
             .await?
@@ -130,7 +121,7 @@ impl Wallet {
     pub async fn transactions(
         &self,
         connector: &Connector,
-    ) -> wasm::Result<Vec<TransactionSummary>> {
+    ) -> crate::Result<Vec<wasm::TransactionSummary>> {
         connector
             ._wasm_transactions(&self.payment_credential())
             .await
@@ -153,11 +144,16 @@ impl Wallet {
     }
 
     #[wasm_bindgen(js_name = "deserialize")]
-    pub fn deserialize(serialized: &str) -> wasm::Result<Wallet> {
-        let (network_id, signing_key, stake_credential, exit_address) =
-            Unmarshall::unmarshall(serialized)?;
+    pub fn deserialize(serialized: &str) -> crate::Result<Wallet> {
+        let decoded: (
+            NetworkId,
+            [u8; 32],
+            Option<Credential>,
+            Option<wasm::ShelleyAddress>,
+        ) = Unmarshall::unmarshall(serialized)?;
+        let (network_id, signing_key_bytes, stake_credential, exit_address) = decoded;
 
-        let signing_key = <[u8; 32]>::into(signing_key);
+        let signing_key = SigningKey::from(signing_key_bytes);
 
         Ok(Self {
             network_id,

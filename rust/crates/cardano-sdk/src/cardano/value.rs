@@ -11,9 +11,6 @@ use std::{
     fmt::Display,
 };
 
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// A multi-asset value, generic in its asset quantities.
 ///
@@ -488,68 +485,118 @@ fn with_assets<AssetName, Quantity: Zero>(
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-pub struct OutputValue(Value<u64>);
+pub mod wasm {
+    use crate::{
+        Hash,
+        wasm::{Hash28, WasmProxy},
+    };
+    use std::collections::BTreeMap;
+    use wasm_bindgen::prelude::*;
 
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-impl OutputValue {
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "new"))]
-    pub fn _wasm_new(lovelace: u64) -> Self {
-        Self(Value::new(lovelace))
+    #[wasm_bindgen]
+    /// A multi-asset value
+    pub struct Value(super::Value<u64>);
+
+    impl ::std::ops::Deref for Value {
+        type Target = super::Value<u64>;
+
+        #[inline]
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
     }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withLovelace"))]
-    pub fn _wasm_with_lovelace(&mut self, lovelace: u64) {
-        self.0.with_lovelace(lovelace);
+    impl ::std::ops::DerefMut for Value {
+        #[inline]
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
     }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "withAssets"))]
-    pub fn _wasm_with_assets(&mut self, assets: &OutputAssets) {
-        with_assets(&mut self.0, assets.0.clone());
-    }
-}
-
-#[derive(Debug, Clone)]
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-pub struct OutputAssets(BTreeMap<Hash<28>, BTreeMap<Vec<u8>, u64>>);
-
-#[cfg(feature = "wasm")]
-impl IntoIterator for OutputAssets {
-    type Item = (Hash<28>, BTreeMap<Vec<u8>, u64>);
-    type IntoIter = std::collections::btree_map::IntoIter<Hash<28>, BTreeMap<Vec<u8>, u64>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-impl OutputAssets {
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "empty"))]
-    pub fn _wasm_empty() -> Self {
-        Self(BTreeMap::new())
+    impl WasmProxy for Value {
+        type OriginalType = super::Value<u64>;
     }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "insert"))]
-    pub fn _wasm_insert(&mut self, script_hash: &[u8], asset_name: &[u8], quantity: u64) {
-        let script_hash = <[u8; 28]>::try_from(script_hash)
-            .expect("invalid script hash length")
-            .into();
+    impl ::std::borrow::Borrow<super::Value<u64>> for Value {
+        #[inline]
+        fn borrow(&self) -> &super::Value<u64> {
+            &self.0
+        }
+    }
 
-        self.0
-            .entry(script_hash)
-            .and_modify(|entry| {
-                entry.insert(Vec::from(asset_name), quantity);
-            })
-            .or_insert(BTreeMap::from([(Vec::from(asset_name), quantity)]));
+    impl ::std::convert::From<Value> for super::Value<u64> {
+        #[inline]
+        fn from(w: Value) -> Self {
+            w.0
+        }
+    }
+
+    impl ::std::convert::From<super::Value<u64>> for Value {
+        #[inline]
+        fn from(v: super::Value<u64>) -> Self {
+            Self(v)
+        }
+    }
+
+    #[wasm_bindgen]
+    impl Value {
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new(lovelace: u64) -> Self {
+            Self(super::Value::new(lovelace))
+        }
+
+        #[wasm_bindgen(getter, js_name = "lovelace")]
+        pub fn _wasm_set_lovelace(&self) -> u64 {
+            self.lovelace()
+        }
+
+        #[wasm_bindgen(setter, js_name = "lovelace")]
+        pub fn _wasm_get_lovelace(&mut self, lovelace: u64) {
+            self.with_lovelace(lovelace);
+        }
+
+        #[wasm_bindgen(getter, js_name = "assets")]
+        pub fn _wasm_get_assets(&mut self) -> OutputAssets {
+            OutputAssets(self.assets().clone())
+        }
+
+        #[wasm_bindgen(setter, js_name = "assets")]
+        pub fn _wasm_set_assets(&mut self, assets: &OutputAssets) {
+            super::with_assets(&mut self.0, assets.clone());
+        }
+    }
+
+    #[wasm_bindgen]
+    #[derive(Debug, Clone)]
+    /// A map-like structure for representing multi-assets in an output (i.e. quantity > 0).
+    pub struct OutputAssets(BTreeMap<Hash<28>, BTreeMap<Vec<u8>, u64>>);
+
+    impl IntoIterator for OutputAssets {
+        type Item = (Hash<28>, BTreeMap<Vec<u8>, u64>);
+        type IntoIter = std::collections::btree_map::IntoIter<Hash<28>, BTreeMap<Vec<u8>, u64>>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.0.into_iter()
+        }
+    }
+
+    #[wasm_bindgen]
+    impl OutputAssets {
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new() -> Self {
+            Self(BTreeMap::new())
+        }
+
+        #[wasm_bindgen(js_name = "insert")]
+        pub fn _wasm_insert(&mut self, script_hash: &Hash28, asset_name: &[u8], quantity: u64) {
+            let script_hash: Hash<28> = (*script_hash).into();
+            self.0
+                .entry(script_hash)
+                .and_modify(|entry| {
+                    entry.insert(Vec::from(asset_name), quantity);
+                })
+                .or_insert(BTreeMap::from([(Vec::from(asset_name), quantity)]));
+        }
     }
 }
 

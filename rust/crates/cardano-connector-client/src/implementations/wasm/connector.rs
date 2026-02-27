@@ -1,16 +1,14 @@
-use super::{TransactionSummary, helpers::singleton};
-use crate::{CardanoConnector, wasm::helpers::json_stringify};
+use crate::{
+    CardanoConnector,
+    types::{self, TransactionSummary},
+};
 use anyhow::anyhow;
 use cardano_sdk::{
-    Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, SigningKey,
-    Transaction, VerificationKey,
-    cbor::ToCbor,
-    hash::Hash32,
-    transaction::{TransactionReadyForSigning, state},
-    wasm,
+    Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, Transaction,
+    VerificationKey, cbor::ToCbor, transaction::state, wasm,
 };
 use http_client::{HttpClient as _, wasm::HttpClient};
-use std::{collections::BTreeMap, ops::Deref};
+use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 mod balance;
@@ -19,6 +17,7 @@ mod network;
 mod utxos_at;
 
 #[wasm_bindgen]
+/// A facade to a remote Cardano connector.
 pub struct Connector {
     http_client: HttpClient,
     network: Network,
@@ -47,36 +46,19 @@ impl Connector {
     }
 
     #[wasm_bindgen(getter, js_name = "networkId")]
-    pub fn network_id(&self) -> NetworkId {
-        self.network.into()
-    }
-
-    #[wasm_bindgen(js_name = "signAndSubmit")]
-    pub async fn _wasm_sign_and_submit(
-        &self,
-        transaction: &mut TransactionReadyForSigning,
-        signing_key: &[u8],
-    ) -> wasm::Result<Hash32> {
-        let signing_key: SigningKey = <[u8; 32]>::try_from(signing_key)
-            .map_err(|_| anyhow!("invalid signing key length"))?
-            .into();
-
-        transaction.sign(&signing_key);
-
-        let tx_hash = transaction.id();
-        self.submit(transaction.deref()).await?;
-
-        Ok(tx_hash.into())
+    pub fn network_id(&self) -> wasm::NetworkId {
+        NetworkId::from(self.network).into()
     }
 
     // TODO: move 'balance' under the Connector trait.
     #[wasm_bindgen(js_name = "balance")]
-    pub async fn _wasm_balance(&self, verification_key: &[u8]) -> wasm::Result<u64> {
-        let verification_key: VerificationKey = <[u8; 32]>::try_from(verification_key)
-            .map_err(|_| anyhow!("invalid verification key length"))?
-            .into();
+    pub async fn _wasm_balance(
+        &self,
+        verification_key: &wasm::VerificationKey,
+    ) -> wasm::Result<u64> {
+        let verification_key: VerificationKey = (*verification_key).into();
 
-        let addr = verification_key.to_address(self.network_id());
+        let addr = verification_key.to_address(NetworkId::from(self.network));
 
         let balance = self
             .http_client
@@ -89,13 +71,16 @@ impl Connector {
     #[wasm_bindgen(js_name = "transactions")]
     pub async fn _wasm_transactions(
         &self,
-        payment: &Credential,
-    ) -> wasm::Result<Vec<TransactionSummary>> {
-        let addr = Address::new(self.network_id(), payment.clone());
+        payment: &wasm::Credential,
+    ) -> wasm::Result<Vec<types::wasm::TransactionSummary>> {
+        let addr = Address::new(NetworkId::from(self.network), payment.clone().into());
         Ok(self
             .http_client
-            .get(&format!("/transactions/{addr}"))
-            .await?)
+            .get::<Vec<TransactionSummary>>(&format!("/transactions/{addr}"))
+            .await?
+            .into_iter()
+            .map(From::from)
+            .collect())
     }
 
     #[wasm_bindgen(js_name = "health")]
@@ -127,7 +112,7 @@ impl CardanoConnector for Connector {
         payment: &Credential,
         delegation: Option<&Credential>,
     ) -> anyhow::Result<BTreeMap<Input, Output>> {
-        let mut addr = Address::new(self.network_id(), payment.clone());
+        let mut addr = Address::new(NetworkId::from(self.network), payment.clone());
         if let Some(delegation) = delegation {
             addr = addr.with_delegation(delegation.clone());
         }
@@ -147,13 +132,18 @@ impl CardanoConnector for Connector {
         &self,
         transaction: &Transaction<state::ReadyForSigning>,
     ) -> anyhow::Result<()> {
-        let body = json_stringify(singleton(
-            "transaction",
-            hex::encode(transaction.to_cbor()),
-        )?)?;
+        #[derive(serde::Serialize)]
+        struct SubmitRequest {
+            transaction: String,
+        }
 
         self.http_client
-            .post::<serde_json::Value>("/submit", body.as_bytes())
+            .post::<serde_json::Value>(
+                "/submit",
+                HttpClient::to_json(&SubmitRequest {
+                    transaction: hex::encode(transaction.to_cbor()),
+                }),
+            )
             .await?;
 
         Ok(())

@@ -135,23 +135,23 @@ impl Client {
 #[cfg(feature = "wasm")]
 pub mod wasm {
     use crate::{
-        core::{
-            SigningKey,
-            wasm::{AdaptorInfo, Tag},
-        },
+        core::wasm::{AdaptorInfo, SigningKey, Tag},
         wasm::Adaptor,
         wasm_proxy,
     };
     use std::ops::Deref;
     use wasm_bindgen::prelude::*;
 
-    wasm_proxy!(Client);
+    wasm_proxy! {
+        /// An L2 client for Konduit, bespoke a single consumer key-tag and adaptor.
+        Client
+    }
 
     #[wasm_bindgen]
     impl Client {
-        #[wasm_bindgen(js_name = "new")]
+        #[wasm_bindgen(constructor)]
         pub fn _wasm_new(adaptor: &Adaptor, signing_key: &SigningKey, tag: &Tag) -> Self {
-            let signing_key = signing_key.clone();
+            let signing_key = signing_key.clone().into();
             let tag = tag.deref().clone();
             Self::from(super::Client::new(adaptor.clone().into(), signing_key, tag))
         }

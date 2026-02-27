@@ -6,9 +6,6 @@ use crate::{cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 /// A network identifier to protect misuses of addresses or transactions on a wrong network.
 ///
 /// Note that you can convert to and from [`u8`] using [`u8::from`] and [`Self::try_from`]
@@ -28,11 +25,6 @@ use wasm_bindgen::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
-#[cfg_attr(
-    feature = "wasm",
-    wasm_bindgen,
-    doc = "A network identifier to protect misuses of addresses or transactions on a wrong network."
-)]
 pub struct NetworkId(#[n(0)] pallas::NetworkId);
 
 impl fmt::Display for NetworkId {
@@ -129,27 +121,38 @@ impl From<NetworkId> for u8 {
     }
 }
 
-// -------------------------------------------------------------------- WASM
-
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-impl NetworkId {
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "mainnet"))]
-    pub fn _wasm_mainnet() -> Self {
-        Self::MAINNET
+pub mod wasm {
+    use crate::wasm_proxy;
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy! {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        /// A network identifier to protect misuses of addresses or transactions on a wrong network.
+        NetworkId
     }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "testnet"))]
-    pub fn _wasm_testnet() -> Self {
-        Self::TESTNET
-    }
+    #[wasm_bindgen]
+    impl NetworkId {
+        #[wasm_bindgen(js_name = "mainnet")]
+        pub fn _wasm_mainnet() -> Self {
+            Self(super::NetworkId::MAINNET)
+        }
 
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        format!("{self:#?}")
+        #[wasm_bindgen(js_name = "testnet")]
+        pub fn _wasm_testnet() -> Self {
+            Self(super::NetworkId::TESTNET)
+        }
+
+        #[wasm_bindgen(js_name = "intoIndex")]
+        pub fn _wasm_into_index(&self) -> u8 {
+            (**self).into()
+        }
+
+        #[wasm_bindgen(js_name = "toString")]
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
+        }
     }
 }
 

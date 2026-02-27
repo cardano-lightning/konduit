@@ -23,12 +23,10 @@ default = []
 wasm = [
   "cardano-sdk/wasm",
   "http-client/wasm",
-  "dep:hex",
   "dep:js-sys",
   "dep:serde_json",
   "dep:wasm-bindgen",
   "dep:wasm-bindgen-futures",
-  "dep:web-time",
 ]
 
 # Exports a blockfrost-based cardano-connector client (incompatible with 'wasm')
@@ -36,25 +34,21 @@ blockfrost = [
   "dep:blockfrost-openapi",
   "dep:blockfrost",
   "dep:futures",
-  "dep:hex",
   "dep:reqwest",
 ]
 
 [dependencies]
 anyhow.workspace = true
 cardano-sdk.workspace = true
-serde.workspace = true
+hex.workspace = true
 http-client.workspace = true
-
-# -F wasm | -F blockfrost
-hex = { workspace = true, optional = true }
+serde.workspace = true
 
 # -F wasm
 js-sys = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-web-time = { workspace = true, optional = true }
 
 # -F blockfrost
 blockfrost-openapi = { workspace = true, optional = true }

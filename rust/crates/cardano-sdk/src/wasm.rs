@@ -7,45 +7,10 @@
 mod error;
 pub use error::*;
 
-#[macro_export]
-macro_rules! wasm_proxy_min_api {
-    ($wrapper:ident) => {
-        impl ::std::ops::Deref for $wrapper {
-            type Target = super::$wrapper;
+mod macros;
+pub use macros::WasmProxy;
 
-            #[inline]
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-
-        impl ::std::convert::From<$wrapper> for super::$wrapper {
-            #[inline]
-            fn from(w: $wrapper) -> Self {
-                w.0
-            }
-        }
-
-        impl ::std::convert::From<super::$wrapper> for $wrapper {
-            #[inline]
-            fn from(v: super::$wrapper) -> Self {
-                Self(v)
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! wasm_proxy {
-    (
-        $(#[$attr:meta])*
-        $name:ident
-    ) => {
-        #[wasm_bindgen::prelude::wasm_bindgen]
-        #[repr(transparent)]
-        $(#[$attr])*
-        pub struct $name(super::$name);
-
-        $crate::wasm_proxy_min_api!($name);
-    };
-}
+pub use crate::cardano::{
+    address::wasm::*, credential::wasm::*, crypto::ed25519::wasm::*, hash::wasm::*, input::wasm::*,
+    network_id::wasm::*, output::wasm::*, protocol_parameters::wasm::*, value::wasm::*,
+};

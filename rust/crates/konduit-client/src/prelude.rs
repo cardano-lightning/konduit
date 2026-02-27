@@ -24,7 +24,7 @@ pub mod core {
 
     #[cfg(feature = "wasm")]
     pub mod wasm {
-        pub use cardano_sdk::wasm::Result;
+        pub use cardano_sdk::wasm::*;
         pub use konduit_data::wasm::*;
     }
 }

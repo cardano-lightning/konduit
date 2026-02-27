@@ -1,4 +1,3 @@
-use crate::wasm;
 use anyhow::anyhow;
 use wasm_bindgen::prelude::*;
 
@@ -12,7 +11,7 @@ pub enum LogLevel {
 }
 
 #[wasm_bindgen(js_name = "enableLogs")]
-pub fn enable_logs(level: LogLevel) -> wasm::Result<()> {
+pub fn enable_logs(level: LogLevel) -> crate::Result<()> {
     let log_level = match level {
         LogLevel::Trace => log::Level::Trace,
         LogLevel::Debug => log::Level::Debug,

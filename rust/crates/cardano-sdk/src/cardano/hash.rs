@@ -6,11 +6,6 @@ use crate::{cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
-#[cfg(feature = "wasm")]
-use std::ops::Deref;
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 /// A _blake2b_ hash digest; typically 28 or 32 bytes long.
 ///
 /// There are several ways to construct [`Self`], but fundamentally:
@@ -172,53 +167,36 @@ impl<const SIZE: usize> AsRef<[u8]> for Hash<SIZE> {
     }
 }
 
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
 pub struct Hash28(#[n(0)] Hash<28>);
 
-#[cfg(feature = "wasm")]
 impl From<Hash<28>> for Hash28 {
     fn from(hash28: Hash<28>) -> Self {
         Self(hash28)
     }
 }
 
-#[cfg(feature = "wasm")]
-impl Deref for Hash28 {
+impl std::ops::Deref for Hash28 {
     type Target = Hash<28>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl Hash28 {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.0.to_string()
-    }
-}
-
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
 pub struct Hash32(#[n(0)] Hash<32>);
 
-#[cfg(feature = "wasm")]
 impl From<Hash<32>> for Hash32 {
     fn from(hash32: Hash<32>) -> Self {
         Self(hash32)
     }
 }
 
-#[cfg(feature = "wasm")]
-impl Deref for Hash32 {
+impl std::ops::Deref for Hash32 {
     type Target = Hash<32>;
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -226,11 +204,76 @@ impl Deref for Hash32 {
 }
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl Hash32 {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.0.to_string()
+pub mod wasm {
+    use std::ops::Deref;
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen]
+    #[repr(transparent)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+    /// A blake-2b hash digest of 28 bytes (224 bits)
+    pub struct Hash28(super::Hash<28>);
+
+    impl Deref for Hash28 {
+        type Target = super::Hash<28>;
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl From<super::Hash<28>> for Hash28 {
+        fn from(hash: super::Hash<28>) -> Self {
+            Self(hash)
+        }
+    }
+
+    impl From<Hash28> for super::Hash<28> {
+        fn from(hash: Hash28) -> Self {
+            hash.0
+        }
+    }
+
+    #[wasm_bindgen]
+    impl Hash28 {
+        /// Convert the hash into a hex-encoded text string.
+        #[wasm_bindgen(js_name = "toString")]
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
+        }
+    }
+
+    #[wasm_bindgen]
+    #[repr(transparent)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+    /// A blake-2b hash digest of 32 bytes (256 bits)
+    pub struct Hash32(super::Hash<32>);
+
+    impl Deref for Hash32 {
+        type Target = super::Hash<32>;
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl From<super::Hash<32>> for Hash32 {
+        fn from(hash: super::Hash<32>) -> Self {
+            Self(hash)
+        }
+    }
+
+    impl From<Hash32> for super::Hash<32> {
+        fn from(hash: Hash32) -> Self {
+            hash.0
+        }
+    }
+
+    #[wasm_bindgen]
+    impl Hash32 {
+        /// Convert the hash into a hex-encoded text string.
+        #[wasm_bindgen(js_name = "toString")]
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
+        }
     }
 }
 

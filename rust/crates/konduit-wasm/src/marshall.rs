@@ -1,7 +1,4 @@
-use crate::{
-    core::cbor::{self, FromCbor, ToCbor},
-    wasm,
-};
+use crate::core::cbor::{self, FromCbor, ToCbor};
 use anyhow::anyhow;
 
 pub(crate) trait Marshall {
@@ -40,7 +37,7 @@ where
 }
 
 pub(crate) trait Unmarshall {
-    fn unmarshall(data: &str) -> wasm::Result<Self>
+    fn unmarshall(data: &str) -> crate::Result<Self>
     where
         Self: Sized + for<'d> cbor::Decode<'d, ()>,
     {

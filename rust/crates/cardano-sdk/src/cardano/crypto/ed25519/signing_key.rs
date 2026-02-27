@@ -7,13 +7,9 @@ use anyhow::anyhow;
 use rand_core::RngCore;
 use std::str::FromStr;
 
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 /// An ed25519 signing key (non-extended).
 #[derive(Debug, Clone)]
 #[repr(transparent)]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub struct SigningKey(ed25519::SecretKey);
 
 // ----------------------------------------------------------------------- Using
@@ -110,18 +106,34 @@ impl From<&SigningKey> for VerificationKey {
     }
 }
 
-// ------------------------------------------------------------------------ Wasm
-
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl SigningKey {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(value: &str) -> Result<Self, String> {
-        Self::from_str(value).map_err(|e| e.to_string())
+pub mod wasm {
+    use crate::{
+        wasm::{self, Signature},
+        wasm_proxy,
+    };
+    use std::str::FromStr;
+    use wasm_bindgen::prelude::*;
+
+    wasm_proxy! {
+        #[derive(Debug, Clone)]
+        /// An ed25519 signing key (non-extended).
+        SigningKey
     }
 
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "sign"))]
-    pub fn _wasm_sign(&self, msg: &[u8]) -> Signature {
-        self.sign(msg)
+    #[wasm_bindgen]
+    impl SigningKey {
+        /// Construct a new signing key from a 64-digit hex-encoded text string. Throws if the
+        /// string is malformed.
+        #[wasm_bindgen(constructor)]
+        pub fn _wasm_new(value: &str) -> wasm::Result<Self> {
+            Ok(super::SigningKey::from_str(value)?.into())
+        }
+
+        /// Sign the given payload (unsafe if unknown /!\) with the key.
+        #[wasm_bindgen(js_name = "sign")]
+        pub fn _wasm_sign(&self, msg: &[u8]) -> Signature {
+            self.sign(msg).into()
+        }
     }
 }

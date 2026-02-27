@@ -10,17 +10,13 @@ use crate::{
 use anyhow::anyhow;
 use itertools::Itertools;
 use std::{
+    borrow::Borrow,
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt, iter,
     marker::PhantomData,
     mem,
     ops::Deref,
 };
-
-#[cfg(feature = "wasm")]
-use std::ops::DerefMut;
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
 
 mod builder;
 pub mod state;
@@ -290,19 +286,22 @@ impl Transaction<state::ReadyForSigning> {
     }
 
     /// Like 'sign', but allows signing through a callback to avoid leaking the signing key.
-    pub fn sign_with(
+    pub fn sign_with<
+        VerificationKeyLike: Borrow<VerificationKey>,
+        SignatureLike: Borrow<Signature>,
+    >(
         &mut self,
-        sign: impl FnOnce(Hash<32>) -> (VerificationKey, Signature),
+        sign: impl FnOnce(Hash<32>) -> (VerificationKeyLike, SignatureLike),
     ) -> &mut Self {
         let (verification_key, signature) = sign(self.id());
 
         let public_key = pallas::Bytes::from(Vec::from(<[u8; VerificationKey::SIZE]>::from(
-            verification_key,
+            *(verification_key.borrow()),
         )));
 
         let witness = pallas::VKeyWitness {
             vkey: public_key.clone(),
-            signature: pallas::Bytes::from(Vec::from(signature.as_ref())),
+            signature: pallas::Bytes::from(Vec::from(signature.borrow().as_ref())),
         };
 
         if let Some(signatures) = mem::take(&mut self.inner.transaction_witness_set.vkeywitness) {
@@ -1241,39 +1240,65 @@ impl<'d, C> cbor::Decode<'d, C> for Transaction<state::ReadyForSigning> {
 // ------------------------------------------------------------------------ WASM
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-pub struct TransactionReadyForSigning(Transaction<state::ReadyForSigning>);
+pub mod wasm {
+    use crate::{
+        transaction::state,
+        wasm::{Hash32, WasmProxy},
+    };
+    use std::{borrow::Borrow, ops::Deref};
+    use wasm_bindgen::prelude::*;
 
-#[cfg(feature = "wasm")]
-impl Deref for TransactionReadyForSigning {
-    type Target = Transaction<state::ReadyForSigning>;
+    #[wasm_bindgen]
+    #[repr(transparent)]
+    /// A fully built and (body-)sealed transaction. Ready for signing and submission.
+    pub struct TransactionReadyForSigning(super::Transaction<state::ReadyForSigning>);
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    impl WasmProxy for TransactionReadyForSigning {
+        type OriginalType = super::Transaction<state::ReadyForSigning>;
     }
-}
 
-#[cfg(feature = "wasm")]
-impl DerefMut for TransactionReadyForSigning {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    impl From<super::Transaction<state::ReadyForSigning>> for TransactionReadyForSigning {
+        #[inline]
+        fn from(tx: super::Transaction<state::ReadyForSigning>) -> Self {
+            Self(tx)
+        }
     }
-}
 
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen, doc(hidden))]
-impl TransactionReadyForSigning {
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.0.to_string()
+    impl From<TransactionReadyForSigning> for super::Transaction<state::ReadyForSigning> {
+        #[inline]
+        fn from(tx: TransactionReadyForSigning) -> Self {
+            tx.0
+        }
     }
-}
 
-#[cfg(feature = "wasm")]
-impl From<Transaction<state::ReadyForSigning>> for TransactionReadyForSigning {
-    fn from(tx: Transaction<state::ReadyForSigning>) -> Self {
-        Self(tx)
+    impl Borrow<super::Transaction<state::ReadyForSigning>> for TransactionReadyForSigning {
+        #[inline]
+        fn borrow(&self) -> &super::Transaction<state::ReadyForSigning> {
+            &self.0
+        }
+    }
+
+    impl Deref for TransactionReadyForSigning {
+        type Target = super::Transaction<state::ReadyForSigning>;
+        #[inline]
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    #[wasm_bindgen]
+    impl TransactionReadyForSigning {
+        #[wasm_bindgen(getter, js_name = "id")]
+        /// Get the transaction's id
+        pub fn _wasm_id(&self) -> Hash32 {
+            self.id().into()
+        }
+
+        #[wasm_bindgen(js_name = "toString")]
+        /// Obtain a
+        pub fn _wasm_to_string(&self) -> String {
+            self.to_string()
+        }
     }
 }
 

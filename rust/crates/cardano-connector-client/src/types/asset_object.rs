@@ -1,4 +1,4 @@
-use crate::wasm::helpers::try_into_array;
+use crate::helpers::try_into_array;
 use cardano_sdk::{Credential, Hash, Value};
 
 #[derive(Debug, serde::Deserialize)]
