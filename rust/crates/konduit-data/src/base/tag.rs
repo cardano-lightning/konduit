@@ -93,31 +93,13 @@ impl From<&Tag> for Vec<u8> {
 
 #[cfg(feature = "wasm")]
 pub mod wasm {
-    use std::{ops::Deref, str::FromStr};
+    use cardano_sdk::wasm_proxy;
+    use std::str::FromStr;
     use wasm_bindgen::prelude::*;
 
-    #[wasm_bindgen]
-    #[repr(transparent)]
-    #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
-    pub struct Tag(super::Tag);
-
-    impl Deref for Tag {
-        type Target = super::Tag;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
-    impl From<Tag> for super::Tag {
-        fn from(tag: Tag) -> Self {
-            tag.0
-        }
-    }
-
-    impl From<super::Tag> for Tag {
-        fn from(tag: super::Tag) -> Self {
-            Self(tag)
-        }
+    wasm_proxy! {
+        #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+        Tag
     }
 
     #[wasm_bindgen]

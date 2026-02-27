@@ -25,6 +25,7 @@ reqwest = [
 wasm = [
   "http-client/wasm",
   "konduit-data/wasm",
+  "cardano-connector-client/wasm",
   "dep:wasm-bindgen",
   "dep:wasm-bindgen-futures",
   "dep:web-time",

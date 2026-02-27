@@ -9,6 +9,10 @@ pub trait WasmProxy {
 #[macro_export]
 macro_rules! wasm_proxy_min_api {
     ($wrapper:ident) => {
+        impl $crate::wasm::WasmProxy for $wrapper {
+            type OriginalType = super::$wrapper;
+        }
+
         impl ::std::ops::Deref for $wrapper {
             type Target = super::$wrapper;
 
@@ -16,10 +20,6 @@ macro_rules! wasm_proxy_min_api {
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
-        }
-
-        impl $crate::wasm::WasmProxy for $wrapper {
-            type OriginalType = super::$wrapper;
         }
 
         impl ::std::borrow::Borrow<super::$wrapper> for $wrapper {

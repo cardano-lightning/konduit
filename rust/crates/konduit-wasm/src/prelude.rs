@@ -1,8 +1,8 @@
 //! A prelude to use within the crate to ease imports, in particular in a multi-platform context.
 
-pub use konduit_client::wasm::Client;
+pub use konduit_client::{l1, wasm::l2};
 
-pub use cardano_connector_client::{CardanoConnector, wasm::Connector};
+pub use cardano_connector_client::wasm::Connector;
 
 pub use cardano_sdk::wasm::Result;
 

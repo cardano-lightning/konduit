@@ -10,42 +10,31 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-pub struct Client<Connector: CardanoConnector> {
-    connector: Connector,
+pub struct Client<'connector, Connector: CardanoConnector> {
+    connector: &'connector Connector,
     consumer: SigningKey,
-    script_deployment_address: Address<kind::Shelley>,
-    stake_credential: Option<Credential>,
 }
 
-impl<Connector: CardanoConnector> Client<Connector> {
-    pub fn new(
-        connector: Connector,
-        consumer: SigningKey,
-        script_deployment_address: Address<kind::Shelley>,
-        stake_credential: Option<Credential>,
-    ) -> Self {
+impl<'connector, Connector: CardanoConnector> Client<'connector, Connector> {
+    pub fn new(connector: &'connector Connector, consumer: SigningKey) -> Self {
         Client {
             connector,
             consumer,
-            script_deployment_address,
-            stake_credential,
         }
-    }
-
-    /// Set or reset the stake credential associated with the consumer's signing key.
-    pub fn set_stake_credential(&mut self, stake_credential: Option<Credential>) {
-        self.stake_credential = stake_credential;
     }
 
     /// Check the chain for opened channels that match the client's credentials, regardless of the
     /// adaptor they're configured with.
-    pub async fn opened_channels(&self) -> anyhow::Result<Vec<ChannelOutput>> {
+    pub async fn opened_channels(
+        &self,
+        stake_credential: Option<&Credential>,
+    ) -> anyhow::Result<impl Iterator<Item = ChannelOutput>> {
         let consumer = self.consumer.to_verification_key();
 
         let utxos_konduit = all_utxos_at(
-            &self.connector,
+            self.connector,
             &KONDUIT_VALIDATOR.to_credential(),
-            self.stake_credential.as_ref(),
+            stake_credential,
         )
         .await?;
 
@@ -56,16 +45,17 @@ impl<Connector: CardanoConnector> Client<Connector> {
         .filter_map(|(_, channel)| match channel.stage {
             Stage::Opened { .. } => Some(channel),
             Stage::Closed { .. } | Stage::Responded { .. } => None,
-        })
-        .collect())
+        }))
     }
 
     /// Execute the given intents on any compatible channel owned by the client's credentials.
     pub async fn execute(
         &self,
         wallet_sk: &SigningKey,
+        stake_credential: Option<&Credential>,
         opens: Vec<OpenIntent>,
         intents: BTreeMap<Tag, Intent>,
+        script_deployment_address: &Address<kind::Shelley>,
     ) -> anyhow::Result<Hash<32>> {
         let network_parameters = NetworkParameters {
             network_id: NetworkId::from(self.connector.network()),
@@ -80,17 +70,17 @@ impl<Connector: CardanoConnector> Client<Connector> {
         let utxos_script_ref = self
             .connector
             .utxos_at(
-                &self.script_deployment_address.payment(),
-                self.script_deployment_address.delegation().as_ref(),
+                &script_deployment_address.payment(),
+                script_deployment_address.delegation().as_ref(),
             )
             .await?;
 
         let utxos_konduit = if !intents.is_empty() {
             Box::new(
                 all_utxos_at(
-                    &self.connector,
+                    self.connector,
                     &KONDUIT_VALIDATOR.to_credential(),
-                    self.stake_credential.as_ref(),
+                    stake_credential,
                 )
                 .await?,
             )
@@ -99,18 +89,18 @@ impl<Connector: CardanoConnector> Client<Connector> {
         };
 
         let utxos_consumer = all_utxos_at(
-            &self.connector,
+            self.connector,
             &Credential::from(&consumer_vk),
-            self.stake_credential.as_ref(),
+            stake_credential,
         )
         .await?;
 
         let utxos_wallet = if wallet_vk != consumer_vk {
             Box::new(
                 all_utxos_at(
-                    &self.connector,
+                    self.connector,
                     &Credential::from(&wallet_vk),
-                    self.stake_credential.as_ref(),
+                    stake_credential,
                 )
                 .await?,
             )

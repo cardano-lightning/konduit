@@ -23,6 +23,15 @@ pub struct Connector {
     network: Network,
 }
 
+impl Clone for Connector {
+    fn clone(&self) -> Self {
+        Self {
+            http_client: HttpClient::new(self.http_client.base_url.as_str()),
+            network: self.network,
+        }
+    }
+}
+
 // -------------------------------------------------------------------- WASM API
 
 #[wasm_bindgen]
