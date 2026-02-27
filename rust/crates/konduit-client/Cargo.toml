@@ -45,8 +45,10 @@ bln-sdk.workspace = true
 cardano-sdk.workspace = true
 http-client.workspace = true
 konduit-data.workspace = true
+konduit-tx.workspace = true
 log.workspace = true
 serde_json.workspace = true
+cardano-connector-client.workspace = true
 # -F reqwest
 reqwest = { workspace = true, features = ["json"], optional = true }
 # -F wasm

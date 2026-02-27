@@ -2004,11 +2004,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bln-sdk",
+ "cardano-connector-client",
  "cardano-sdk",
  "clap",
  "dotenvy",
  "http-client",
  "konduit-data",
+ "konduit-tx",
  "log",
  "proptest",
  "proptest-derive",

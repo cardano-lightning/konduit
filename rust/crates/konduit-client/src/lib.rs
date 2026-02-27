@@ -4,8 +4,8 @@ pub use adaptor::Adaptor;
 #[cfg(feature = "cli")]
 pub mod cli;
 
-mod l2;
-pub use l2::Client;
+pub mod l1;
+pub mod l2;
 
 mod prelude;
 pub(crate) use prelude::*;
