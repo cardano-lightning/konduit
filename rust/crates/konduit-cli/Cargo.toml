@@ -26,6 +26,7 @@ dotenvy.workspace = true
 hex.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
+konduit-client = { workspace = true, features = ["reqwest"] }
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 tokio.workspace = true

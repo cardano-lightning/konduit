@@ -1990,6 +1990,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "hex",
+ "konduit-client",
  "konduit-data",
  "konduit-tx",
  "serde",
