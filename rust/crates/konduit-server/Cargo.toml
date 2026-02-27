@@ -10,16 +10,14 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
-
 [dependencies]
 actix-cors.workspace = true
 actix-web.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 bln-client = { workspace = true, features = ["cli", "namespaced"] }
-cardano-connector-client = { workspace = true, features = ["blockfrost"] }
+cardano-connector-direct.workspace = true
+cardano-connector.workspace = true
 cardano-sdk.workspace = true
 clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true

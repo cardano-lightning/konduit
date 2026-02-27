@@ -10,51 +10,32 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
-
-[package.metadata.cargo-machete]
-ignored = ["wasm-bindgen-futures"]
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-
-# Exports a wasm-based cardano-connector client (incompatible with 'blockfrost')
 wasm = [
   "cardano-sdk/wasm",
-  "http-client/wasm",
+  "dep:http-client-wasm",
   "dep:js-sys",
-  "dep:serde_json",
   "dep:wasm-bindgen",
   "dep:wasm-bindgen-futures",
 ]
 
-# Exports a blockfrost-based cardano-connector client (incompatible with 'wasm')
-blockfrost = [
-  "dep:blockfrost-openapi",
-  "dep:blockfrost",
-  "dep:futures",
-  "dep:reqwest",
-]
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen-futures"]
 
 [dependencies]
 anyhow.workspace = true
+cardano-connector.workspace = true
 cardano-sdk.workspace = true
 hex.workspace = true
 http-client.workspace = true
 serde.workspace = true
-
+serde_json.workspace = true
 # -F wasm
+http-client-wasm = { workspace = true, optional = true }
 js-sys = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-
-# -F blockfrost
-blockfrost-openapi = { workspace = true, optional = true }
-blockfrost = { workspace = true, optional = true }
-futures = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
-
-[target.'cfg(target_family="wasm")'.dependencies]
-getrandom = { workspace = true, features = ["js"] }

@@ -1,10 +1,14 @@
-pub use interface::CardanoConnector;
-mod interface;
+mod connector;
+pub use connector::Connector;
 
-#[cfg(any(feature = "blockfrost", feature = "wasm"))]
-pub use implementations::*;
-mod implementations;
+pub(crate) mod endpoints;
+
+pub mod helpers;
 
 pub mod types;
 
-pub mod helpers;
+#[cfg(feature = "wasm")]
+pub mod wasm {
+    use super::*;
+    pub use connector::wasm::Connector;
+}

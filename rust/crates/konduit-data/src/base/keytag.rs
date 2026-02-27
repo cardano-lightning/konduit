@@ -99,6 +99,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+        #[doc = "An (ideally) unique identifier composed of a verification key and a well-chosen tag."]
         Keytag
     }
 

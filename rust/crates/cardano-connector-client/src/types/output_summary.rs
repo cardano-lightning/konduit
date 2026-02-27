@@ -46,7 +46,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone)]
-        /// An `Output` that carries only reference scripts as hashes, and not plain scripts.
+        #[doc = "An `Output` that carries only reference scripts as hashes, and not plain scripts."]
         OutputSummary
     }
 

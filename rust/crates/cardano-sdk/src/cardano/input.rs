@@ -104,7 +104,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-        /// A reference to a past transaction output.
+        #[doc = "A reference to a past transaction output."]
         Input
     }
 

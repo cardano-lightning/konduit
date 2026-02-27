@@ -205,32 +205,13 @@ impl std::ops::Deref for Hash32 {
 
 #[cfg(feature = "wasm")]
 pub mod wasm {
-    use std::ops::Deref;
+    use crate::wasm_proxy;
     use wasm_bindgen::prelude::*;
 
-    #[wasm_bindgen]
-    #[repr(transparent)]
-    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-    /// A blake-2b hash digest of 28 bytes (224 bits)
-    pub struct Hash28(super::Hash<28>);
-
-    impl Deref for Hash28 {
-        type Target = super::Hash<28>;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
-    impl From<super::Hash<28>> for Hash28 {
-        fn from(hash: super::Hash<28>) -> Self {
-            Self(hash)
-        }
-    }
-
-    impl From<Hash28> for super::Hash<28> {
-        fn from(hash: Hash28) -> Self {
-            hash.0
-        }
+    wasm_proxy! {
+        #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+        #[doc = "A blake-2b hash digest of 28 bytes (224 bits)"]
+        Hash28 => super::Hash<28>
     }
 
     #[wasm_bindgen]
@@ -242,29 +223,10 @@ pub mod wasm {
         }
     }
 
-    #[wasm_bindgen]
-    #[repr(transparent)]
-    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-    /// A blake-2b hash digest of 32 bytes (256 bits)
-    pub struct Hash32(super::Hash<32>);
-
-    impl Deref for Hash32 {
-        type Target = super::Hash<32>;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
-    impl From<super::Hash<32>> for Hash32 {
-        fn from(hash: super::Hash<32>) -> Self {
-            Self(hash)
-        }
-    }
-
-    impl From<Hash32> for super::Hash<32> {
-        fn from(hash: Hash32) -> Self {
-            hash.0
-        }
+    wasm_proxy! {
+        #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+        #[doc = "A blake-2b hash digest of 32 bytes (256 bits)"]
+        Hash32 => super::Hash<32>
     }
 
     #[wasm_bindgen]

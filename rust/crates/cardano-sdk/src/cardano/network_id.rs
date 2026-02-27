@@ -128,7 +128,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-        /// A network identifier to protect misuses of addresses or transactions on a wrong network.
+        #[doc = "A network identifier to protect misuses of addresses or transactions on a wrong network."]
         NetworkId
     }
 

@@ -118,7 +118,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone)]
-        /// A synthetic representation of a transaction used by the Connector.
+        #[doc = "A synthetic representation of a transaction used by the Connector."]
         TransactionSummary
     }
 

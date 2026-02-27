@@ -375,7 +375,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, PartialEq, Eq)]
-        /// A transaction output, which comprises of at least an `Address` and a `Value`.
+        #[doc = "A transaction output, which comprises of at least an `Address` and a `Value`."]
         Output
     }
 

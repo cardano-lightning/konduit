@@ -15,6 +15,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone)]
+        #[doc = "An `Input` alongside its resolved `Output`"]
         InputSummary
     }
 

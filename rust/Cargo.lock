@@ -601,23 +601,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "cardano-connector"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-sdk",
+]
+
+[[package]]
 name = "cardano-connector-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-connector",
+ "cardano-sdk",
+ "hex",
+ "http-client",
+ "http-client-wasm",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "cardano-connector-direct"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "blockfrost",
  "blockfrost-openapi",
+ "cardano-connector",
  "cardano-sdk",
  "futures",
- "getrandom 0.2.16",
  "hex",
- "http-client",
- "js-sys",
  "reqwest",
  "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -1577,15 +1597,32 @@ dependencies = [
 name = "http-client"
 version = "0.0.0"
 dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "http-client-native"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "http-client",
+ "reqwest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "http-client-wasm"
+version = "0.0.0"
+dependencies = [
  "anyhow",
  "gloo-net",
  "gloo-timers",
+ "http-client",
  "js-sys",
  "log",
- "reqwest",
  "serde",
  "serde-wasm-bindgen",
- "serde_json",
  "web-sys",
  "web-time",
 ]
@@ -1985,11 +2022,13 @@ name = "konduit-cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "cardano-connector-client",
+ "cardano-connector",
+ "cardano-connector-direct",
  "cardano-sdk",
  "clap",
  "dotenvy",
  "hex",
+ "konduit-client",
  "konduit-data",
  "konduit-tx",
  "serde",
@@ -2004,11 +2043,14 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bln-sdk",
+ "cardano-connector",
  "cardano-sdk",
  "clap",
  "dotenvy",
  "http-client",
+ "http-client-wasm",
  "konduit-data",
+ "konduit-tx",
  "log",
  "proptest",
  "proptest-derive",
@@ -2037,6 +2079,7 @@ dependencies = [
  "thiserror 2.0.17",
  "uplc",
  "wasm-bindgen",
+ "web-time",
 ]
 
 [[package]]
@@ -2048,7 +2091,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bln-client",
- "cardano-connector-client",
+ "cardano-connector",
+ "cardano-connector-direct",
  "cardano-sdk",
  "clap",
  "dotenvy",
@@ -2596,18 +2640,18 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pin-project"
-version = "1.1.10"
+version = "1.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677f1add503faace112b9f1373e43e9e054bfdd22ff1a63c1bc485eaec6a6a8a"
+checksum = "f1749c7ed4bcaf4c3d0a3efc28538844fb29bcdd7d2b67b2be7e20ba861ff517"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "1.1.10"
+version = "1.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
+checksum = "d9b20ed30f105399776b9c883e68e536ef602a16ae6f596d2c473591d6ad64c6"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -125,7 +125,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-        /// An EdDSA signature on Curve25519.
+        #[doc = "An EdDSA signature on Curve25519."]
         Signature
     }
 

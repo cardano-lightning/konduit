@@ -1,6 +1,6 @@
 use crate::{
     Channel, Connector, Marshall,
-    core::{Credential, NetworkId, Signature, SigningKey, VerificationKey, wasm},
+    core::{Credential, NetworkId, SigningKey, wasm},
     marshall::Unmarshall,
 };
 use wasm_bindgen::prelude::*;
@@ -23,13 +23,10 @@ impl Wallet {
             network_id,
         })
     }
-
-    pub(crate) fn sign(&self, msg: impl AsRef<[u8]>) -> (VerificationKey, Signature) {
-        (self.verification_key().into(), self.signing_key.sign(msg))
-    }
 }
 
 #[wasm_bindgen]
+/// A thin abstraction for single-address wallets.
 impl Wallet {
     // ------------------------------------------------------------------------ Initialize
 
@@ -102,14 +99,10 @@ impl Wallet {
     // ------------------------------------------------------------------------ Querying
 
     #[wasm_bindgen(js_name = "balance")]
-    pub async fn balance(
-        &self,
-        connector: &Connector,
-        konduit_validator: &wasm::Credential,
-    ) -> crate::Result<u64> {
+    pub async fn balance(&self, connector: &Connector) -> crate::Result<u64> {
         let l1_balance = connector._wasm_balance(&self.verification_key()).await?;
 
-        let l2_balance = Channel::opened(connector, self, konduit_validator)
+        let l2_balance = Channel::opened(connector, self)
             .await?
             .iter()
             .fold(0, |total, channel| total + channel.amount());

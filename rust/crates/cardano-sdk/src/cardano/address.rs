@@ -354,43 +354,14 @@ impl<T: IsAddressKind> From<&Address<T>> for Vec<u8> {
 
 #[cfg(feature = "wasm")]
 pub mod wasm {
-    use crate::{address::kind, cbor, wasm, wasm::WasmProxy};
-    use std::{borrow::Borrow, ops::Deref, str::FromStr};
+    use crate::{address::kind, cbor, wasm, wasm_proxy};
+    use std::str::FromStr;
     use wasm_bindgen::prelude::*;
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    #[cfg(feature = "wasm")]
-    #[cfg_attr(feature = "wasm", wasm_bindgen)]
-    pub struct ShelleyAddress(super::Address<kind::Shelley>);
-
-    impl WasmProxy for ShelleyAddress {
-        type OriginalType = super::Address<kind::Shelley>;
-    }
-
-    impl From<super::Address<kind::Shelley>> for ShelleyAddress {
-        fn from(address: super::Address<kind::Shelley>) -> Self {
-            Self(address)
-        }
-    }
-
-    impl From<ShelleyAddress> for super::Address<kind::Shelley> {
-        fn from(address: ShelleyAddress) -> Self {
-            address.0
-        }
-    }
-
-    impl Deref for ShelleyAddress {
-        type Target = super::Address<kind::Shelley>;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
-    impl Borrow<super::Address<kind::Shelley>> for ShelleyAddress {
-        #[inline]
-        fn borrow(&self) -> &super::Address<kind::Shelley> {
-            &self.0
-        }
+    wasm_proxy! {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[doc = "An `Address`, specialized to the `Shelley` kind."]
+        ShelleyAddress => super::Address<kind::Shelley>
     }
 
     impl<C> cbor::Encode<C> for ShelleyAddress {
@@ -444,13 +415,12 @@ pub mod wasm {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{Address, address::kind::*, any};
-    use proptest::{option, prelude::*};
 
     // -------------------------------------------------------------- Generators
 
     pub mod generators {
-        use super::*;
+        use crate::{Address, address::kind::*, any};
+        use proptest::{option, prelude::*};
 
         prop_compose! {
             pub fn address_shelley()(

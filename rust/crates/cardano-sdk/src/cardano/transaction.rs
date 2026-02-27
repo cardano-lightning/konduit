@@ -1241,49 +1241,12 @@ impl<'d, C> cbor::Decode<'d, C> for Transaction<state::ReadyForSigning> {
 
 #[cfg(feature = "wasm")]
 pub mod wasm {
-    use crate::{
-        transaction::state,
-        wasm::{Hash32, WasmProxy},
-    };
-    use std::{borrow::Borrow, ops::Deref};
+    use crate::{transaction::state, wasm::Hash32, wasm_proxy};
     use wasm_bindgen::prelude::*;
 
-    #[wasm_bindgen]
-    #[repr(transparent)]
-    /// A fully built and (body-)sealed transaction. Ready for signing and submission.
-    pub struct TransactionReadyForSigning(super::Transaction<state::ReadyForSigning>);
-
-    impl WasmProxy for TransactionReadyForSigning {
-        type OriginalType = super::Transaction<state::ReadyForSigning>;
-    }
-
-    impl From<super::Transaction<state::ReadyForSigning>> for TransactionReadyForSigning {
-        #[inline]
-        fn from(tx: super::Transaction<state::ReadyForSigning>) -> Self {
-            Self(tx)
-        }
-    }
-
-    impl From<TransactionReadyForSigning> for super::Transaction<state::ReadyForSigning> {
-        #[inline]
-        fn from(tx: TransactionReadyForSigning) -> Self {
-            tx.0
-        }
-    }
-
-    impl Borrow<super::Transaction<state::ReadyForSigning>> for TransactionReadyForSigning {
-        #[inline]
-        fn borrow(&self) -> &super::Transaction<state::ReadyForSigning> {
-            &self.0
-        }
-    }
-
-    impl Deref for TransactionReadyForSigning {
-        type Target = super::Transaction<state::ReadyForSigning>;
-        #[inline]
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
+    wasm_proxy! {
+        #[doc = "A fully built and (body-)sealed transaction. Ready for signing and submission."]
+        TransactionReadyForSigning => super::Transaction<state::ReadyForSigning>
     }
 
     #[wasm_bindgen]
@@ -1295,7 +1258,7 @@ pub mod wasm {
         }
 
         #[wasm_bindgen(js_name = "toString")]
-        /// Obtain a
+        /// Obtain a human-readable representation of the transaction.
         pub fn _wasm_to_string(&self) -> String {
             self.to_string()
         }

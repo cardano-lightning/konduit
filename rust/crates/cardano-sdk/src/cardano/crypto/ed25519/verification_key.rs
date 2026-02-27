@@ -158,7 +158,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        /// A ed25519 verification key (non-extended).
+        #[doc = "A ed25519 verification key (non-extended)."]
         VerificationKey
     }
 

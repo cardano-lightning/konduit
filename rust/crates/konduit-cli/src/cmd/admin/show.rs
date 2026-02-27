@@ -1,5 +1,5 @@
 use crate::config::admin::Config;
-use cardano_connector_client::CardanoConnector;
+use cardano_connector::CardanoConnector;
 use tokio::runtime::Runtime;
 
 /// Show

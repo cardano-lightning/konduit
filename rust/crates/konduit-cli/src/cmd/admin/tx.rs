@@ -1,5 +1,5 @@
 use crate::{cardano::ADA, config::admin::Config};
-use cardano_connector_client::CardanoConnector;
+use cardano_connector::CardanoConnector;
 use cardano_sdk::{Address, Value, address::kind};
 use konduit_tx::{self, KONDUIT_VALIDATOR};
 use std::str;

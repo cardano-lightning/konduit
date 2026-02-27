@@ -1,0 +1,18 @@
+[package]
+name = "http-client-native"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+http-client.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true

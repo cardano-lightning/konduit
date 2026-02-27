@@ -2,10 +2,14 @@
 members = [
   "crates/bln-client",
   "crates/bln-sdk",
+  "crates/cardano-connector",
   "crates/cardano-connector-client",
+  "crates/cardano-connector-direct",
   "crates/cardano-sdk",
   "crates/fx-client",
   "crates/http-client",
+  "crates/http-client-native",
+  "crates/http-client-wasm",
   "crates/konduit-cli",
   "crates/konduit-client",
   "crates/konduit-data",
@@ -98,10 +102,14 @@ web-time = "1.1.0"
 
 bln-client = { path = "crates/bln-client" }
 bln-sdk = { path = "crates/bln-sdk" }
+cardano-connector = { path = "crates/cardano-connector" }
 cardano-connector-client = { path = "crates/cardano-connector-client" }
+cardano-connector-direct = { path = "crates/cardano-connector-direct" }
 cardano-sdk = { path = "crates/cardano-sdk" }
 fx-client = { path = "crates/fx-client" }
 http-client = { path = "crates/http-client" }
+http-client-native = { path = "crates/http-client-native" }
+http-client-wasm = { path = "crates/http-client-wasm" }
 konduit-client = { path = "crates/konduit-client" }
 konduit-data = { path = "crates/konduit-data" }
 konduit-server = { path = "crates/konduit-server" }

@@ -10,8 +10,8 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
@@ -19,9 +19,6 @@ wasm = [
   "cardano-sdk/wasm",
   "dep:wasm-bindgen"
 ]
-
-[lib]
-crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
@@ -36,5 +33,6 @@ serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
 uplc.workspace = true
+web-time.workspace = true
 # -F wasm
 wasm-bindgen = { workspace = true, optional = true }

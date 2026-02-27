@@ -1,11 +1,8 @@
 use crate::{cardano::ADA, config::consumer::Config};
-use cardano_connector_client::CardanoConnector;
-use cardano_sdk::{Credential, VerificationKey};
+use cardano_sdk::VerificationKey;
+use konduit_client::l1;
 use konduit_data::{Duration, Tag};
-use konduit_tx::{
-    self, Bounds, KONDUIT_VALIDATOR, NetworkParameters,
-    consumer::{Intent, OpenIntent},
-};
+use konduit_tx::consumer::{Intent, OpenIntent};
 use std::{collections::BTreeMap, str};
 use tokio::runtime::Runtime;
 
@@ -89,57 +86,29 @@ impl From<OpenArgs> for OpenIntent {
 impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
-        let own_key = config.wallet.to_verification_key();
-        let own_address = own_key.to_address(connector.network().into());
+
         let opens = self
             .open
             .into_iter()
             .map(OpenIntent::from)
             .collect::<Vec<_>>();
+
         let intents = self
             .add
             .iter()
             .map(|a| <(Tag, Intent)>::from(a.clone()))
             .chain(self.close.iter().map(|c| (c.clone(), Intent::Close)))
             .collect::<BTreeMap<_, _>>();
-        let bounds = Bounds::twenty_mins();
 
-        Runtime::new()?.block_on(async {
-            let protocol_parameters = connector.protocol_parameters().await?;
-            let network_id = connector.network().into();
-            let network_parameters = NetworkParameters {
-                network_id,
-                protocol_parameters,
-            };
-            let utxos = connector
-                .utxos_at(&own_address.payment(), None)
-                .await?
-                .into_iter()
-                .chain(
-                    connector
-                        .utxos_at(
-                            &config.host_address.payment(),
-                            config.host_address.delegation().as_ref(),
-                        )
-                        .await?,
-                )
-                .chain(
-                    connector
-                        .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
-                        .await?,
-                )
-                .collect();
-            let mut tx = konduit_tx::consumer::tx(
-                &network_parameters,
-                &own_key,
-                opens,
-                intents,
-                &utxos,
-                bounds,
-            )?;
-            println!("Tx id :: {}", tx.id());
-            tx.sign(&config.wallet);
-            connector.submit(&tx).await
-        })
+        let id = Runtime::new()?.block_on(async {
+            let client = l1::Client::new(&connector, config.wallet.clone());
+            client
+                .execute(&config.wallet, None, opens, intents, &config.host_address)
+                .await
+        })?;
+
+        println!("\"{id}\"");
+
+        Ok(())
     }
 }

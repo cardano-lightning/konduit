@@ -1,5 +1,5 @@
 use crate::{admin::config::Config, channel::Retainer, db};
-use cardano_connector_client::CardanoConnector;
+use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
 use konduit_data::{ChannelParameters, Keytag, Secret};
 use konduit_tx::{

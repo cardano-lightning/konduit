@@ -266,7 +266,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-        /// A wrapper around the _blake2b-224_ hash digest of a key or script.
+        #[doc = "A wrapper around the _blake2b-224_ hash digest of a key or script."]
         Credential
     }
 
