@@ -24,6 +24,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[doc = "Proposed price and routing fee by an Adaptor for a payment."]
         Quote
     }
 

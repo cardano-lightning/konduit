@@ -1,7 +1,6 @@
-use cardano_connector_client::CardanoConnector;
-use tokio::runtime::Runtime;
-
 use crate::config::adaptor::Config;
+use cardano_connector::CardanoConnector;
+use tokio::runtime::Runtime;
 
 /// Show
 #[derive(Debug, clap::Subcommand)]

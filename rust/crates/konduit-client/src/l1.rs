@@ -1,13 +1,11 @@
-use crate::{
-    CardanoConnector,
-    core::{
-        Address, Bounds, ChannelOutput, Credential, Hash, Input, KONDUIT_VALIDATOR, NetworkId,
-        NetworkParameters, Output, SigningKey, Stage, Tag,
-        address::kind,
-        consumer::{self, Intent, OpenIntent},
-        filter_channels,
-    },
+use crate::core::{
+    Address, Bounds, ChannelOutput, Credential, Hash, Input, KONDUIT_VALIDATOR, NetworkId,
+    NetworkParameters, Output, SigningKey, Stage, Tag,
+    address::kind,
+    consumer::{self, Intent, OpenIntent},
+    filter_channels,
 };
+use cardano_connector::CardanoConnector;
 use std::collections::BTreeMap;
 
 pub struct Client<'connector, Connector: CardanoConnector> {

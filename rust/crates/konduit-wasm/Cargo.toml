@@ -10,14 +10,11 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
+[lib]
+crate-type = ["cdylib"]
 
 [package.metadata.cargo-machete]
 ignored = ["wasm-bindgen-futures"]
-
-[lib]
-crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true

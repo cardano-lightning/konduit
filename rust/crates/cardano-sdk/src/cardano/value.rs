@@ -486,55 +486,19 @@ fn with_assets<AssetName, Quantity: Zero>(
 
 #[cfg(feature = "wasm")]
 pub mod wasm {
-    use crate::{
-        Hash,
-        wasm::{Hash28, WasmProxy},
-    };
+    use crate::{Hash, wasm::Hash28, wasm_proxy};
     use std::collections::BTreeMap;
     use wasm_bindgen::prelude::*;
 
-    #[wasm_bindgen]
-    /// A multi-asset value
-    pub struct Value(super::Value<u64>);
-
-    impl ::std::ops::Deref for Value {
-        type Target = super::Value<u64>;
-
-        #[inline]
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
+    wasm_proxy! {
+        #[doc = "A multi-asset value"]
+        Value => super::Value<u64>
     }
 
     impl ::std::ops::DerefMut for Value {
         #[inline]
         fn deref_mut(&mut self) -> &mut Self::Target {
             &mut self.0
-        }
-    }
-
-    impl WasmProxy for Value {
-        type OriginalType = super::Value<u64>;
-    }
-
-    impl ::std::borrow::Borrow<super::Value<u64>> for Value {
-        #[inline]
-        fn borrow(&self) -> &super::Value<u64> {
-            &self.0
-        }
-    }
-
-    impl ::std::convert::From<Value> for super::Value<u64> {
-        #[inline]
-        fn from(w: Value) -> Self {
-            w.0
-        }
-    }
-
-    impl ::std::convert::From<super::Value<u64>> for Value {
-        #[inline]
-        fn from(v: super::Value<u64>) -> Self {
-            Self(v)
         }
     }
 
@@ -568,7 +532,7 @@ pub mod wasm {
 
     #[wasm_bindgen]
     #[derive(Debug, Clone)]
-    /// A map-like structure for representing multi-assets in an output (i.e. quantity > 0).
+    #[doc = "A map-like structure for representing multi-assets in an output (i.e. quantity > 0)."]
     pub struct OutputAssets(BTreeMap<Hash<28>, BTreeMap<Vec<u8>, u64>>);
 
     impl IntoIterator for OutputAssets {

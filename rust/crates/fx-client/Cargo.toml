@@ -10,15 +10,18 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
-
 [[bin]]
 name = "fx-print"
 path = "src/main.rs"
+required-features = ["cli"]
 
 [features]
-cli = ["dep:clap", "dep:tokio", "dep:dotenvy", "dep:humantime"]
+cli = [
+  "dep:clap",
+  "dep:dotenvy",
+  "dep:humantime",
+  "dep:tokio",
+]
 namespaced = []
 
 [dependencies]
@@ -29,8 +32,7 @@ reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-
-# Binary-only dependencies (marked as optional)
+# -F cli
 clap = { workspace = true, features = ["derive", "env"], optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dotenvy = { workspace = true, optional = true }

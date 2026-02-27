@@ -73,11 +73,13 @@ impl Channel {
     /// Find currently opened channels.
     #[wasm_bindgen(js_name = "opened")]
     pub async fn opened(connector: &Connector, consumer: &Wallet) -> crate::Result<Vec<Self>> {
-        Ok(l1::Client::new(connector, consumer.signing_key().into())
-            .opened_channels(consumer.stake_credential().as_deref())
-            .await?
-            .map(Self)
-            .collect())
+        Ok(
+            l1::Client::new(connector.deref(), consumer.signing_key().into())
+                .opened_channels(consumer.stake_credential().as_deref())
+                .await?
+                .map(Self)
+                .collect(),
+        )
     }
 
     #[wasm_bindgen(js_name = "open")]
@@ -97,16 +99,18 @@ impl Channel {
             amount,
         }];
 
-        Ok(l1::Client::new(connector, consumer.signing_key().into())
-            .execute(
-                &consumer.signing_key(),
-                consumer.stake_credential().as_deref(),
-                opens,
-                Default::default(),
-                &script_deployment_address.clone().into(),
-            )
-            .await?
-            .into())
+        Ok(
+            l1::Client::new(connector.deref(), consumer.signing_key().into())
+                .execute(
+                    &consumer.signing_key(),
+                    consumer.stake_credential().as_deref(),
+                    opens,
+                    Default::default(),
+                    &script_deployment_address.clone().into(),
+                )
+                .await?
+                .into(),
+        )
     }
 
     #[wasm_bindgen(js_name = "close")]
@@ -116,15 +120,17 @@ impl Channel {
         script_deployment_address: &wasm::ShelleyAddress,
         tag: &wasm::Tag,
     ) -> crate::Result<wasm::Hash32> {
-        Ok(l1::Client::new(connector, consumer.signing_key().into())
-            .execute(
-                &consumer.signing_key(),
-                consumer.stake_credential().as_deref(),
-                vec![],
-                From::from([(tag.clone().into(), Intent::Close)]),
-                &script_deployment_address.clone().into(),
-            )
-            .await?
-            .into())
+        Ok(
+            l1::Client::new(connector.deref(), consumer.signing_key().into())
+                .execute(
+                    &consumer.signing_key(),
+                    consumer.stake_credential().as_deref(),
+                    vec![],
+                    From::from([(tag.clone().into(), Intent::Close)]),
+                    &script_deployment_address.clone().into(),
+                )
+                .await?
+                .into(),
+        )
     }
 }

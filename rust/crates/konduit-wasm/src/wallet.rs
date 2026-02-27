@@ -26,6 +26,7 @@ impl Wallet {
 }
 
 #[wasm_bindgen]
+/// A thin abstraction for single-address wallets.
 impl Wallet {
     // ------------------------------------------------------------------------ Initialize
 

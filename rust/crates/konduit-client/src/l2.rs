@@ -4,19 +4,23 @@ use crate::{
         AdaptorInfo, ChequeBody, Duration, Invoice, Lock, Locked, Quote, Receipt, SigningKey,
         Squash, SquashBody, SquashStatus, Tag, VerificationKey,
     },
-    time::{SystemTime, UNIX_EPOCH},
 };
 use anyhow::{Context, anyhow};
+use http_client::HttpClient;
 use std::ops::Deref;
+use web_time::{SystemTime, UNIX_EPOCH};
 
-pub struct Client {
-    adaptor: Adaptor,
+pub struct Client<Http: HttpClient> {
+    adaptor: Adaptor<Http>,
     signing_key: SigningKey,
     tag: Tag,
 }
 
-impl Client {
-    pub fn new(adaptor: Adaptor, signing_key: SigningKey, tag: Tag) -> Self {
+impl<Http: HttpClient> Client<Http>
+where
+    Http::Error: Into<anyhow::Error>,
+{
+    pub fn new(adaptor: Adaptor<Http>, signing_key: SigningKey, tag: Tag) -> Self {
         Self {
             adaptor,
             signing_key,
@@ -139,12 +143,13 @@ pub mod wasm {
         wasm::Adaptor,
         wasm_proxy,
     };
+    use http_client_wasm::HttpClient;
     use std::ops::Deref;
     use wasm_bindgen::prelude::*;
 
     wasm_proxy! {
-        /// An L2 client for Konduit, bespoke a single consumer key-tag and adaptor.
-        Client
+        #[doc = "An L2 client for Konduit, bespoke a single consumer key-tag and adaptor."]
+        Client => super::Client<HttpClient>
     }
 
     #[wasm_bindgen]

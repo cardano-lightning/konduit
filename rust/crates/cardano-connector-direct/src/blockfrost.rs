@@ -1,10 +1,10 @@
-use crate::CardanoConnector;
 use anyhow::anyhow;
 use blockfrost::{BlockfrostAPI, BlockfrostError, Pagination};
 use blockfrost_openapi::models::{
     address_utxo_content_inner::AddressUtxoContentInner,
     tx_content_output_amount_inner::TxContentOutputAmountInner,
 };
+use cardano_connector::CardanoConnector;
 use cardano_sdk::{
     Address, Credential, Hash, Input, Network, Output, PlutusData, PlutusScript, PlutusVersion,
     ProtocolParameters, Transaction, Value, address::kind, cbor, cbor::ToCbor, transaction::state,
@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 
 const UNIT_LOVELACE: &str = "lovelace";
 
-pub struct Connector {
+pub struct Blockfrost {
     api: BlockfrostAPI,
     base_url: String,
     client: reqwest::Client,
@@ -24,7 +24,7 @@ pub struct Connector {
 
 pub type ProjectId = String;
 
-impl Connector {
+impl Blockfrost {
     pub fn new(project_id: ProjectId) -> Self {
         let network = Network::try_from(&project_id[0..7])
             .unwrap_or_else(|e| panic!("failed to infer network from Blockfrost's id: {e}"));
@@ -139,7 +139,7 @@ impl Connector {
     }
 }
 
-impl CardanoConnector for Connector {
+impl CardanoConnector for Blockfrost {
     fn network(&self) -> Network {
         self.network
     }

@@ -14,6 +14,5 @@ pub(crate) use prelude::*;
 pub mod wasm {
     use super::*;
     pub use adaptor::wasm::Adaptor;
-    pub use cardano_connector_client::wasm::Connector;
     pub use l2::wasm as l2;
 }

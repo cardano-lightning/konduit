@@ -10,15 +10,17 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
-
 [[bin]]
 name = "bln-cli"
 path = "src/main.rs"
+required-features = ["cli"]
 
 [features]
-cli = ["dep:clap", "dep:dotenvy", "dep:humantime"]
+cli = [
+  "dep:clap",
+  "dep:dotenvy",
+  "dep:humantime"
+]
 namespaced = []
 
 [dependencies]
@@ -33,8 +35,7 @@ serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex", "base64"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-
-# Binary-only dependencies (marked as optional)
+# -F cli
 clap = { workspace = true, features = ["derive", "env"], optional = true }
 dotenvy = { workspace = true, optional = true }
 humantime = { workspace = true, optional = true }

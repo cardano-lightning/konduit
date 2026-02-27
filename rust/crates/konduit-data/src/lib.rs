@@ -52,10 +52,8 @@ pub use used::*;
 
 #[cfg(feature = "wasm")]
 pub mod wasm {
-    use super::{adaptor_info, base, quote, squash_body, squash_status};
+    use super::{adaptor_info, base, quote};
     pub use adaptor_info::wasm::*;
     pub use base::wasm::*;
     pub use quote::wasm::*;
-    pub use squash_body::wasm::*;
-    pub use squash_status::wasm::*;
 }

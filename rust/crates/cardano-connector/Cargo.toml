@@ -1,5 +1,5 @@
 [package]
-name = "konduit-tx"
+name = "cardano-connector"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -13,7 +13,3 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 cardano-sdk.workspace = true
-hex.workspace = true
-konduit-data.workspace = true
-serde_json.workspace = true
-web-time.workspace = true

@@ -117,7 +117,7 @@ pub mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone)]
-        /// An ed25519 signing key (non-extended).
+        #[doc = "An Ed25519 signing key (non-extended)."]
         SigningKey
     }
 

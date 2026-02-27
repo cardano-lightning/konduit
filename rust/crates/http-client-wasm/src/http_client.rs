@@ -77,7 +77,7 @@ impl HttpClient {
     }
 }
 
-impl crate::HttpClient for HttpClient {
+impl http_client::HttpClient for HttpClient {
     type Error = anyhow::Error;
 
     fn to_json<T: serde::Serialize>(value: &T) -> Vec<u8> {

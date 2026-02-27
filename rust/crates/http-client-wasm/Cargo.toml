@@ -1,5 +1,5 @@
 [package]
-name = "konduit-tx"
+name = "http-client-wasm"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -12,8 +12,12 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-cardano-sdk.workspace = true
-hex.workspace = true
-konduit-data.workspace = true
-serde_json.workspace = true
+gloo-net.workspace = true
+gloo-timers.workspace = true
+http-client.workspace = true
+js-sys.workspace = true
+log.workspace = true
+serde-wasm-bindgen.workspace = true
+serde.workspace = true
+web-sys.workspace = true
 web-time.workspace = true

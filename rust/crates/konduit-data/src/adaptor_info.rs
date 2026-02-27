@@ -35,7 +35,7 @@ pub(crate) mod wasm {
 
     wasm_proxy! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
-        /// Channel parameters and ToS of a given adaptor.
+        #[doc = "Channel parameters and ToS of a given adaptor."]
         AdaptorInfo
     }
 

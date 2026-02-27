@@ -8,13 +8,13 @@ pub trait WasmProxy {
 
 #[macro_export]
 macro_rules! wasm_proxy_min_api {
-    ($wrapper:ident) => {
+    ($wrapper:ident => $parent:ty) => {
         impl $crate::wasm::WasmProxy for $wrapper {
-            type OriginalType = super::$wrapper;
+            type OriginalType = $parent;
         }
 
         impl ::std::ops::Deref for $wrapper {
-            type Target = super::$wrapper;
+            type Target = $parent;
 
             #[inline]
             fn deref(&self) -> &Self::Target {
@@ -22,23 +22,23 @@ macro_rules! wasm_proxy_min_api {
             }
         }
 
-        impl ::std::borrow::Borrow<super::$wrapper> for $wrapper {
+        impl ::std::borrow::Borrow<$parent> for $wrapper {
             #[inline]
-            fn borrow(&self) -> &super::$wrapper {
+            fn borrow(&self) -> &$parent {
                 &self.0
             }
         }
 
-        impl ::std::convert::From<$wrapper> for super::$wrapper {
+        impl ::std::convert::From<$wrapper> for $parent {
             #[inline]
             fn from(w: $wrapper) -> Self {
                 w.0
             }
         }
 
-        impl ::std::convert::From<super::$wrapper> for $wrapper {
+        impl ::std::convert::From<$parent> for $wrapper {
             #[inline]
-            fn from(v: super::$wrapper) -> Self {
+            fn from(v: $parent) -> Self {
                 Self(v)
             }
         }
@@ -51,11 +51,23 @@ macro_rules! wasm_proxy {
         $(#[$attr:meta])*
         $name:ident
     ) => {
+        $(#[$attr])*
         #[wasm_bindgen::prelude::wasm_bindgen]
         #[repr(transparent)]
-        $(#[$attr])*
         pub struct $name(super::$name);
 
-        $crate::wasm_proxy_min_api!($name);
+        $crate::wasm_proxy_min_api!($name => super::$name);
+    };
+
+    (
+        $(#[$attr:meta])*
+        $name:ident => $parent:ty
+    ) => {
+        $(#[$attr])*
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        #[repr(transparent)]
+        pub struct $name($parent);
+
+        $crate::wasm_proxy_min_api!($name => $parent);
     };
 }
