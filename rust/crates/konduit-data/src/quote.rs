@@ -20,9 +20,33 @@ pub struct Quote {
 pub mod wasm {
     use cardano_sdk::wasm_proxy;
     use serde::{Deserialize, Serialize};
+    use wasm_bindgen::prelude::*;
 
     wasm_proxy! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         Quote
+    }
+
+    #[wasm_bindgen]
+    impl Quote {
+        #[wasm_bindgen(getter, js_name = "index")]
+        pub fn index(&self) -> u64 {
+            self.index
+        }
+
+        #[wasm_bindgen(getter, js_name = "amount")]
+        pub fn amount(&self) -> u64 {
+            self.amount
+        }
+
+        #[wasm_bindgen(getter, js_name = "relativeTimeout")]
+        pub fn relative_timeout(&self) -> u64 {
+            self.relative_timeout
+        }
+
+        #[wasm_bindgen(getter, js_name = "routingFee")]
+        pub fn routing_fee(&self) -> u64 {
+            self.routing_fee
+        }
     }
 }
