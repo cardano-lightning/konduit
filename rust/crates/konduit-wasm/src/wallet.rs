@@ -1,6 +1,6 @@
 use crate::{
     Channel, Connector, Marshall,
-    core::{Credential, NetworkId, SigningKey, wasm},
+    core::{Credential, NetworkId, SigningKey, cbor, wasm},
     marshall::Unmarshall,
 };
 use wasm_bindgen::prelude::*;
@@ -129,7 +129,7 @@ impl Wallet {
 
         (
             self.network_id,
-            signing_key,
+            cbor::bytes::ByteArray::from(signing_key),
             &self.stake_credential,
             &self.exit_address,
         )
@@ -140,13 +140,14 @@ impl Wallet {
     pub fn deserialize(serialized: &str) -> crate::Result<Wallet> {
         let decoded: (
             NetworkId,
-            [u8; 32],
+            cbor::bytes::ByteArray<32>,
             Option<Credential>,
             Option<wasm::ShelleyAddress>,
         ) = Unmarshall::unmarshall(serialized)?;
+
         let (network_id, signing_key_bytes, stake_credential, exit_address) = decoded;
 
-        let signing_key = SigningKey::from(signing_key_bytes);
+        let signing_key = SigningKey::from(<[u8; 32]>::from(signing_key_bytes));
 
         Ok(Self {
             network_id,

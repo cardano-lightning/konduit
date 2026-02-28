@@ -9,11 +9,18 @@ pub type Result<T> = std::result::Result<T, AsJsError>;
 #[wasm_bindgen]
 #[repr(transparent)]
 /// @hidden
-pub struct AsJsError(JsError);
+pub struct AsJsError(anyhow::Error);
+
+#[wasm_bindgen]
+impl AsJsError {
+    #[wasm_bindgen(getter, js_name = "message")]
+    pub fn _wasm_message(&self) -> String {
+        format!("{}", self.0)
+    }
+}
 
 impl From<anyhow::Error> for AsJsError {
     fn from(e: anyhow::Error) -> Self {
-        let e: &(dyn std::error::Error + 'static) = e.as_ref();
-        Self(JsError::new(e.to_string().as_str()))
+        Self(e)
     }
 }
