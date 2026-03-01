@@ -105,35 +105,3 @@ impl From<&SigningKey> for VerificationKey {
         VerificationKey::from(key.0.public_key())
     }
 }
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{
-        wasm::{self, Signature},
-        wasm_proxy,
-    };
-    use std::str::FromStr;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone)]
-        #[doc = "An Ed25519 signing key (non-extended)."]
-        SigningKey
-    }
-
-    #[wasm_bindgen]
-    impl SigningKey {
-        /// Construct a new signing key from a 64-digit hex-encoded text string. Throws if the
-        /// string is malformed.
-        #[wasm_bindgen(constructor)]
-        pub fn _wasm_new(value: &str) -> wasm::Result<Self> {
-            Ok(super::SigningKey::from_str(value)?.into())
-        }
-
-        /// Sign the given payload (unsafe if unknown /!\) with the key.
-        #[wasm_bindgen(js_name = "sign")]
-        pub fn _wasm_sign(&self, msg: &[u8]) -> Signature {
-            self.sign(msg).into()
-        }
-    }
-}

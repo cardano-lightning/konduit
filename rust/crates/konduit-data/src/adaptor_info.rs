@@ -26,39 +26,3 @@ pub struct TxHelp {
     #[serde_as(as = "serde_with::hex::Hex")]
     pub validator: Hash<28>,
 }
-
-#[cfg(feature = "wasm")]
-pub(crate) mod wasm {
-    use cardano_sdk::{wasm::VerificationKey, wasm_proxy};
-    use serde::{Deserialize, Serialize};
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, Serialize, Deserialize)]
-        #[doc = "Channel parameters and ToS of a given adaptor."]
-        AdaptorInfo
-    }
-
-    #[wasm_bindgen]
-    impl AdaptorInfo {
-        #[wasm_bindgen(getter, js_name = "verificationKey")]
-        pub fn verification_key(&self) -> VerificationKey {
-            self.channel_parameters.adaptor_key.into()
-        }
-
-        #[wasm_bindgen(getter, js_name = "closePeriod")]
-        pub fn close_period_secs(&self) -> u64 {
-            self.channel_parameters.close_period.as_secs()
-        }
-
-        #[wasm_bindgen(getter, js_name = "maxTagLength")]
-        pub fn max_tag_length(&self) -> u8 {
-            self.channel_parameters.tag_length as u8
-        }
-
-        #[wasm_bindgen(getter, js_name = "fee")]
-        pub fn fee(&self) -> u64 {
-            self.tos.flat_fee
-        }
-    }
-}

@@ -18,15 +18,19 @@ ignored = ["wasm-bindgen-futures"]
 
 [dependencies]
 anyhow.workspace = true
-cardano-connector-client = { workspace = true, features = ["wasm"] }
-cardano-sdk = { workspace = true, features = ["wasm"] }
+cardano-connector-client.workspace = true
+cardano-connector.workspace = true
+cardano-sdk.workspace = true
 console_error_panic_hook.workspace = true
 console_log.workspace = true
 hex.workspace = true
-konduit-client = { workspace = true, features = ["wasm"] }
-konduit-data = { workspace = true, features = ["wasm"] }
+http-client-wasm.workspace = true
+js-sys.workspace = true
+konduit-client.workspace = true
+konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
+serde.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 

@@ -617,12 +617,8 @@ dependencies = [
  "cardano-sdk",
  "hex",
  "http-client",
- "http-client-wasm",
- "js-sys",
  "serde",
  "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -662,7 +658,6 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "uplc",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -2048,7 +2043,6 @@ dependencies = [
  "clap",
  "dotenvy",
  "http-client",
- "http-client-wasm",
  "konduit-data",
  "konduit-tx",
  "log",
@@ -2057,8 +2051,6 @@ dependencies = [
  "reqwest",
  "serde_json",
  "tokio",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "web-time",
 ]
 
@@ -2078,7 +2070,6 @@ dependencies = [
  "serde_with",
  "thiserror 2.0.17",
  "uplc",
- "wasm-bindgen",
  "web-time",
 ]
 
@@ -2133,15 +2124,19 @@ name = "konduit-wasm"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "cardano-connector",
  "cardano-connector-client",
  "cardano-sdk",
  "console_error_panic_hook",
  "console_log",
  "hex",
+ "http-client-wasm",
+ "js-sys",
  "konduit-client",
  "konduit-data",
  "konduit-tx",
  "log",
+ "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",

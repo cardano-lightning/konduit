@@ -90,35 +90,3 @@ impl From<&Tag> for Vec<u8> {
         value.0.clone()
     }
 }
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use cardano_sdk::wasm_proxy;
-    use std::str::FromStr;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
-        Tag
-    }
-
-    #[wasm_bindgen]
-    impl Tag {
-        #[wasm_bindgen(constructor)]
-        pub fn _wasm_new(value: &str) -> Result<Self, String> {
-            super::Tag::from_str(value)
-                .map_err(|e| e.to_string())
-                .map(Self)
-        }
-
-        #[wasm_bindgen(js_name = "generate")]
-        pub fn _wasm_generate(length: usize) -> Self {
-            Self(super::Tag::generate(length))
-        }
-
-        #[wasm_bindgen(js_name = "toString")]
-        pub fn _wasm_to_string(&self) -> String {
-            self.to_string()
-        }
-    }
-}

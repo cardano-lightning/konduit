@@ -117,35 +117,6 @@ impl<'a> From<Signature> for PlutusData<'a> {
     }
 }
 
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{wasm, wasm_proxy};
-    use std::str::FromStr;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-        #[doc = "An EdDSA signature on Curve25519."]
-        Signature
-    }
-
-    #[wasm_bindgen]
-    impl Signature {
-        /// Construct a new signature from a 64-digit hex-encoded text string. Throws if the string
-        /// is malformed.
-        #[wasm_bindgen(constructor)]
-        pub fn _wasm_new(value: &str) -> wasm::Result<Self> {
-            Ok(Self(super::Signature::from_str(value)?))
-        }
-
-        /// Show the signature as a 64-digit hex-encoded text string.
-        #[wasm_bindgen(js_name = "toString")]
-        pub fn _wasm_to_string(&self) -> String {
-            self.to_string()
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

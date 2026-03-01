@@ -101,7 +101,7 @@ impl Cmd {
             .collect::<BTreeMap<_, _>>();
 
         let id = Runtime::new()?.block_on(async {
-            let client = l1::Client::new(&connector, config.wallet.clone());
+            let client = l1::Client::new(&connector, &config.wallet);
             client
                 .execute(&config.wallet, None, opens, intents, &config.host_address)
                 .await

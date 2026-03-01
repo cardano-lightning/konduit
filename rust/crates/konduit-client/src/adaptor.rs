@@ -1,6 +1,6 @@
 use crate::core::{
     AdaptorInfo, Invoice, Keytag, Locked, PayBody, PlutusData, Quote, QuoteBody, Receipt, Squash,
-    SquashStatus, cbor::ToCbor,
+    SquashStatus, Tag, cbor::ToCbor,
 };
 use anyhow::anyhow;
 use http_client::HttpClient;
@@ -12,7 +12,7 @@ const HEADER_NAME_KEYTAG: &str = "KONDUIT";
 pub struct Adaptor<Http: HttpClient> {
     http_client: Http,
     info: AdaptorInfo,
-    keytag: String,
+    keytag: Option<(Tag, String)>,
 }
 
 /// An isomorphic Adaptor (a.k.a konduit-server) client that selectively pick a platform-compatible
@@ -21,29 +21,54 @@ impl<Http: HttpClient> Adaptor<Http>
 where
     Http::Error: Into<anyhow::Error>,
 {
-    pub async fn new(http_client: Http, keytag: &Keytag) -> anyhow::Result<Self> {
+    pub async fn new(http_client: Http, keytag: Option<&Keytag>) -> anyhow::Result<Self> {
         let info = http_client
             .get::<AdaptorInfo>("/info")
             .await
             .map_err(|e| anyhow!(e))?;
-        Ok(Self {
+
+        let mut adaptor = Self {
             http_client,
             info,
-            keytag: keytag.to_string(),
-        })
+            keytag: None,
+        };
+
+        adaptor.set_keytag(keytag);
+
+        Ok(adaptor)
     }
 
-    fn header_keytag(&self) -> (&'static str, &str) {
-        (HEADER_NAME_KEYTAG, self.keytag.as_str())
+    fn with_keytag_header<'a>(
+        &'a self,
+        others: &[(&'static str, &'a str)],
+    ) -> Vec<(&'static str, &'a str)> {
+        let mut headers = Vec::from(others);
+
+        if let Some((_, keytag)) = self.keytag.as_ref() {
+            headers.push((HEADER_NAME_KEYTAG, keytag));
+        }
+
+        headers
+    }
+
+    pub fn set_keytag(&mut self, keytag: Option<&Keytag>) {
+        self.keytag = keytag.map(|k| {
+            let (_, tag) = k.split();
+            (tag, k.to_string())
+        });
     }
 
     pub fn info(&self) -> &AdaptorInfo {
         &self.info
     }
 
+    pub fn tag(&self) -> Option<&Tag> {
+        self.keytag.as_ref().map(|(tag, _)| tag)
+    }
+
     pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
         self.http_client
-            .get_with_headers::<Option<Receipt>>("/ch/receipt", &[self.header_keytag()])
+            .get_with_headers::<Option<Receipt>>("/ch/receipt", &self.with_keytag_header(&[]))
             .await
             .map_err(|e| anyhow!(e))
     }
@@ -52,7 +77,7 @@ where
         self.http_client
             .post_with_headers::<Quote>(
                 "/ch/quote",
-                &[self.header_keytag(), HEADER_CONTENT_TYPE_JSON],
+                &self.with_keytag_header(&[HEADER_CONTENT_TYPE_JSON]),
                 Http::to_json(&QuoteBody::Bolt11(invoice)),
             )
             .await
@@ -63,7 +88,7 @@ where
         self.http_client
             .post_with_headers::<SquashStatus>(
                 "/ch/pay",
-                &[self.header_keytag(), HEADER_CONTENT_TYPE_JSON],
+                &self.with_keytag_header(&[HEADER_CONTENT_TYPE_JSON]),
                 Http::to_json(&PayBody {
                     cheque_body: locked.body,
                     signature: locked.signature,
@@ -78,50 +103,10 @@ where
         self.http_client
             .post_with_headers::<SquashStatus>(
                 "/ch/squash",
-                &[self.header_keytag(), HEADER_CONTENT_TYPE_CBOR],
+                &self.with_keytag_header(&[HEADER_CONTENT_TYPE_CBOR]),
                 PlutusData::from(squash).to_cbor(),
             )
             .await
             .map_err(|e| anyhow!(e))
-    }
-}
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{
-        core::wasm::{self, AdaptorInfo, Keytag},
-        wasm_proxy,
-    };
-    use http_client_wasm::HttpClient;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[doc = "A facade for the Adaptor server."]
-        Adaptor => super::Adaptor<HttpClient>
-    }
-
-    impl Clone for Adaptor {
-        fn clone(&self) -> Self {
-            Self(super::Adaptor {
-                http_client: HttpClient::new(&self.http_client.base_url),
-                info: self.info.clone(),
-                keytag: self.keytag.clone(),
-            })
-        }
-    }
-
-    #[wasm_bindgen]
-    impl Adaptor {
-        #[wasm_bindgen(js_name = "new")]
-        pub async fn _wasm_new(base_url: &str, keytag: &Keytag) -> wasm::Result<Self> {
-            Ok(Self::from(
-                super::Adaptor::new(HttpClient::new(base_url), keytag).await?,
-            ))
-        }
-
-        #[wasm_bindgen(getter, js_name = "info")]
-        pub fn _wasm_info(&self) -> AdaptorInfo {
-            AdaptorInfo::from(self.info().clone())
-        }
     }
 }

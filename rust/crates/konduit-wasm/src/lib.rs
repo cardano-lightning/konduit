@@ -1,14 +1,22 @@
-mod channel;
-pub use channel::Channel;
+pub mod api;
 
-mod debug;
-pub use debug::{LogLevel, enable_logs};
+pub mod wasm;
 
-mod marshall;
-pub(crate) use marshall::Marshall;
-
-mod prelude;
+// A prelude to use within the crate to ease imports, in particular in a multi-platform context.
 pub(crate) use prelude::*;
-
-mod wallet;
-pub use wallet::Wallet;
+mod prelude {
+    pub use cardano_connector::CardanoConnector;
+    pub use cardano_connector_client::Connector;
+    pub use http_client_wasm::HttpClient;
+    pub use konduit_client::{Adaptor, l1, l2};
+    pub mod core {
+        pub use cardano_connector_client::types::*;
+        pub use cardano_sdk::*;
+        pub use konduit_data::*;
+        pub use konduit_tx::*;
+        // NOTE: 'funny enough', #[wasm_bindgen] explicitly uses core::borrow for some of the
+        // automatic derivations... which means that if we override core, we run into funny
+        // problems.
+        pub use std::borrow;
+    }
+}

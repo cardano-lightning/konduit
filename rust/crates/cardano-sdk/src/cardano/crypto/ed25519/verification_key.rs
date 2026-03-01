@@ -149,32 +149,3 @@ impl<'a> From<&'a VerificationKey> for PlutusData<'a> {
         Self::bytes(key.0)
     }
 }
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{wasm, wasm_proxy};
-    use std::str::FromStr;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[doc = "A ed25519 verification key (non-extended)."]
-        VerificationKey
-    }
-
-    #[wasm_bindgen]
-    impl VerificationKey {
-        #[wasm_bindgen(constructor)]
-        /// Construct a `VerificationKey` from a 64-digit hex-encoded text string. Throws if the
-        /// string is malformed.
-        pub fn _wasm_new(value: &str) -> wasm::Result<Self> {
-            Ok(super::VerificationKey::from_str(value)?.into())
-        }
-
-        #[wasm_bindgen(js_name = "toString")]
-        /// Encode the `VerificationKey` as a 64-digit hex-encoded text string.
-        pub fn _wasm_to_string(&self) -> String {
-            self.to_string()
-        }
-    }
-}
