@@ -34,7 +34,7 @@ export async function endpointTransactions(ctx) {
     );
   } catch (res) {
     if (res.status === 404) {
-      return ctx.json({});
+      return ctx.json([]);
     }
     if (res.status && res.statusText) {
       console.log(`${res.status} ${res.statusText}: ${await res.text()}`);

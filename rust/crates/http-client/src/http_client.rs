@@ -1,6 +1,8 @@
 pub trait HttpClient {
     type Error;
 
+    fn base_url(&self) -> &str;
+
     fn to_json<T: serde::Serialize>(value: &T) -> Vec<u8>;
 
     fn get<T: serde::de::DeserializeOwned>(

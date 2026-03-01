@@ -8,13 +8,16 @@ use crate::core::{
 use cardano_connector::CardanoConnector;
 use std::collections::BTreeMap;
 
-pub struct Client<'connector, Connector: CardanoConnector> {
-    connector: &'connector Connector,
-    consumer: SigningKey,
+pub struct Client<'a, Connector: CardanoConnector> {
+    connector: &'a Connector,
+    consumer: &'a SigningKey,
 }
 
-impl<'connector, Connector: CardanoConnector> Client<'connector, Connector> {
-    pub fn new(connector: &'connector Connector, consumer: SigningKey) -> Self {
+impl<'a, Connector> Client<'a, Connector>
+where
+    Connector: CardanoConnector,
+{
+    pub fn new(connector: &'a Connector, consumer: &'a SigningKey) -> Self {
         Client {
             connector,
             consumer,
@@ -60,7 +63,7 @@ impl<'connector, Connector: CardanoConnector> Client<'connector, Connector> {
             protocol_parameters: self.connector.protocol_parameters().await?,
         };
 
-        let consumer_sk = &self.consumer;
+        let consumer_sk = self.consumer;
         let consumer_vk = self.consumer.to_verification_key();
 
         let wallet_vk = wallet_sk.to_verification_key();

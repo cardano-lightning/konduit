@@ -2,16 +2,22 @@ use crate::{
     helpers::try_into_array,
     types::asset_object::{AssetObject, from_asset_objects},
 };
-use cardano_sdk::{Address, Hash, Input, Output, address::kind, cbor};
+use cardano_sdk::{Address, Hash, Input, Output, address::kind, cbor, cbor as minicbor};
 
 /// A synthetic representation of a transaction used by the Connector.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, cbor::Encode, cbor::Decode)]
 pub struct TransactionSummary {
+    #[n(0)]
     pub id: Hash<32>,
+    #[n(1)]
     pub index: u64,
+    #[n(2)]
     pub depth: u64,
+    #[n(3)]
     pub inputs: Vec<(Input, Output, Option<Hash<28>>)>,
+    #[n(4)]
     pub outputs: Vec<(Output, Option<Hash<28>>)>,
+    #[n(5)]
     pub timestamp_secs: u64,
 }
 
@@ -104,72 +110,6 @@ impl<'de> serde::Deserialize<'de> for TransactionSummary {
                 .map_err(serde::de::Error::custom)?,
             timestamp_secs: json.timestamp,
         })
-    }
-}
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::types::{
-        self,
-        wasm::{InputSummary, OutputSummary},
-    };
-    use cardano_sdk::{wasm::Hash32, wasm_proxy};
-    use wasm_bindgen::{JsValue, prelude::*};
-
-    wasm_proxy! {
-        #[derive(Debug, Clone)]
-        #[doc = "A synthetic representation of a transaction used by the Connector."]
-        TransactionSummary
-    }
-
-    #[wasm_bindgen]
-    impl TransactionSummary {
-        #[wasm_bindgen(getter, js_name = "id")]
-        pub fn _wasm_id(&self) -> Hash32 {
-            Hash32::from(self.id)
-        }
-
-        #[wasm_bindgen(getter, js_name = "index")]
-        pub fn _wasm_index(&self) -> u64 {
-            self.index
-        }
-
-        #[wasm_bindgen(getter, js_name = "depth")]
-        pub fn depth(&self) -> u64 {
-            self.depth
-        }
-
-        #[wasm_bindgen(getter, js_name = "outputs")]
-        pub fn _wasm_outputs(&self) -> Vec<OutputSummary> {
-            self.outputs
-                .iter()
-                .map(|(partial_output, reference_script_hash)| {
-                    types::OutputSummary::new(partial_output.clone(), *reference_script_hash).into()
-                })
-                .collect()
-        }
-
-        #[wasm_bindgen(getter, js_name = "inputs")]
-        pub fn _wasm_inputs(&self) -> Vec<InputSummary> {
-            self.inputs
-                .iter()
-                .map(|(input, partial_output, reference_script_hash)| {
-                    types::InputSummary {
-                        input: input.clone(),
-                        output: types::OutputSummary::new(
-                            partial_output.clone(),
-                            *reference_script_hash,
-                        ),
-                    }
-                    .into()
-                })
-                .collect()
-        }
-
-        #[wasm_bindgen(getter, js_name = "timestamp")]
-        pub fn _wasm_timestamp(&self) -> js_sys::Date {
-            js_sys::Date::new(&JsValue::from_f64((self.timestamp_secs * 1000) as f64))
-        }
     }
 }
 

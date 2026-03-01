@@ -18,7 +18,6 @@ default = []
 clap = ["dep:clap"]
 serde = ["dep:serde"]
 test-utils = ["dep:proptest"]
-wasm = ["dep:wasm-bindgen"]
 
 [dependencies]
 anyhow.workspace = true
@@ -40,8 +39,6 @@ clap = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 # -F test-utils
 proptest = { workspace = true, optional = true }
-# -F wasm
-wasm-bindgen = { workspace = true, optional = true }
 
 [dev-dependencies]
 indoc.workspace = true

@@ -254,61 +254,6 @@ impl From<&Credential> for Hash<28> {
     }
 }
 
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{
-        WithNetworkId,
-        wasm::{self, Hash28, NetworkId},
-        wasm_proxy,
-    };
-    use std::{ops::Deref, str::FromStr};
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-        #[doc = "A wrapper around the _blake2b-224_ hash digest of a key or script."]
-        Credential
-    }
-
-    #[wasm_bindgen]
-    impl Credential {
-        /// Construct a new credential from a bech32 stake address. Throws if the
-        /// string is malformed.
-        #[wasm_bindgen(constructor)]
-        pub fn _wasm_new(credential: &str) -> wasm::Result<Self> {
-            Ok(Self(super::Credential::from_str(credential)?))
-        }
-
-        /// Compare two credentials together. Important as `===` only compare pointers.
-        #[wasm_bindgen(js_name = "equals")]
-        pub fn _wasm_equals(&self, other: &Self) -> bool {
-            self == other
-        }
-
-        /// Encode the credential as a stake address for the given `NetworkId`.
-        #[wasm_bindgen(js_name = "toStringWithNetworkId")]
-        pub fn _wasm_to_string_with_network_id(&self, network_id: NetworkId) -> String {
-            WithNetworkId {
-                inner: self.deref(),
-                network_id: network_id.into(),
-            }
-            .to_string()
-        }
-
-        /// Downcast the credential as a key hash, or `null` if the credential is a script.
-        #[wasm_bindgen(js_name = "asKey")]
-        pub fn _wasm_as_key(&self) -> Option<Hash28> {
-            self.as_key().map(From::from)
-        }
-
-        /// Downcast the credential as a script hash, or `null` if the credential is a key.
-        #[wasm_bindgen(js_name = "asScript")]
-        pub fn _wasm_as_script(&self) -> Option<Hash28> {
-            self.as_script().map(From::from)
-        }
-    }
-}
-
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
     use crate::{Credential, any, key_credential, pallas, script_credential};

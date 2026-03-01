@@ -21,21 +21,12 @@ required-features = ["cli"]
 
 [features]
 default = []
-wasm = [
-  "konduit-data/wasm",
-  "dep:http-client-wasm",
-  "dep:wasm-bindgen",
-  "dep:wasm-bindgen-futures",
-]
 cli = [
   "dep:clap",
   "dep:dotenvy",
   "dep:reqwest",
   "dep:tokio",
 ]
-
-[package.metadata.cargo-machete]
-ignored = ["wasm-bindgen-futures"]
 
 [dependencies]
 anyhow.workspace = true
@@ -48,10 +39,6 @@ konduit-tx.workspace = true
 log.workspace = true
 serde_json.workspace = true
 web-time.workspace = true
-# -F wasm
-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
-http-client-wasm = { workspace = true, optional = true }
 # -F cli
 clap = { workspace = true, features = ["env"], optional = true }
 dotenvy = { workspace = true, optional = true }

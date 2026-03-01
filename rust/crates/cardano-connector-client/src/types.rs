@@ -9,11 +9,3 @@ pub use output_summary::OutputSummary;
 
 mod transaction_summary;
 pub use transaction_summary::TransactionSummary;
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use super::*;
-    pub use input_summary::wasm::InputSummary;
-    pub use output_summary::wasm::OutputSummary;
-    pub use transaction_summary::wasm::TransactionSummary;
-}

@@ -49,11 +49,3 @@ pub use squash_status::*;
 pub use stage::*;
 pub use unlocked::*;
 pub use used::*;
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use super::{adaptor_info, base, quote};
-    pub use adaptor_info::wasm::*;
-    pub use base::wasm::*;
-    pub use quote::wasm::*;
-}

@@ -9,10 +9,3 @@ pub mod l2;
 
 mod prelude;
 pub(crate) use prelude::*;
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use super::*;
-    pub use adaptor::wasm::Adaptor;
-    pub use l2::wasm as l2;
-}

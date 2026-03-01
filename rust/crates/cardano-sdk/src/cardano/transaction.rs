@@ -1239,32 +1239,6 @@ impl<'d, C> cbor::Decode<'d, C> for Transaction<state::ReadyForSigning> {
 
 // ------------------------------------------------------------------------ WASM
 
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{transaction::state, wasm::Hash32, wasm_proxy};
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[doc = "A fully built and (body-)sealed transaction. Ready for signing and submission."]
-        TransactionReadyForSigning => super::Transaction<state::ReadyForSigning>
-    }
-
-    #[wasm_bindgen]
-    impl TransactionReadyForSigning {
-        #[wasm_bindgen(getter, js_name = "id")]
-        /// Get the transaction's id
-        pub fn _wasm_id(&self) -> Hash32 {
-            self.id().into()
-        }
-
-        #[wasm_bindgen(js_name = "toString")]
-        /// Obtain a human-readable representation of the transaction.
-        pub fn _wasm_to_string(&self) -> String {
-            self.to_string()
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{SigningKey, Transaction, cbor, transaction::state::*};

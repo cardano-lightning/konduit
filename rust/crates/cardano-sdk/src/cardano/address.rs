@@ -352,67 +352,6 @@ impl<T: IsAddressKind> From<&Address<T>> for Vec<u8> {
 
 // --------------------------------------------------------------- Wasm
 
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{address::kind, cbor, wasm, wasm_proxy};
-    use std::str::FromStr;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[doc = "An `Address`, specialized to the `Shelley` kind."]
-        ShelleyAddress => super::Address<kind::Shelley>
-    }
-
-    impl<C> cbor::Encode<C> for ShelleyAddress {
-        fn encode<W: cbor::encode::Write>(
-            &self,
-            e: &mut cbor::Encoder<W>,
-            _ctx: &mut C,
-        ) -> Result<(), cbor::encode::Error<W::Error>> {
-            e.bytes(<Vec<u8>>::from(&self.0).as_slice())?;
-            Ok(())
-        }
-    }
-
-    impl<'d, C> cbor::Decode<'d, C> for ShelleyAddress {
-        fn decode(d: &mut cbor::Decoder<'d>, _ctx: &mut C) -> Result<Self, cbor::decode::Error> {
-            let bytes = d.bytes()?;
-            super::Address::try_from(bytes)
-                .map_err(cbor::decode::Error::message)
-                .map(Self)
-        }
-    }
-
-    #[wasm_bindgen]
-    impl ShelleyAddress {
-        #[wasm_bindgen(constructor)]
-        pub fn _wasm_new(addr: &str) -> wasm::Result<Self> {
-            Ok(super::Address::from_str(addr)?.into())
-        }
-
-        #[wasm_bindgen(js_name = "equals")]
-        pub fn _wasm_equals(&self, other: &Self) -> bool {
-            self == other
-        }
-
-        #[wasm_bindgen(js_name = "toString")]
-        pub fn _wasm_to_string(&self) -> String {
-            self.0.to_string()
-        }
-
-        #[wasm_bindgen(getter, js_name = "paymentCredential")]
-        pub fn _wasm_payment_credential(&self) -> crate::wasm::Credential {
-            self.payment().into()
-        }
-
-        #[wasm_bindgen(getter, js_name = "delegationCredential")]
-        pub fn _wasm_delegation_credential(&self) -> Option<crate::wasm::Credential> {
-            self.delegation().map(Into::into)
-        }
-    }
-}
-
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
 

@@ -13,19 +13,6 @@ rust-version.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[features]
-default = []
-wasm = [
-  "cardano-sdk/wasm",
-  "dep:http-client-wasm",
-  "dep:js-sys",
-  "dep:wasm-bindgen",
-  "dep:wasm-bindgen-futures",
-]
-
-[package.metadata.cargo-machete]
-ignored = ["wasm-bindgen-futures"]
-
 [dependencies]
 anyhow.workspace = true
 cardano-connector.workspace = true
@@ -34,8 +21,3 @@ hex.workspace = true
 http-client.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# -F wasm
-http-client-wasm = { workspace = true, optional = true }
-js-sys = { workspace = true, optional = true }
-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }

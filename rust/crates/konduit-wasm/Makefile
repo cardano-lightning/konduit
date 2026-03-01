@@ -1,18 +1,18 @@
 MAKEFLAGS += -j
 OUT := konduit-wasm-nightly
 
-.PHONY: all browser nodejs clean
+.PHONY: all core black-box clean
 
-all: browser nodejs
+all: | core black-box
 
-browser:
-	@echo "📦 Building WASM (browser)..."
-	wasm-pack build --release --target browser -d $(OUT)-browser
+core:
+	@echo "📦 Building WASM (core types only)..."
+	wasm-pack build --profile wasm --no-pack --target browser -d $(OUT)-core .
 
-nodejs:
-	@echo "📦 Building WASM (nodejs)..."
-	wasm-pack build --release --target nodejs -d $(OUT)-nodejs
+black-box:
+	@echo "📦 Building WASM (full black-box API)..."
+	wasm-pack build --profile wasm --no-pack --target browser -d $(OUT)-black-box . -F black-box-api
 
 clean:
 	@echo "🧹 Cleaning..."
-	rm -rf $(OUT)-browser $(OUT)-nodejs
+	rm -rf $(OUT)-black-box $(OUT)-core

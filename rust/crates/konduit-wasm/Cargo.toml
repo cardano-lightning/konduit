@@ -10,25 +10,33 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[features]
+default = []
+black-box-api = []
+
 [lib]
 crate-type = ["cdylib"]
 
 [package.metadata.cargo-machete]
 ignored = ["wasm-bindgen-futures"]
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ['-Oz']
+
 [dependencies]
 anyhow.workspace = true
-cardano-connector-client = { workspace = true, features = ["wasm"] }
-cardano-sdk = { workspace = true, features = ["wasm"] }
+cardano-connector-client.workspace = true
+cardano-connector.workspace = true
+cardano-sdk.workspace = true
 console_error_panic_hook.workspace = true
 console_log.workspace = true
 hex.workspace = true
-konduit-client = { workspace = true, features = ["wasm"] }
-konduit-data = { workspace = true, features = ["wasm"] }
+http-client-wasm.workspace = true
+js-sys.workspace = true
+konduit-client.workspace = true
+konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
+serde_json.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true

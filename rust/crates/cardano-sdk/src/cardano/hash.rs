@@ -203,42 +203,6 @@ impl std::ops::Deref for Hash32 {
     }
 }
 
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::wasm_proxy;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-        #[doc = "A blake-2b hash digest of 28 bytes (224 bits)"]
-        Hash28 => super::Hash<28>
-    }
-
-    #[wasm_bindgen]
-    impl Hash28 {
-        /// Convert the hash into a hex-encoded text string.
-        #[wasm_bindgen(js_name = "toString")]
-        pub fn _wasm_to_string(&self) -> String {
-            self.to_string()
-        }
-    }
-
-    wasm_proxy! {
-        #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-        #[doc = "A blake-2b hash digest of 32 bytes (256 bits)"]
-        Hash32 => super::Hash<32>
-    }
-
-    #[wasm_bindgen]
-    impl Hash32 {
-        /// Convert the hash into a hex-encoded text string.
-        #[wasm_bindgen(js_name = "toString")]
-        pub fn _wasm_to_string(&self) -> String {
-            self.to_string()
-        }
-    }
-}
-
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
     use crate::Hash;

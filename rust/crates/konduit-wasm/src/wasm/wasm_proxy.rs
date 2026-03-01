@@ -1,16 +1,14 @@
-//  This Source Code Form is subject to the terms of the Mozilla Public
-//  License, v. 2.0. If a copy of the MPL was not distributed with this
-//  file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
+/// A (sometimes) convenient trait to refer to the proxied type from the proxy in a reflexive
+/// manner. Particularly useful when the proxy is generic and not referenced explicitly.
 pub trait WasmProxy {
-    type OriginalType;
+    type T;
 }
 
 #[macro_export]
 macro_rules! wasm_proxy_min_api {
     ($wrapper:ident => $parent:ty) => {
         impl $crate::wasm::WasmProxy for $wrapper {
-            type OriginalType = $parent;
+            type T = $parent;
         }
 
         impl ::std::ops::Deref for $wrapper {
