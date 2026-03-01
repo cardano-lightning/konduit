@@ -10,11 +10,18 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[features]
+default = []
+black-box-api = []
+
 [lib]
 crate-type = ["cdylib"]
 
 [package.metadata.cargo-machete]
 ignored = ["wasm-bindgen-futures"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ['-Oz']
 
 [dependencies]
 anyhow.workspace = true
@@ -30,9 +37,6 @@ konduit-client.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
-serde.workspace = true
+serde_json.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true

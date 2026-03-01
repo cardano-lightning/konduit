@@ -1,8 +1,10 @@
 use crate::{
-    core,
+    core, wasm,
     wasm::{Hash32, InputSummary, OutputSummary},
     wasm_proxy,
 };
+use anyhow::anyhow;
+use core::cbor::{FromCbor, ToCbor};
 use wasm_bindgen::{JsValue, prelude::*};
 
 wasm_proxy! {
@@ -58,5 +60,19 @@ impl TransactionSummary {
     #[wasm_bindgen(getter, js_name = "timestamp")]
     pub fn _wasm_timestamp(&self) -> js_sys::Date {
         js_sys::Date::new(&JsValue::from_f64((self.timestamp_secs * 1000) as f64))
+    }
+
+    #[wasm_bindgen(js_name = "serialise")]
+    pub fn _wasm_serialise(&self) -> String {
+        hex::encode(self.to_cbor())
+    }
+
+    #[wasm_bindgen(js_name = "deserialise")]
+    pub fn _wasm_deserialise(s: &str) -> wasm::Result<Self> {
+        let bytes = hex::decode(s).map_err(|e| anyhow!("invalid hex: {e}"))?;
+        Ok(Self(
+            core::TransactionSummary::from_cbor(&bytes)
+                .map_err(|e| anyhow!("invalid bytes: {e}"))?,
+        ))
     }
 }

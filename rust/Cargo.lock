@@ -2136,7 +2136,6 @@ dependencies = [
  "konduit-data",
  "konduit-tx",
  "log",
- "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",

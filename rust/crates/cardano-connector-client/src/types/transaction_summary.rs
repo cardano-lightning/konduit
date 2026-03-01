@@ -2,16 +2,22 @@ use crate::{
     helpers::try_into_array,
     types::asset_object::{AssetObject, from_asset_objects},
 };
-use cardano_sdk::{Address, Hash, Input, Output, address::kind, cbor};
+use cardano_sdk::{Address, Hash, Input, Output, address::kind, cbor, cbor as minicbor};
 
 /// A synthetic representation of a transaction used by the Connector.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, cbor::Encode, cbor::Decode)]
 pub struct TransactionSummary {
+    #[n(0)]
     pub id: Hash<32>,
+    #[n(1)]
     pub index: u64,
+    #[n(2)]
     pub depth: u64,
+    #[n(3)]
     pub inputs: Vec<(Input, Output, Option<Hash<28>>)>,
+    #[n(4)]
     pub outputs: Vec<(Output, Option<Hash<28>>)>,
+    #[n(5)]
     pub timestamp_secs: u64,
 }
 

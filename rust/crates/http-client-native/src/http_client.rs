@@ -64,6 +64,10 @@ impl HttpClient {
 impl http_client::HttpClient for HttpClient {
     type Error = anyhow::Error;
 
+    fn base_url(&self) -> &str {
+        self.base_url.as_str()
+    }
+
     fn to_json<V: serde::Serialize>(value: &V) -> Vec<u8> {
         serde_json::to_vec(value)
             .unwrap_or_else(|e| unreachable!("failed to serialised to vector? {e}"))

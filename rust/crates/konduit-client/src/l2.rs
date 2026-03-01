@@ -26,7 +26,7 @@ where
         }
     }
 
-    pub fn info(&self) -> &AdaptorInfo {
+    pub fn info(&self) -> &AdaptorInfo<()> {
         self.adaptor.info()
     }
 

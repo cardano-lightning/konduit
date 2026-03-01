@@ -80,6 +80,10 @@ impl HttpClient {
 impl http_client::HttpClient for HttpClient {
     type Error = anyhow::Error;
 
+    fn base_url(&self) -> &str {
+        self.base_url.as_str()
+    }
+
     fn to_json<T: serde::Serialize>(value: &T) -> Vec<u8> {
         js_sys::JSON::stringify(
             &serde_wasm_bindgen::to_value(value)

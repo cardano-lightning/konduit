@@ -35,7 +35,7 @@ impl From<CommonArgs> for ChannelParameters {
     }
 }
 
-impl From<CommonArgs> for AdaptorInfo {
+impl From<CommonArgs> for AdaptorInfo<TxHelp> {
     fn from(args: CommonArgs) -> Self {
         let tos = TosInfo { flat_fee: args.fee };
 

@@ -1,6 +1,6 @@
 use crate::core::{
     AdaptorInfo, Invoice, Keytag, Locked, PayBody, PlutusData, Quote, QuoteBody, Receipt, Squash,
-    SquashStatus, Tag, cbor::ToCbor,
+    SquashStatus, Tag, TxHelp, cbor::ToCbor,
 };
 use anyhow::anyhow;
 use http_client::HttpClient;
@@ -11,7 +11,7 @@ const HEADER_NAME_KEYTAG: &str = "KONDUIT";
 
 pub struct Adaptor<Http: HttpClient> {
     http_client: Http,
-    info: AdaptorInfo,
+    info: AdaptorInfo<()>,
     keytag: Option<(Tag, String)>,
 }
 
@@ -23,13 +23,13 @@ where
 {
     pub async fn new(http_client: Http, keytag: Option<&Keytag>) -> anyhow::Result<Self> {
         let info = http_client
-            .get::<AdaptorInfo>("/info")
+            .get::<AdaptorInfo<TxHelp>>("/info")
             .await
             .map_err(|e| anyhow!(e))?;
 
         let mut adaptor = Self {
             http_client,
-            info,
+            info: info.into(),
             keytag: None,
         };
 
@@ -58,12 +58,16 @@ where
         });
     }
 
-    pub fn info(&self) -> &AdaptorInfo {
+    pub fn info(&self) -> &AdaptorInfo<()> {
         &self.info
     }
 
     pub fn tag(&self) -> Option<&Tag> {
         self.keytag.as_ref().map(|(tag, _)| tag)
+    }
+
+    pub fn base_url(&self) -> &str {
+        self.http_client.base_url()
     }
 
     pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {

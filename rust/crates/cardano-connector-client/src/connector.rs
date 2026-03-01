@@ -34,6 +34,10 @@ where
         })
     }
 
+    pub fn base_url(&self) -> &str {
+        self.http_client.base_url()
+    }
+
     pub async fn balance(&self, verification_key: VerificationKey) -> anyhow::Result<u64> {
         let addr = verification_key.to_address(NetworkId::from(self.network));
 

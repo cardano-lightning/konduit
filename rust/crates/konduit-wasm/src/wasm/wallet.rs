@@ -1,9 +1,13 @@
-use crate::wasm::{self, Credential, NetworkId, ShelleyAddress, SigningKey, VerificationKey};
+use crate::wasm::{
+    self, Connector, Credential, NetworkId, ShelleyAddress, SigningKey, TransactionSummary,
+    VerificationKey,
+};
 use anyhow::anyhow;
 use wasm_bindgen::prelude::*;
 
 /// A rudimentary wallet interface
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct Wallet {
     network_id: NetworkId,
     signing_key: SigningKey,
@@ -81,5 +85,27 @@ impl Wallet {
     #[wasm_bindgen(js_name = "resetExitAddress")]
     pub fn reset_exit_address(&mut self) {
         self.exit_address = Err(anyhow!("no exit address").into());
+    }
+
+    /// Retrieve the balance of the underlying L1 wallet.
+    #[wasm_bindgen(js_name = "balance")]
+    pub async fn balance(&self, connector: &Connector) -> wasm::Result<u64> {
+        Ok(connector.balance(self.verification_key().into()).await?)
+    }
+
+    /// Retrieve the transaction activity around the underlying L1 wallet. This includes channels
+    /// opening and closing, but not intermediate operation on channels that do not involve the
+    /// wallet.
+    #[wasm_bindgen(js_name = "transactions")]
+    pub async fn transactions(
+        &self,
+        connector: &Connector,
+    ) -> wasm::Result<Vec<TransactionSummary>> {
+        Ok(connector
+            .transactions(&self.payment_credential())
+            .await?
+            .into_iter()
+            .map(From::from)
+            .collect())
     }
 }

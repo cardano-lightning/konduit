@@ -19,4 +19,9 @@ impl SigningKey {
     pub fn _wasm_parse(value: &str) -> wasm::Result<Self> {
         Ok(core::SigningKey::from_str(value)?.into())
     }
+
+    #[wasm_bindgen(js_name = "toString")]
+    pub fn _wasm_to_string(&self) -> String {
+        unsafe { hex::encode(core::SigningKey::leak(self.clone().into())) }
+    }
 }

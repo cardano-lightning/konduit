@@ -3,6 +3,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 #[repr(transparent)]
+#[derive(Clone)]
 /// @hidden
 pub struct Error(Rc<Box<dyn std::error::Error + Send + Sync + 'static>>);
 

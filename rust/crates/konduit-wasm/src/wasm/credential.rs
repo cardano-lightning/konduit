@@ -14,8 +14,8 @@ wasm_proxy! {
 
 #[wasm_bindgen]
 impl Credential {
-    #[wasm_bindgen(constructor)]
-    pub fn _wasm_new(credential: &str) -> wasm::Result<Self> {
+    #[wasm_bindgen(js_name = "tryParse")]
+    pub fn _wasm_try_parse(credential: &str) -> wasm::Result<Self> {
         Ok(Self(core::Credential::from_str(credential)?))
     }
 

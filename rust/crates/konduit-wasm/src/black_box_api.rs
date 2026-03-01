@@ -1,11 +1,12 @@
 use crate::{
-    Adaptor, CardanoConnector, Connector, HttpClient, core, l1, l2,
+    Adaptor, Connector, HttpClient, core, l1, l2,
     wasm::{
-        self, ChannelOutput, Hash32, NetworkId, Quote, ShelleyAddress, SigningKey, Tag,
-        TransactionSummary, Wallet,
+        self, AdaptorInfo, ChannelOutput, Hash32, NetworkId, Quote, ShelleyAddress, SigningKey,
+        Tag, Wallet,
     },
 };
 use anyhow::anyhow;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 /// A 'black-box' API for Konduit L1 & L2 operations.
@@ -14,7 +15,7 @@ pub struct Konduit {
     network_id: NetworkId,
     script_deployment_address: ShelleyAddress,
     wallet: Wallet,
-    connector: wasm::Result<Connector<HttpClient>>,
+    connector: wasm::Result<Rc<Connector<HttpClient>>>,
     adaptor: wasm::Result<Adaptor<HttpClient>>,
 }
 
@@ -67,6 +68,12 @@ impl Konduit {
         }
     }
 
+    /// A handle on the underlying wallet.
+    #[wasm_bindgen(getter, js_name = "wallet")]
+    pub fn wallet(&self) -> Wallet {
+        self.wallet.clone()
+    }
+
     /// Current network id for which the app is configured.
     #[wasm_bindgen(getter, js_name = "networkId")]
     pub fn network_id(&self) -> NetworkId {
@@ -77,25 +84,27 @@ impl Konduit {
 // Connector-related interface
 #[wasm_bindgen]
 impl Konduit {
+    /// Get a reference to the connector.
+    #[wasm_bindgen(getter, js_name = "connector")]
+    pub fn _wasm_connector(&self) -> wasm::Result<wasm::Connector> {
+        self.connector.clone().map(Into::into)
+    }
+
     /// Configure or reconfigure the associated connector for the instance.
     #[wasm_bindgen(js_name = "setConnector")]
     pub async fn set_connector(&mut self, url: &str) -> wasm::Result<()> {
-        self.connector = Ok(Connector::new(HttpClient::new(url)).await?);
-        Ok(())
-    }
+        if self.connector.as_ref().is_ok_and(|c| c.base_url() == url) {
+            log::debug!("set_connector: connector already set to {url}.");
+            return Ok(());
+        }
 
-    /// Ping the connector for health, to see whether it's online and available. Returns `true`
-    /// when okay.
-    #[wasm_bindgen(js_name = "connectorHealth")]
-    pub async fn is_connector_healthy(&self) -> wasm::Result<bool> {
-        Ok(self
-            .connector
-            .as_ref()?
-            .health()
-            .await?
-            .as_str()
-            .to_lowercase()
-            == "ok")
+        let connector = Rc::new(Connector::new(HttpClient::new(url)).await?);
+
+        self.connector = Ok(connector);
+
+        log::debug!("set_connector: connector set to {url}.");
+
+        Ok(())
     }
 }
 
@@ -104,19 +113,33 @@ impl Konduit {
 impl Konduit {
     /// Configure an (unauthenticated) adaptor, without a defined tag yet. Suitable to get the
     /// adaptor info and other non-authenticated operations.
-    #[wasm_bindgen(js_name = "setAdaptorWith")]
-    pub async fn set_adaptor(&mut self, url: &str) -> wasm::Result<()> {
-        self.adaptor = Ok(Adaptor::new(HttpClient::new(url), None).await?);
-        Ok(())
+    #[wasm_bindgen(js_name = "setAdaptor")]
+    pub async fn set_adaptor(&mut self, url: &str) -> wasm::Result<AdaptorInfo> {
+        if let Ok(adaptor) = self.adaptor.as_ref()
+            && adaptor.base_url() == url
+        {
+            log::debug!("set_adaptor: adaptor already set to {url}.");
+            return Ok(adaptor.info().clone().into());
+        }
+
+        let adaptor = Adaptor::new(HttpClient::new(url), None).await?;
+        let adaptor_info: AdaptorInfo = adaptor.info().clone().into();
+
+        self.adaptor = Ok(adaptor);
+
+        log::debug!("set_adaptor: adaptor already set to {url}.");
+
+        Ok(adaptor_info)
     }
 
     /// Reset a previously known tag, if any.
     #[wasm_bindgen(js_name = "setChannelTag")]
     pub fn set_channel_tag(&mut self, tag: &Tag) -> wasm::Result<()> {
-        let tag: core::Tag = tag.clone().into();
-        let keytag = core::Keytag::new(self.wallet.verification_key().into(), tag.clone());
-
-        self.adaptor.as_mut()?.set_keytag(Some(&keytag));
+        if self.adaptor.as_ref()?.tag() != Some(tag) {
+            let tag: core::Tag = tag.clone().into();
+            let keytag = core::Keytag::new(self.wallet.verification_key().into(), tag.clone());
+            self.adaptor.as_mut()?.set_keytag(Some(&keytag));
+        }
 
         Ok(())
     }
@@ -243,30 +266,5 @@ impl Konduit {
         self.adaptor.as_mut()?.set_keytag(None);
 
         Ok(close_tx)
-    }
-
-    /// Retrieve the balance of the underlying L1 wallet.
-    #[wasm_bindgen(js_name = "walletBalance")]
-    pub async fn wallet_balance(&self) -> wasm::Result<u64> {
-        Ok(self
-            .connector
-            .as_ref()?
-            .balance(self.wallet.verification_key().into())
-            .await?)
-    }
-
-    /// Retrieve the transaction activity around the underlying L1 wallet. This includes channels
-    /// opening and closing, but not intermediate operation on channels that do not involve the
-    /// wallet.
-    #[wasm_bindgen(js_name = "walletTransactions")]
-    pub async fn wallet_transactions(&self) -> wasm::Result<Vec<TransactionSummary>> {
-        Ok(self
-            .connector
-            .as_ref()?
-            .transactions(&self.wallet.payment_credential())
-            .await?
-            .into_iter()
-            .map(From::from)
-            .collect())
     }
 }

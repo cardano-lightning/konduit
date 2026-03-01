@@ -1,5 +1,6 @@
 mod adaptor_info;
 mod channel_output;
+mod connector;
 mod credential;
 mod error;
 mod hash28;
@@ -22,6 +23,7 @@ mod wasm_proxy;
 
 pub use adaptor_info::*;
 pub use channel_output::*;
+pub use connector::*;
 pub use credential::*;
 pub use error::*;
 pub use hash28::*;
