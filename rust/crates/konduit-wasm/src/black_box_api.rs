@@ -38,23 +38,13 @@ impl Konduit {
 /// A 'black-box' API for Konduit L1 & L2 operations.
 #[wasm_bindgen]
 impl Konduit {
-    /// Create a brand new instance using an internally generated signing key.
-    ///
-    /// By default, the instance comes without adaptor, connector or channel tag set. These can be
-    /// recovered using specific setters on the object.
-    #[wasm_bindgen(constructor)]
-    pub fn new(network_id: &NetworkId, script_deployment_address: &ShelleyAddress) -> Self {
-        Self::from_signing_key(
-            network_id,
-            script_deployment_address,
-            SigningKey::_wasm_new(),
-        )
-    }
-
     /// Restore an instance from a signing key. Everything else (connector, adaptor, ...) is
     /// initially NOT configured.
-    #[wasm_bindgen(js_name = "fromSigningKey")]
-    pub fn from_signing_key(
+    ///
+    /// Note that this take ownership of the signing key /!\, to prevent it from leaking elsewhere
+    /// afterwards.
+    #[wasm_bindgen(constructor)]
+    pub fn new(
         network_id: &NetworkId,
         script_deployment_address: &ShelleyAddress,
         signing_key: SigningKey,
@@ -132,7 +122,7 @@ impl Konduit {
         Ok(adaptor_info)
     }
 
-    /// Reset a previously known tag, if any.
+    /// Set a previously known tag, if any.
     #[wasm_bindgen(js_name = "setChannelTag")]
     pub fn set_channel_tag(&mut self, tag: &Tag) -> wasm::Result<()> {
         if self.adaptor.as_ref()?.tag() != Some(tag) {
@@ -227,12 +217,12 @@ impl Konduit {
         Ok(open_tx)
     }
 
-    /// Find currently opened channels that belongs to "us"
-    #[wasm_bindgen(js_name = "openedChannels")]
-    pub async fn opened_channels(&self) -> wasm::Result<Vec<ChannelOutput>> {
+    /// Find channels that belongs to "us"
+    #[wasm_bindgen(js_name = "channels")]
+    pub async fn channels(&self) -> wasm::Result<Vec<ChannelOutput>> {
         Ok(self
             .l1_client()?
-            .opened_channels(self.wallet.stake_credential().as_deref())
+            .channels(self.wallet.stake_credential().as_deref())
             .await?
             .map(Into::into)
             .collect())

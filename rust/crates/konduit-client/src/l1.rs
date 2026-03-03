@@ -1,6 +1,6 @@
 use crate::core::{
     Address, Bounds, ChannelOutput, Credential, Hash, Input, KONDUIT_VALIDATOR, NetworkId,
-    NetworkParameters, Output, SigningKey, Stage, Tag,
+    NetworkParameters, Output, SigningKey, Tag,
     address::kind,
     consumer::{self, Intent, OpenIntent},
     filter_channels,
@@ -26,7 +26,7 @@ where
 
     /// Check the chain for opened channels that match the client's credentials, regardless of the
     /// adaptor they're configured with.
-    pub async fn opened_channels(
+    pub async fn channels(
         &self,
         stake_credential: Option<&Credential>,
     ) -> anyhow::Result<impl Iterator<Item = ChannelOutput>> {
@@ -43,10 +43,7 @@ where
             channel.constants.add_vkey == consumer
         })
         .into_iter()
-        .filter_map(|(_, channel)| match channel.stage {
-            Stage::Opened { .. } => Some(channel),
-            Stage::Closed { .. } | Stage::Responded { .. } => None,
-        }))
+        .map(|(_, channel)| channel))
     }
 
     /// Execute the given intents on any compatible channel owned by the client's credentials.
