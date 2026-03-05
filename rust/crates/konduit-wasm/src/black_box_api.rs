@@ -182,6 +182,17 @@ impl Konduit {
 // Channel(s) related interfaces
 #[wasm_bindgen]
 impl Konduit {
+    /// Find channels that belongs to "us"
+    #[wasm_bindgen(js_name = "channels")]
+    pub async fn channels(&self) -> wasm::Result<Vec<ChannelOutput>> {
+        Ok(self
+            .l1_client()?
+            .channels(self.wallet.stake_credential().as_deref())
+            .await?
+            .map(Into::into)
+            .collect())
+    }
+
     /// Open a channel with the given tag and initial deposit.
     #[wasm_bindgen(js_name = "openChannel")]
     pub async fn open_channel(&mut self, tag: &Tag, amount: u64) -> wasm::Result<Hash32> {
@@ -217,15 +228,32 @@ impl Konduit {
         Ok(open_tx)
     }
 
-    /// Find channels that belongs to "us"
-    #[wasm_bindgen(js_name = "channels")]
-    pub async fn channels(&self) -> wasm::Result<Vec<ChannelOutput>> {
-        Ok(self
+    /// Add funds to an existing channel.
+    #[wasm_bindgen(js_name = "addToChannel")]
+    pub async fn add_to_channel(&mut self, amount: u64) -> wasm::Result<Hash32> {
+        let tag: core::Tag = self
+            .adaptor
+            .as_ref()?
+            .tag()
+            .ok_or::<wasm::Error>(
+                anyhow!("add_to_channel: no tag set: attempting to add to non-existing channel?")
+                    .into(),
+            )?
+            .clone();
+
+        let add_tx: Hash32 = self
             .l1_client()?
-            .channels(self.wallet.stake_credential().as_deref())
+            .execute(
+                self.wallet.signing_key(),
+                self.wallet.stake_credential().as_deref(),
+                vec![],
+                From::from([(tag, core::consumer::Intent::Add(amount))]),
+                &self.script_deployment_address.clone(),
+            )
             .await?
-            .map(Into::into)
-            .collect())
+            .into();
+
+        Ok(add_tx)
     }
 
     /// Close the currently active channel, if any.
