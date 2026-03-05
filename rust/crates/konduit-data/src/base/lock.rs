@@ -42,6 +42,12 @@ impl From<Secret> for Lock {
     }
 }
 
+impl From<&Secret> for Lock {
+    fn from(value: &Secret) -> Self {
+        Lock(sha256(&value.0))
+    }
+}
+
 impl<'a> TryFrom<&PlutusData<'a>> for Lock {
     type Error = anyhow::Error;
 

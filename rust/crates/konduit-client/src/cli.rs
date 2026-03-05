@@ -3,11 +3,7 @@ use clap::Parser;
 use std::{io, io::Write};
 
 #[derive(Parser)]
-#[command(
-    author,
-    version,
-    about = "Konduit CLI - Factorized manual interaction tool"
-)]
+#[command(author, version, about = "Konduit Consumer CLI")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,

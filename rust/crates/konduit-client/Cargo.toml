@@ -20,11 +20,11 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = []
+default = ["cli"]
 cli = [
   "dep:clap",
   "dep:dotenvy",
-  "dep:reqwest",
+  "dep:http-client-native",
   "dep:tokio",
 ]
 
@@ -42,8 +42,8 @@ web-time.workspace = true
 # -F cli
 clap = { workspace = true, features = ["env"], optional = true }
 dotenvy = { workspace = true, optional = true }
-reqwest = { workspace = true, features = ["json"], optional = true }
 tokio = { workspace = true, optional = true }
+http-client-native = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true

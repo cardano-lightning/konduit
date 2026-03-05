@@ -63,6 +63,21 @@ pub enum Step {
     Eol(Eol),
 }
 
+impl Step {
+    pub fn is_adaptor(&self) -> bool {
+        match self {
+            Step::Cont(Cont::Sub(_, _))
+            | Step::Cont(Cont::Respond(_, _))
+            | Step::Cont(Cont::Unlock(_)) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_consumer(&self) -> bool {
+        !self.is_adaptor()
+    }
+}
+
 impl<'a> TryFrom<&PlutusData<'a>> for Step {
     type Error = anyhow::Error;
 

@@ -1,6 +1,6 @@
 use crate::{
     Bounds, ChannelOutput, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, NetworkParameters, Utxos,
-    filter_channels, konduit_reference, wallet_inputs,
+    filter_channels, konduit_reference, step_to::StepTo, wallet_inputs,
 };
 use anyhow::anyhow;
 use cardano_sdk::{
@@ -80,6 +80,7 @@ pub fn tx(
         }
         _ => vec![],
     };
+    // SPLIT
     let opens = opens.iter().map(|o| {
         Output::new(
             konduit_address.clone(),
@@ -164,26 +165,6 @@ pub fn tx(
                 .ok()
         },
     )
-}
-
-pub enum StepTo {
-    Cont(Cont, Box<ChannelOutput>),
-    Eol(Eol),
-}
-
-impl StepTo {
-    pub fn to_step(&self) -> Step {
-        match &self {
-            StepTo::Cont(cont, _) => Step::Cont(cont.clone()),
-            StepTo::Eol(eol) => Step::Eol(eol.clone()),
-        }
-    }
-    pub fn to_output(&self) -> Option<ChannelOutput> {
-        match &self {
-            StepTo::Cont(_, o) => Some(o.as_ref().clone()),
-            StepTo::Eol(_) => None,
-        }
-    }
 }
 
 fn mk_step(bounds: &Bounds, intents: &BTreeMap<Tag, Intent>, c: &ChannelOutput) -> Option<StepTo> {

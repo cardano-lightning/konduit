@@ -2,6 +2,8 @@ use anyhow::{Error, Result, anyhow};
 use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 
+use crate::Unlocked;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Used {
     pub index: u64,
@@ -11,6 +13,12 @@ pub struct Used {
 impl Used {
     pub fn new(index: u64, amount: u64) -> Self {
         Self { index, amount }
+    }
+}
+
+impl From<&Unlocked> for Used {
+    fn from(value: &Unlocked) -> Self {
+        Self::new(value.index(), value.amount())
     }
 }
 

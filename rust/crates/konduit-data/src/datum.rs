@@ -8,6 +8,16 @@ pub struct Datum {
     pub stage: Stage,
 }
 
+impl Datum {
+    pub fn new(own_hash: Hash<28>, constants: Constants, stage: Stage) -> Self {
+        Self {
+            own_hash,
+            constants,
+            stage,
+        }
+    }
+}
+
 impl<'a> TryFrom<&PlutusData<'a>> for Datum {
     type Error = anyhow::Error;
 

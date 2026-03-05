@@ -1,6 +1,22 @@
 use anyhow::anyhow;
-use cardano_sdk::{Credential, Hash, PlutusScript, PlutusVersion};
+use cardano_sdk::{
+    Address, Credential, Hash, NetworkId, PlutusScript, PlutusVersion, address::kind,
+};
 use std::{collections::BTreeMap, sync::LazyLock};
+
+pub type Lovelace = u64;
+pub const MIN_ADA_BUFFER: Lovelace = 2_000_000;
+
+pub fn konduit_address(
+    network_id: NetworkId,
+    delegation: Option<&Credential>,
+) -> Address<kind::Shelley> {
+    match delegation {
+        Some(delegation) => Address::new(network_id, KONDUIT_VALIDATOR.to_credential())
+            .with_delegation(delegation.clone()),
+        None => Address::new(network_id, KONDUIT_VALIDATOR.to_credential()),
+    }
+}
 
 // TODO: embed the whole blueprint? blueprint_json
 pub struct KonduitValidator {

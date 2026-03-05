@@ -65,6 +65,7 @@ where
 
         let wallet_vk = wallet_sk.to_verification_key();
 
+        /// CACHE ///
         let utxos_script_ref = self
             .connector
             .utxos_at(
@@ -73,6 +74,7 @@ where
             )
             .await?;
 
+        /// PRE CACHE ?? ///
         let utxos_konduit = if !intents.is_empty() {
             Box::new(
                 all_utxos_at(
@@ -86,13 +88,7 @@ where
             Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Input, Output)>>
         };
 
-        let utxos_consumer = all_utxos_at(
-            self.connector,
-            &Credential::from(&consumer_vk),
-            stake_credential,
-        )
-        .await?;
-
+        /// FUEL ///
         let utxos_wallet = if wallet_vk != consumer_vk {
             Box::new(
                 all_utxos_at(
@@ -114,7 +110,6 @@ where
             &std::iter::empty()
                 .chain(utxos_script_ref)
                 .chain(utxos_konduit)
-                .chain(utxos_consumer)
                 .chain(utxos_wallet)
                 .collect(),
             Bounds::twenty_mins(),

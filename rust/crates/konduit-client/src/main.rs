@@ -1,8 +1,9 @@
 use anyhow::anyhow;
 use clap::Parser;
-use http_client::{HttpClient as _, reqwest::HttpClient};
+use http_client::HttpClient as _;
+use http_client_native::HttpClient;
 use konduit_client::{
-    Client,
+    Adaptor,
     cli::{Cli, Commands, confirm, prompt_if_incomplete},
 };
 use konduit_data::SquashBody;

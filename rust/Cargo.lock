@@ -2043,12 +2043,12 @@ dependencies = [
  "clap",
  "dotenvy",
  "http-client",
+ "http-client-native",
  "konduit-data",
  "konduit-tx",
  "log",
  "proptest",
  "proptest-derive",
- "reqwest",
  "serde_json",
  "tokio",
  "web-time",
@@ -2116,6 +2116,7 @@ dependencies = [
  "hex",
  "konduit-data",
  "serde_json",
+ "thiserror 2.0.17",
  "web-time",
 ]
 
