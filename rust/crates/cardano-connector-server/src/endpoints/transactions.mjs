@@ -2,7 +2,9 @@ export async function endpointTransactions(ctx) {
   try {
     const [tip, transactions] = await Promise.all([
       await ctx.blockfrost(`/blocks/latest`),
-      await ctx.blockfrost(`/addresses/${ctx.req.param("address")}/transactions`)
+      await ctx.blockfrost(
+        `/addresses/${ctx.req.param("address")}/transactions`,
+      ),
     ]);
 
     return ctx.json(
@@ -19,14 +21,20 @@ export async function endpointTransactions(ctx) {
             invalid_before: meta.invalid_before,
             invalid_after: meta.invalid_after,
             inputs: utxos.inputs
-              .filter(i => !i.reference && (meta.valid_contract ? !i.collateral : i.collateral))
+              .filter(
+                (i) =>
+                  !i.reference &&
+                  (meta.valid_contract ? !i.collateral : i.collateral),
+              )
               .map((i) => ({
                 transaction_id: i.tx_hash,
                 output_index: i.output_index,
                 ...toOutput(i),
               })),
             outputs: utxos.outputs
-              .filter(o => meta.valid_contract ? !o.collateral : o.collateral)
+              .filter((o) =>
+                meta.valid_contract ? !o.collateral : o.collateral,
+              )
               .map(toOutput),
           };
         }),
@@ -45,12 +53,14 @@ export async function endpointTransactions(ctx) {
   }
 }
 
-function toOutput(json) {
+export function toOutput(json) {
   return {
     address: json.address,
     value: json.amount,
     ...(json.data_hash != null && { datum_hash: json.data_hash }),
     ...(json.inline_datum != null && { datum_inline: json.inline_datum }),
-    ...(json.reference_script_hash != null && { reference_script_hash: json.reference_script_hash }),
+    ...(json.reference_script_hash != null && {
+      reference_script_hash: json.reference_script_hash,
+    }),
   };
 }
