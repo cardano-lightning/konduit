@@ -2,10 +2,16 @@ import { toOutput } from "./transactions.mjs";
 
 export async function endpointTransaction(ctx) {
   try {
-    const meta = await ctx.blockfrost(`/txs/${ctx.req.param("id")}`);
-    const utxos = await ctx.blockfrost(`/txs/${ctx.req.param("id")}/utxos`);
-    console.log(JSON.stringify(utxos));
+    const [meta, utxos, tip] = await Promise.all([
+      await ctx.blockfrost(`/txs/${ctx.req.param("id")}`),
+      await ctx.blockfrost(`/txs/${ctx.req.param("id")}/utxos`),
+      await ctx.blockfrost(`/blocks/latest`),
+    ]);
     return ctx.json({
+      block_time: meta.block_time,
+      depth: Math.max(0, tip.height - meta.block_height),
+      invalid_before: meta.invalid_before,
+      invalid_after: meta.invalid_after,
       inputs: utxos.inputs
         .filter(
           (i) =>
