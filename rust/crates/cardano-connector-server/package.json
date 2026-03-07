@@ -5,13 +5,17 @@
   "scripts": {
     "deploy": "wrangler deploy -e production --name konduit-connector",
     "dev": "wrangler dev",
-    "start": "wrangler dev"
+    "start": "wrangler dev",
+    "test": "vitest"
   },
   "dependencies": {
     "blake2b": "^2.1.4",
     "hono": "^4.6.20"
   },
   "devDependencies": {
+    "axios": "^1.13.6",
+    "vitest": "^3.2.4",
+    "vitest-openapi": "^1.0.3",
     "wrangler": "^4.46.0"
   }
 }

@@ -1,0 +1,304 @@
+openapi: 3.1.0
+info:
+  title: Cardano Connector Server API
+  version: 1.0.0
+  description: |
+    Minimal HTTP facade over Blockfrost and Koios used by the Cardano connector client.
+
+    The API is read-only except for transaction submission. Amounts are encoded as decimal strings
+    to avoid integer precision issues in clients that do not support JSON bigint.
+servers:
+  - url: http://localhost:8787
+    description: Local development server
+  - url: https://api.ferret.channel
+    description: Hosted Cloudflare worker for Ferret, configured for PreProd
+paths:
+  /health:
+    get:
+      summary: Health
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /network:
+    get:
+      summary: Network
+      operationId: getNetwork
+      responses:
+        '200':
+          description: Network inferred from the configured Blockfrost project id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkResponse'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /balance/{address}:
+    get:
+      summary: Address balance
+      operationId: getBalance
+      parameters:
+        - $ref: '#/components/parameters/Address'
+      responses:
+        '200':
+          description: Lovelace balance for the address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /utxos_at/{address}:
+    get:
+      summary: UTxOs by address
+      operationId: getUtxosAt
+      parameters:
+        - $ref: '#/components/parameters/Address'
+      responses:
+        '200':
+          description: Current UTxOs found at the address
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Utxo'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /transactions/{address}:
+    get:
+      summary: Transactions by address
+      operationId: getTransactions
+      parameters:
+        - $ref: '#/components/parameters/Address'
+      responses:
+        '200':
+          description: Transactions touching the address
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionSummary'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /transaction/{id}:
+    get:
+      summary: Transaction by id
+      operationId: getTransaction
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Expanded transaction summary
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionSummary'
+                  - type: "null"
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /submit:
+    post:
+      summary: Submit transaction
+      operationId: submitTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRequest'
+      responses:
+        '200':
+          description: Transaction accepted by Koios submit endpoint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitResponse'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+components:
+  parameters:
+    Address:
+      name: address
+      in: path
+      required: true
+      description: Shelley address encoded as bech32
+      schema:
+        type: string
+        format: bech32
+        minLength: 1
+    TransactionId:
+      name: id
+      in: path
+      required: true
+      description: 32-byte transaction hash encoded as lowercase hexadecimal
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{64}$'
+
+  responses:
+    UnexpectedError:
+      description: Upstream failure or malformed request
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: unexpected error
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    NetworkResponse:
+      type: object
+      required: [network]
+      properties:
+        network:
+          type: string
+          enum: [mainnet, preprod, preview]
+
+    BalanceResponse:
+      type: object
+      required: [lovelace]
+      properties:
+        lovelace:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Lovelace amount encoded as a decimal string
+
+    AssetObject:
+      type: object
+      required: [unit, quantity]
+      properties:
+        unit:
+          type: string
+          description: Asset identifier, or `lovelace` for Ada
+        quantity:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Asset quantity encoded as a decimal string
+
+    TxOutput:
+      type: object
+      required: [address, value]
+      properties:
+        address:
+          type: string
+        value:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetObject'
+        datum_hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        datum_inline:
+          type: string
+          description: Inline datum CBOR encoded as hexadecimal
+        reference_script_hash:
+          type: string
+          pattern: '^[0-9a-f]{56}$'
+
+    TxInput:
+      allOf:
+        - type: object
+          required: [transaction_id, output_index]
+          properties:
+            transaction_id:
+              type: string
+              pattern: '^[0-9a-f]{64}$'
+            output_index:
+              type: integer
+              minimum: 0
+        - $ref: '#/components/schemas/TxOutput'
+
+    Utxo:
+      allOf:
+        - type: object
+          required: [transaction_id, output_index]
+          properties:
+            transaction_id:
+              type: string
+              pattern: '^[0-9a-f]{64}$'
+            output_index:
+              type: integer
+              minimum: 0
+        - $ref: '#/components/schemas/TxOutput'
+        - type: object
+          properties:
+            reference_script_version:
+              type: integer
+              minimum: 0
+              maximum: 3
+            reference_script:
+              type: string
+              description: Reference script CBOR encoded as hexadecimal
+
+    TransactionSummary:
+      type: object
+      required: [id, index, depth, timestamp, inputs, outputs]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        index:
+          type: integer
+          minimum: 0
+        depth:
+          type: integer
+          minimum: 0
+        timestamp:
+          type: integer
+          minimum: 0
+          description: Block timestamp in Unix seconds
+        invalid_before:
+          type: integer
+          minimum: 0
+          description: Optional lower slot bound as returned by upstream
+        invalid_after:
+          type: integer
+          minimum: 0
+          description: Optional upper slot bound as returned by upstream
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/TxInput'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/TxOutput'
+
+    SubmitRequest:
+      type: object
+      required: [transaction]
+      properties:
+        transaction:
+          type: string
+          description: Signed transaction CBOR encoded as hexadecimal
+
+    SubmitResponse:
+      type: object
+      required: [transaction_id]
+      properties:
+        transaction_id:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
