@@ -180,6 +180,7 @@ components:
     BalanceResponse:
       type: object
       required: [lovelace]
+      additionalProperties: false
       properties:
         lovelace:
           type: string
@@ -189,6 +190,7 @@ components:
     AssetObject:
       type: object
       required: [unit, quantity]
+      additionalProperties: false
       properties:
         unit:
           type: string
@@ -204,6 +206,10 @@ components:
       properties:
         address:
           type: string
+        consumed_by:
+          allOf:
+            - $ref: '#/components/schemas/TxId'
+            - description: Id of the transaction that consumed this output, if any.
         value:
           type: array
           items:
@@ -218,30 +224,28 @@ components:
           type: string
           pattern: '^[0-9a-f]{56}$'
 
+    TxId:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+
     TxInput:
       allOf:
-        - type: object
-          required: [transaction_id, output_index]
-          properties:
-            transaction_id:
-              type: string
-              pattern: '^[0-9a-f]{64}$'
-            output_index:
-              type: integer
-              minimum: 0
+        - $ref: '#/components/schemas/UtxoRef'
         - $ref: '#/components/schemas/TxOutput'
+
+    UtxoRef:
+      type: object
+      required: [transaction_id, output_index]
+      properties:
+        transaction_id:
+          $ref: '#/components/schemas/TxId'
+        output_index:
+          type: integer
+          minimum: 0
 
     Utxo:
       allOf:
-        - type: object
-          required: [transaction_id, output_index]
-          properties:
-            transaction_id:
-              type: string
-              pattern: '^[0-9a-f]{64}$'
-            output_index:
-              type: integer
-              minimum: 0
+        - $ref: '#/components/schemas/UtxoRef'
         - $ref: '#/components/schemas/TxOutput'
         - type: object
           properties:
@@ -256,10 +260,10 @@ components:
     TransactionSummary:
       type: object
       required: [id, index, depth, timestamp, inputs, outputs]
+      additionalProperties: false
       properties:
         id:
-          type: string
-          pattern: '^[0-9a-f]{64}$'
+          $ref: '#/components/schemas/TxId'
         index:
           type: integer
           minimum: 0
@@ -289,6 +293,7 @@ components:
 
     SubmitRequest:
       type: object
+      additionalProperties: false
       required: [transaction]
       properties:
         transaction:
@@ -297,6 +302,7 @@ components:
 
     SubmitResponse:
       type: object
+      additionalProperties: false
       required: [transaction_id]
       properties:
         transaction_id:

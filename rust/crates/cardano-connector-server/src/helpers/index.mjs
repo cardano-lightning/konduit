@@ -42,9 +42,8 @@ export function toOutput(json) {
     value: json.amount,
     ...(json.data_hash != null && { datum_hash: json.data_hash }),
     ...(json.inline_datum != null && { datum_inline: json.inline_datum }),
-    ...(json.reference_script_hash != null && {
-      reference_script_hash: json.reference_script_hash,
-    }),
+    ...(json.reference_script_hash != null && { reference_script_hash: json.reference_script_hash }),
+    ...(json.consumed_by_tx != null && { consumed_by: json.consumed_by_tx }),
   };
 }
 
