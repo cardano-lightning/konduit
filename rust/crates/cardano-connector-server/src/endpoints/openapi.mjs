@@ -20,8 +20,8 @@ export const REDOC_HTML = `<!doctype html>
     </style>
   </head>
   <body>
-    <redoc spec-url="/openapi.yaml"></redoc>
-    <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"></script>
+    <redoc spec-url="/openapi.yaml" expand-responses="200,201"></redoc>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"> </script>
   </body>
 </html>
 `;

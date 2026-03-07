@@ -1,24 +1,21 @@
 openapi: 3.1.0
 info:
   title: Cardano Connector Server API
-  version: 0.1.0
+  version: 1.0.0
   description: |
     Minimal HTTP facade over Blockfrost and Koios used by the Cardano connector client.
 
     The API is read-only except for transaction submission. Amounts are encoded as decimal strings
-    to avoid integer precision issues in JavaScript clients.
+    to avoid integer precision issues in clients that do not support JSON bigint.
 servers:
   - url: http://localhost:8787
     description: Local development server
-tags:
-  - name: system
-  - name: addresses
-  - name: transactions
+  - url: https://api.ferret.channel
+    description: Hosted Cloudflare worker for Ferret, configured for PreProd
 paths:
   /health:
     get:
-      tags: [system]
-      summary: Health check
+      summary: Health
       operationId: getHealth
       responses:
         '200':
@@ -32,8 +29,7 @@ paths:
 
   /network:
     get:
-      tags: [system]
-      summary: Active Cardano network
+      summary: Network
       operationId: getNetwork
       responses:
         '200':
@@ -47,7 +43,6 @@ paths:
 
   /balance/{address}:
     get:
-      tags: [addresses]
       summary: Address balance
       operationId: getBalance
       parameters:
@@ -64,8 +59,7 @@ paths:
 
   /utxos_at/{address}:
     get:
-      tags: [addresses]
-      summary: UTxOs at address
+      summary: UTxOs by address
       operationId: getUtxosAt
       parameters:
         - $ref: '#/components/parameters/Address'
@@ -83,8 +77,7 @@ paths:
 
   /transactions/{address}:
     get:
-      tags: [transactions]
-      summary: Transaction summaries for an address
+      summary: Transactions by address
       operationId: getTransactions
       parameters:
         - $ref: '#/components/parameters/Address'
@@ -102,8 +95,7 @@ paths:
 
   /transaction/{id}:
     get:
-      tags: [transactions]
-      summary: Transaction summary by id
+      summary: Transaction by id
       operationId: getTransaction
       parameters:
         - $ref: '#/components/parameters/TransactionId'
@@ -113,14 +105,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionSummary'
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionSummary'
+                  - type: "null"
         default:
           $ref: '#/components/responses/UnexpectedError'
 
   /submit:
     post:
-      tags: [transactions]
-      summary: Submit a signed transaction
+      summary: Submit transaction
       operationId: submitTransaction
       requestBody:
         required: true
@@ -147,6 +140,7 @@ components:
       description: Shelley address encoded as bech32
       schema:
         type: string
+        format: bech32
         minLength: 1
     TransactionId:
       name: id
@@ -173,7 +167,7 @@ components:
       properties:
         status:
           type: string
-          const: ok
+          enum: [ok]
 
     NetworkResponse:
       type: object
@@ -248,14 +242,16 @@ components:
             output_index:
               type: integer
               minimum: 0
+        - $ref: '#/components/schemas/TxOutput'
+        - type: object
+          properties:
             reference_script_version:
               type: integer
               minimum: 0
-              maximum: 255
+              maximum: 3
             reference_script:
               type: string
               description: Reference script CBOR encoded as hexadecimal
-        - $ref: '#/components/schemas/TxOutput'
 
     TransactionSummary:
       type: object
@@ -275,16 +271,12 @@ components:
           minimum: 0
           description: Block timestamp in Unix seconds
         invalid_before:
-          anyOf:
-            - type: integer
-              minimum: 0
-            - type: string
+          type: integer
+          minimum: 0
           description: Optional lower slot bound as returned by upstream
         invalid_after:
-          anyOf:
-            - type: integer
-              minimum: 0
-            - type: string
+          type: integer
+          minimum: 0
           description: Optional upper slot bound as returned by upstream
         inputs:
           type: array
@@ -308,10 +300,5 @@ components:
       required: [transaction_id]
       properties:
         transaction_id:
-          oneOf:
-            - type: string
-              pattern: '^[0-9a-f]{64}$'
-            - type: array
-              items:
-                type: string
-              description: Koios may return an array payload depending on upstream behavior
+          type: string
+          pattern: '^[0-9a-f]{64}$'

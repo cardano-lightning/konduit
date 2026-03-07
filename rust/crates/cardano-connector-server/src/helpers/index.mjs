@@ -26,9 +26,9 @@ export function toTransaction(tip, meta, utxos) {
     id: meta.hash,
     index: meta.index,
     depth: Math.max(0, tip.height - meta.block_height),
-    timestamp: meta.block_time,
-    invalid_before: meta.invalid_before,
-    invalid_after: meta.invalid_after,
+    timestamp: Number(meta.block_time),
+    ...(meta.invalid_before != null && { invalid_before: Number(meta.invalid_before) }),
+    ...(meta.invalid_after != null && { invalid_after: Number(meta.invalid_after) }),
     ...partitionInputsOutputs(meta, utxos),
   }
 }

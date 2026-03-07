@@ -6,12 +6,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "konduit-connector",
   "main": "src/index.mjs",
-  "compatibility_date": "2025-11-06",
+  "compatibility_date": "2025-11-05",
   "compatibility_flags": ["nodejs_compat"],
   "rules": [
     {
       "type": "Text",
-      "globs": ["**/*.yaml"]
+      "globs": ["**/*.yaml"],
+      "fallthrough": true
     }
   ],
   "observability": {
