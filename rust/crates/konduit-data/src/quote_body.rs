@@ -24,6 +24,13 @@ impl QuoteBody {
             QuoteBody::Bolt11(invoice) => invoice.payee_compressed,
         }
     }
+
+    pub fn payment_hash(&self) -> [u8; 32] {
+        match self {
+            QuoteBody::Simple(simple_quote) => simple_quote.payment_hash,
+            QuoteBody::Bolt11(invoice) => invoice.payment_hash,
+        }
+    }
 }
 
 #[serde_as]
@@ -32,4 +39,6 @@ pub struct SimpleQuote {
     pub amount_msat: u64,
     #[serde_as(as = "serde_with::hex::Hex")]
     pub payee: [u8; 33],
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub payment_hash: [u8; 32],
 }

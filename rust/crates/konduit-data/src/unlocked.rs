@@ -61,12 +61,10 @@ impl Unlocked {
         verification_key: &VerificationKey,
         tag: &Tag,
     ) -> bool {
-        // Assume secret is verified in constructor
-        self.locked().verify(verification_key, tag) && &self.body.timeout < timeout
+        &self.body.timeout < timeout && self.verify_no_time(verification_key, tag)
     }
 
     pub fn verify_no_time(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
-        // Assume secret is verified in constructor
         let locked = self.locked();
         locked.verify(verification_key, tag) && locked.body.is_secret(&self.secret)
     }
