@@ -21,34 +21,34 @@ const LOCKED_CHEQUE_GRACE_PERIOD: Duration = Duration::from_secs(60);
 /// A 'black-box' API for Konduit L1 & L2 operations.
 #[wasm_bindgen]
 pub struct Konduit {
-    _network_id: NetworkId,
+    network_id: NetworkId,
 
     // Address at which is deployed the Konduit validator. We could also cache the UTxO
     // corresponding to the address to avoid re-fetching it on every single request.
-    _script_deployment_address: ShelleyAddress,
+    script_deployment_address: ShelleyAddress,
 
     // Rudimentary wallet holding the consumer's credentials.
-    _wallet: Wallet,
+    wallet: Wallet,
 
     // Connection to a connector, as a result since it could initially be missing.
-    _connector: wasm::Result<Rc<Connector<HttpClient>>>,
+    connector: wasm::Result<Rc<Connector<HttpClient>>>,
 
     // Connection to an adaptor, as a result since it could initially be missing.
-    _adaptor: wasm::Result<Adaptor<HttpClient>>,
+    adaptor: wasm::Result<Adaptor<HttpClient>>,
 }
 
 impl Konduit {
     fn l1_client(&self) -> wasm::Result<l1::Client<'_, Connector<HttpClient>>> {
         Ok(l1::Client::new(
-            self._connector.as_ref()?,
-            self._wallet.signing_key(),
+            self.connector.as_ref()?,
+            &self.wallet.signing_key(),
         ))
     }
 
     fn l2_client(&self) -> wasm::Result<l2::Client<'_, HttpClient>> {
         Ok(l2::Client::new(
-            self._adaptor.as_ref()?,
-            self._wallet.signing_key(),
+            self.adaptor.as_ref()?,
+            &self.wallet.signing_key(),
         ))
     }
 
@@ -93,7 +93,7 @@ impl Konduit {
                 .into());
             }
 
-            receipt.provably_owed(&self._wallet.verification_key(), tag)
+            receipt.provably_owed(&self.wallet.verification_key(), tag)
         } else {
             0
         };
@@ -119,24 +119,24 @@ impl Konduit {
         signing_key: SigningKey,
     ) -> Self {
         Konduit {
-            _network_id: *network_id,
-            _script_deployment_address: script_deployment_address.clone(),
-            _wallet: Wallet::new(*network_id, signing_key),
-            _connector: Err(anyhow!("no available connector").into()),
-            _adaptor: Err(anyhow!("no available adaptor").into()),
+            network_id: *network_id,
+            script_deployment_address: script_deployment_address.clone(),
+            wallet: Wallet::new((*network_id).into(), signing_key.into()),
+            connector: Err(anyhow!("no available connector").into()),
+            adaptor: Err(anyhow!("no available adaptor").into()),
         }
     }
 
     /// A handle on the underlying wallet.
     #[wasm_bindgen(getter, js_name = "wallet")]
-    pub fn _wasm_wallet(&self) -> Wallet {
-        self._wallet.clone()
+    pub fn wallet(&self) -> Wallet {
+        self.wallet.clone()
     }
 
     /// Current network id for which the app is configured.
     #[wasm_bindgen(getter, js_name = "networkId")]
     pub fn network_id(&self) -> NetworkId {
-        self._network_id
+        self.network_id
     }
 }
 
@@ -145,25 +145,14 @@ impl Konduit {
 impl Konduit {
     /// Get a reference to the connector.
     #[wasm_bindgen(getter, js_name = "connector")]
-    pub fn _wasm_connector(&self) -> wasm::Result<wasm::Connector> {
-        self._connector.clone().map(Into::into)
+    pub fn connector(&self) -> wasm::Result<wasm::Connector> {
+        self.connector.clone().map(Into::into)
     }
 
     /// Configure or reconfigure the associated connector for the instance.
-    #[wasm_bindgen(js_name = "setConnector")]
-    pub async fn set_connector(&mut self, url: &str) -> wasm::Result<()> {
-        if self._connector.as_ref().is_ok_and(|c| c.base_url() == url) {
-            log::debug!("set_connector: connector already set to {url}.");
-            return Ok(());
-        }
-
-        let connector = Rc::new(Connector::new(HttpClient::new(url)).await?);
-
-        self._connector = Ok(connector);
-
-        log::debug!("set_connector: connector set to {url}.");
-
-        Ok(())
+    #[wasm_bindgen(setter, js_name = "connector")]
+    pub fn set_connector(&mut self, connector: wasm::Connector) {
+        self.connector = Ok(connector.into());
     }
 }
 
@@ -172,34 +161,34 @@ impl Konduit {
 impl Konduit {
     /// Configure an (unauthenticated) adaptor, without a defined tag yet. Suitable to get the
     /// adaptor info and other non-authenticated operations.
-    #[wasm_bindgen(js_name = "setAdaptor")]
-    pub async fn set_adaptor(&mut self, url: &str) -> wasm::Result<AdaptorInfo> {
-        if let Ok(adaptor) = self._adaptor.as_ref()
-            && adaptor.base_url() == url
-        {
-            log::debug!("set_adaptor: adaptor already set to {url}.");
-            return Ok(adaptor.info().clone().into());
-        }
+    #[wasm_bindgen(getter, js_name = "adaptorInfo")]
+    pub fn adaptor_info(&self) -> wasm::Result<AdaptorInfo> {
+        Ok(self.adaptor.as_ref()?.info().clone().into())
+    }
 
-        let adaptor = Adaptor::new(HttpClient::new(url), None).await?;
-        let adaptor_info: AdaptorInfo = adaptor.info().clone().into();
-
-        self._adaptor = Ok(adaptor);
-
-        log::debug!("set_adaptor: adaptor already set to {url}.");
-
-        Ok(adaptor_info)
+    /// Configure an (unauthenticated) adaptor, without a defined tag yet. Suitable to get the
+    /// adaptor info and other non-authenticated operations.
+    #[wasm_bindgen(setter, js_name = "adaptor")]
+    pub fn set_adaptor(&mut self, adaptor: wasm::Adaptor) {
+        self.adaptor = Ok(adaptor.into());
     }
 
     /// Recover a previously known tag, if any.
     #[wasm_bindgen(js_name = "setChannelTag")]
     pub fn set_channel_tag(&mut self, tag: &Tag) -> wasm::Result<()> {
-        if self._adaptor.as_ref()?.tag() != Some(tag) {
+        if self.adaptor.as_ref()?.tag() != Some(tag) {
             let tag: core::Tag = tag.clone().into();
-            let keytag = core::Keytag::new(self._wallet.verification_key().into(), tag.clone());
-            self._adaptor.as_mut()?.set_keytag(Some(&keytag));
+            let keytag = core::Keytag::new(self.wallet.verification_key(), tag.clone());
+            self.adaptor.as_mut()?.set_keytag(Some(&keytag));
         }
 
+        Ok(())
+    }
+
+    /// Remove any existing channel tag
+    #[wasm_bindgen(js_name = "resetChannelTag")]
+    pub fn reset_channel_tag(&mut self) -> wasm::Result<()> {
+        self.adaptor.as_mut()?.set_keytag(None);
         Ok(())
     }
 
@@ -207,39 +196,6 @@ impl Konduit {
     #[wasm_bindgen(js_name = "getQuoteFor")]
     pub async fn get_quote_for(&self, invoice: &str) -> wasm::Result<Quote> {
         Ok(self.l2_client()?.quote(invoice).await?.into())
-    }
-
-    /// Synchronize the channel with the adaptor.
-    #[wasm_bindgen(js_name = "syncChannel")]
-    pub async fn sync_channel(&mut self, lockeds: &mut Lockeds) -> wasm::Result<SyncStatus> {
-        if let Some(tag) = self._adaptor.as_ref()?.tag() {
-            log::debug!("sync_channel: for tag={}", tag);
-            let client = self.l2_client()?;
-            let squash_status = client.squash(core::SquashBody::default()).await?;
-            self.squash(client, tag, squash_status, lockeds).await
-        } else {
-            log::debug!("sync_channel: no tag set, assuming no channel to sync.");
-            Ok(SyncStatus::default())
-        }
-    }
-
-    /// Pay an invoice using a previously established quote.
-    #[wasm_bindgen(js_name = "pay")]
-    pub async fn pay(
-        &mut self,
-        invoice: &str,
-        quote: &Quote,
-        lockeds: &mut Lockeds,
-    ) -> wasm::Result<SyncStatus> {
-        if let Some(tag) = self._adaptor.as_ref()?.tag() {
-            log::debug!("pay: for tag={}, quote={:?}", tag, quote);
-            let client = self.l2_client()?;
-            lockeds.add(quote.lock);
-            let squash_status = client.pay(invoice, quote).await?;
-            self.squash(client, tag, squash_status, lockeds).await
-        } else {
-            Err(anyhow!("pay: no tag set; is the channel open?").into())
-        }
     }
 }
 
@@ -249,22 +205,23 @@ impl Konduit {
     /// Find channels that belongs to "us"
     #[wasm_bindgen(js_name = "channels")]
     pub async fn channels(&self) -> wasm::Result<Vec<ChannelOutput>> {
+        let stake_credential: Option<core::Credential> = self.wallet.stake_credential();
         Ok(self
             .l1_client()?
-            .channels(self._wallet.stake_credential().as_deref())
+            .channels(stake_credential.as_ref())
             .await?
-            .map(Into::into)
+            .map(ChannelOutput::from)
             .collect())
     }
 
     /// Open a channel with the given tag and initial deposit.
     #[wasm_bindgen(js_name = "openChannel")]
-    pub async fn open_channel(&mut self, tag: &Tag, amount: u64) -> wasm::Result<Hash32> {
+    pub async fn open_channel(&self, tag: &Tag, amount: u64) -> wasm::Result<Hash32> {
         let tag: core::Tag = tag.clone().into();
 
         log::debug!("open_channel: for tag = {}", tag);
 
-        let adaptor = self._adaptor.as_ref()?;
+        let adaptor = self.adaptor.as_ref()?;
         let adaptor_key = adaptor.info().channel_parameters.adaptor_key;
         let close_period = adaptor.info().channel_parameters.close_period;
 
@@ -278,25 +235,23 @@ impl Konduit {
         let open_tx: Hash32 = self
             .l1_client()?
             .execute(
-                self._wallet.signing_key(),
-                self._wallet.stake_credential().as_deref(),
+                self.wallet.signing_key(),
+                self.wallet.stake_credential().as_ref(),
                 opens,
                 Default::default(),
-                &self._script_deployment_address,
+                &self.script_deployment_address,
             )
             .await?
             .into();
-
-        self.set_channel_tag(&tag.into())?;
 
         Ok(open_tx)
     }
 
     /// Add funds to an existing channel.
     #[wasm_bindgen(js_name = "addToChannel")]
-    pub async fn add_to_channel(&mut self, amount: u64) -> wasm::Result<Hash32> {
+    pub async fn add_to_channel(&self, amount: u64) -> wasm::Result<Hash32> {
         let tag: core::Tag = self
-            ._adaptor
+            .adaptor
             .as_ref()?
             .tag()
             .ok_or::<wasm::Error>(
@@ -308,11 +263,11 @@ impl Konduit {
         let add_tx: Hash32 = self
             .l1_client()?
             .execute(
-                self._wallet.signing_key(),
-                self._wallet.stake_credential().as_deref(),
+                self.wallet.signing_key(),
+                self.wallet.stake_credential().as_ref(),
                 vec![],
                 From::from([(tag, core::consumer::Intent::Add(amount))]),
-                &self._script_deployment_address.clone(),
+                &self.script_deployment_address.clone(),
             )
             .await?
             .into();
@@ -320,11 +275,44 @@ impl Konduit {
         Ok(add_tx)
     }
 
+    /// Synchronize the channel with the adaptor.
+    #[wasm_bindgen(js_name = "syncChannel")]
+    pub async fn sync_channel(&self, lockeds: &mut Lockeds) -> wasm::Result<SyncStatus> {
+        if let Some(tag) = self.adaptor.as_ref()?.tag() {
+            log::debug!("sync_channel: for tag={}", tag);
+            let client = self.l2_client()?;
+            let squash_status = client.squash(core::SquashBody::default()).await?;
+            self.squash(client, tag, squash_status, lockeds).await
+        } else {
+            log::debug!("sync_channel: no tag set, assuming no channel to sync.");
+            Ok(SyncStatus::default())
+        }
+    }
+
+    /// Pay an invoice using a previously established quote.
+    #[wasm_bindgen(js_name = "pay")]
+    pub async fn pay(
+        &self,
+        invoice: &str,
+        quote: &Quote,
+        lockeds: &mut Lockeds,
+    ) -> wasm::Result<SyncStatus> {
+        if let Some(tag) = self.adaptor.as_ref()?.tag() {
+            log::debug!("pay: for tag={}, quote={:?}", tag, quote);
+            let client = self.l2_client()?;
+            lockeds.add(quote.lock);
+            let squash_status = client.pay(invoice, quote).await?;
+            self.squash(client, tag, squash_status, lockeds).await
+        } else {
+            Err(anyhow!("pay: no tag set; is the channel open?").into())
+        }
+    }
+
     /// Close the currently active channel, if any.
     #[wasm_bindgen(js_name = "closeChannel")]
-    pub async fn close_channel(&mut self) -> wasm::Result<Hash32> {
+    pub async fn close_channel(&self) -> wasm::Result<Hash32> {
         let tag: core::Tag = self
-            ._adaptor
+            .adaptor
             .as_ref()?
             .tag()
             .ok_or::<wasm::Error>(
@@ -336,16 +324,14 @@ impl Konduit {
         let close_tx: Hash32 = self
             .l1_client()?
             .execute(
-                self._wallet.signing_key(),
-                self._wallet.stake_credential().as_deref(),
+                &self.wallet.signing_key(),
+                self.wallet.stake_credential().as_ref(),
                 vec![],
                 From::from([(tag, core::consumer::Intent::Close)]),
-                &self._script_deployment_address.clone(),
+                &self.script_deployment_address.clone(),
             )
             .await?
             .into();
-
-        self._adaptor.as_mut()?.set_keytag(None);
 
         Ok(close_tx)
     }

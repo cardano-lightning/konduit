@@ -1,108 +1,108 @@
-use crate::wasm::{
-    self, Connector, Credential, NetworkId, ShelleyAddress, SigningKey, TransactionSummary,
-    VerificationKey,
+use crate::{
+    core, wallet,
+    wasm::{self, Connector, Credential, ShelleyAddress, TransactionSummary, VerificationKey},
+    wasm_proxy,
 };
 use anyhow::anyhow;
+use std::{ops::Deref, rc::Rc};
 use wasm_bindgen::prelude::*;
 
-/// A rudimentary wallet interface
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct Wallet {
-    _network_id: NetworkId,
-    _signing_key: SigningKey,
-    _stake_credential: Option<Credential>,
-    _exit_address: wasm::Result<ShelleyAddress>,
+wasm_proxy! {
+    #[derive(Debug, Clone)]
+    #[doc = "A rudimentary wallet interface"]
+    Wallet => Rc<wallet::Wallet>
 }
 
 impl Wallet {
-    pub fn new(network_id: NetworkId, signing_key: SigningKey) -> Self {
-        Self {
-            _network_id: network_id,
-            _signing_key: signing_key,
-            _stake_credential: None,
-            _exit_address: Err(anyhow!("no exit address").into()),
-        }
+    pub fn new(network_id: core::NetworkId, signing_key: core::SigningKey) -> Self {
+        Self(Rc::new(wallet::Wallet::new(network_id, signing_key)))
     }
 
-    pub fn signing_key(&self) -> &SigningKey {
-        &self._signing_key
+    pub fn signing_key(&self) -> &core::SigningKey {
+        &self.signing_key
+    }
+
+    pub fn verification_key(&self) -> core::VerificationKey {
+        self.signing_key().to_verification_key()
+    }
+
+    pub fn stake_credential(&self) -> Option<core::Credential> {
+        self.stake_credential.borrow().clone()
     }
 }
 
-// Wallet-related methods for the Konduit interface.
 #[wasm_bindgen]
 impl Wallet {
     #[wasm_bindgen(getter, js_name = "verificationKey")]
-    pub fn verification_key(&self) -> VerificationKey {
-        self.signing_key().to_verification_key().into()
+    pub fn _wasm_verification_key(&self) -> VerificationKey {
+        self.verification_key().into()
     }
 
     #[wasm_bindgen(getter, js_name = "paymentCredential")]
-    pub fn payment_credential(&self) -> Credential {
-        self.verification_key().to_credential().into()
+    pub fn _wasm_payment_credential(&self) -> Credential {
+        self._wasm_verification_key().to_credential().into()
     }
 
     #[wasm_bindgen(getter, js_name = "stakeCredential")]
-    pub fn stake_credential(&self) -> Option<Credential> {
-        self._stake_credential.clone()
+    pub fn _wasm_stake_credential(&self) -> Option<Credential> {
+        self.stake_credential().clone().map(Into::into)
     }
 
     #[wasm_bindgen(setter, js_name = "stakeCredential")]
-    pub fn set_stake_credential(&mut self, stake_credential: &Credential) {
-        self._stake_credential = Some(stake_credential.clone())
+    pub fn _wasm_set_stake_credential(&self, stake_credential: &Credential) {
+        *self.stake_credential.borrow_mut() = Some(stake_credential.clone().into())
     }
 
     #[wasm_bindgen(js_name = "resetStakeCredential")]
-    pub fn reset_stake_credential(&mut self) {
-        self._stake_credential = None;
+    pub fn _wasm_reset_stake_credential(&self) {
+        *self.stake_credential.borrow_mut() = None;
     }
 
     #[wasm_bindgen(getter, js_name = "address")]
-    pub fn address(&self) -> ShelleyAddress {
-        let mut address = self.verification_key().to_address(self._network_id.into());
+    pub fn _wasm_address(&self) -> ShelleyAddress {
+        let mut address = self.verification_key().to_address(self.network_id);
 
-        if let Some(stake_credential) = self.stake_credential() {
-            address = address.with_delegation(stake_credential.into());
+        if let Some(stake_credential) = self.stake_credential.borrow().deref() {
+            address = address.with_delegation(core::Credential::clone(stake_credential));
         }
 
         address.into()
     }
 
     #[wasm_bindgen(getter, js_name = "exitAddress")]
-    pub fn exit_address(&self) -> Option<ShelleyAddress> {
-        match self._exit_address {
-            Ok(ref exit_address) => Some(exit_address.clone()),
+    pub fn _wasm_exit_address(&self) -> Option<ShelleyAddress> {
+        match self.exit_address.borrow().deref() {
+            Ok(exit_address) => Some(core::Address::clone(exit_address).into()),
             Err(_) => None,
         }
     }
 
     #[wasm_bindgen(setter, js_name = "exitAddress")]
-    pub fn set_exit_address(&mut self, exit_address: &ShelleyAddress) {
-        self._exit_address = Ok(exit_address.clone());
+    pub fn _wasm_set_exit_address(&self, exit_address: &ShelleyAddress) {
+        *self.exit_address.borrow_mut() = Ok(exit_address.clone().into());
     }
 
     #[wasm_bindgen(js_name = "resetExitAddress")]
-    pub fn reset_exit_address(&mut self) {
-        self._exit_address = Err(anyhow!("no exit address").into());
+    pub fn _wasm_reset_exit_address(&self) {
+        *self.exit_address.borrow_mut() = Err(anyhow!("no exit address"));
     }
 
     /// Retrieve the balance of the underlying L1 wallet.
     #[wasm_bindgen(js_name = "balance")]
-    pub async fn balance(&self, connector: &Connector) -> wasm::Result<u64> {
-        Ok(connector.balance(self.verification_key().into()).await?)
+    pub async fn _wasm_balance(&self, connector: &Connector) -> wasm::Result<u64> {
+        Ok(connector.balance(self.verification_key()).await?)
     }
 
     /// Retrieve the transaction activity around the underlying L1 wallet. This includes channels
     /// opening and closing, but not intermediate operation on channels that do not involve the
     /// wallet.
     #[wasm_bindgen(js_name = "transactions")]
-    pub async fn transactions(
+    pub async fn _wasm_transactions(
         &self,
         connector: &Connector,
     ) -> wasm::Result<Vec<TransactionSummary>> {
         Ok(connector
-            .transactions(&self.payment_credential())
+            .transactions(&self._wasm_payment_credential())
             .await?
             .into_iter()
             .map(From::from)

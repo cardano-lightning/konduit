@@ -1,3 +1,4 @@
+mod adaptor;
 mod adaptor_info;
 mod channel_output;
 mod connector;
@@ -23,6 +24,7 @@ mod verification_key;
 mod wallet;
 mod wasm_proxy;
 
+pub use adaptor::*;
 pub use adaptor_info::*;
 pub use channel_output::*;
 pub use connector::*;
