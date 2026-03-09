@@ -4,7 +4,7 @@ use crate::{
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use cardano_sdk::cbor;
-use konduit_data::{Keytag, Lock, Locked, PayBody, Quote, QuoteBody, Secret, Squash, SquashStatus};
+use konduit_data::{Keytag, Locked, PayBody, Quote, QuoteBody, Secret, Squash, SquashStatus};
 use std::{
     ops::Deref,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -203,7 +203,6 @@ pub async fn quote(
         amount,
         relative_timeout,
         routing_fee: bln_quote.fee_msat,
-        lock: Lock::from(request.payment_hash()),
     };
     Ok(HttpResponse::Ok().json(response_body))
 }

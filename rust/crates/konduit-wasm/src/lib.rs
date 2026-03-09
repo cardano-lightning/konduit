@@ -14,6 +14,7 @@ mod prelude {
     pub use http_client_wasm::HttpClient;
     pub use konduit_client::{Adaptor, l1, l2};
     pub mod core {
+        pub use bln_sdk::types::Invoice;
         pub use cardano_connector_client::types::*;
         pub use cardano_sdk::*;
         pub use konduit_data::*;

@@ -1,8 +1,8 @@
 use crate::{
     Adaptor, Connector, HttpClient, core, l1, l2,
     wasm::{
-        self, AdaptorInfo, ChannelOutput, Hash32, Lock, Lockeds, NetworkId, Quote, ShelleyAddress,
-        SigningKey, Tag, Wallet,
+        self, AdaptorInfo, ChannelOutput, Hash32, Invoice, Lock, Lockeds, NetworkId, Quote,
+        ShelleyAddress, SigningKey, Tag, Wallet,
     },
 };
 use anyhow::anyhow;
@@ -194,7 +194,7 @@ impl Konduit {
 
     /// Get a quote for a given Bolt11 invoice from the adapator.
     #[wasm_bindgen(js_name = "getQuoteFor")]
-    pub async fn get_quote_for(&self, invoice: &str) -> wasm::Result<Quote> {
+    pub async fn get_quote_for(&self, invoice: &Invoice) -> wasm::Result<Quote> {
         Ok(self.l2_client()?.quote(invoice).await?.into())
     }
 }
@@ -293,14 +293,14 @@ impl Konduit {
     #[wasm_bindgen(js_name = "pay")]
     pub async fn pay(
         &self,
-        invoice: &str,
+        invoice: &Invoice,
         quote: &Quote,
         lockeds: &mut Lockeds,
     ) -> wasm::Result<SyncStatus> {
         if let Some(tag) = self.adaptor.as_ref()?.tag() {
             log::debug!("pay: for tag={}, quote={:?}", tag, quote);
             let client = self.l2_client()?;
-            lockeds.add(quote.lock);
+            lockeds.add(core::Lock(invoice.payment_hash));
             let squash_status = client.pay(invoice, quote).await?;
             self.squash(client, tag, squash_status, lockeds).await
         } else {

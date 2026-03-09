@@ -5,7 +5,7 @@ use crate::{
         Squash, SquashBody, SquashStatus,
     },
 };
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use http_client::HttpClient;
 use web_time::{SystemTime, UNIX_EPOCH};
 
@@ -30,22 +30,15 @@ where
         self.adaptor.info()
     }
 
-    pub async fn quote(&self, invoice: &str) -> anyhow::Result<Quote> {
-        self.adaptor
-            .quote(invoice.parse().context("failed to parse bolt11 invoice")?)
-            .await
+    pub async fn quote(&self, invoice: &Invoice) -> anyhow::Result<Quote> {
+        self.adaptor.quote(invoice).await
     }
 
     pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
         self.adaptor.receipt().await
     }
 
-    pub async fn pay(&self, invoice: &str, quote: &Quote) -> anyhow::Result<SquashStatus> {
-        let payment_hash = invoice
-            .parse::<Invoice>()
-            .context("failed to parse bolt11 invoice")?
-            .payment_hash;
-
+    pub async fn pay(&self, invoice: &Invoice, quote: &Quote) -> anyhow::Result<SquashStatus> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("failed calculate duration since UNIX epoch ?!")
@@ -53,7 +46,12 @@ where
 
         let timeout = Duration::from_millis(now + quote.relative_timeout);
 
-        let body = ChequeBody::new(quote.index, quote.amount, timeout, Lock(payment_hash));
+        let body = ChequeBody::new(
+            quote.index,
+            quote.amount,
+            timeout,
+            Lock(invoice.payment_hash),
+        );
 
         let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
 

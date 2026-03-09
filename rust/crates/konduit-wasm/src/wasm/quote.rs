@@ -1,4 +1,4 @@
-use crate::{core, wasm::Lock, wasm_proxy};
+use crate::{core, wasm_proxy};
 use wasm_bindgen::prelude::*;
 
 wasm_proxy! {
@@ -27,10 +27,5 @@ impl Quote {
     #[wasm_bindgen(getter, js_name = "routingFee")]
     pub fn _wasm_routing_fee(&self) -> u64 {
         self.routing_fee
-    }
-
-    #[wasm_bindgen(getter, js_name = "lock")]
-    pub fn _wasm_lock(&self) -> Lock {
-        self.lock.into()
     }
 }

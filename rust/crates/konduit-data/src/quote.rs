@@ -1,4 +1,3 @@
-use crate::Lock;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -7,5 +6,4 @@ pub struct Quote {
     pub amount: u64,
     pub relative_timeout: u64,
     pub routing_fee: u64,
-    pub lock: Lock,
 }

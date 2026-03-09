@@ -2129,6 +2129,7 @@ name = "konduit-wasm"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bln-sdk",
  "cardano-connector",
  "cardano-connector-client",
  "cardano-sdk",
