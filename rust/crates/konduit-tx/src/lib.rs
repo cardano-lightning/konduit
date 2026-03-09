@@ -21,26 +21,25 @@ pub use bounds::Bounds;
 mod open;
 pub use open::Open;
 
-mod channel_data;
+mod channel;
 mod channel_utxo;
-mod channel_variables;
+mod variables;
 
-mod step_and;
+mod step_error;
+pub use step_error::StepError;
 mod step_to;
+
 mod stepped;
 mod stepped_utxo;
 mod stepped_utxos;
-mod stepping;
 
-pub use channel_data::ChannelData;
+pub use channel::Channel;
 pub use channel_utxo::ChannelUtxo;
-pub use channel_variables::Variables;
-pub use step_and::StepAnd;
 pub use step_to::StepTo;
 pub use stepped::Stepped;
 pub use stepped_utxo::SteppedUtxo;
 pub use stepped_utxos::SteppedUtxos;
-pub use stepping::Stepping;
+pub use variables::Variables;
 
 /// Tx
 pub mod fuel;
@@ -59,4 +58,3 @@ pub use network_parameters::NetworkParameters;
 // pub mod adaptor;
 // pub mod admin;
 // pub mod consumer;
-//

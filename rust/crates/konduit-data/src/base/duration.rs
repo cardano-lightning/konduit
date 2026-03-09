@@ -3,7 +3,7 @@ use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
-    ops::{Deref, DerefMut},
+    ops::{Add, Deref, DerefMut},
     str::FromStr,
     time,
 };
@@ -111,5 +111,14 @@ impl From<&Duration> for u64 {
 impl From<Duration> for u64 {
     fn from(value: Duration) -> Self {
         value.0.as_millis() as u64
+    }
+}
+
+impl Add for Duration {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        // Accessing .0 directly or using deref
+        Duration(self.0 + rhs.0)
     }
 }

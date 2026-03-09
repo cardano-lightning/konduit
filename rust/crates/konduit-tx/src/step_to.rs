@@ -1,6 +1,6 @@
 use konduit_data::{Cont, Eol, Step};
 
-use crate::Variables;
+use crate::{Variables, variables};
 
 #[derive(Debug, Clone)]
 pub enum StepTo {
@@ -9,6 +9,14 @@ pub enum StepTo {
 }
 
 impl StepTo {
+    pub fn cont(step: Cont, variables: Variables) -> Self {
+        Self::Cont(step, Box::new(variables))
+    }
+
+    pub fn eol(step: Eol) -> Self {
+        Self::Eol(step)
+    }
+
     pub fn step(&self) -> Step {
         match &self {
             StepTo::Cont(cont, _) => Step::Cont(cont.clone()),

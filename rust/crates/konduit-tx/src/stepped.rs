@@ -1,32 +1,37 @@
-use crate::{ChannelData, Stepping};
+use crate::{Bounds, Channel, StepTo};
 
 /// Encapsulate the current channel data, together with a valid stepping.
 #[derive(Debug, Clone)]
 pub struct Stepped {
-    data: ChannelData,
-    stepping: Stepping,
+    channel: Channel,
+    step_to: StepTo,
+    bounds: Bounds,
 }
 
 impl Stepped {
-    pub fn new(data: ChannelData, stepping: Stepping) -> Self {
-        Self { data, stepping }
+    pub fn new(channel: Channel, step_to: StepTo, bounds: Bounds) -> Self {
+        Self {
+            channel,
+            step_to,
+            bounds,
+        }
     }
 
-    pub fn data(&self) -> &ChannelData {
-        &self.data
+    pub fn channel(&self) -> &Channel {
+        &self.channel
     }
 
-    pub fn stepping(&self) -> &Stepping {
-        &self.stepping
+    pub fn step_to(&self) -> &StepTo {
+        &self.step_to
     }
 
-    pub fn cont_data(&self) -> Option<ChannelData> {
-        self.stepping.variables().map(|v| {
-            ChannelData::new(
-                v.amount().clone(),
-                self.data.constants().clone(),
-                v.stage().clone(),
-            )
-        })
+    pub fn bounds(&self) -> &Bounds {
+        &self.bounds
+    }
+
+    pub fn cont_data(&self) -> Option<Channel> {
+        self.step_to
+            .variables()
+            .map(|v| Channel::new(self.channel.constants().clone(), v.clone()))
     }
 }

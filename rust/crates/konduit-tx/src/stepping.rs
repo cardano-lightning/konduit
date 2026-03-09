@@ -4,7 +4,7 @@ use konduit_data::{
     Cont, Duration, Eol, Lock, Pending, Receipt, Secret, Stage, Step, Unpend, Used,
 };
 
-use crate::{Bounds, StepTo, channel_variables::Variables, step_and::StepAnd};
+use crate::{Bounds, StepTo, step_and::StepAnd, variables::Variables};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {

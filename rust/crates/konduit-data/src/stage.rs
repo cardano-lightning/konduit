@@ -20,8 +20,8 @@ impl Stage {
     pub fn possible_steps(&self) -> Vec<PossibleStep> {
         match self {
             Stage::Opened(_, _) => vec![PossibleStep::Add, PossibleStep::Close],
-            Stage::Closed(_, _, duration) => vec![PossibleStep::Elapse {
-                after: duration.clone(),
+            Stage::Closed(_, _, elapse_at) => vec![PossibleStep::Elapse {
+                after: elapse_at.clone(),
             }],
             Stage::Responded(_, pendings) => {
                 if pendings.is_empty() {
@@ -36,6 +36,14 @@ impl Stage {
                         .collect::<Vec<_>>()
                 }
             }
+        }
+    }
+
+    pub fn label(&self) -> &str {
+        match self {
+            Stage::Opened(_, _) => "Opened",
+            Stage::Closed(_, _, _) => "Closed",
+            Stage::Responded(_, _) => "Responded",
         }
     }
 }

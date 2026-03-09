@@ -1,4 +1,4 @@
-use konduit_data::{Duration, Receipt, Secret};
+use konduit_data::{Duration, Receipt};
 
 /// Some intermediary between `Step`, `Intent` and `Evidence`.
 ///

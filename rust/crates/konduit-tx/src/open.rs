@@ -1,25 +1,23 @@
 use cardano_sdk::{Address, Credential, NetworkId, Output, PlutusData, address::kind};
-use konduit_data::{Constants, Datum, Stage};
+use konduit_data::{Constants, Stage};
 
-use crate::{ChannelData, konduit_address};
+use crate::{Channel, Variables, konduit_address};
 
 #[derive()]
-pub struct Open(ChannelData, Option<Credential>);
+pub struct Open(Channel, Option<Credential>);
 
 impl Open {
     pub fn new(amount: u64, constants: Constants, delegation: Option<Credential>) -> Self {
-        Self(
-            ChannelData::new(amount, constants, Stage::Opened(0, vec![])),
-            delegation,
-        )
+        let variables = Variables::new(amount, Stage::Opened(0, vec![]));
+        Self(Channel::new(constants, variables), delegation)
     }
 
     /// Specify any kind of output. Can start a channel "mid-lifecycle".
-    pub fn new_raw(data: ChannelData, delegation: Option<Credential>) -> Self {
+    pub fn new_raw(data: Channel, delegation: Option<Credential>) -> Self {
         Self(data, delegation)
     }
 
-    pub fn data(&self) -> &ChannelData {
+    pub fn data(&self) -> &Channel {
         &self.0
     }
 

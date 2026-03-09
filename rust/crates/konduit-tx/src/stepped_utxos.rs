@@ -36,7 +36,7 @@ impl SteppedUtxos {
     pub fn steps(&self) -> Vec<Step> {
         self.0
             .iter()
-            .map(|x| x.data().stepping().step())
+            .map(|x| x.data().step_to().step())
             .collect::<Vec<_>>()
     }
 
