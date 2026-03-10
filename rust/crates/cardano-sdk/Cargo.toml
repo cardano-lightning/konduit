@@ -10,18 +10,14 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
 clap = ["dep:clap"]
 serde = ["dep:serde"]
 test-utils = ["dep:proptest"]
-wasm = ["dep:wasm-bindgen"]
-
-[lib]
-crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
@@ -44,13 +40,6 @@ clap = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 # -F test-utils
 proptest = { workspace = true, optional = true }
-# -F wasm
-wasm-bindgen = { workspace = true, optional = true }
-
-[target.'cfg(target_family="wasm")'.dependencies]
-console_error_panic_hook.workspace = true
-console_log.workspace = true
-getrandom = { workspace = true, features = ["js"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 env_logger.workspace = true
@@ -58,3 +47,6 @@ env_logger.workspace = true
 [dev-dependencies]
 indoc.workspace = true
 proptest.workspace = true
+
+[target.'cfg(target_family="wasm")'.dependencies]
+getrandom = { workspace = true, features = ["js"] }

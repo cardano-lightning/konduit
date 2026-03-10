@@ -1,8 +1,7 @@
-use cardano_connector_client::CardanoConnector;
+use crate::config::consumer::Config;
+use cardano_connector::CardanoConnector;
 use konduit_data::{Keytag, Tag};
 use tokio::runtime::Runtime;
-
-use crate::config::consumer::Config;
 
 /// Show
 #[derive(Debug, clap::Subcommand)]

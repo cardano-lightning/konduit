@@ -86,34 +86,3 @@ impl<'a> From<Keytag> for PlutusData<'a> {
         Self::bytes(value.0)
     }
 }
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::wasm;
-    use cardano_sdk::{VerificationKey, wasm::Result, wasm_proxy};
-    use std::{ops::Deref, str::FromStr};
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
-        Keytag
-    }
-
-    #[wasm_bindgen]
-    impl Keytag {
-        #[wasm_bindgen(constructor, js_name = "new")]
-        pub fn _wasm_new(key: &VerificationKey, tag: &wasm::Tag) -> Self {
-            Self(super::Keytag::new(*key, tag.clone().into()))
-        }
-
-        #[wasm_bindgen(js_name = "parse")]
-        pub fn _wasm_parse(s: &str) -> Result<Self> {
-            Ok(Self(super::Keytag::from_str(s)?))
-        }
-
-        #[wasm_bindgen(js_name = "toString")]
-        pub fn _wasm_to_string(&self) -> String {
-            self.deref().to_string()
-        }
-    }
-}

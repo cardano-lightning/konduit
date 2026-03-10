@@ -1,10 +1,10 @@
 {
-	"entryPoints": ["./konduit-wasm-*-browser/konduit_wasm.d.ts"],
+	"entryPoints": ["./konduit-wasm-*-black-box/konduit_wasm.d.ts"],
   "tsconfig": "./tsconfig.typedoc.json",
 	"out": "./docs",
 	"plugin": ["typedoc-theme-oxide"],
   "theme": "oxide",
-	"name": "Konduit WASM (browser)",
+	"name": "Konduit WASM",
   "readme": "none",
 	"includeVersion": true,
 	"typePrintWidth": 100

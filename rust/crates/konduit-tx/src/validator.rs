@@ -1,11 +1,17 @@
 use anyhow::anyhow;
-use cardano_sdk::{Hash, PlutusScript, PlutusVersion};
+use cardano_sdk::{Credential, Hash, PlutusScript, PlutusVersion};
 use std::{collections::BTreeMap, sync::LazyLock};
 
 // TODO: embed the whole blueprint? blueprint_json
 pub struct KonduitValidator {
     pub hash: Hash<28>,
     pub script: PlutusScript,
+}
+
+impl KonduitValidator {
+    pub fn to_credential(&self) -> Credential {
+        Credential::from_script(self.hash)
+    }
 }
 
 pub fn plutus_version_from_str(s: &str) -> anyhow::Result<PlutusVersion> {

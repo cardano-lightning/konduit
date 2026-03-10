@@ -1,5 +1,5 @@
 use crate::config::{self};
-use cardano_connector_client::CardanoConnector;
+use cardano_connector::CardanoConnector;
 use cardano_sdk::{Address, Credential, Hash, Input, Value, address::kind};
 use konduit_data::{Keytag, Pending, Used};
 use konduit_tx::{ChannelOutput, KONDUIT_VALIDATOR, Utxo, Utxos, filter_channels};

@@ -59,7 +59,7 @@ impl LeakableSigningKey {
         sk: &SigningKey,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
-        unsafe { serializer.serialize_str(&hex::encode(SigningKey::leak(sk.clone()))) }
+        serializer.serialize_str(&unsafe { hex::encode(SigningKey::leak(sk.clone())) })
     }
 
     #[cfg(feature = "serde")]

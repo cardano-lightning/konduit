@@ -11,6 +11,7 @@ primary_region = 'ams'
   FX_EVERY = '60s'
   KONDUIT_DB_PATH = '/var/konduit-server/db'
   KONDUIT_SERVER_HOST = '0.0.0.0'
+  KONDUIT_HOST_ADDRESS = 'addr_test1vrpynvza5vswczszkjhe5cvqz2awmzukf84xa5wway8durqpmfm2m'
   # Secrets can be declared and pushed using 'fly secrets set' and `fly secrets deploy'.
   # For example:
   #
@@ -23,7 +24,7 @@ primary_region = 'ams'
   destination = '/var/konduit-server'
 
 [http_service]
-  internal_port = 4444
+  internal_port = 5663
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
@@ -32,4 +33,3 @@ primary_region = 'ams'
 [[vm]]
   cpus = 2
   memory = '512mb'
-  memory_mb = 512

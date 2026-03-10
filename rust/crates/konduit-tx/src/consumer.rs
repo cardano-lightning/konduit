@@ -1,16 +1,14 @@
+use crate::{
+    Bounds, ChannelOutput, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, NetworkParameters, Utxos,
+    filter_channels, konduit_reference, wallet_inputs,
+};
 use anyhow::anyhow;
-use std::{collections::BTreeMap, iter};
-
 use cardano_sdk::{
     Address, ChangeStrategy, Credential, Hash, Input, Output, PlutusData, SlotBound, Transaction,
     Value, VerificationKey, transaction::state::ReadyForSigning,
 };
 use konduit_data::{Constants, Cont, Duration, Eol, Redeemer, Stage, Step, Tag, Unpend};
-
-use crate::{
-    Bounds, ChannelOutput, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, NetworkParameters, Utxos,
-    filter_channels, konduit_reference, wallet_inputs,
-};
+use std::{collections::BTreeMap, iter};
 
 pub struct OpenIntent {
     pub tag: Tag,

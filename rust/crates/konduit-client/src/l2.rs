@@ -2,29 +2,31 @@ use crate::{
     Adaptor,
     core::{
         AdaptorInfo, ChequeBody, Duration, Invoice, Lock, Locked, Quote, Receipt, SigningKey,
-        Squash, SquashBody, SquashStatus, Tag, VerificationKey,
+        Squash, SquashBody, SquashStatus,
     },
-    time::{SystemTime, UNIX_EPOCH},
 };
 use anyhow::{Context, anyhow};
-use std::ops::Deref;
+use http_client::HttpClient;
+use web_time::{SystemTime, UNIX_EPOCH};
 
-pub struct Client {
-    adaptor: Adaptor,
-    signing_key: SigningKey,
-    tag: Tag,
+pub struct Client<'a, Http: HttpClient> {
+    adaptor: &'a Adaptor<Http>,
+    signing_key: &'a SigningKey,
 }
 
-impl Client {
-    pub fn new(adaptor: Adaptor, signing_key: SigningKey, tag: Tag) -> Self {
+impl<'a, Http> Client<'a, Http>
+where
+    Http: HttpClient,
+    Http::Error: Into<anyhow::Error>,
+{
+    pub fn new(adaptor: &'a Adaptor<Http>, signing_key: &'a SigningKey) -> Self {
         Self {
             adaptor,
             signing_key,
-            tag,
         }
     }
 
-    pub fn info(&self) -> &AdaptorInfo {
+    pub fn info(&self) -> &AdaptorInfo<()> {
         self.adaptor.info()
     }
 
@@ -38,11 +40,7 @@ impl Client {
         self.adaptor.receipt().await
     }
 
-    pub async fn pay(
-        &self,
-        invoice: &str,
-        quote: impl Deref<Target = Quote>,
-    ) -> anyhow::Result<SquashStatus> {
+    pub async fn pay(&self, invoice: &str, quote: &Quote) -> anyhow::Result<SquashStatus> {
         let payment_hash = invoice
             .parse::<Invoice>()
             .context("failed to parse bolt11 invoice")?
@@ -57,17 +55,21 @@ impl Client {
 
         let body = ChequeBody::new(quote.index, quote.amount, timeout, Lock(payment_hash));
 
-        let locked = Locked::make(&self.signing_key, &self.tag, body);
+        let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
+
+        let locked = Locked::make(self.signing_key, tag, body);
 
         self.adaptor.pay(invoice, locked).await
     }
 
     pub async fn squash(&self, squash_body: SquashBody) -> anyhow::Result<SquashStatus> {
-        let squash = Squash::make(&self.signing_key, &self.tag, squash_body);
+        let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
+        let squash = Squash::make(self.signing_key, tag, squash_body);
         self.adaptor.squash(squash).await
     }
 
     pub async fn sync(&self, squash: SquashStatus, and_confirm: bool) -> anyhow::Result<()> {
+        let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
         match squash {
             SquashStatus::Complete => {
                 log::info!("nothing to squash");
@@ -84,10 +86,10 @@ impl Client {
             SquashStatus::Incomplete(st) => {
                 log::info!("squash incomplete; verifying...");
 
-                let verification_key = VerificationKey::from(&self.signing_key);
+                let verification_key = self.signing_key.to_verification_key();
 
                 // 1. Verify the current squash
-                if !st.current.verify(&verification_key, &self.tag) {
+                if !st.current.verify(&verification_key, tag) {
                     return Err(anyhow!("current squash does not verify"));
                 }
                 log::info!("currently squashed = {}", st.current.amount());
@@ -107,7 +109,7 @@ impl Client {
                     // and released it.
                     // - the locked cheque was still emitted (signed) by the consumer, so they
                     // definitely intented to make that payment.
-                    if !unlocked.verify_no_time(&verification_key, &self.tag) {
+                    if !unlocked.verify_no_time(&verification_key, tag) {
                         return Err(anyhow!("current squash does not verify"));
                     }
 
@@ -128,37 +130,6 @@ impl Client {
 
                 Box::pin(self.sync(res, and_confirm)).await
             }
-        }
-    }
-}
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use crate::{
-        core::{
-            SigningKey,
-            wasm::{AdaptorInfo, Tag},
-        },
-        wasm::Adaptor,
-        wasm_proxy,
-    };
-    use std::ops::Deref;
-    use wasm_bindgen::prelude::*;
-
-    wasm_proxy!(Client);
-
-    #[wasm_bindgen]
-    impl Client {
-        #[wasm_bindgen(js_name = "new")]
-        pub fn _wasm_new(adaptor: &Adaptor, signing_key: &SigningKey, tag: &Tag) -> Self {
-            let signing_key = signing_key.clone();
-            let tag = tag.deref().clone();
-            Self::from(super::Client::new(adaptor.clone().into(), signing_key, tag))
-        }
-
-        #[wasm_bindgen(getter, js_name = "info")]
-        pub fn _wasm_info(&self) -> AdaptorInfo {
-            self.adaptor.info().clone().into()
         }
     }
 }

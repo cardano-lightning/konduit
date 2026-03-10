@@ -144,13 +144,3 @@ impl<'a> From<SquashBody> for PlutusData<'a> {
         ])
     }
 }
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use cardano_sdk::wasm_proxy;
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, PartialEq, Eq, Default)]
-        SquashBody
-    }
-}

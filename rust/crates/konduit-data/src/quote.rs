@@ -15,14 +15,3 @@ pub struct Quote {
     // pub payment_secret: [u8; 32],
     pub routing_fee: u64,
 }
-
-#[cfg(feature = "wasm")]
-pub mod wasm {
-    use cardano_sdk::wasm_proxy;
-    use serde::{Deserialize, Serialize};
-
-    wasm_proxy! {
-        #[derive(Debug, Clone, Serialize, Deserialize)]
-        Quote
-    }
-}

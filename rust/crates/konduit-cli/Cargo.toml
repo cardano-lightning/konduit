@@ -10,22 +10,17 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
-
-[features]
-default = [ "blockfrost" ]
-blockfrost = [ "cardano-connector-client/blockfrost" ]
-
 [dependencies]
 anyhow.workspace = true
-cardano-connector-client.workspace = true
+cardano-connector.workspace = true
+cardano-connector-direct.workspace = true
 cardano-sdk = { workspace = true, features = ["clap", "serde"] }
 clap.workspace = true
 dotenvy.workspace = true
 hex.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
+konduit-client.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 tokio.workspace = true
