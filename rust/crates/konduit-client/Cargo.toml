@@ -24,7 +24,7 @@ default = []
 cli = [
   "dep:clap",
   "dep:dotenvy",
-  "dep:http-client-native",
+  # "dep:http-client-native",
   # "dep:serde_json",
   "dep:tokio",
 ]
