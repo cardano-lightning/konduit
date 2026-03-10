@@ -42,7 +42,7 @@ where
         let consumer_channels = utxos_konduit
             .into_iter()
             .filter_map(|u| ChannelUtxo::try_from(u).ok())
-            .filter(move |u| u.data().constants().add_vkey.clone() == consumer)
+            .filter(move |u| u.data().constants().add_vkey == consumer)
             .map(|u| u.data().to_owned());
         Ok(consumer_channels)
     }

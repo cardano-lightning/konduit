@@ -2,7 +2,7 @@ use crate::core::{SigningKey, SquashStatus, Tag};
 use clap::Parser;
 use std::{io, io::Write};
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(author, version, about = "Konduit Consumer CLI")]
 pub struct Cli {
     #[command(subcommand)]
@@ -37,7 +37,7 @@ pub struct Cli {
     pub yes: bool,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Commands {
     /// Show info about the server
     Info,
