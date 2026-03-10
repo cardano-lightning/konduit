@@ -2,7 +2,6 @@ use cardano_sdk::VerificationKey;
 use konduit_data::{
     Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
 };
-use konduit_tx::ChannelOutput;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::cmp;
@@ -203,14 +202,14 @@ impl TryFrom<&L1Channel> for Retainer {
     }
 }
 
-impl TryFrom<&ChannelOutput> for Retainer {
+impl TryFrom<&konduit_tx::Channel> for Retainer {
     type Error = anyhow::Error;
 
-    fn try_from(value: &ChannelOutput) -> Result<Self, Self::Error> {
-        let Stage::Opened(subbed, useds) = value.stage.clone() else {
+    fn try_from(value: &konduit_tx::Channel) -> Result<Self, Self::Error> {
+        let Stage::Opened(subbed, useds) = value.stage().clone() else {
             return Err(anyhow::anyhow!("Not openened"));
         };
-        let amount = value.amount;
+        let amount = value.amount();
         Ok(Retainer {
             amount,
             subbed,

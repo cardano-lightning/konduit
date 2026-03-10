@@ -3,7 +3,7 @@ use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
 use konduit_data::{ChannelParameters, Keytag, Secret};
 use konduit_tx::{
-    Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences, filter_channels,
+    Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
 };
 use std::{collections::BTreeMap, iter, sync::Arc};
 
@@ -71,18 +71,22 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         let close_period = self.channel_parameters.close_period;
         let tag_length = self.channel_parameters.tag_length;
         let own_vkey = VerificationKey::from(&self.wallet);
-        let candidates = filter_channels(utxos, |co| {
-            [
-                co.constants.sub_vkey == own_vkey,
-                co.constants.close_period >= close_period,
-                co.constants.tag.len() <= tag_length,
-                co.stage.is_opened(),
-            ]
+        let candidates = utxos
             .iter()
-            .all(|&x| x)
-        })
-        .into_iter()
-        .filter_map(|(_, co)| Retainer::try_from(&co).ok().map(|r| (co.keytag(), r)));
+            .filter_map(|u| ChannelUtxo::try_from(u).ok())
+            .filter(|u| {
+                let channel = u.data();
+                let constants = channel.constants();
+                constants.sub_vkey == own_vkey
+                    && constants.close_period >= close_period
+                    && constants.tag.len() <= tag_length
+                    && channel.stage().is_opened()
+            })
+            .filter_map(|u| {
+                Retainer::try_from(u.data())
+                    .ok()
+                    .map(|r| (u.data().keytag(), r))
+            });
         let mut retainers = BTreeMap::new();
         for (keytag, retainer) in candidates {
             retainers
@@ -156,7 +160,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             .chain(snapshot.into_iter())
             .chain(self.wallet_utxos().await?.into_iter())
             .collect::<BTreeMap<_, _>>();
-        let upper_bound = Bounds::twenty_mins().upper;
+        let upper_bound = Bounds::twenty_mins().upper.expect("This returns `Some`!!");
         let mut tx = konduit_tx::adaptor::tx(
             &self.network_parameters,
             &self.tx_preferences,
