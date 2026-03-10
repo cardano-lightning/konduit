@@ -20,7 +20,7 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = ["cli"]
+default = []
 cli = [
   "dep:clap",
   "dep:dotenvy",

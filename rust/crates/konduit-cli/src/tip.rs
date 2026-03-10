@@ -68,7 +68,7 @@ impl fmt::Display for Consumer {
                 channel.constants().sub_vkey,
                 channel.constants().close_period
             )?;
-            display_stage(f, &channel.stage())?;
+            display_stage(f, channel.stage())?;
             writeln!(f, "  Amt : {}", channel.amount())?;
         }
         Ok(())
@@ -118,7 +118,7 @@ impl fmt::Display for Adaptor {
         for (input, channel) in self.channels.iter() {
             writeln!(f, "  Input : {}", input)?;
             writeln!(f, "  Keytag : {}", channel.keytag(),)?;
-            display_stage(f, &channel.stage())?;
+            display_stage(f, channel.stage())?;
             writeln!(f, "  Amt : {}", channel.amount())?;
         }
         Ok(())
