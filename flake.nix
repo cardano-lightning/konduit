@@ -33,6 +33,7 @@
         ...
       }: let
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
+        wasm-pack = pkgs.callPackage ./flake/wasm-pack.nix {};
         devShell = {
           name = "konduit-shell";
           shellHook = ''
@@ -48,7 +49,7 @@
               pkgs.typescript-language-server
               pkgs.openssl
               config.rust-project.toolchain
-              pkgs.wasm-pack
+              wasm-pack
               clang-unwrapped
               pkgs.just
             ]
