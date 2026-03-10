@@ -269,6 +269,7 @@ impl Transaction<state::InConstruction> {
                 params,
             )
             .inspect_err(|err| {
+                eprintln!("{}", err);
                 dump_tx_context(&tx.id(), &serialized_tx, &uplc_resolved_inputs);
             })?;
 
