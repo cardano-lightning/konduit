@@ -65,7 +65,7 @@ test test_foldr_cps() {
   let src = [1, 2, 3]
   let got <-
     foldr(src, [], fn(i, acc, return) { return([i, ..acc]) }, _)
-  let want = [3, 2, 1]
+  let want = [1, 2, 3]
   got == want
 }
 

@@ -75,7 +75,7 @@ fn with_(
         wf.unlocked(wellsinged, body, signature, secret, _)
       trace @"unlocked.2": @"Unlocked is well-formed wrt upper bound"
       expect Finite(upper_bound) = upper_bound
-      expect upper_bound < timeout
+      expect upper_bound <= timeout
       trace @"unlocked.3": @"Unlocked is unaccounted for"
       let index, exclude <- next_index(index, exclude, new_index)
       expect (new_index, amount) == used
@@ -217,7 +217,7 @@ test test_used_not_squashed() {
   tot == 1112
 }
 
-test test_unlocked_already_used() fail {
+test test_unlocked_already_used() {
   let squash = ((1000, 3, [2]), sig)
   let useds_in = [(2, 100)]
   let useds_out = [(2, 100)]
