@@ -20,6 +20,11 @@ pub fn tx(
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let network_id = network_parameters.network_id;
     let reference_inputs: Vec<_> = reference_utxo.iter().map(|x| x.0.clone()).collect();
+    if !steppeds.inputs().is_empty() && reference_inputs.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Reference script required when stepping channels"
+        ));
+    }
     let gain = steppeds.gain() - opens.iter().map(|x| x.buffered_amount()).sum::<u64>() as i64;
     let fuel_amount = cmp::max(FEE_BUFFER, FEE_BUFFER.saturating_sub_signed(gain));
     let fuel_inputs = fuel::select(fuel, fuel_amount)?;

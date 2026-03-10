@@ -4,6 +4,8 @@ use konduit_data::Duration;
 pub enum StepError {
     #[error("Step had no effect on variables")]
     NoStep,
+    #[error("Lower bound required but not set")]
+    NoLower,
     #[error("Too early: Set {0}, Need > {0}")]
     Early(Duration, Duration),
     #[error("Pair (Stage, Step) ({0}, {1}) are incompat")]

@@ -2,13 +2,11 @@
 mod validator;
 pub use validator::*;
 
-mod error_and;
 /// Generic containers
 mod utxo;
 mod utxo_and;
 mod utxos;
 
-pub use error_and::ErrorAnd;
 pub use utxo::Utxo;
 pub use utxo_and::UtxoAnd;
 pub use utxos::Utxos;
@@ -57,4 +55,4 @@ pub use network_parameters::NetworkParameters;
 
 // pub mod adaptor;
 // pub mod admin;
-// pub mod consumer;
+pub mod consumer;

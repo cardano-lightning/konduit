@@ -74,7 +74,7 @@ pub struct Channel {
     variables: Variables,
 }
 
-type SteppedElseChannel = Result<Stepped, (Channel, StepError)>;
+pub type SteppedElseChannel = Result<Stepped, (Channel, StepError)>;
 
 impl Channel {
     pub fn new(constants: Constants, variables: Variables) -> Self {
@@ -150,7 +150,7 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
-    fn close(self, upper: &Duration) -> SteppedElseChannel {
+    pub fn close(self, upper: &Duration) -> SteppedElseChannel {
         let variables = match self.variables.close(upper, &self.constants().close_period) {
             Ok(variables) => variables,
             Err(err) => return Err((self, err)),
@@ -159,7 +159,7 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
-    fn elapse(self, lower: &Duration) -> SteppedElseChannel {
+    pub fn elapse(self, lower: &Duration) -> SteppedElseChannel {
         if let Err(err) = self.variables.elapse(lower) {
             return Err((self, err));
         };
@@ -266,5 +266,28 @@ impl Channel {
         };
         let step_to = StepTo::cont(Cont::Expire(unpends), variables);
         Ok(Stepped::new(self, step_to, Bounds::lower(*lower)))
+    }
+
+    pub fn end(self, lower: Option<&Duration>) -> SteppedElseChannel {
+        // FIXME :: this shouldn't be a clone
+        let Stage::Responded(_pendings_amount, pendings) = self.stage().clone() else {
+            let label = self.stage().label().to_string();
+            return Err((self, StepError::pair(label, "End")));
+        };
+        let bounds = if !pendings.is_empty() {
+            let Some(lower) = lower else {
+                return Err((self, StepError::NoLower));
+            };
+            for pending in pendings.iter() {
+                if pending.timeout >= *lower {
+                    return Err((self, StepError::Early(*lower, pending.timeout)));
+                }
+            }
+            Bounds::lower(*lower)
+        } else {
+            Bounds::default()
+        };
+        let step_to = StepTo::eol(Eol::End);
+        Ok(Stepped::new(self, step_to, bounds))
     }
 }
