@@ -25,6 +25,7 @@ cli = [
   "dep:clap",
   "dep:dotenvy",
   "dep:http-client-native",
+  # "dep:serde_json",
   "dep:tokio",
 ]
 
@@ -37,13 +38,14 @@ http-client.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
-serde_json.workspace = true
 web-time.workspace = true
 # -F cli
 clap = { workspace = true, features = ["env"], optional = true }
 dotenvy = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
-http-client-native = { workspace = true, optional = true }
+# FIXME :: Disabled to appease cargo machete, and while main is broken
+# serde_json = { workspace = true, optional = true }
+# http-client-native = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
