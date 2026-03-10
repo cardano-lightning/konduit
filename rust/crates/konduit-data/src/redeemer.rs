@@ -65,12 +65,12 @@ pub enum Step {
 
 impl Step {
     pub fn is_adaptor(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Step::Cont(Cont::Sub(_, _))
-            | Step::Cont(Cont::Respond(_, _))
-            | Step::Cont(Cont::Unlock(_)) => true,
-            _ => false,
-        }
+                | Step::Cont(Cont::Respond(_, _))
+                | Step::Cont(Cont::Unlock(_))
+        )
     }
 
     pub fn is_consumer(&self) -> bool {

@@ -32,11 +32,11 @@ impl SteppedUtxo {
     }
 
     fn consumer_key(&self) -> VerificationKey {
-        self.data().channel().constants().add_vkey.clone()
+        self.data().channel().constants().add_vkey
     }
 
     fn adaptor_key(&self) -> VerificationKey {
-        self.data().channel().constants().sub_vkey.clone()
+        self.data().channel().constants().sub_vkey
     }
 
     pub fn signer(&self) -> VerificationKey {

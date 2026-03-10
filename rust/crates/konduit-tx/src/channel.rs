@@ -75,7 +75,7 @@ pub struct Channel {
     variables: Variables,
 }
 
-pub type SteppedElseChannel = Result<Stepped, (Channel, StepError)>;
+pub type SteppedElseChannel = Result<Stepped, (Box<Channel>, StepError)>;
 
 impl Channel {
     pub fn new(constants: Constants, variables: Variables) -> Self {
@@ -102,7 +102,7 @@ impl Channel {
     }
 
     pub fn stage(&self) -> &Stage {
-        &self.variables.stage()
+        self.variables.stage()
     }
 
     pub fn amount(&self) -> u64 {
@@ -128,10 +128,11 @@ impl Channel {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, amount: u64) -> SteppedElseChannel {
         let variables = match self.variables.add(amount) {
             Ok(variables) => variables,
-            Err(err) => return Err((self, err)),
+            Err(err) => return Err((Box::new(self), err)),
         };
         let step_to = StepTo::cont(Cont::Add, variables);
         Ok(Stepped::new(self, step_to, Bounds::default()))
@@ -140,20 +141,20 @@ impl Channel {
     pub fn sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
         let Stage::Opened(subbed, useds) = self.stage() else {
             let label = self.stage().label().to_string();
-            return Err((self, StepError::pair(label, "Sub")));
+            return Err((Box::new(self), StepError::pair(label, "Sub")));
         };
-        let (unlockeds, useds) = receipt.next_unlockeds_useds(&useds, upper);
+        let (unlockeds, useds) = receipt.next_unlockeds_useds(useds, upper);
         let squash = receipt.squash.clone();
         let absolute_owed = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
         let relative_owed = absolute_owed.saturating_sub(*subbed);
         let gain = cmp::min(relative_owed, self.amount());
         if gain == 0 {
-            return Err((self, StepError::NoStep));
+            return Err((Box::new(self), StepError::NoStep));
         }
         // It ought to be impossible to fail
         let variables = match self.variables.sub(gain, useds) {
             Ok(variables) => variables,
-            Err(err) => return Err((self, err)),
+            Err(err) => return Err((Box::new(self), err)),
         };
         let step_to = StepTo::cont(Cont::Sub(squash, unlockeds), variables);
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
@@ -162,7 +163,7 @@ impl Channel {
     pub fn close(self, upper: &Duration) -> SteppedElseChannel {
         let variables = match self.variables.close(upper, &self.constants().close_period) {
             Ok(variables) => variables,
-            Err(err) => return Err((self, err)),
+            Err(err) => return Err((Box::new(self), err)),
         };
         let step_to = StepTo::cont(Cont::Close, variables);
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
@@ -170,7 +171,7 @@ impl Channel {
 
     pub fn elapse(self, lower: &Duration) -> SteppedElseChannel {
         if let Err(err) = self.variables.elapse(lower) {
-            return Err((self, err));
+            return Err((Box::new(self), err));
         };
         Ok(Stepped::new(
             self,
@@ -182,10 +183,10 @@ impl Channel {
     pub fn respond(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
         let Stage::Closed(subbed, useds, _) = self.stage() else {
             let label = self.stage().label().to_string();
-            return Err((self, StepError::pair(label, "Respond")));
+            return Err((Box::new(self), StepError::pair(label, "Respond")));
         };
         let (cheques, pendings, useds_amount) =
-            receipt.next_cheques_pendings_useds_amount(&useds, &upper);
+            receipt.next_cheques_pendings_useds_amount(useds, upper);
         let squash = receipt.squash.clone();
         let absolute_owed = squash.amount() + useds_amount;
         let relative_owed = absolute_owed.saturating_sub(*subbed);
@@ -193,7 +194,7 @@ impl Channel {
         // It ought to be impossible to fail
         let variables = match self.variables.respond(gain, pendings) {
             Ok(variables) => variables,
-            Err(err) => return Err((self, err)),
+            Err(err) => return Err((Box::new(self), err)),
         };
         let step_to = StepTo::cont(Cont::Respond(squash, cheques), variables);
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
@@ -211,7 +212,7 @@ impl Channel {
     pub fn unlock_with_secrets(self, secrets: Vec<Secret>, upper: &Duration) -> SteppedElseChannel {
         let Stage::Responded(_pendings_amount, pendings) = self.stage() else {
             let label = self.stage().label().to_string();
-            return Err((self, StepError::pair(label, "Unlock")));
+            return Err((Box::new(self), StepError::pair(label, "Unlock")));
         };
         let lookup = secrets
             .into_iter()
@@ -240,7 +241,7 @@ impl Channel {
         // It ought to be impossible to fail
         let variables = match self.variables.unlock(gain, pendings) {
             Ok(variables) => variables,
-            Err(err) => return Err((self, err)),
+            Err(err) => return Err((Box::new(self), err)),
         };
         let step_to = StepTo::cont(Cont::Unlock(unpends), variables);
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
@@ -249,7 +250,7 @@ impl Channel {
     pub fn expire(self, lower: &Duration) -> SteppedElseChannel {
         let Stage::Responded(_pendings_amount, pendings) = &self.stage() else {
             let label = self.stage().label().to_string();
-            return Err((self, StepError::pair(label, "Expire")));
+            return Err((Box::new(self), StepError::pair(label, "Expire")));
         };
         let map = |p: &Pending| {
             if p.timeout < *lower {
@@ -260,7 +261,7 @@ impl Channel {
         };
         let unpends = pendings.iter().map(map).collect::<Vec<_>>();
         if unpends.iter().all(|x| *x == Unpend::Continue) {
-            return Err((self, StepError::NoStep));
+            return Err((Box::new(self), StepError::NoStep));
         };
         let pendings = pendings
             .iter()
@@ -271,7 +272,7 @@ impl Channel {
             .collect::<Vec<_>>();
         let variables = match self.variables.expire(pendings) {
             Ok(variables) => variables,
-            Err(err) => return Err((self, err)),
+            Err(err) => return Err((Box::new(self), err)),
         };
         let step_to = StepTo::cont(Cont::Expire(unpends), variables);
         Ok(Stepped::new(self, step_to, Bounds::lower(*lower)))
@@ -281,15 +282,15 @@ impl Channel {
         // FIXME :: this shouldn't be a clone
         let Stage::Responded(_pendings_amount, pendings) = self.stage().clone() else {
             let label = self.stage().label().to_string();
-            return Err((self, StepError::pair(label, "End")));
+            return Err((Box::new(self), StepError::pair(label, "End")));
         };
         let bounds = if !pendings.is_empty() {
             let Some(lower) = lower else {
-                return Err((self, StepError::NoLower));
+                return Err((Box::new(self), StepError::NoLower));
             };
             for pending in pendings.iter() {
                 if pending.timeout >= *lower {
-                    return Err((self, StepError::Early(*lower, pending.timeout)));
+                    return Err((Box::new(self), StepError::Early(*lower, pending.timeout)));
                 }
             }
             Bounds::lower(*lower)

@@ -1,11 +1,6 @@
-use crate::{
-    Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, SteppedUtxos, Utxos,
-    find_reference_script,
-};
-use anyhow::anyhow;
+use crate::{Bounds, ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script};
 use cardano_sdk::{
-    Address, Hash, Input, Output, Transaction, VerificationKey, address::kind,
-    transaction::state::ReadyForSigning,
+    Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
 use konduit_data::{Constants, Duration, Stage, Tag};
 use std::collections::BTreeMap;
@@ -72,7 +67,7 @@ pub fn tx(
 
     let opens = opens
         .into_iter()
-        .map(|o| crate::Open::new(o.amount, o.constant(wallet.clone()), None))
+        .map(|o| crate::Open::new(o.amount, o.constant(*wallet), None))
         .collect::<Vec<_>>();
 
     let wallet_address: Address<kind::Any> =

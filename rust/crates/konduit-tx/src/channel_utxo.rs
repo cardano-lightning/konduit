@@ -1,19 +1,11 @@
 use cardano_sdk::{Input, Output};
-use konduit_data::{Constants, Datum, Duration, PossibleStep, Receipt, Secret, Stage};
+use konduit_data::{Duration, PossibleStep, Receipt, Secret};
 
 use crate::{
-    KONDUIT_VALIDATOR, StepError, SteppedUtxo, Utxo,
+    StepError, SteppedUtxo, Utxo,
     channel::{self, Channel, SteppedElseChannel},
     utxo_and::UtxoAnd,
 };
-
-fn konduit_datum(constants: Constants, stage: Stage) -> Datum {
-    Datum {
-        own_hash: KONDUIT_VALIDATOR.hash,
-        constants,
-        stage,
-    }
-}
 
 // Process:
 // - Find channels.
@@ -42,7 +34,7 @@ impl TryFrom<Utxo> for ChannelUtxo {
     }
 }
 
-type SteppedElseChannelUtxo = Result<SteppedUtxo, (ChannelUtxo, StepError)>;
+type SteppedElseChannelUtxo = Result<SteppedUtxo, (Box<ChannelUtxo>, StepError)>;
 
 impl ChannelUtxo {
     pub fn possible_steps(&self) -> Vec<PossibleStep> {
@@ -52,10 +44,11 @@ impl ChannelUtxo {
     fn rewrap(utxo: Utxo, result: SteppedElseChannel) -> SteppedElseChannelUtxo {
         match result {
             Ok(data) => Ok(UtxoAnd::new(utxo, data)),
-            Err((data, err)) => Err((UtxoAnd::new(utxo, data), err)),
+            Err((data, err)) => Err((Box::new(UtxoAnd::new(utxo, *data)), err)),
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, amount: u64) -> SteppedElseChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().add(amount))
     }

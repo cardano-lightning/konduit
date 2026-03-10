@@ -39,13 +39,15 @@ pub use stepped_utxo::SteppedUtxo;
 pub use stepped_utxos::SteppedUtxos;
 pub use variables::Variables;
 
-/// Tx
-pub mod fuel;
-pub mod tx;
-
-///
+/// Network params
 mod network_parameters;
 pub use network_parameters::NetworkParameters;
+
+/// Fuel / wallet utxos
+pub mod fuel;
+
+/// Tx
+pub mod tx;
 
 pub mod adaptor;
 pub mod admin;

@@ -66,13 +66,13 @@ impl SteppedUtxos {
     pub fn specified_signatories(&self) -> Vec<Hash<28>> {
         self.signers()
             .iter()
-            .map(|x| Hash::<28>::new(x))
+            .map(Hash::<28>::new)
             .collect::<Vec<_>>()
     }
 
     pub fn bounds(&self) -> Bounds {
         self.0.iter().fold(Bounds::default(), |bounds, item| {
-            bounds.intersect(&item.bounds())
+            bounds.intersect(item.bounds())
         })
     }
 

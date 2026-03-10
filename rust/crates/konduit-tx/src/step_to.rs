@@ -1,6 +1,6 @@
 use konduit_data::{Cont, Eol, Step};
 
-use crate::{Variables, variables};
+use crate::Variables;
 
 #[derive(Debug, Clone)]
 pub enum StepTo {

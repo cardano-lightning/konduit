@@ -1,4 +1,4 @@
-use konduit_data::{Duration, Pending, Stage, Unpend, Used};
+use konduit_data::{Duration, Pending, Stage, Used};
 
 use crate::StepError;
 
@@ -97,7 +97,7 @@ impl Variables {
         ))
     }
 
-    pub fn end(&self, lower: &Duration) -> Result<(), StepError> {
-        todo!("Not yet implemented")
+    pub fn end(&self, _lower: Option<&Duration>) -> Result<(), StepError> {
+        panic!("Use `Channel::end` instead.")
     }
 }

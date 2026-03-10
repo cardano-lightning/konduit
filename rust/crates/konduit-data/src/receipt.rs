@@ -121,7 +121,7 @@ impl Receipt {
         useds: &[Used],
         upper: &Duration,
     ) -> (Vec<Unlocked>, Vec<Used>) {
-        let used_indices = useds.iter().map(|x| x.index.clone()).collect::<Vec<_>>();
+        let used_indices = useds.iter().map(|x| x.index).collect::<Vec<_>>();
         let unlockeds = self
             .cheques
             .iter()
@@ -132,7 +132,7 @@ impl Receipt {
             .iter()
             .filter(|u| !self.squash.is_index_squashed(u.index))
             .cloned()
-            .chain(unlockeds.iter().map(|u| Used::from(u)))
+            .chain(unlockeds.iter().map(Used::from))
             .collect::<Vec<_>>();
         useds.sort_by_key(|u| u.index);
         (unlockeds, useds)
@@ -144,7 +144,7 @@ impl Receipt {
         useds: &[Used],
         upper: &Duration,
     ) -> (Vec<Cheque>, Vec<Pending>, u64) {
-        let used_indices = useds.iter().map(|x| x.index.clone()).collect::<Vec<_>>();
+        let used_indices = useds.iter().map(|x| x.index).collect::<Vec<_>>();
         let cheques = self
             .cheques
             .iter()
