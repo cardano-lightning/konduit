@@ -1,8 +1,10 @@
 use anyhow::anyhow;
 use cardano_sdk::{
-    Address, Credential, Hash, NetworkId, PlutusScript, PlutusVersion, address::kind,
+    Address, Credential, Hash, Input, NetworkId, Output, PlutusScript, PlutusVersion, address::kind,
 };
 use std::{collections::BTreeMap, sync::LazyLock};
+
+use crate::Utxos;
 
 pub type Lovelace = u64;
 pub const MIN_ADA_BUFFER: Lovelace = 2_000_000;
@@ -16,6 +18,16 @@ pub fn konduit_address(
             .with_delegation(delegation.clone()),
         None => Address::new(network_id, KONDUIT_VALIDATOR.to_credential()),
     }
+}
+
+pub fn find_reference_script(utxos: &Utxos) -> Option<(Input, Output)> {
+    utxos
+        .iter()
+        .find(|(_i, o)| {
+            o.script()
+                .is_some_and(|s| Hash::<28>::from(s) == KONDUIT_VALIDATOR.hash)
+        })
+        .map(|(i, o)| (i.clone(), o.clone()))
 }
 
 // TODO: embed the whole blueprint? blueprint_json

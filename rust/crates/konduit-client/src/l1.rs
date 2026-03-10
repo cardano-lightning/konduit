@@ -87,18 +87,14 @@ where
             Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Input, Output)>>
         };
 
-        let utxos_wallet = if wallet_vk != consumer_vk {
-            Box::new(
-                all_utxos_at(
-                    self.connector,
-                    &Credential::from(&wallet_vk),
-                    stake_credential,
-                )
-                .await?,
+        let utxos_wallet = Box::new(
+            all_utxos_at(
+                self.connector,
+                &Credential::from(&wallet_vk),
+                stake_credential,
             )
-        } else {
-            Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Input, Output)>>
-        };
+            .await?,
+        );
 
         let mut tx = consumer::tx(
             &network_parameters,

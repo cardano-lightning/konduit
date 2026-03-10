@@ -1,14 +1,26 @@
 use crate::config::{self};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Address, Credential, Hash, Input, Value, address::kind};
-use konduit_data::{Keytag, Pending, Used};
-use konduit_tx::{ChannelOutput, KONDUIT_VALIDATOR, Utxo, Utxos, filter_channels};
+use konduit_data::{Pending, Used};
+use konduit_tx::{Channel, KONDUIT_VALIDATOR, Utxo, Utxos};
 use std::{collections::BTreeMap, fmt};
 
 pub struct Consumer {
     wallet: Utxos,
     reference_script: Option<Utxo>,
-    channels: BTreeMap<Input, ChannelOutput>,
+    channels: BTreeMap<Input, Channel>,
+}
+
+pub fn filter_channels(utxos: &Utxos, filter: impl Fn(&Channel) -> bool) -> Vec<(Input, Channel)> {
+    utxos
+        .iter()
+        .filter_map(|(i, o)| {
+            Channel::try_from(o)
+                .ok()
+                .filter(|c| filter(c))
+                .map(|c| (i.clone(), c))
+        })
+        .collect::<Vec<_>>()
 }
 
 impl Consumer {
@@ -28,7 +40,7 @@ impl Consumer {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let channels = filter_channels(&konduit_utxos, |co| co.constants.add_vkey == add_vkey)
+        let channels = filter_channels(&konduit_utxos, |co| co.constants().add_vkey == add_vkey)
             .into_iter()
             .collect();
         Ok(Self {
@@ -49,14 +61,15 @@ impl fmt::Display for Consumer {
         writeln!(f, "Channels : {}", self.channels.len())?;
         for (input, channel) in self.channels.iter() {
             writeln!(f, "  Input : {}", input)?;
-            writeln!(f, "  Tag : {}", channel.constants.tag)?;
+            writeln!(f, "  Tag : {}", channel.constants().tag)?;
             writeln!(
                 f,
                 "  Sub : {} || Close Period : {}",
-                channel.constants.sub_vkey, channel.constants.close_period
+                channel.constants().sub_vkey,
+                channel.constants().close_period
             )?;
-            display_stage(f, &channel.stage)?;
-            writeln!(f, "  Amt : {}", channel.amount)?;
+            display_stage(f, &channel.stage())?;
+            writeln!(f, "  Amt : {}", channel.amount())?;
         }
         Ok(())
     }
@@ -64,7 +77,7 @@ impl fmt::Display for Consumer {
 pub struct Adaptor {
     wallet: Utxos,
     reference_script: Option<Utxo>,
-    channels: BTreeMap<Input, ChannelOutput>,
+    channels: BTreeMap<Input, Channel>,
 }
 
 impl Adaptor {
@@ -83,7 +96,7 @@ impl Adaptor {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let channels = filter_channels(&konduit_utxos, |co| co.constants.sub_vkey == sub_vkey)
+        let channels = filter_channels(&konduit_utxos, |co| co.constants().sub_vkey == sub_vkey)
             .into_iter()
             .collect();
         Ok(Self {
@@ -104,13 +117,9 @@ impl fmt::Display for Adaptor {
         writeln!(f, "Channels : {}", self.channels.len())?;
         for (input, channel) in self.channels.iter() {
             writeln!(f, "  Input : {}", input)?;
-            writeln!(
-                f,
-                "  Keytag : {}",
-                Keytag::new(channel.constants.add_vkey, channel.constants.tag.clone())
-            )?;
-            display_stage(f, &channel.stage)?;
-            writeln!(f, "  Amt : {}", channel.amount)?;
+            writeln!(f, "  Keytag : {}", channel.keytag(),)?;
+            display_stage(f, &channel.stage())?;
+            writeln!(f, "  Amt : {}", channel.amount())?;
         }
         Ok(())
     }

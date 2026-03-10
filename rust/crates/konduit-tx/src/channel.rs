@@ -2,7 +2,8 @@ use std::{cmp, collections::BTreeMap};
 
 use cardano_sdk::{Output, Value};
 use konduit_data::{
-    Constants, Cont, Datum, Duration, Eol, Lock, Pending, Receipt, Secret, Stage, Unpend,
+    Constants, Cont, Datum, Duration, Eol, Keytag, Lock, Pending, Receipt, Secret, Stage, Tag,
+    Unpend,
 };
 
 use crate::{
@@ -82,6 +83,14 @@ impl Channel {
             constants,
             variables,
         }
+    }
+
+    pub fn tag(&self) -> &Tag {
+        &self.constants().tag
+    }
+
+    pub fn keytag(&self) -> Keytag {
+        Keytag::new(self.constants().add_vkey, self.tag().clone())
     }
 
     pub fn constants(&self) -> &Constants {
@@ -289,5 +298,13 @@ impl Channel {
         };
         let step_to = StepTo::eol(Eol::End);
         Ok(Stepped::new(self, step_to, bounds))
+    }
+
+    pub fn any_sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+        match self.stage() {
+            Stage::Opened(_, _) => self.sub(receipt, upper),
+            Stage::Closed(_, _, _) => self.respond(receipt, upper),
+            Stage::Responded(_, _) => self.unlock(receipt, upper),
+        }
     }
 }

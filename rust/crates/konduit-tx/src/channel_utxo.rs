@@ -107,4 +107,11 @@ impl ChannelUtxo {
     pub fn end(self, lower: Option<&Duration>) -> SteppedElseChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().end(lower))
     }
+
+    pub fn any_sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
+        Self::rewrap(
+            self.utxo().to_owned(),
+            self.data().to_owned().any_sub(receipt, upper),
+        )
+    }
 }

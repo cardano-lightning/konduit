@@ -47,12 +47,6 @@ pub mod tx;
 mod network_parameters;
 pub use network_parameters::NetworkParameters;
 
-// mod shared;
-// pub use shared::*;
-
-// pub mod channel_output;
-// pub mod step_to;
-
-// pub mod adaptor;
-// pub mod admin;
+pub mod adaptor;
+pub mod admin;
 pub mod consumer;

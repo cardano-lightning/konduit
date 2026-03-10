@@ -34,4 +34,9 @@ impl Stepped {
             .variables()
             .map(|v| Channel::new(self.channel.constants().clone(), v.clone()))
     }
+
+    pub fn gain(&self) -> i64 {
+        let cont_amount = self.step_to.variables().map_or(0, |v| v.amount());
+        self.channel().amount() as i64 - cont_amount as i64
+    }
 }

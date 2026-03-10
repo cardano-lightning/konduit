@@ -30,6 +30,7 @@ impl Cmd {
             min_total: 1_000_000,
         };
         let bounds = Bounds::twenty_mins();
+        let upper = bounds.upper.unwrap();
 
         Runtime::new()?.block_on(async {
             let protocol_parameters = connector.protocol_parameters().await?;
@@ -62,7 +63,7 @@ impl Cmd {
                 &own_key,
                 &receipts,
                 &utxos,
-                &bounds.upper,
+                &upper,
             )?;
             println!("Tx id :: {}", tx.id());
             tx.sign(&config.wallet);
