@@ -27,10 +27,14 @@ export function toTransaction(tip, meta, utxos) {
     index: meta.index,
     depth: Math.max(0, tip.height - meta.block_height),
     timestamp: Number(meta.block_time),
-    ...(meta.invalid_before != null && { invalid_before: Number(meta.invalid_before) }),
-    ...(meta.invalid_after != null && { invalid_after: Number(meta.invalid_after) }),
+    ...(meta.invalid_before != null && {
+      invalid_before: Number(meta.invalid_before),
+    }),
+    ...(meta.invalid_after != null && {
+      invalid_after: Number(meta.invalid_after),
+    }),
     ...partitionInputsOutputs(meta, utxos),
-  }
+  };
 }
 
 /**
@@ -42,7 +46,9 @@ export function toOutput(json) {
     value: json.amount,
     ...(json.data_hash != null && { datum_hash: json.data_hash }),
     ...(json.inline_datum != null && { datum_inline: json.inline_datum }),
-    ...(json.reference_script_hash != null && { reference_script_hash: json.reference_script_hash }),
+    ...(json.reference_script_hash != null && {
+      reference_script_hash: json.reference_script_hash,
+    }),
     ...(json.consumed_by_tx != null && { consumed_by: json.consumed_by_tx }),
   };
 }
@@ -64,8 +70,7 @@ export function partitionInputsOutputs(meta, utxos) {
     inputs: utxos.inputs
       .filter(
         (i) =>
-          !i.reference &&
-          (meta.valid_contract ? !i.collateral : i.collateral),
+          !i.reference && (meta.valid_contract ? !i.collateral : i.collateral),
       )
       .map((i) => ({
         transaction_id: i.tx_hash,
@@ -73,9 +78,7 @@ export function partitionInputsOutputs(meta, utxos) {
         ...toOutput(i),
       })),
     outputs: utxos.outputs
-      .filter((o) =>
-        meta.valid_contract ? !o.collateral : o.collateral,
-      )
+      .filter((o) => (meta.valid_contract ? !o.collateral : o.collateral))
       .map(toOutput),
   };
 }
