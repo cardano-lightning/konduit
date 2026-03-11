@@ -1,34 +1,69 @@
-# Cloudflare Workers OpenAPI 3.1
+# Cardano Connector Server
 
-This is a Cloudflare Worker with OpenAPI 3.1 using
-[chanfana](https://github.com/cloudflare/chanfana) and
-[Hono](https://github.com/honojs/hono).
+Cloudflare Worker exposing a small Cardano connector API backed by Blockfrost and Koios.
 
-This is an example project made to be used as a quick start into building
-OpenAPI compliant Workers that generates the `openapi.json` schema automatically
-from code and validates the incoming request to the defined parameters or
-request body.
+## Pre-requisites
 
-## Get started
+- `wrangler >= 4.46.0` or `npx >= 10.9.3`
+- `jq >= 1.8.0`
 
-1. Sign up for [Cloudflare Workers](https://workers.dev). The free tier is more
-   than enough for most use cases.
-2. Clone this project and install dependencies with `npm install`
-3. Run `wrangler login` to login to your Cloudflare account in wrangler
-4. Run `wrangler deploy` to publish the API to Cloudflare Workers
+## Getting started
 
-## Project structure
+#### Environments
 
-1. Your main router is defined in `src/index.ts`.
-2. Each endpoint has its own file in `src/endpoints/`.
-3. For more information read the
-   [chanfana documentation](https://chanfana.pages.dev/) and
-   [Hono documentation](https://hono.dev/docs).
+This worker must be started or deployed with an explicit Wrangler environment.
 
-## Development
+Available environments in [`wrangler.jsonc`](/Users/ktorz/Documents/Projects/Konduit/rust/crates/cardano-connector-server/wrangler.jsonc):
 
-1. Run `wrangler dev` to start a local instance of the API.
-2. Open `http://localhost:8787/` in your browser to see the Swagger interface
-   where you can try the endpoints.
-3. Changes made in the `src/` folder will automatically trigger the server to
-   reload, you only need to refresh the Swagger interface.
+- `preprod`
+- `mainnet`
+
+#### Setting up secrets
+
+The worker requires a `BLOCKFROST_PROJECT_ID` secret for each environment.
+
+In this repository, each environment binds that variable from a Cloudflare Secrets Store entry:
+
+| environment | secret name          |
+| ---         | ---                  |
+| `preprod`   | `blockfrost-preprod` |
+| `mainnet`   | `blockfrost-mainnet` |
+
+Initialize those secrets before running or deploying the worker, for example:
+
+
+```console
+npx wrangler secrets-store secret create \
+  $(jq ".env.preprod.secrets_store_secrets[0].store_id" wrangler.jsonc) \
+  --name blockfrost-preprod \
+  --scopes workers
+```
+
+This will prompt you for the Blockfrost project id.
+
+#### Running
+
+```console
+npx wrangler dev --env preprod
+```
+
+## Documentation
+
+HTML documentation is available at the root of the server `/`. It is based on an OpenAPI specification available under `/openapi.yaml`
+
+## Deployment
+
+```console
+npx wrangler deploy --env preprod
+```
+
+## Testing
+
+```console
+npm test
+```
+
+> [!NOTE]
+>
+> Tests are running end-to-end against a local server running on preprod. The
+> server must be started independently of the test.
