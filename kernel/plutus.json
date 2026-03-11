@@ -12,6 +12,14 @@
   },
   "validators": [
     {
+      "title": "crash.crash.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "5001010023259800b452689b2b20025735",
+      "hash": "22c9a103ed3f2fa97c982d76d6e2af50c5d54ac306983b196c8fcdab"
+    },
+    {
       "title": "konduit.konduit.spend",
       "datum": {
         "title": "datum",
