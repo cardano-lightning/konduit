@@ -1,6 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 use crate::Stage;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct L1Channel {

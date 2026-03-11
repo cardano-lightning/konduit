@@ -138,19 +138,16 @@ jobs:
         run: |
           sudo apt-get -y install binaryen
           rustup target add wasm32-unknown-unknown
-          # wasm-pack is cached when already installed, no need to re-install it.
-          if ! command -v wasm-pack >/dev/null 2>&1; then
-            cargo install wasm-pack
-          fi
+          cargo install wasm-pack --version 0.14.0 --force
 
       - name: Build wasm
         id: build
-        working-directory: rust
+        working-directory: rust/crates/konduit-wasm
         env:
           OUT: konduit-wasm-${{ steps.meta.outputs.version }}
         run: |
-          wasm-pack build --release --target browser -d "$OUT"-browser crates/konduit-wasm
-          wasm-pack build --release --target nodejs -d "$OUT"-nodejs crates/konduit-wasm
+          make OUT="$OUT" core
+          make OUT="$OUT" black-box
           echo "name=$OUT" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
@@ -160,8 +157,8 @@ jobs:
             rust/crates/konduit-wasm/package.json
             rust/crates/konduit-wasm/typedoc.json
             rust/crates/konduit-wasm/tsconfig.typedoc.json
-            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-browser
-            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-nodejs
+            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-core
+            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-black-box
 
   docs:
     runs-on: ubuntu-latest

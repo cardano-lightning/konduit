@@ -1,12 +1,14 @@
 use crate::{
-    db, info,
-    models::{PayBody, QuoteBody, SquashResponse},
+    db,
     server::{self, cbor::decode_from_cbor},
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use cardano_sdk::cbor;
-use konduit_data::{Keytag, Locked, Secret, Squash};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use konduit_data::{Keytag, Locked, PayBody, Quote, QuoteBody, Secret, Squash, SquashStatus};
+use std::{
+    ops::Deref,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 type Data = web::Data<server::Data>;
 
@@ -51,8 +53,8 @@ const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60
 /// LND fails for values much smaller than this.
 const QUOTE_PAY_TIME_MARGIN: std::time::Duration = Duration::from_secs(4 * 10 * 60);
 
-pub async fn info(data: Data) -> info::Info {
-    (*data.info()).clone()
+pub async fn info(data: Data) -> HttpResponse {
+    HttpResponse::Ok().json(data.info().deref())
 }
 
 pub async fn fx(data: Data) -> HttpResponse {
@@ -135,13 +137,13 @@ pub async fn squash(
     };
     let response_body = if squash.body == proposal.proposal {
         // Consumer up-to-date
-        SquashResponse::Complete
+        SquashStatus::Complete
     } else if proposal.proposal == proposal.current.body {
         // Consumer not up-to-date, but nothing to squash
-        SquashResponse::Stale(proposal)
+        SquashStatus::Stale(proposal)
     } else {
         // Something to squash
-        SquashResponse::Incomplete(proposal)
+        SquashStatus::Incomplete(proposal)
     };
 
     Ok(HttpResponse::Ok().json(response_body))
@@ -196,7 +198,7 @@ pub async fn quote(
     }
     let relative_timeout = (ADAPTOR_TIME_DELTA + QUOTE_PAY_TIME_MARGIN + bln_quote.relative_timeout)
         .as_millis() as u64;
-    let response_body = crate::models::QuoteResponse {
+    let response_body = Quote {
         index,
         amount,
         relative_timeout,
@@ -303,9 +305,9 @@ pub async fn pay(
         }
     };
     let response_body = if proposal.current.body == proposal.proposal {
-        SquashResponse::Complete
+        SquashStatus::Complete
     } else {
-        SquashResponse::Incomplete(proposal)
+        SquashStatus::Incomplete(proposal)
     };
     Ok(HttpResponse::Ok().json(response_body))
 }

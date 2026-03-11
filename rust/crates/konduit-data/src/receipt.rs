@@ -106,6 +106,68 @@ impl Receipt {
             .collect::<Vec<Unlocked>>()
     }
 
+    pub fn secrets(&self) -> Vec<Secret> {
+        self.cheques
+            .iter()
+            .filter_map(|x| x.as_unlocked().map(|c| c.secret))
+            .collect::<Vec<_>>()
+    }
+
+    // The `Unlocked`s that can be used in the next tx.
+    // Also the `Used`s to appear in the datum.
+    // Only use unused lockeds that timeout _after_ upper bound.
+    pub fn next_unlockeds_useds(
+        &self,
+        useds: &[Used],
+        upper: &Duration,
+    ) -> (Vec<Unlocked>, Vec<Used>) {
+        let used_indices = useds.iter().map(|x| x.index).collect::<Vec<_>>();
+        let unlockeds = self
+            .cheques
+            .iter()
+            .filter_map(|x| x.as_unlocked())
+            .filter(|x| *x.timeout() > *upper && !used_indices.contains(&x.index()))
+            .collect::<Vec<_>>();
+        let mut useds = useds
+            .iter()
+            .filter(|u| !self.squash.is_index_squashed(u.index))
+            .cloned()
+            .chain(unlockeds.iter().map(Used::from))
+            .collect::<Vec<_>>();
+        useds.sort_by_key(|u| u.index);
+        (unlockeds, useds)
+    }
+
+    // The data required to compute respond.
+    pub fn next_cheques_pendings_useds_amount(
+        &self,
+        useds: &[Used],
+        upper: &Duration,
+    ) -> (Vec<Cheque>, Vec<Pending>, u64) {
+        let used_indices = useds.iter().map(|x| x.index).collect::<Vec<_>>();
+        let cheques = self
+            .cheques
+            .iter()
+            .filter(|x| *x.timeout() > *upper && !used_indices.contains(&x.index()))
+            .cloned()
+            .collect::<Vec<_>>();
+        let pendings = cheques
+            .iter()
+            .filter_map(|x| x.as_locked())
+            .map(Pending::from)
+            .collect::<Vec<_>>();
+        let useds_amount = useds
+            .iter()
+            .filter(|u| !self.squash.is_index_squashed(u.index))
+            .map(|u| u.amount)
+            .chain(
+                cheques
+                    .iter()
+                    .filter_map(|u| u.as_unlocked().map(|x| x.amount())),
+            )
+            .sum::<u64>();
+        (cheques, pendings, useds_amount)
+    }
     pub fn unlock(&mut self, secret: Secret) -> Result<(), String> {
         let lock = Lock::from(secret.clone());
         let mut none_changed = true;
@@ -125,6 +187,25 @@ impl Receipt {
 
     pub fn owed(&self) -> u64 {
         self.squash.amount() + self.unlockeds().iter().map(|x| x.body.amount).sum::<u64>()
+    }
+
+    pub fn provably_owed(&self, vk: &VerificationKey, tag: &Tag) -> u64 {
+        let squash_amount = if self.squash.verify(vk, tag) {
+            self.squash.amount()
+        } else {
+            0
+        };
+
+        let cheques_amount = self.cheques.iter().fold(0, |total, cheque| {
+            total
+                + if cheque.verify(vk, tag) {
+                    cheque.amount()
+                } else {
+                    0
+                }
+        });
+
+        squash_amount + cheques_amount
     }
 
     pub fn committed(&self) -> u64 {

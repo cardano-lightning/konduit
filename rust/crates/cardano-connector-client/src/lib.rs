@@ -1,6 +1,8 @@
-pub use crate::interface::CardanoConnector;
-mod interface;
+mod connector;
+pub use connector::Connector;
 
-#[cfg(any(feature = "blockfrost", feature = "wasm"))]
-pub use crate::implementations::*;
-mod implementations;
+pub(crate) mod endpoints;
+
+pub mod helpers;
+
+pub mod types;

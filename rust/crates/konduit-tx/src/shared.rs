@@ -1,14 +1,10 @@
-use std::{cmp, collections::BTreeMap, sync::LazyLock};
-// Standard system time breaks in wasm targets
 use crate::KONDUIT_VALIDATOR;
 use cardano_sdk::{
     Address, Credential, Hash, Input, NetworkId, Output, PlutusData, ProtocolParameters, Value,
-    VerificationKey,
+    VerificationKey, address::kind,
 };
 use konduit_data::{Constants, Datum, Duration, Keytag, L1Channel, Stage};
-#[cfg(not(target_family = "wasm"))]
-use std::time::{SystemTime, UNIX_EPOCH};
-#[cfg(target_family = "wasm")]
+use std::{cmp, collections::BTreeMap, sync::LazyLock};
 use web_time::{SystemTime, UNIX_EPOCH};
 
 pub type Lovelace = u64;
@@ -27,33 +23,6 @@ pub static DEFAULT_TTL: LazyLock<Duration> = LazyLock::new(|| Duration::from_sec
 pub const MIN_ADA_BUFFER: Lovelace = 2_000_000;
 
 pub const FEE_BUFFER: Lovelace = 3_000_000;
-
-#[derive(Debug, Clone)]
-pub struct NetworkParameters {
-    pub network_id: NetworkId,
-    pub protocol_parameters: ProtocolParameters,
-}
-
-pub struct Bounds {
-    pub lower: Duration,
-    pub upper: Duration,
-}
-
-impl Bounds {
-    pub fn twenty_mins() -> Self {
-        // TODO :: Either use std time, or upstream methods
-        let lower = Duration::from_secs(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                // Hack to handle blockfrost slots not aligning with current time.
-                .saturating_sub(60),
-        );
-        let upper = Duration::from_secs(lower.as_secs() + 19 * 60);
-        Bounds { lower, upper }
-    }
-}
 
 pub struct OptionalBounds {
     lower: Option<Duration>,
@@ -143,6 +112,11 @@ impl ChannelOutput {
         if let Some(credential) = credential {
             address = address.with_delegation(credential.clone());
         };
+        Output::new(address.into(), Value::new(MIN_ADA_BUFFER + self.amount))
+            .with_datum(self.to_datum().into())
+    }
+
+    pub fn to_output_from_address(&self, address: Address<kind::Any>) -> Output {
         Output::new(address.into(), Value::new(MIN_ADA_BUFFER + self.amount))
             .with_datum(self.to_datum().into())
     }

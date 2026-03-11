@@ -6,13 +6,6 @@ use crate::{Credential, NetworkId, pallas};
 use anyhow::anyhow;
 use std::{cmp::Ordering, fmt, marker::PhantomData, str::FromStr, sync::Arc};
 
-#[cfg(feature = "wasm")]
-use crate::cbor;
-#[cfg(feature = "wasm")]
-use std::ops::Deref;
-#[cfg(feature = "wasm")]
-use wasm_bindgen::prelude::*;
-
 pub mod kind;
 pub use kind::IsAddressKind;
 
@@ -359,89 +352,14 @@ impl<T: IsAddressKind> From<&Address<T>> for Vec<u8> {
 
 // --------------------------------------------------------------- Wasm
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub struct ShelleyAddress(Address<kind::Shelley>);
-
-#[cfg(feature = "wasm")]
-impl From<Address<kind::Shelley>> for ShelleyAddress {
-    fn from(address: Address<kind::Shelley>) -> Self {
-        Self(address)
-    }
-}
-
-#[cfg(feature = "wasm")]
-impl Deref for ShelleyAddress {
-    type Target = Address<kind::Shelley>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(feature = "wasm")]
-impl<C> cbor::Encode<C> for ShelleyAddress {
-    fn encode<W: cbor::encode::Write>(
-        &self,
-        e: &mut cbor::Encoder<W>,
-        _ctx: &mut C,
-    ) -> Result<(), cbor::encode::Error<W::Error>> {
-        e.bytes(<Vec<u8>>::from(&self.0).as_slice())?;
-        Ok(())
-    }
-}
-
-#[cfg(feature = "wasm")]
-impl<'d, C> cbor::Decode<'d, C> for ShelleyAddress {
-    fn decode(d: &mut cbor::Decoder<'d>, _ctx: &mut C) -> Result<Self, cbor::decode::Error> {
-        let bytes = d.bytes()?;
-        Address::try_from(bytes)
-            .map_err(cbor::decode::Error::message)
-            .map(Self)
-    }
-}
-
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-impl ShelleyAddress {
-    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
-    pub fn _wasm_new(addr: &str) -> Result<Self, String> {
-        Ok(Self(Address::from_str(addr).map_err(|e| e.to_string())?))
-    }
-
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "equals"))]
-    pub fn _wasm_equals(&self, other: &Self) -> bool {
-        self == other
-    }
-
-    #[cfg_attr(feature = "wasm", wasm_bindgen(js_name = "toString"))]
-    pub fn _wasm_to_string(&self) -> String {
-        self.0.to_string()
-    }
-
-    #[cfg_attr(feature = "wasm", wasm_bindgen(getter, js_name = "paymentCredential"))]
-    pub fn _wasm_payment_credential(&self) -> Credential {
-        self.payment()
-    }
-
-    #[cfg_attr(
-        feature = "wasm",
-        wasm_bindgen(getter, js_name = "delegationCredential")
-    )]
-    pub fn _wasm_delegation_credential(&self) -> Option<Credential> {
-        self.delegation()
-    }
-}
-
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{Address, address::kind::*, any};
-    use proptest::{option, prelude::*};
 
     // -------------------------------------------------------------- Generators
 
     pub mod generators {
-        use super::*;
+        use crate::{Address, address::kind::*, any};
+        use proptest::{option, prelude::*};
 
         prop_compose! {
             pub fn address_shelley()(

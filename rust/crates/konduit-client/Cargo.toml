@@ -10,21 +10,42 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
-[package.metadata.release]
-release = false
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "konduit-client"
+path = "src/main.rs"
+doc = false
+required-features = ["cli"]
+
+[features]
+default = []
+cli = [
+  "dep:clap",
+  "dep:dotenvy",
+  # "dep:http-client-native",
+  # "dep:serde_json",
+  "dep:tokio",
+]
 
 [dependencies]
 anyhow.workspace = true
-bln-client = { workspace = true, features = ["cli", "namespaced"] }
+bln-sdk.workspace = true
+cardano-connector.workspace = true
 cardano-sdk.workspace = true
-clap = { workspace = true, features = ["env"] }
-dotenvy.workspace = true
-hex = { workspace = true, features = ["serde"] }
+http-client.workspace = true
 konduit-data.workspace = true
-reqwest = { workspace = true, features = ["json"] }
-serde.workspace = true
-serde_json.workspace = true
-tokio.workspace = true
+konduit-tx.workspace = true
+log.workspace = true
+web-time.workspace = true
+# -F cli
+clap = { workspace = true, features = ["env"], optional = true }
+dotenvy = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+# FIXME :: Disabled to appease cargo machete, and while main is broken
+# serde_json = { workspace = true, optional = true }
+# http-client-native = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true

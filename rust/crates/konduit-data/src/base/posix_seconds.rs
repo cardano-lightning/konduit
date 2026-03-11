@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local, Utc};
-use std::time::{SystemTime, UNIX_EPOCH};
+use web_time::{SystemTime, UNIX_EPOCH};
 
 // POSIX seconds since the UNIX epoch useful because of slot rounding.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]

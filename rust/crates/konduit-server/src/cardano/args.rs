@@ -1,4 +1,5 @@
-use cardano_connector_client::{CardanoConnector, blockfrost};
+use cardano_connector::CardanoConnector;
+use cardano_connector_direct::Blockfrost;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct CardanoArgs {
@@ -11,7 +12,7 @@ pub struct CardanoArgs {
 impl CardanoArgs {
     pub async fn build(&self) -> anyhow::Result<super::Cardano> {
         if let Some(project_id) = &self.blockfrost_project_id {
-            let client = blockfrost::Connector::new(project_id.clone());
+            let client = Blockfrost::new(project_id.clone());
             let Ok(_) = client.health().await else {
                 return Err(anyhow::anyhow!("Cardano health check failed"));
             };

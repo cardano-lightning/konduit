@@ -3,7 +3,7 @@ use cardano_sdk::PlutusData;
 
 use crate::{Secret, utils::try_into_array};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unpend {
     Continue,
     Expire,

@@ -3,10 +3,12 @@ use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
 };
 use konduit_data::Keytag;
-use std::future::Future;
-use std::future::{Ready, ready};
-use std::pin::Pin;
-use std::rc::Rc;
+use std::{
+    future::{Future, Ready, ready},
+    pin::Pin,
+    rc::Rc,
+    str::FromStr,
+};
 
 pub struct KeytagAuth {
     header_name: String,
@@ -68,10 +70,8 @@ where
 
         match header_value {
             Some(val) => {
-                match hex::decode(val) {
-                    Ok(bytes) => {
-                        keytag = Some(Keytag(bytes));
-                    }
+                match Keytag::from_str(val) {
+                    Ok(tag) => keytag = Some(tag),
                     Err(_) => {
                         // Invalid hex
                         error = Some(actix_web::error::ErrorForbidden(format!(

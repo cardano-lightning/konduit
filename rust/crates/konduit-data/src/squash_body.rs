@@ -1,10 +1,8 @@
-use std::cmp;
-
+use crate::{ChequeBody, Indexes, IndexesError, Tag};
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, cbor, cbor::ToCbor};
 use serde::{Deserialize, Serialize};
-
-use crate::{ChequeBody, Indexes, IndexesError, Tag};
+use std::cmp;
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum SquashBodyError {
@@ -53,14 +51,6 @@ impl<'de> Deserialize<'de> for SquashBody {
 }
 
 impl SquashBody {
-    pub fn zero() -> Self {
-        SquashBody {
-            amount: 0,
-            index: 0,
-            exclude: Indexes::empty(),
-        }
-    }
-
     pub fn new(amount: u64, index: u64, exclude: Indexes) -> anyhow::Result<Self> {
         match SquashBody::verify_new(&index, &exclude) {
             true => Ok(SquashBody::new_no_verify(amount, index, exclude)),

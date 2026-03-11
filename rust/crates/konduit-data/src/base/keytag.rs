@@ -1,17 +1,15 @@
-use std::fmt;
-
+use crate::Tag;
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, VerificationKey};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::Tag;
+use std::fmt;
 
 #[serde_as]
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
 #[serde(transparent)]
-pub struct Keytag(#[serde_as(as = "serde_with::hex::Hex")] pub Vec<u8>);
+pub struct Keytag(#[serde_as(as = "serde_with::hex::Hex")] Vec<u8>);
 
 impl AsRef<[u8]> for Keytag {
     fn as_ref(&self) -> &[u8] {
@@ -26,9 +24,13 @@ impl fmt::Display for Keytag {
 }
 
 impl TryFrom<Vec<u8>> for Keytag {
-    type Error = Vec<u8>;
+    type Error = anyhow::Error;
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        if value.len() != 64 {
+            return Err(anyhow!("invalid length for keytag; should be 64 bytes"));
+        }
+
         Ok(Self(value))
     }
 }

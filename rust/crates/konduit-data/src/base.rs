@@ -1,20 +1,15 @@
 mod duration;
-pub use duration::*;
-
-mod tag;
-pub use tag::*;
-
 mod keytag;
-pub use keytag::*;
-
 mod lock;
-pub use lock::*;
-
-mod secret;
-pub use secret::*;
-
-mod unpend;
-pub use unpend::*;
-
 mod posix_seconds;
+mod secret;
+mod tag;
+mod unpend;
+
+pub use duration::*;
+pub use keytag::*;
+pub use lock::*;
 pub use posix_seconds::*;
+pub use secret::*;
+pub use tag::*;
+pub use unpend::*;

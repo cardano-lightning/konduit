@@ -1,15 +1,11 @@
-use std::{collections::BTreeMap, iter};
+use std::collections::BTreeMap;
 
 use cardano_sdk::{
-    Address, ChangeStrategy, Credential, Hash, Input, PlutusData, SlotBound, Transaction,
-    VerificationKey, transaction::state::ReadyForSigning,
+    Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
-use konduit_data::{Cont, Duration, Keytag, Receipt, Redeemer, Step};
+use konduit_data::{Duration, Keytag, Receipt};
 
-use crate::{
-    ChannelOutput, NetworkParameters, Utxos, extract_amount, filter_channels, konduit_reference,
-    wallet_inputs,
-};
+use crate::{ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script};
 
 #[derive(Debug, Clone)]
 pub struct AdaptorPreferences {
@@ -29,110 +25,51 @@ pub fn tx(
     wallet: &VerificationKey,
     receipts: &BTreeMap<Keytag, Receipt>,
     utxos: &Utxos,
-    upper_bound: &Duration,
+    upper: &Duration,
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
-    let Some(reference_input) = konduit_reference(utxos) else {
+    let reference_utxo = find_reference_script(utxos);
+    if reference_utxo.is_none() {
         return Err(anyhow::anyhow!("No konduit reference found"));
     };
-    let reference_inputs = vec![reference_input];
-    let wallet_ins = wallet_inputs(wallet, utxos);
-    let channels_in = filter_channels(utxos, |c| c.constants.sub_vkey == *wallet);
-
-    let mk_step_ = |c: &ChannelOutput| mk_step(upper_bound, receipts, c);
-    let mut steps = channels_in
+    let change_address = wallet.to_address(network_parameters.network_id);
+    let steppeds = utxos
         .iter()
-        .filter_map(|(i, c)| mk_step_(c).map(|(step, output)| (i.clone(), step, output)))
-        .filter(|triple| {
-            extract_amount(utxos.get(&triple.0).unwrap().value()) - triple.2.amount
-                >= preferences.min_single
+        .filter_map(|u| ChannelUtxo::try_from(u).ok())
+        .filter(|u| u.data().constants().sub_vkey == *wallet)
+        .filter_map(|u| {
+            receipts
+                .get(&u.data().keytag())
+                .and_then(|receipt| u.any_sub(receipt, upper).ok())
         })
+        .filter(|u| u.gain() >= preferences.min_single as i64)
         .collect::<Vec<_>>();
+    let steppeds = SteppedUtxos::from(steppeds);
 
-    let gain = steps
-        .iter()
-        .map(|triple| extract_amount(utxos.get(&triple.0).unwrap().value()) - triple.2.amount)
-        .sum::<u64>();
-
-    if gain < preferences.min_total {
+    if steppeds.gain() < preferences.min_total as i64 {
         return Err(anyhow::anyhow!(
-            "insufficient total gain: preferences.min_total = {}, gain = {gain}",
-            preferences.min_total
+            "insufficient total gain: preferences.min_total = {}, gain = {}",
+            preferences.min_total,
+            steppeds.gain()
         ));
     }
-    steps.sort_by_key(|(i, _, _)| i.clone());
-    let [main_step, rest @ ..] = &steps[..] else {
-        panic!("Impossible")
-    };
-    let main_redeemer = Redeemer::Main(
-        iter::once(main_step.1.clone())
-            .chain(rest.iter().map(|s| s.1.clone()))
-            .map(|s| Step::Cont(s.clone()))
-            .collect::<Vec<_>>(),
-    );
-    let main_input = (main_step.0.clone(), Some(PlutusData::from(main_redeemer)));
-    let defer_inputs = rest
-        .iter()
-        .map(|(i, _, _)| (i.clone(), Some(PlutusData::from(Redeemer::Defer)).clone()))
-        .collect::<Vec<(Input, Option<PlutusData>)>>();
-    let outputs = steps
-        .iter()
-        .map(|(i, _, co)| {
-            co.to_output(
-                &network_parameters.network_id,
-                &utxos
-                    .get(i)
-                    .unwrap()
-                    .address()
-                    .as_shelley()
-                    .unwrap()
-                    .delegation(),
-            )
-        })
-        .collect::<Vec<_>>();
-    let wallet_hash = Hash::<28>::new(wallet);
-    let specified_signatories = vec![wallet_hash];
-    let inputs = wallet_ins
-        .iter()
-        .map(|i| (i.clone(), None))
-        .chain(iter::once(main_input))
-        .chain(defer_inputs)
-        .collect::<Vec<_>>();
 
-    // FIXME :: This bounds should not _necessarily_ be necessary.
-    let upper_bound = SlotBound::Exclusive(
-        network_parameters
-            .protocol_parameters
-            .posix_to_slot(upper_bound.0),
-    );
+    let opens = vec![];
 
-    Transaction::build(
-        &network_parameters.protocol_parameters,
-        utxos,
-        |transaction| {
-            let wallet_address = Address::new(
-                network_parameters.network_id,
-                Credential::from_key(wallet_hash),
-            );
-            transaction
-                .with_inputs(inputs.clone())
-                .with_collaterals(wallet_ins.clone())
-                .with_reference_inputs(reference_inputs.clone())
-                .with_outputs(outputs.clone())
-                .with_specified_signatories(specified_signatories.clone())
-                .with_validity_interval(SlotBound::None, upper_bound)
-                .with_change_strategy(ChangeStrategy::as_last_output(wallet_address.into()))
-                .ok()
-        },
+    let wallet_address: Address<kind::Any> =
+        wallet.to_address(network_parameters.network_id).into();
+
+    let fuel = utxos
+        .iter()
+        .filter(|u| u.1.address() == &wallet_address)
+        .map(|u| (u.0.clone(), u.1.clone()))
+        .to_owned()
+        .collect::<BTreeMap<_, _>>();
+    crate::tx::tx(
+        network_parameters,
+        reference_utxo.as_ref(),
+        change_address.into(),
+        steppeds,
+        opens,
+        &fuel,
     )
-}
-
-fn mk_step(
-    upper_bound: &Duration,
-    receipts: &BTreeMap<Keytag, Receipt>,
-    c: &ChannelOutput,
-) -> Option<(Cont, ChannelOutput)> {
-    receipts
-        .get(&Keytag::new(c.constants.add_vkey, c.constants.tag.clone()))
-        .and_then(|receipt| receipt.step(upper_bound, &c.to_l1_channel()))
-        .map(|(s, l1)| (s, ChannelOutput::from_l1_channel(l1, c.constants.clone())))
 }
