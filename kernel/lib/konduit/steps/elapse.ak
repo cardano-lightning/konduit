@@ -11,6 +11,6 @@ pub fn do(
   let t.Constants { add_vkey, .. } = constants
   expect t.Closed(_, _, elapse_at) = stage_in
   expect Finite(lower_bound) = lower_bound
-  expect lower_bound <= elapse_at
+  expect elapse_at <= lower_bound
   add_vkey
 }

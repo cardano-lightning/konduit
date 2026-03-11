@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use cardano_sdk::{PlutusData, constr};
 use serde::{Deserialize, Serialize};
 
-use crate::{Duration, Pending, Used};
+use crate::{Duration, Pending, Used, possible_step::PossibleStep};
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Stage {
@@ -14,6 +14,35 @@ pub enum Stage {
 impl Stage {
     pub fn is_opened(&self) -> bool {
         matches!(self, Stage::Opened(_, _))
+    }
+
+    /// This is only relevant to Consumer.
+    pub fn possible_steps(&self) -> Vec<PossibleStep> {
+        match self {
+            Stage::Opened(_, _) => vec![PossibleStep::Add, PossibleStep::Close],
+            Stage::Closed(_, _, elapse_at) => vec![PossibleStep::Elapse { after: *elapse_at }],
+            Stage::Responded(_, pendings) => {
+                if pendings.is_empty() {
+                    vec![PossibleStep::End]
+                } else {
+                    pendings
+                        .iter()
+                        .map(|x| PossibleStep::Expire {
+                            after: x.timeout,
+                            gain: x.amount,
+                        })
+                        .collect::<Vec<_>>()
+                }
+            }
+        }
+    }
+
+    pub fn label(&self) -> &str {
+        match self {
+            Stage::Opened(_, _) => "Opened",
+            Stage::Closed(_, _, _) => "Closed",
+            Stage::Responded(_, _) => "Responded",
+        }
     }
 }
 

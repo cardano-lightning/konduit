@@ -1,11 +1,11 @@
 use crate::core::{
-    Address, Bounds, ChannelOutput, Credential, Hash, Input, KONDUIT_VALIDATOR, NetworkId,
+    Address, Bounds, Channel, Credential, Hash, Input, KONDUIT_VALIDATOR, NetworkId,
     NetworkParameters, Output, SigningKey, Tag,
     address::kind,
     consumer::{self, Intent, OpenIntent},
-    filter_channels,
 };
 use cardano_connector::CardanoConnector;
+use konduit_tx::ChannelUtxo;
 use std::collections::BTreeMap;
 
 pub struct Client<'a, Connector: CardanoConnector> {
@@ -29,7 +29,7 @@ where
     pub async fn channels(
         &self,
         stake_credential: Option<&Credential>,
-    ) -> anyhow::Result<impl Iterator<Item = ChannelOutput>> {
+    ) -> anyhow::Result<impl Iterator<Item = Channel>> {
         let consumer = self.consumer.to_verification_key();
 
         let utxos_konduit = all_utxos_at(
@@ -39,11 +39,12 @@ where
         )
         .await?;
 
-        Ok(filter_channels(&utxos_konduit.collect(), |channel| {
-            channel.constants.add_vkey == consumer
-        })
-        .into_iter()
-        .map(|(_, channel)| channel))
+        let consumer_channels = utxos_konduit
+            .into_iter()
+            .filter_map(|u| ChannelUtxo::try_from(u).ok())
+            .filter(move |u| u.data().constants().add_vkey == consumer)
+            .map(|u| u.data().to_owned());
+        Ok(consumer_channels)
     }
 
     /// Execute the given intents on any compatible channel owned by the client's credentials.
@@ -86,25 +87,14 @@ where
             Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Input, Output)>>
         };
 
-        let utxos_consumer = all_utxos_at(
-            self.connector,
-            &Credential::from(&consumer_vk),
-            stake_credential,
-        )
-        .await?;
-
-        let utxos_wallet = if wallet_vk != consumer_vk {
-            Box::new(
-                all_utxos_at(
-                    self.connector,
-                    &Credential::from(&wallet_vk),
-                    stake_credential,
-                )
-                .await?,
+        let utxos_wallet = Box::new(
+            all_utxos_at(
+                self.connector,
+                &Credential::from(&wallet_vk),
+                stake_credential,
             )
-        } else {
-            Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Input, Output)>>
-        };
+            .await?,
+        );
 
         let mut tx = consumer::tx(
             &network_parameters,
@@ -114,7 +104,6 @@ where
             &std::iter::empty()
                 .chain(utxos_script_ref)
                 .chain(utxos_konduit)
-                .chain(utxos_consumer)
                 .chain(utxos_wallet)
                 .collect(),
             Bounds::twenty_mins(),

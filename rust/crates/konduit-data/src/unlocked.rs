@@ -43,6 +43,10 @@ impl Unlocked {
         self.body.amount
     }
 
+    pub fn timeout(&self) -> &Duration {
+        &self.body.timeout
+    }
+
     pub fn lock(&self) -> &Lock {
         &self.body.lock
     }
