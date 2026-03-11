@@ -77,18 +77,18 @@ where
             .map_err(|e| anyhow!(e))
     }
 
-    pub async fn quote(&self, invoice: Invoice) -> anyhow::Result<Quote> {
+    pub async fn quote(&self, invoice: &Invoice) -> anyhow::Result<Quote> {
         self.http_client
             .post_with_headers::<Quote>(
                 "/ch/quote",
                 &self.with_keytag_header(&[HEADER_CONTENT_TYPE_JSON]),
-                Http::to_json(&QuoteBody::Bolt11(invoice)),
+                Http::to_json(&QuoteBody::Bolt11(invoice.clone())),
             )
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    pub async fn pay(&self, invoice: &str, locked: Locked) -> anyhow::Result<SquashStatus> {
+    pub async fn pay(&self, invoice: &Invoice, locked: Locked) -> anyhow::Result<SquashStatus> {
         self.http_client
             .post_with_headers::<SquashStatus>(
                 "/ch/pay",

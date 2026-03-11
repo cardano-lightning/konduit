@@ -1,16 +1,22 @@
+use crate::{Secret, utils::try_into_array};
 use anyhow::anyhow;
 use cardano_sdk::PlutusData;
 use cryptoxide::hashing::sha256;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::{Secret, utils::try_into_array};
+use std::fmt;
 
 #[serde_as]
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct Lock(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
+
+impl fmt::Display for Lock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.write_str(&hex::encode(self.0))
+    }
+}
 
 impl std::str::FromStr for Lock {
     type Err = anyhow::Error;
@@ -33,6 +39,12 @@ impl TryFrom<Vec<u8>> for Lock {
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         Ok(Self(<[u8; 32]>::try_from(value)?))
+    }
+}
+
+impl From<[u8; 32]> for Lock {
+    fn from(hash: [u8; 32]) -> Self {
+        Lock(hash)
     }
 }
 

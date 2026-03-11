@@ -267,7 +267,7 @@ impl Receipt {
         }
     }
 
-    /// Drop all locked cheques for which timeout is < now
+    /// Drop all locked cheques for which timeout is <= now
     pub fn timeout(&mut self, now: Duration) {
         self.cheques.retain(|c| {
             let Some(l) = c.as_locked() else {
@@ -402,7 +402,7 @@ impl Receipt {
                 let known = self
                     .unlockeds()
                     .iter()
-                    .map(|c| (c.lock().clone(), c.secret.clone()))
+                    .map(|c| (*c.lock(), c.secret.clone()))
                     .collect::<BTreeMap<Lock, Secret>>();
                 let unpends: Vec<Unpend> = pendings
                     .iter()

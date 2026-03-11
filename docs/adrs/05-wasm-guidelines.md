@@ -34,7 +34,7 @@ While those tools make it easier to produce a WASM API for a client app, there a
    ```rs
    // DON'T
    #[wasm_bindgen]
-   fn do_something(foo: Foo) -> SomeValue { ... }
+   pub fn do_something(foo: Foo) -> SomeValue { ... }
    ```
 
    ```js
@@ -48,10 +48,45 @@ While those tools make it easier to produce a WASM API for a client app, there a
    ```rs
    // DO
    #[wasm_bindgen]
-   fn do_something(foo: &Foo) -> SomeValue { ... }
+   pub fn do_something(foo: &Foo) -> SomeValue { ... }
    ```
 
-6. To keep the code Rust free of WASM concerns, we only export thin proxies through `wasm_bindgen` instead of their respective Rust equivalent. For example:
+6. Avoid mutable references in async code. JavaScript is single-threaded but the event-loop still allows concurrency between the various execution paths. So when a particular path is awaiting on a promise, another may be allowed to continue. Yet, if both path happen to use a same WASM object that requires mutable references, a runtime error such as _"recursive use of an object detected which would lead to unsafe aliasing in rust"_ will be thrown. So it is best to avoid holding mutable references in async code altogether on the Rust side.
+
+   ```rs
+   // DON'T
+   #[wasm_bindgen(js_name = "fetchDataAndMutate")]
+   pub async fn fetch_data_and_mutate(&mut self) {
+     self.data = api.fetch().await;
+   }
+   ```
+
+   ```js
+   await obj.fetchDataAndMutate()
+   ```
+
+   ---
+
+   ```rs
+   // DO
+   #[wasm_bindgen(js_name = "fetchData")]
+   pub async fn fetch_data(&self) -> Data {
+     api.fetch().await;
+   }
+
+   #[wasm_bindgen(setter, js_name = "data")]
+   pub fn set_data(&mut self, data: Data) {
+     self.data = data;
+   }
+   ```
+
+   ```js
+   obj.data = await obj.fetchData();
+   ```
+
+   If async mutation is however required, then we shall prefer interior mutation via `Rc<RefCell<...>>` or the likes. Although it's best to decompose the code so that the mutation happens synchronously outside of the async calls.
+
+7. To keep the code Rust free of WASM concerns, we only export thin proxies through `wasm_bindgen` instead of their respective Rust equivalent. For example:
 
    ```rs
    #[wasm_bindgen]
@@ -105,7 +140,7 @@ While those tools make it easier to produce a WASM API for a client app, there a
    > Doc comments `///` don't play well with the macro; so use the `#[doc = "..."]` macro attribute to attach
    > documentation to the proxy. This is picked up by our CI pipeline when building the WASM/JS API reference.
 
-7. Rust-exported types to wasm cannot have generic parameters nor lifetimes. For generics, we can simply monomorphize types as needed and export one type per generic instantiation. For example:
+8. Rust-exported types to wasm cannot have generic parameters nor lifetimes. For generics, we can simply monomorphize types as needed and export one type per generic instantiation. For example:
 
    - [ShelleyAddress](https://github.com/cardano-lightning/konduit/blob/399d18258021b21addf17be12223116fe009c8be/rust/crates/konduit-wasm/src/wasm/shelley_address.rs#L12)
    - [Hash28](https://github.com/cardano-lightning/konduit/blob/399d18258021b21addf17be12223116fe009c8be/rust/crates/konduit-wasm/src/wasm/hash28.rs)
@@ -115,13 +150,13 @@ While those tools make it easier to produce a WASM API for a client app, there a
 
    - [Connector](https://github.com/cardano-lightning/konduit/blob/399d18258021b21addf17be12223116fe009c8be/rust/crates/konduit-wasm/src/wasm/connector.rs#L7)
 
-8. Rust uses `snake_case` while JavaScript usually uses `camelCase`. So, every exported WASM function shall use the `js_name` macro field from `wasm_bindgen` to define a JavaScript idiomatic name in camelCase for functions:
+9. Rust uses `snake_case` while JavaScript usually uses `camelCase`. So, every exported WASM function shall use the `js_name` macro field from `wasm_bindgen` to define a JavaScript idiomatic name in camelCase for functions:
 
    ```rs
    #[wasm_bindgen(js_name = "toString")]
    ```
 
-9. To avoid weird cyclic dependencies when calling functions on a proxied type, we religiously prefix all WASM-exported Rust methods with `_wasm`. We use `js_name` anyway to control their JavaScript name. This allows us to disambiguate which object is targeted by a method that would exist both on the proxy and its proxied type. For example:
+10. To avoid weird cyclic dependencies when calling functions on a proxied type, we religiously prefix all WASM-exported Rust methods with `_wasm`. We use `js_name` anyway to control their JavaScript name. This allows us to disambiguate which object is targeted by a method that would exist both on the proxy and its proxied type. For example:
 
    ```rs
    #[wasm_bindgen(js_name = "toString")]
@@ -130,9 +165,9 @@ While those tools make it easier to produce a WASM API for a client app, there a
    }
    ```
 
-10. We expose a `wasm::Result<T>` type in `konduit-wasm`, which is suitable for `wasm_bindgen` and plays nicely with `anyhow::Result` and the `?` operator.
+11. We expose a `wasm::Result<T>` type in `konduit-wasm`, which is suitable for `wasm_bindgen` and plays nicely with `anyhow::Result` and the `?` operator.
 
-11. `konduit-wasm` also exposes a very useful `enable_logs_and_panic_hook` global method, which allows:
+12. `konduit-wasm` also exposes a very useful `enable_logs_and_panic_hook` global method, which allows:
 
     1. Propagating Rust logs from the `log` crate (e.g. `log::info`) to the browser console, with a configurable minimum severity.
     2. Installing a panic hook to turn Rust panics into proper JavaScript errors.

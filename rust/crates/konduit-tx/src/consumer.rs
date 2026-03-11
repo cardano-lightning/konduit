@@ -79,6 +79,7 @@ pub fn tx(
         .map(|u| (u.0.clone(), u.1.clone()))
         .to_owned()
         .collect::<BTreeMap<_, _>>();
+
     crate::tx::tx(
         network_parameters,
         reference_utxo.as_ref(),
