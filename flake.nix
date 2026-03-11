@@ -26,7 +26,6 @@
       perSystem = {
         lib,
         config,
-        self',
         inputs',
         pkgs,
         system,
@@ -52,6 +51,7 @@
               wasm-pack
               clang-unwrapped
               pkgs.just
+              pkgs.cargo-machete
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
           buildInputs =
@@ -77,7 +77,7 @@
       in {
         rust-project = {
           src = ./rust;
-          cargoToml = builtins.fromTOML (builtins.readFile ./rust/Cargo.toml);
+          cargoToml = fromTOML (builtins.readFile ./rust/Cargo.toml);
           toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust/rust-toolchain.toml;
           crates = {
             konduit-server = {
@@ -108,10 +108,22 @@
         };
         pre-commit.settings.hooks = {
           treefmt.enable = true;
+          clippy = {
+            enable = true;
+            settings.allFeatures = true;
+          };
+          cargo-machete = {
+            enable = true;
+            name = "cargo-machete";
+            description = "Check for unused dependencies";
+            entry = "${pkgs.cargo-machete}/bin/cargo-machete cargo-machete";
+            files = "\\.toml$";
+            pass_filenames = false;
+          };
         };
         devShells = {
           default = pkgs.mkShell devShell;
-          extras = pkgs.mkShell devShellExtra;
+          # extras = pkgs.mkShell devShellExtra;
         };
       };
       flake = {
