@@ -36,9 +36,9 @@
         devShell = {
           name = "konduit-shell";
           shellHook = ''
-            ${config.pre-commit.installationScript}
+              ${config.pre-commit.installationScript}
             echo 1>&2 "Welcome to the development shell!"
-            export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
+              export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
           '';
           packages =
             [
@@ -51,6 +51,7 @@
               wasm-pack
               clang-unwrapped
               pkgs.just
+              pkgs.prek
               pkgs.cargo-machete
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
@@ -106,24 +107,38 @@
             aiken.enable = true;
           };
         };
-        pre-commit.settings.hooks = {
-          treefmt.enable = true;
-          clippy = {
-            enable = true;
-            settings.allFeatures = true;
-          };
-          cargo-machete = {
-            enable = true;
-            name = "cargo-machete";
-            description = "Check for unused dependencies";
-            entry = "${pkgs.cargo-machete}/bin/cargo-machete cargo-machete";
-            files = "\\.toml$";
-            pass_filenames = false;
+
+        pre-commit = {
+          # clippy checks are failing `nix flake check`
+          # However, they come from rust-flakes, and our implicit workspace
+          # makes it awkward to turn these off
+          check.enable = false;
+          settings = {
+            package = pkgs.prek;
+            hooks = {
+              treefmt.enable = true;
+              # Transitive deps mean default clippy ends up using a different cargo.
+              my-clippy = {
+                enable = true;
+                name = "clippy";
+                description = "Run clippy";
+                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path rust/Cargo.toml";
+                pass_filenames = false;
+              };
+              cargo-machete = {
+                enable = true;
+                name = "cargo-machete";
+                description = "Check for unused dependencies";
+                entry = "${pkgs.cargo-machete}/bin/cargo-machete rust/";
+                files = "\\.toml$";
+                pass_filenames = false;
+              };
+            };
           };
         };
         devShells = {
           default = pkgs.mkShell devShell;
-          # extras = pkgs.mkShell devShellExtra;
+          extras = pkgs.mkShell devShellExtra;
         };
       };
       flake = {
