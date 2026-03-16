@@ -89,6 +89,20 @@ pub async fn receipt(req: HttpRequest, data: Data) -> Result<HttpResponse, Handl
     Ok(HttpResponse::Ok().json(channel.receipt()))
 }
 
+pub async fn retainer(req: HttpRequest, data: Data) -> Result<HttpResponse, HandlerError> {
+    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
+        return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
+    };
+
+    let channel = if let Some(channel) = data.db().get_channel(&keytag).await? {
+        channel
+    } else {
+        return Ok(HttpResponse::NotFound().body(format!("no channel for keytag={}", keytag)));
+    };
+
+    Ok(HttpResponse::Ok().json(channel.retainer()))
+}
+
 pub async fn squash(
     req: HttpRequest,
     data: Data,
