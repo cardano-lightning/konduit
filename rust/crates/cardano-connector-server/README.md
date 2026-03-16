@@ -1,6 +1,7 @@
 # Cardano Connector Server
 
-Cloudflare Worker exposing a small Cardano connector API backed by Blockfrost and Koios.
+Cloudflare Worker exposing a small Cardano connector API backed by Blockfrost
+and Koios.
 
 ## Pre-requisites
 
@@ -13,7 +14,8 @@ Cloudflare Worker exposing a small Cardano connector API backed by Blockfrost an
 
 This worker must be started or deployed with an explicit Wrangler environment.
 
-Available environments in [`wrangler.jsonc`](/Users/ktorz/Documents/Projects/Konduit/rust/crates/cardano-connector-server/wrangler.jsonc):
+Available environments in
+[`wrangler.jsonc`](/Users/ktorz/Documents/Projects/Konduit/rust/crates/cardano-connector-server/wrangler.jsonc):
 
 - `preprod`
 - `mainnet`
@@ -22,15 +24,15 @@ Available environments in [`wrangler.jsonc`](/Users/ktorz/Documents/Projects/Kon
 
 The worker requires a `BLOCKFROST_PROJECT_ID` secret for each environment.
 
-In this repository, each environment binds that variable from a Cloudflare Secrets Store entry:
+In this repository, each environment binds that variable from a Cloudflare
+Secrets Store entry:
 
 | environment | secret name          |
-| ---         | ---                  |
+| ----------- | -------------------- |
 | `preprod`   | `blockfrost-preprod` |
 | `mainnet`   | `blockfrost-mainnet` |
 
 Initialize those secrets before running or deploying the worker, for example:
-
 
 ```console
 npx wrangler secrets-store secret create \
@@ -49,7 +51,8 @@ npx wrangler dev --env preprod
 
 ## Documentation
 
-HTML documentation is available at the root of the server `/`. It is based on an OpenAPI specification available under `/openapi.yaml`
+HTML documentation is available at the root of the server `/`. It is based on an
+OpenAPI specification available under `/openapi.yaml`
 
 ## Deployment
 
