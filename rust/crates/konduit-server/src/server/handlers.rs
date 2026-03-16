@@ -309,5 +309,6 @@ pub async fn pay(
     } else {
         SquashStatus::Incomplete(proposal)
     };
+
     Ok(HttpResponse::Ok().json(response_body))
 }

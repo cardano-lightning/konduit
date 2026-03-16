@@ -1,6 +1,8 @@
 #[cfg(feature = "black-box-api")]
 pub mod black_box_api;
 
+pub mod wallet;
+
 pub mod wasm;
 
 // A prelude to use within the crate to ease imports, in particular in a multi-platform context.
@@ -12,6 +14,7 @@ mod prelude {
     pub use http_client_wasm::HttpClient;
     pub use konduit_client::{Adaptor, l1, l2};
     pub mod core {
+        pub use bln_sdk::types::Invoice;
         pub use cardano_connector_client::types::*;
         pub use cardano_sdk::*;
         pub use konduit_data::*;
