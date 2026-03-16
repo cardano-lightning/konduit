@@ -18,98 +18,99 @@ paths:
       summary: Health
       operationId: getHealth
       responses:
-        '200':
+        "200":
           description: Service is reachable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                $ref: "#/components/schemas/HealthResponse"
         default:
-          $ref: '#/components/responses/UnexpectedError'
+          $ref: "#/components/responses/UnexpectedError"
 
   /network:
     get:
       summary: Network
       operationId: getNetwork
       responses:
-        '200':
-          description: Network inferred from the configured Blockfrost project id
+        "200":
+          description:
+            Network inferred from the configured Blockfrost project id
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NetworkResponse'
+                $ref: "#/components/schemas/NetworkResponse"
         default:
-          $ref: '#/components/responses/UnexpectedError'
+          $ref: "#/components/responses/UnexpectedError"
 
   /balance/{address}:
     get:
       summary: Address balance
       operationId: getBalance
       parameters:
-        - $ref: '#/components/parameters/Address'
+        - $ref: "#/components/parameters/Address"
       responses:
-        '200':
+        "200":
           description: Lovelace balance for the address
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BalanceResponse'
+                $ref: "#/components/schemas/BalanceResponse"
         default:
-          $ref: '#/components/responses/UnexpectedError'
+          $ref: "#/components/responses/UnexpectedError"
 
   /utxos_at/{address}:
     get:
       summary: UTxOs by address
       operationId: getUtxosAt
       parameters:
-        - $ref: '#/components/parameters/Address'
+        - $ref: "#/components/parameters/Address"
       responses:
-        '200':
+        "200":
           description: Current UTxOs found at the address
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Utxo'
+                  $ref: "#/components/schemas/Utxo"
         default:
-          $ref: '#/components/responses/UnexpectedError'
+          $ref: "#/components/responses/UnexpectedError"
 
   /transactions/{address}:
     get:
       summary: Transactions by address
       operationId: getTransactions
       parameters:
-        - $ref: '#/components/parameters/Address'
+        - $ref: "#/components/parameters/Address"
       responses:
-        '200':
+        "200":
           description: Transactions touching the address
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/TransactionSummary'
+                  $ref: "#/components/schemas/TransactionSummary"
         default:
-          $ref: '#/components/responses/UnexpectedError'
+          $ref: "#/components/responses/UnexpectedError"
 
   /transaction/{id}:
     get:
       summary: Transaction by id
       operationId: getTransaction
       parameters:
-        - $ref: '#/components/parameters/TransactionId'
+        - $ref: "#/components/parameters/TransactionId"
       responses:
-        '200':
+        "200":
           description: Expanded transaction summary
           content:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/TransactionSummary'
+                  - $ref: "#/components/schemas/TransactionSummary"
                   - type: "null"
         default:
-          $ref: '#/components/responses/UnexpectedError'
+          $ref: "#/components/responses/UnexpectedError"
 
   /submit:
     post:
@@ -120,16 +121,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SubmitRequest'
+              $ref: "#/components/schemas/SubmitRequest"
       responses:
-        '200':
+        "200":
           description: Transaction accepted by Koios submit endpoint
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubmitResponse'
+                $ref: "#/components/schemas/SubmitResponse"
         default:
-          $ref: '#/components/responses/UnexpectedError'
+          $ref: "#/components/responses/UnexpectedError"
 
 components:
   parameters:
@@ -149,7 +150,7 @@ components:
       description: 32-byte transaction hash encoded as lowercase hexadecimal
       schema:
         type: string
-        pattern: '^[0-9a-f]{64}$'
+        pattern: "^[0-9a-f]{64}$"
 
   responses:
     UnexpectedError:
@@ -184,7 +185,7 @@ components:
       properties:
         lovelace:
           type: string
-          pattern: '^[0-9]+$'
+          pattern: "^[0-9]+$"
           description: Lovelace amount encoded as a decimal string
 
     AssetObject:
@@ -197,7 +198,7 @@ components:
           description: Asset identifier, or `lovelace` for Ada
         quantity:
           type: string
-          pattern: '^[0-9]+$'
+          pattern: "^[0-9]+$"
           description: Asset quantity encoded as a decimal string
 
     TxOutput:
@@ -208,45 +209,46 @@ components:
           type: string
         consumed_by:
           allOf:
-            - $ref: '#/components/schemas/TxId'
-            - description: Id of the transaction that consumed this output, if any.
+            - $ref: "#/components/schemas/TxId"
+            - description:
+                Id of the transaction that consumed this output, if any.
         value:
           type: array
           items:
-            $ref: '#/components/schemas/AssetObject'
+            $ref: "#/components/schemas/AssetObject"
         datum_hash:
           type: string
-          pattern: '^[0-9a-f]{64}$'
+          pattern: "^[0-9a-f]{64}$"
         datum_inline:
           type: string
           description: Inline datum CBOR encoded as hexadecimal
         reference_script_hash:
           type: string
-          pattern: '^[0-9a-f]{56}$'
+          pattern: "^[0-9a-f]{56}$"
 
     TxId:
       type: string
-      pattern: '^[0-9a-f]{64}$'
+      pattern: "^[0-9a-f]{64}$"
 
     TxInput:
       allOf:
-        - $ref: '#/components/schemas/UtxoRef'
-        - $ref: '#/components/schemas/TxOutput'
+        - $ref: "#/components/schemas/UtxoRef"
+        - $ref: "#/components/schemas/TxOutput"
 
     UtxoRef:
       type: object
       required: [transaction_id, output_index]
       properties:
         transaction_id:
-          $ref: '#/components/schemas/TxId'
+          $ref: "#/components/schemas/TxId"
         output_index:
           type: integer
           minimum: 0
 
     Utxo:
       allOf:
-        - $ref: '#/components/schemas/UtxoRef'
-        - $ref: '#/components/schemas/TxOutput'
+        - $ref: "#/components/schemas/UtxoRef"
+        - $ref: "#/components/schemas/TxOutput"
         - type: object
           properties:
             reference_script_version:
@@ -263,7 +265,7 @@ components:
       additionalProperties: false
       properties:
         id:
-          $ref: '#/components/schemas/TxId'
+          $ref: "#/components/schemas/TxId"
         index:
           type: integer
           minimum: 0
@@ -285,11 +287,11 @@ components:
         inputs:
           type: array
           items:
-            $ref: '#/components/schemas/TxInput'
+            $ref: "#/components/schemas/TxInput"
         outputs:
           type: array
           items:
-            $ref: '#/components/schemas/TxOutput'
+            $ref: "#/components/schemas/TxOutput"
 
     SubmitRequest:
       type: object
@@ -307,4 +309,4 @@ components:
       properties:
         transaction_id:
           type: string
-          pattern: '^[0-9a-f]{64}$'
+          pattern: "^[0-9a-f]{64}$"

@@ -7,7 +7,7 @@ export default async function endpoint(ctx, next) {
   ctx.endpoint = async (defaultValue, callback) => {
     try {
       return ctx.json(await callback());
-    } catch(res) {
+    } catch (res) {
       if (defaultValue !== undefined && res.status === 404) {
         return ctx.json(defaultValue);
       }

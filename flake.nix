@@ -26,7 +26,6 @@
       perSystem = {
         lib,
         config,
-        self',
         inputs',
         pkgs,
         system,
@@ -37,9 +36,9 @@
         devShell = {
           name = "konduit-shell";
           shellHook = ''
-            ${config.pre-commit.installationScript}
+              ${config.pre-commit.installationScript}
             echo 1>&2 "Welcome to the development shell!"
-            export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
+              export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
           '';
           packages =
             [
@@ -52,6 +51,8 @@
               wasm-pack
               clang-unwrapped
               pkgs.just
+              pkgs.prek
+              pkgs.cargo-machete
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
           buildInputs =
@@ -77,7 +78,7 @@
       in {
         rust-project = {
           src = ./rust;
-          cargoToml = builtins.fromTOML (builtins.readFile ./rust/Cargo.toml);
+          cargoToml = fromTOML (builtins.readFile ./rust/Cargo.toml);
           toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust/rust-toolchain.toml;
           crates = {
             konduit-server = {
@@ -106,8 +107,34 @@
             aiken.enable = true;
           };
         };
-        pre-commit.settings.hooks = {
-          treefmt.enable = true;
+
+        pre-commit = {
+          # clippy checks are failing `nix flake check`
+          # However, they come from rust-flakes, and our implicit workspace
+          # makes it awkward to turn these off
+          check.enable = false;
+          settings = {
+            package = pkgs.prek;
+            hooks = {
+              treefmt.enable = true;
+              # Transitive deps mean default clippy ends up using a different cargo.
+              my-clippy = {
+                enable = true;
+                name = "clippy";
+                description = "Run clippy";
+                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path rust/Cargo.toml";
+                pass_filenames = false;
+              };
+              cargo-machete = {
+                enable = true;
+                name = "cargo-machete";
+                description = "Check for unused dependencies";
+                entry = "${pkgs.cargo-machete}/bin/cargo-machete rust/";
+                files = "\\.toml$";
+                pass_filenames = false;
+              };
+            };
+          };
         };
         devShells = {
           default = pkgs.mkShell devShell;
