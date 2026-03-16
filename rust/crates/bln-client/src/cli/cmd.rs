@@ -1,4 +1,5 @@
-use crate::types::Payee;
+use bln_sdk::types::PublicKey;
+
 use std::time::Duration;
 
 /// Subcommands for the different API endpoints.
@@ -12,7 +13,7 @@ pub enum Cmd {
 
         /// The 33-byte public key of the payee in hex format.
         #[arg(long)]
-        payee: Payee,
+        payee: PublicKey,
     },
     /// Pay based on a previous quote.
     Pay {

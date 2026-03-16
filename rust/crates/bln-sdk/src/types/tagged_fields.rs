@@ -13,8 +13,8 @@ pub(crate) struct TaggedFields {
     pub(crate) description_hash: Option<[u8; 32]>,
     pub(crate) expiry_time: Option<Duration>,
     pub(crate) min_final_cltv_expiry_delta: Option<MinFinalCltvExpiryDelta>,
-    pub(crate) fallback: Option<Fallback>,
-    pub(crate) private_route: Option<PrivateRoute>,
+    pub(crate) fallback: Vec<Fallback>,
+    pub(crate) private_route: Vec<PrivateRoute>,
     pub(crate) payment_secret: Option<[u8; 32]>,
     pub(crate) payment_metadata: Option<Vec<u8>>,
     pub(crate) features: Option<Bolt11InvoiceFeatures>,
@@ -39,8 +39,8 @@ impl From<Vec<RawTaggedField>> for TaggedFields {
                     TaggedField::MinFinalCltvExpiryDelta(min_final_cltv_expiry_delta) => {
                         tfs.min_final_cltv_expiry_delta = Some(min_final_cltv_expiry_delta.clone())
                     }
-                    Fallback(fallback) => tfs.fallback = Some(fallback.clone()),
-                    PrivateRoute(private_route) => tfs.private_route = Some(private_route.clone()),
+                    Fallback(fallback) => tfs.fallback.push(fallback.clone()),
+                    PrivateRoute(private_route) => tfs.private_route.push(private_route.clone()),
                     PaymentSecret(payment_secret) => tfs.payment_secret = Some(payment_secret.0),
                     PaymentMetadata(items) => tfs.payment_metadata = Some(items.to_vec()),
                     Features(features) => tfs.features = Some(features.clone()),

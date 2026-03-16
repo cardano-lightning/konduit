@@ -1,7 +1,7 @@
 use super::types::{get_info, graph_routes, payments, router_send, stream_wrapper};
 use crate::{
     Api, Error,
-    lnd::Config,
+    lnd::{Config, types::route_hints},
     types::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse},
 };
 use async_trait::async_trait;
@@ -164,13 +164,14 @@ impl Client {
         &self,
         payee: [u8; 33],
         amount_msat: u64,
+        route_hints: &route_hints::RouteHints,
     ) -> crate::Result<graph_routes::GraphRoutes> {
         let path = format!(
             "v1/graph/routes/{}/{}",
             hex::encode(payee),
             amount_msat / 1000 + 1
         );
-        self.execute(self.get(&path)).await
+        self.execute(self.post(&path).json(route_hints)).await
     }
 
     pub async fn v1_payments(
@@ -199,7 +200,9 @@ impl Client {
 #[async_trait]
 impl Api for Client {
     async fn quote(&self, req: QuoteRequest) -> crate::Result<QuoteResponse> {
-        let routes = self.v1_graph_routes(req.payee, req.amount_msat).await?;
+        let routes = self
+            .v1_graph_routes(req.payee, req.amount_msat, &req.route_hints.clone().into())
+            .await?;
         let route = routes.routes.first().ok_or(Error::ApiError {
             status: 404,
             message: "No route".into(),

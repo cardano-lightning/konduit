@@ -1,5 +1,10 @@
-#[derive(Debug, Clone)]
-pub struct Payee(pub [u8; 33]);
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Payee(#[serde_as(as = "serde_with::hex::Hex")] [u8; 33]);
 
 impl std::str::FromStr for Payee {
     type Err = String;

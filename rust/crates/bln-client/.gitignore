@@ -1,3 +1,1 @@
-.env
-.env.n1
-.env.n2
+.env*

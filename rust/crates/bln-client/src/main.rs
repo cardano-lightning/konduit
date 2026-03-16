@@ -30,7 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let req = QuoteRequest {
                 amount_msat,
-                payee: payee.0,
+                payee: payee.serialize(),
+                route_hints: vec![],
             };
 
             match client.quote(req).await {

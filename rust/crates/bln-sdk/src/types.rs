@@ -6,6 +6,7 @@ mod quote_request;
 mod quote_response;
 mod reveal_request;
 mod reveal_response;
+mod route_hints;
 
 pub use invoice::*;
 pub use pay_request::*;
@@ -15,6 +16,9 @@ pub use quote_request::*;
 pub use quote_response::*;
 pub use reveal_request::*;
 pub use reveal_response::*;
+pub use route_hints::*;
+
+pub use bitcoin::secp256k1::PublicKey;
 
 mod tagged_fields;
 pub(crate) use tagged_fields::*;

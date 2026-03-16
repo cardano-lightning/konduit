@@ -7,6 +7,30 @@ dot_file := if node == "default" { ".env" } else { ".env." + node }
 default:
     @just --list
 
+# Private recipe to handle the gRPC boilerplate
+_grpc service_method payload='{}':
+    @if [ ! -f "{{dot_file}}" ]; then \
+        echo "Error: Configuration file {{dot_file}} not found."; \
+        exit 1; \
+    fi; \
+    export $(grep -v '^#' {{dot_file}} | xargs); \
+    grpcurl -rpc-header "macaroon: $LND_MACAROON" \
+            -d '{{payload}}' \
+            -proto lightning.proto \
+            "ferret-lnd.m.voltageapp.io:10009" \
+            {{service_method}}
+
+# --- Public Recipes ---
+
+# Get node information
+getinfo:
+    @just _grpc lnrpc.Lightning/GetInfo
+
+# List connected peers
+listpeers:
+    @just _grpc lnrpc.Lightning/ListPeers
+
+
 # Internal helper to perform raw authenticated requests
 # We source the specific dot_file inside the shell to ensure the correct credentials are used
 _request method path data='':
@@ -19,12 +43,13 @@ _request method path data='':
         echo "Error: LND credentials not found in {{dot_file}}"; \
         exit 1; \
     fi; \
-    curl -s -X {{method}} \
+    curl -v -s -X {{method}} \
         --cacert ${LND_TLS_CERT:-/dev/null} \
         -k \
         -H "Grpc-Metadata-macaroon: $LND_MACAROON" \
+        -H "Content-Type: application/json" \
         -d '{{data}}' \
-        "$LND_BASE_URL{{path}}"
+        $LND_BASE_URL{{path}}
 
 # Helper to encode hashes to hex
 encode-hash hash:
@@ -43,7 +68,7 @@ health:
 # --- Invoice Commands ---
 # Decode a bolt11 invoice to see destination and amount
 decode-invoice invoice:
-    @just node={{node}} _request GET "/v1/payreq/{{invoice}}" | jq '{destination: .destination, amount_msat: .num_msat}' 
+    @just node={{node}} _request GET "/v1/payreq/{{invoice}}" | jq # '{destination: .destination, amount_msat: .num_msat}' 
 
 # List invoices
 invoices short="":
@@ -57,6 +82,9 @@ add-invoice amt_msat memo="":
 
 get-routes pub_key amt:
     @just node={{node}} _request GET "/v1/graph/routes/{{pub_key}}/{{amt}}"
+
+post-routes pub_key amt data:
+    @just node={{node}} _request POST "/v1/graph/routes/{{pub_key}}/{{amt}}" '{{data}}'
 
 # Pay a lightning invoice
 pay invoice:
