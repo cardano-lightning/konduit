@@ -38,6 +38,7 @@ impl Service {
                     web::scope("/ch")
                         .wrap(middleware::KeytagAuth::new("KONDUIT"))
                         .route("/receipt", web::get().to(handlers::receipt))
+                        .route("/retainer", web::get().to(handlers::retainer))
                         .route("/squash", web::post().to(handlers::squash))
                         .route("/quote", web::post().to(handlers::quote))
                         .route("/pay", web::post().to(handlers::pay)),

@@ -154,6 +154,10 @@ impl Channel {
         self.receipt.clone()
     }
 
+    pub fn retainer(&self) -> Option<Retainer> {
+        self.retainer.clone()
+    }
+
     pub fn unlock(&mut self, secret: Secret) -> Result<(), ChannelError> {
         self.receipt
             .as_mut()
