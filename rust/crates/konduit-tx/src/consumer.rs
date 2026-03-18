@@ -5,6 +5,7 @@ use cardano_sdk::{
 use konduit_data::{Constants, Duration, Stage, Tag};
 use std::collections::BTreeMap;
 
+#[derive(Debug, Clone)]
 pub struct OpenIntent {
     pub tag: Tag,
     pub sub_vkey: VerificationKey,
@@ -23,6 +24,7 @@ impl OpenIntent {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Intent {
     Add(u64),
     Close,

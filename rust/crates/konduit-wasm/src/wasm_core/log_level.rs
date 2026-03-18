@@ -1,4 +1,4 @@
-use crate::wasm;
+use crate::wasm_core;
 use anyhow::anyhow;
 use wasm_bindgen::prelude::*;
 
@@ -16,7 +16,7 @@ pub enum LogLevel {
 /// browser console, and to install a hook on Rust internal panics in order to make them bubble as
 /// plain JavaScript errors.
 #[wasm_bindgen(js_name = "enableLogsAndPanicHook")]
-pub fn enable_logs_and_panic_hook(level: LogLevel) -> wasm::Result<()> {
+pub fn enable_logs_and_panic_hook(level: LogLevel) -> wasm_core::Result<()> {
     let log_level = match level {
         LogLevel::Trace => log::Level::Trace,
         LogLevel::Debug => log::Level::Debug,
