@@ -1,9 +1,16 @@
 #[cfg(feature = "black-box-api")]
 pub mod black_box_api;
 
+#[cfg(feature = "black-box-api")]
+pub mod wasm;
+
+#[cfg(feature = "black-box-api")]
 pub mod wallet;
 
-pub mod wasm;
+#[cfg(feature = "tx-builder")]
+pub mod tx_builder;
+
+pub mod wasm_core;
 
 // A prelude to use within the crate to ease imports, in particular in a multi-platform context.
 pub(crate) use prelude::*;
