@@ -53,6 +53,8 @@ pub fn plutus_version_from_str(s: &str) -> anyhow::Result<PlutusVersion> {
     }
 }
 
+const VALIDATOR_NAME: &str = "konduit.konduit.spend";
+
 /// Get the validator blueprint at compile-time, and make the validator hash available on-demand.
 pub static KONDUIT_VALIDATOR: LazyLock<KonduitValidator> = LazyLock::new(|| {
     let blueprint: BTreeMap<String, serde_json::Value> = serde_json::from_str(include_str!(
@@ -63,11 +65,19 @@ pub static KONDUIT_VALIDATOR: LazyLock<KonduitValidator> = LazyLock::new(|| {
     let validator = blueprint
         .get("validators")
         .and_then(|value| value.as_array())
-        .and_then(|validators| validators.first())
-        .and_then(|value| value.as_object());
+        .and_then(|validators| {
+            validators.iter().find(|validator| {
+                validator
+                    .get("title")
+                    .and_then(|value| value.as_str())
+                    .map(|title| title == VALIDATOR_NAME)
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or_else(|| panic!("validator `{VALIDATOR_NAME}` not found in blueprint"));
 
     let hash = validator
-        .and_then(|validator| validator.get("hash"))
+        .get("hash")
         .and_then(|value| value.as_str())
         .and_then(|s| Hash::try_from(s).ok())
         .unwrap_or_else(|| panic!("failed to extract validator's hash from blueprint"));
@@ -82,7 +92,7 @@ pub static KONDUIT_VALIDATOR: LazyLock<KonduitValidator> = LazyLock::new(|| {
 
     // We should decode hex into Vec<u8>
     let script_bytes = validator
-        .and_then(|validator| validator.get("compiledCode"))
+        .get("compiledCode")
         .and_then(|value| value.as_str())
         .and_then(|s| hex::decode(s).ok())
         .unwrap_or_else(|| panic!("failed to extract validator's compiled code from blueprint"));
