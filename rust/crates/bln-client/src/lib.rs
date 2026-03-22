@@ -10,3 +10,11 @@ pub mod mock;
 
 #[cfg(feature = "cli")]
 pub mod cli;
+
+#[cfg(feature = "merchant")]
+mod merchant;
+#[cfg(feature = "merchant")]
+pub use merchant::{Merchant, MerchantApi};
+
+#[cfg(feature = "namespaced")]
+pub mod testing;

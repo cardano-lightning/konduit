@@ -69,7 +69,7 @@ pub fn debuffer_amount(value: &cardano_sdk::Value<u64>) -> u64 {
 }
 
 /// Data obtained from parsing a channel
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Channel {
     constants: Constants,
     variables: Variables,

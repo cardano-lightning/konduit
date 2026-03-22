@@ -49,7 +49,7 @@ use std::{fmt, str::FromStr};
 ///   ```
 ///
 /// - For the latter, we also provide the [`hash!`](crate::hash) macro.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, cbor::Encode, cbor::Decode, Hash)]
 #[repr(transparent)]
 #[cbor(transparent)]
 pub struct Hash<const SIZE: usize>(#[n(0)] pallas::Hash<SIZE>);

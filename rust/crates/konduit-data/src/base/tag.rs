@@ -1,11 +1,15 @@
 use anyhow::anyhow;
 use cardano_sdk::PlutusData;
 use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::{fmt, ops::Deref, str::FromStr};
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[repr(transparent)]
-pub struct Tag(Vec<u8>);
+#[serde(transparent)]
+pub struct Tag(#[serde_as(as = "serde_with::hex::Hex")] Vec<u8>);
 
 impl Tag {
     pub fn generate(length: usize) -> Self {

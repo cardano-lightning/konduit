@@ -739,7 +739,7 @@ impl<State: IsTransactionBodyState> Transaction<State> {
     /// - account for signers from certificates
     /// - account for signers from votes
     /// - account for signers from withdrawals
-    fn required_signatories(
+    pub fn required_signatories(
         &self,
         resolved_inputs: &BTreeMap<Input, Output>,
     ) -> anyhow::Result<BTreeSet<Hash<28>>> {

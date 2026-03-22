@@ -6,19 +6,11 @@
     "plutusVersion": "v3",
     "compiler": {
       "name": "Aiken",
-      "version": "v1.1.19+a8c0329"
+      "version": "v1.1.21+57da530"
     },
     "license": "Apache-2.0"
   },
   "validators": [
-    {
-      "title": "crash.crash.else",
-      "redeemer": {
-        "schema": {}
-      },
-      "compiledCode": "5001010023259800b452689b2b20025735",
-      "hash": "22c9a103ed3f2fa97c982d76d6e2af50c5d54ac306983b196c8fcdab"
-    },
     {
       "title": "konduit.konduit.spend",
       "datum": {
@@ -49,37 +41,37 @@
     "Int": {
       "dataType": "integer"
     },
-    "List$konduit/types/Cheque": {
+    "List<konduit/types/Cheque>": {
       "dataType": "list",
       "items": {
         "$ref": "#/definitions/konduit~1types~1Cheque"
       }
     },
-    "List$konduit/types/Pending": {
+    "List<konduit/types/Pending>": {
       "dataType": "list",
       "items": {
         "$ref": "#/definitions/konduit~1types~1Pending"
       }
     },
-    "List$konduit/types/Step": {
+    "List<konduit/types/Step>": {
       "dataType": "list",
       "items": {
         "$ref": "#/definitions/konduit~1types~1Step"
       }
     },
-    "List$konduit/types/Unlocked": {
+    "List<konduit/types/Unlocked>": {
       "dataType": "list",
       "items": {
         "$ref": "#/definitions/konduit~1types~1Unlocked"
       }
     },
-    "List$konduit/types/Unpend": {
+    "List<konduit/types/Unpend>": {
       "dataType": "list",
       "items": {
         "$ref": "#/definitions/konduit~1types~1Unpend"
       }
     },
-    "List$konduit/types/Used": {
+    "List<konduit/types/Used>": {
       "dataType": "list",
       "items": {
         "$ref": "#/definitions/konduit~1types~1Used"
@@ -205,7 +197,7 @@
               "$ref": "#/definitions/konduit~1types~1Squash"
             },
             {
-              "$ref": "#/definitions/List$konduit~1types~1Unlocked"
+              "$ref": "#/definitions/List<konduit~1types~1Unlocked>"
             }
           ]
         },
@@ -224,7 +216,7 @@
               "$ref": "#/definitions/konduit~1types~1Squash"
             },
             {
-              "$ref": "#/definitions/List$konduit~1types~1Cheque"
+              "$ref": "#/definitions/List<konduit~1types~1Cheque>"
             }
           ]
         },
@@ -234,7 +226,7 @@
           "index": 4,
           "fields": [
             {
-              "$ref": "#/definitions/List$konduit~1types~1Unpend"
+              "$ref": "#/definitions/List<konduit~1types~1Unpend>"
             }
           ]
         },
@@ -244,7 +236,7 @@
           "index": 5,
           "fields": [
             {
-              "$ref": "#/definitions/List$konduit~1types~1Unpend"
+              "$ref": "#/definitions/List<konduit~1types~1Unpend>"
             }
           ]
         }
@@ -327,7 +319,7 @@
           "index": 1,
           "fields": [
             {
-              "$ref": "#/definitions/List$konduit~1types~1Step"
+              "$ref": "#/definitions/List<konduit~1types~1Step>"
             }
           ]
         },
@@ -382,7 +374,7 @@
               "$ref": "#/definitions/konduit~1prelude~1Amount"
             },
             {
-              "$ref": "#/definitions/List$konduit~1types~1Used"
+              "$ref": "#/definitions/List<konduit~1types~1Used>"
             }
           ]
         },
@@ -395,7 +387,7 @@
               "$ref": "#/definitions/konduit~1prelude~1Amount"
             },
             {
-              "$ref": "#/definitions/List$konduit~1types~1Used"
+              "$ref": "#/definitions/List<konduit~1types~1Used>"
             },
             {
               "$ref": "#/definitions/konduit~1types~1ElapseAt"
@@ -411,7 +403,7 @@
               "$ref": "#/definitions/konduit~1prelude~1Amount"
             },
             {
-              "$ref": "#/definitions/List$konduit~1types~1Pending"
+              "$ref": "#/definitions/List<konduit~1types~1Pending>"
             }
           ]
         }

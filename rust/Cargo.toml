@@ -13,6 +13,7 @@ members = [
   "crates/konduit-cli",
   "crates/konduit-client",
   "crates/konduit-data",
+  "crates/konduit-hammer",
   "crates/konduit-server",
   "crates/konduit-tx",
   "crates/konduit-wasm",
@@ -112,6 +113,7 @@ http-client-native = { path = "crates/http-client-native" }
 http-client-wasm = { path = "crates/http-client-wasm" }
 konduit-client = { path = "crates/konduit-client" }
 konduit-data = { path = "crates/konduit-data" }
+konduit-hammer = { path = "crates/konduit-hammer" }
 konduit-server = { path = "crates/konduit-server" }
 konduit-tx = { path = "crates/konduit-tx" }
 

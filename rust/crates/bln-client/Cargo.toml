@@ -22,6 +22,7 @@ cli = [
   "dep:humantime"
 ]
 namespaced = []
+merchant = []
 
 [dependencies]
 async-trait.workspace = true

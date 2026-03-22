@@ -79,4 +79,18 @@ impl SteppedUtxos {
     pub fn gain(&self) -> i64 {
         self.0.iter().map(|x| x.gain()).sum::<i64>()
     }
+
+    pub fn insert(&mut self, utxo: SteppedUtxo) {
+        let pos = self.0.binary_search_by_key(&utxo.input().clone(), |x| x.input().clone())
+            .unwrap_or_else(|e| e);
+        self.0.insert(pos, utxo);
+    }
+
+    pub fn pop(&mut self) -> Option<SteppedUtxo> {
+        self.0.pop()
+    }
+
+    pub fn remove(&mut self, index: usize) -> SteppedUtxo {
+        self.0.remove(index)
+    }
 }

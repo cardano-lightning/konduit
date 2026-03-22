@@ -15,7 +15,7 @@ actix-cors.workspace = true
 actix-web.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
-bln-client = { workspace = true, features = ["cli", "namespaced"] }
+bln-client = { workspace = true, features = ["cli", "namespaced" ] }
 cardano-connector-direct.workspace = true
 cardano-connector.workspace = true
 cardano-sdk.workspace = true

@@ -52,3 +52,15 @@ impl AsRef<[u8]> for Macaroon {
         self.0.as_ref()
     }
 }
+
+impl From<&[u8]> for Macaroon {
+    fn from(value: &[u8]) -> Self {
+        Self(value.to_vec())
+    }
+}
+
+impl From<Vec<u8>> for Macaroon {
+    fn from(value: Vec<u8>) -> Self {
+        Self(value)
+    }
+}

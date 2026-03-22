@@ -27,8 +27,11 @@ impl TryFrom<Vec<u8>> for Keytag {
     type Error = anyhow::Error;
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        if value.len() != 64 {
-            return Err(anyhow!("invalid length for keytag; should be 64 bytes"));
+        if value.len() < 32 {
+            return Err(anyhow!("invalid length for keytag; should be at least 32 bytes"));
+        }
+        if value.len() > 64 {
+            return Err(anyhow!("invalid length for keytag; should be no more than 64 bytes"));
         }
 
         Ok(Self(value))

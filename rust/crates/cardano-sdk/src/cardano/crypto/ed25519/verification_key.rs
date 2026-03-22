@@ -8,7 +8,7 @@ use crate::{
 use std::{cmp, fmt, str::FromStr};
 
 /// A ed25519 verification key (non-extended).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct VerificationKey(ed25519::PublicKey);
 

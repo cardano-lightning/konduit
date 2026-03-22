@@ -11,6 +11,9 @@ use serde::de::DeserializeOwned;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
+#[cfg(feature = "merchant")]
+use crate::merchant::Merchant;
+
 #[derive(Debug)]
 pub struct Client {
     config: Config,
@@ -291,5 +294,17 @@ impl Api for Client {
         Ok(RevealResponse {
             secret: cache.get(&req.lock).map(|s| s.0),
         })
+    }
+}
+
+#[cfg(feature = "merchant")]
+#[async_trait]
+impl Merchant for Client {
+    async fn health(&self) -> crate::Result<String> {
+        Ok(self.v1_getinfo().await?.block_height.to_string())
+    }
+
+    async fn add_invoice(&self, _amount_msat: Option<u64>) -> crate::Result<()> {
+        todo!()
     }
 }

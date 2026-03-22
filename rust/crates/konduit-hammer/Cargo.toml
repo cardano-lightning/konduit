@@ -1,0 +1,39 @@
+[package]
+name = "konduit-hammer"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bln-sdk.workspace = true
+bln-client = { workspace = true, features = [ "merchant" ] }
+cardano-connector.workspace = true
+cardano-sdk = { workspace = true, features = ["serde"] }
+http-client.workspace = true
+konduit-data.workspace = true
+konduit-tx.workspace = true
+log.workspace = true
+web-time.workspace = true
+clap.workspace = true
+dotenvy.workspace = true
+tokio.workspace = true
+serde = { workspace = true, features = ["derive"] }
+toml.workspace = true
+hex.workspace = true
+serde_json.workspace = true
+http-client-native.workspace = true
+cardano-connector-client.workspace = true
+cardano-connector-direct.workspace = true
+futures.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+proptest-derive.workspace = true
+uuid = { version = "1.22.0", features = ["v4"] }

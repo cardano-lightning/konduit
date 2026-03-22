@@ -3,7 +3,7 @@ use cardano_sdk::{Input, Output};
 use crate::Utxo;
 
 /// We inspect a Utxo once, and then parse it around, endowed with extra data.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UtxoAnd<T> {
     utxo: Utxo,
     data: T,
