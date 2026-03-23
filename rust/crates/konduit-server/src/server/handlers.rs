@@ -178,6 +178,7 @@ pub async fn quote(
     let quote_request = bln_client::types::QuoteRequest {
         amount_msat: request.amount_msat(),
         payee: request.payee(),
+        route_hints: request.route_hints(),
     };
     let bln_quote = match data.bln().quote(quote_request.clone()).await {
         Ok(y) => y,

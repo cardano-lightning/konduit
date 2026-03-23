@@ -1,4 +1,5 @@
 use crate::types::TaggedFields;
+use bitcoin::secp256k1::PublicKey;
 use error::InvoiceError;
 use lightning_invoice::{
     Currency, Description, Fallback, MinFinalCltvExpiryDelta, PrivateRoute, RawHrp,
@@ -15,7 +16,7 @@ pub struct Invoice {
     pub invoice_hash: [u8; 32],
     pub currency: Currency,
     pub amount_msat: u64,
-    pub payee_compressed: [u8; 33],
+    pub payee_compressed: PublicKey,
     pub payment_hash: [u8; 32],
     pub payment_secret: [u8; 32],
     pub features: Bolt11InvoiceFeatures,
@@ -23,8 +24,9 @@ pub struct Invoice {
     pub description_hash: Option<[u8; 32]>,
     pub expiry_time: Option<Duration>,
     pub min_final_cltv_expiry_delta: Option<MinFinalCltvExpiryDelta>,
-    pub fallback: Option<Fallback>,
-    pub private_route: Option<PrivateRoute>,
+    pub fallback: Vec<Fallback>,
+    // This naming choice seems specific to the `lightning_invoices` lib
+    pub private_route: Vec<PrivateRoute>,
     pub payment_metadata: Option<Vec<u8>>,
 }
 
@@ -69,7 +71,9 @@ impl TryFrom<SignedRawBolt11Invoice> for Invoice {
 
     fn try_from(value: SignedRawBolt11Invoice) -> Result<Self, Self::Error> {
         if value.check_signature() {
-            let payee_compressed = value.recover_payee_pub_key().unwrap().0.serialize();
+            let payee_compressed = *value
+                .recover_payee_pub_key()
+                .map_err(|_err| InvoiceError::Parse)?; //.0.serialize();
             let (invoice, hash, _sig) = value.clone().into_parts();
             let amount_msat = amount_msat(&invoice.hrp)?;
             let currency = invoice.hrp.currency;

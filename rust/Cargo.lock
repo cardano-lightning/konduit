@@ -500,6 +500,8 @@ dependencies = [
  "hex",
  "lightning-invoice",
  "lightning-types",
+ "serde",
+ "serde_with",
  "thiserror 2.0.17",
 ]
 

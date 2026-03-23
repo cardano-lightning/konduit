@@ -81,6 +81,7 @@ mod tests {
         let req = QuoteRequest {
             amount_msat: 5000,
             payee: [0u8; 33],
+            route_hints: vec![],
         };
 
         let res = client.quote(req).await.unwrap();
