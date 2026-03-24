@@ -1,10 +1,11 @@
-use crate::{admin::config::Config, channel::Retainer, db};
+use crate::{admin::{SyncApi, config::Config}, channel::Retainer, db};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
 use konduit_data::{ChannelParameters, Keytag, Secret};
 use konduit_tx::{
     Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
 };
+use async_trait::async_trait;
 use std::{collections::BTreeMap, iter, sync::Arc};
 
 #[derive(Clone)]
@@ -172,5 +173,12 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         tx.sign(&self.wallet);
         self.cardano.submit(&tx).await?;
         Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl<Connector: CardanoConnector + Send + Sync + 'static> SyncApi for Service<Connector> {
+    async fn sync(&self) -> Result<(), anyhow::Error> {
+        Service::sync(self).await
     }
 }
