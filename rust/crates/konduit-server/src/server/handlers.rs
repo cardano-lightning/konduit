@@ -124,7 +124,29 @@ pub async fn squash(
     if !squash.verify(&key, &tag) {
         return Ok(HttpResponse::BadRequest().body("Invalid squash"));
     }
-    let channel = data.db().update_squash(&keytag, squash.clone()).await?;
+    let channel = match data.db().update_squash(&keytag, squash.clone()).await {
+        Ok(channel) => channel,
+        Err(db::Error::Logic(db::LogicError::NoEntry(_))) => {
+            log::warn!(
+                "squash: channel {} not found locally, forcing admin sync before retrying",
+                keytag
+            );
+
+            if let Err(err) = data.admin().sync().await {
+                log::error!(
+                    "squash: forced admin sync failed while recovering {}: {}",
+                    keytag,
+                    err
+                );
+                return Ok(HttpResponse::InternalServerError().body(format!(
+                    "failed to sync latest tip while recovering channel: {err}"
+                )));
+            }
+
+            data.db().update_squash(&keytag, squash.clone()).await?
+        }
+        Err(err) => return Err(err.into()),
+    };
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
     };

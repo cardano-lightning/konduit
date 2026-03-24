@@ -4,6 +4,7 @@ use crate::core::{
     address::kind,
     consumer::{self, Intent, OpenIntent},
 };
+use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
 use konduit_tx::ChannelUtxo;
 use std::collections::BTreeMap;
@@ -74,18 +75,13 @@ where
             )
             .await?;
 
-        let utxos_konduit = if !intents.is_empty() {
-            Box::new(
-                all_utxos_at(
-                    self.connector,
-                    &KONDUIT_VALIDATOR.to_credential(),
-                    stake_credential,
-                )
-                .await?,
-            )
-        } else {
-            Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Input, Output)>>
-        };
+        let utxos_konduit = all_utxos_at(
+            self.connector,
+            &KONDUIT_VALIDATOR.to_credential(),
+            stake_credential,
+        )
+        .await?
+        .collect::<Vec<_>>();
 
         let utxos_wallet = Box::new(
             all_utxos_at(
@@ -95,6 +91,10 @@ where
             )
             .await?,
         );
+
+        if opens.is_empty() && intents.is_empty() && utxos_konduit.is_empty() {
+            return Err(anyhow!("nothing to do"));
+        }
 
         let mut tx = consumer::tx(
             &network_parameters,

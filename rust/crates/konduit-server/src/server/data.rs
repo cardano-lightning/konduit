@@ -1,4 +1,4 @@
-use crate::db;
+use crate::{admin, db};
 use konduit_data::{AdaptorInfo, TxHelp};
 /// Actix web server "Data" ie the context of handlers.
 use std::sync::Arc;
@@ -9,6 +9,7 @@ pub struct Data {
     db: Arc<dyn db::Api + Send + Sync + 'static>,
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<AdaptorInfo<TxHelp>>,
+    admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
 }
 
 impl Data {
@@ -17,8 +18,15 @@ impl Data {
         db: Arc<dyn db::Api + Send + Sync + 'static>,
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<AdaptorInfo<TxHelp>>,
+        admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
     ) -> Self {
-        Self { bln, db, fx, info }
+        Self {
+            bln,
+            db,
+            fx,
+            info,
+            admin,
+        }
     }
 
     pub fn fx(&self) -> Arc<tokio::sync::RwLock<fx_client::State>> {
@@ -35,5 +43,9 @@ impl Data {
 
     pub fn info(&self) -> Arc<AdaptorInfo<TxHelp>> {
         self.info.clone()
+    }
+
+    pub fn admin(&self) -> Arc<dyn admin::SyncApi + Send + Sync + 'static> {
+        self.admin.clone()
     }
 }

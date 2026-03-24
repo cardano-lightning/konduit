@@ -58,9 +58,10 @@ async fn main() -> anyhow::Result<()> {
     let admin = Arc::new(
         admin::Service::new(admin_config, bln.clone(), cardano.clone(), db.clone()).await?,
     );
+    let admin_for_sync = Arc::clone(&admin);
 
     tokio::spawn(async move {
-        let admin = Arc::clone(&admin);
+        let admin = Arc::clone(&admin_for_sync);
         let mut ticker = interval(admin_every);
         loop {
             ticker.tick().await;
@@ -73,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
 
     // INFO
     let info = Arc::new(AdaptorInfo::from(args.common));
-    let server_data = server::Data::new(bln, db, fx_state, info);
+    let server_data = server::Data::new(bln, db, fx_state, info, admin);
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;
