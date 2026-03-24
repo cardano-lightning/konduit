@@ -138,8 +138,9 @@ pub async fn squash(
                     keytag,
                     err
                 );
-                return Ok(HttpResponse::InternalServerError()
-                    .body(format!("failed to sync latest tip while recovering channel: {err}")));
+                return Ok(HttpResponse::InternalServerError().body(format!(
+                    "failed to sync latest tip while recovering channel: {err}"
+                )));
             }
 
             data.db().update_squash(&keytag, squash.clone()).await?
