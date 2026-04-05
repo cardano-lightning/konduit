@@ -17,6 +17,23 @@ Below is an entry template.
 
 ## Entries
 
+### 2026-04-05
+
+@waalge: Apologies for the many missed logs. This week was spent, mostly in
+vain, attempting to diversify deployment pathways. I could not get fly.io to
+work with nix built docker container. I also attempt to get static-ish builds
+for VPS deployment, but again, I could not get this to work.
+
+OKRs:
+
+```
+maturity // adaptor infra
+```
+
+Next:
+
+- I will abandon this. And go back to testing the smart contracts.
+
 ### 2026-02-14
 
 @waalge: Server running. Now syncs delayed revealed secrets with BLN client (not
