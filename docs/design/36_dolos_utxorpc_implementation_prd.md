@@ -1,16 +1,16 @@
 ---
 title: "Dolos UTxO RPC Implementation PRD"
 authors:
-  - "@OpenCode"
+  - "AndrewWestberg"
 created-at: 2026-04-05
 status: draft
 ---
 
 # Objective
 
-Implement a production-grade Cardano backend for `konduit-server` using a local
-`dolos` instance over `UTxO RPC`, replacing the current assumption that the
-adaptor relies on Blockfrost for Cardano connectivity.
+Implement a production-grade Cardano backend for the Rust runtime surfaces that
+currently use direct Blockfrost connectivity, using a local `dolos` instance
+over `UTxO RPC`.
 
 # Background
 
@@ -27,18 +27,20 @@ direction: integrating Konduit with local Cardano infrastructure through
 
 # Problem Statement
 
-`konduit-server` does not currently have a Cardano backend that can:
+The Rust runtime surfaces currently using direct Blockfrost do not yet have a
+UTxO RPC backend path that can:
 
 - use a local `dolos` service over gRPC
 - query protocol parameters and UTxOs through UTxO RPC
 - submit Cardano transactions through UTxO RPC
-- be configured as a first-class production backend beside the existing
-  Blockfrost path
+- be configured as a first-class backend beside the existing Blockfrost path in
+  the Rust runtime surfaces in scope
 
 # Goals
 
 - Add a new UTxO RPC Cardano connector implementation.
-- Allow `konduit-server` to select that backend through configuration.
+- Allow the Rust runtime surfaces that currently use direct Blockfrost to select
+  that backend through configuration.
 - Keep the implementation aligned with the existing connector abstraction.
 - Support single-host production deployment with localhost-only Cardano access.
 - Provide sufficient tests and documentation for future maintenance.
@@ -48,13 +50,15 @@ direction: integrating Konduit with local Cardano infrastructure through
 - Replacing `cardano-node`
 - Replacing `Ogmios` or `Kupo`
 - Generalizing Konduit to every possible Cardano provider in this phase
+- Repo-wide backend parity for unrelated repository subprojects
 - Changing the public consumer API surface unless implementation needs force it
 - Building automated deployment orchestration beyond documented manual rollout
 
 # Assumptions
 
 - `dolos` runs on the same host as Konduit.
-- `dolos` connects to the existing local `cardano-node`.
+- `dolos` may sync from the same-host `cardano-node` or an external relay,
+  depending on operator choice.
 - `lnd` REST is already enabled on localhost.
 - public clients are mostly mobile wallet apps.
 - public access to the consumer API is anonymous.
@@ -66,6 +70,21 @@ direction: integrating Konduit with local Cardano infrastructure through
 - Preserve the Cardano connector abstraction.
 - Respect the repo's role-oriented and connector-oriented direction.
 - Avoid introducing production dependence on Blockfrost.
+
+# Scope
+
+In scope for backend parity in this phase:
+
+- `konduit-server`
+- `konduit-cli`
+- the shared connector implementation layer used by those Rust runtime surfaces
+
+Out of scope for backend parity in this phase:
+
+- `cardano-connector-server`
+- unrelated repository subprojects
+- generic crates that already depend only on `CardanoConnector` and do not
+  instantiate or configure Blockfrost directly
 
 # Users
 
@@ -82,27 +101,56 @@ Secondary users:
 
 ## Backend Selection
 
-`konduit-server` must support selecting a Cardano backend that targets UTxO RPC.
+The Rust runtime surfaces that currently instantiate or configure the direct
+Blockfrost connector must support selecting a Cardano backend that targets UTxO
+RPC.
+
+For this phase, that means at minimum:
+
+- `konduit-server`
+- `konduit-cli`
 
 ## Cardano Network
 
 The backend must determine or be configured with the intended Cardano network in
 a way that maps correctly to Konduit's `cardano_sdk::Network` types.
 
+For this phase, the intended network is explicit Konduit configuration and must
+be cross-checked against live data available through UTxO RPC.
+
 ## Health
 
 The backend must expose a meaningful health signal based on reachability and
 basic correctness of the local Dolos service.
+
+The backend must fail startup unless:
+
+- Dolos is reachable
+- the configured network matches live data from Dolos
+- live protocol parameters required for transaction building can be derived from
+  UTxO RPC
+- the configured reference script UTxO can be resolved
 
 ## Protocol Parameters
 
 The backend must obtain protocol parameters sufficient for Konduit transaction
 building.
 
+For the UTxO RPC backend, these parameters must be derived from UTxO RPC modules
+only. Konduit should not fall back to local genesis files, `cardano-node`
+artifacts, or static per-network presets for this backend.
+
 ## UTxO Lookup
 
 The backend must retrieve UTxOs by address or credential patterns in a form that
 can be mapped into the types used by existing Konduit logic.
+
+Semantics:
+
+- `utxos_at(payment, Some(delegation))` matches that specific payment and
+  delegation pair.
+- `utxos_at(payment, None)` matches any UTxO whose address shares the given
+  payment credential, regardless of delegation.
 
 ## Transaction Submission
 
@@ -116,6 +164,8 @@ failure with actionable error information.
 - Good logging at the backend boundary
 - Clear configuration errors when Dolos is unreachable or misconfigured
 - Sufficient tests for type conversion and connector behavior
+- Clear startup failure reasons for network mismatch, missing live protocol
+  parameters, or missing reference script UTxO
 
 # Security Requirements
 
@@ -149,6 +199,10 @@ Purpose:
 
 - introduce a dedicated crate, likely `cardano-connector-utxorpc`
 
+This crate is the shared implementation layer for the Rust runtime surfaces in
+scope. It is not a requirement of this phase to retrofit unrelated repository
+subprojects onto that backend.
+
 Tasks:
 
 - add client dependency on UTxO RPC Rust tooling
@@ -171,6 +225,8 @@ Tasks:
 - map outputs, values, multi-assets, datums, and script-relevant fields
 - map protocol parameters required by Konduit tx builders
 - explicitly document unsupported or deferred fields if any
+- confirm that the data required for live protocol parameters can be derived from
+  UTxO RPC modules only
 
 Definition of done:
 
@@ -184,13 +240,35 @@ Purpose:
 
 Tasks:
 
-- add CLI/env/config for UTxO RPC endpoint and network selection if needed
+- add CLI/env/config for UTxO RPC endpoint and explicit network selection
 - wire backend selection in server bootstrap
 - add startup validation and useful logs
+- fail startup on reachability, network, live-parameter, or reference-script
+  validation failures
 
 Definition of done:
 
 - `konduit-server` can boot against Dolos and pass basic health checks
+
+## Workstream 4b: `konduit-cli` integration
+
+Purpose:
+
+- make the new backend selectable anywhere the CLI currently configures or
+  instantiates the direct Blockfrost connector
+
+Tasks:
+
+- add CLI/env/config for backend kind, UTxO RPC URI, and explicit network
+- wire runtime enum selection in CLI connector construction
+- ensure current admin, adaptor, and consumer flows can use either backend
+- ensure runtime flows fail clearly when startup-equivalent backend validation
+  cannot be satisfied
+
+Definition of done:
+
+- `konduit-cli` can run its current Blockfrost-backed runtime flows with either
+  backend selection
 
 ## Workstream 5: Tests
 
@@ -235,13 +313,17 @@ Suggested execution order:
 5. implement UTxO search and mapping
 6. implement transaction submission
 7. integrate backend selection into `konduit-server`
-8. add tests and docs
+8. integrate backend selection into `konduit-cli`
+9. add tests and docs
 
 # Risks
 
 - UTxO RPC response shapes may not line up perfectly with Konduit's current
   assumptions.
 - Protocol parameter mapping may need more fields than initially expected.
+- UTxO RPC may not expose enough information to fully satisfy Konduit's current
+  transaction-building needs without changing the connector shape or adjacent
+  code.
 - Transaction submission errors may require translation to fit current server
   behavior.
 - The existing connector trait may expose Blockfrost-era assumptions.
@@ -249,10 +331,12 @@ Suggested execution order:
 # Acceptance Criteria
 
 - `konduit-server` can start with a UTxO RPC backend configuration.
+- `konduit-cli` can execute its current direct-Blockfrost-backed runtime flows
+  with a UTxO RPC backend configuration.
 - The server can query Dolos for health and Cardano state over localhost.
 - The server can obtain UTxOs needed for its Cardano flows.
 - The server can submit Cardano transactions through Dolos.
-- The new backend is documented in repo docs.
+- The new backend is documented for the Rust runtime surfaces in scope.
 
 # Verification Plan
 
@@ -279,6 +363,4 @@ Minimum verification:
 # Open Questions
 
 - whether the current connector trait needs extension for richer health data
-- whether protocol parameter mapping can rely fully on UTxO RPC or needs
-  guarded defaults
 - whether a local test harness for Dolos should be introduced later

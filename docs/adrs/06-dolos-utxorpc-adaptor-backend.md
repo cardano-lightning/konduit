@@ -2,7 +2,7 @@
 title: Dolos UTxO RPC Adaptor Backend
 status: accepted
 authors:
-  - "@OpenCode"
+  - "AndrewWestberg"
 date: 2026-04-05
 tags:
   - adaptor
@@ -23,6 +23,17 @@ Blockfrost, Ogmios and Kupo, Dolos, and others.
 
 This ADR does not change that broader direction. Instead, it records the backend
 choice for one specific implementation and deployment effort.
+
+For this effort, backend parity is required only across the Rust runtime
+surfaces that currently instantiate or configure the direct Blockfrost
+connector:
+
+- `konduit-server`
+- `konduit-cli`
+- the shared connector implementation layer
+
+This ADR does not imply repo-wide backend parity for unrelated repository
+subprojects.
 
 For the target deployment discussed here, the operator already runs:
 
@@ -55,16 +66,25 @@ More precisely:
 
 1. `konduit-server` will gain a Cardano backend selection that can target a new
    UTxO RPC connector implementation.
-2. The new connector will communicate with a local `dolos` instance over
+2. `konduit-cli` will gain the same backend selection model for the Rust
+   runtime flows that currently use the direct Blockfrost connector.
+3. The new connector will communicate with a local `dolos` instance over
    localhost gRPC.
-3. `dolos` will be deployed beside the existing `cardano-node`, using the local
-   node as its Cardano source.
-4. `konduit-server` will continue to communicate with the local `lnd` over
+4. `dolos` will be deployed beside the existing `cardano-node`, using the local
+   node as an upstream peer or an external relay, depending on operator choice.
+5. For the UTxO RPC backend, Konduit will treat UTxO RPC as the authoritative
+   source for live protocol parameters, UTxO data, and transaction submission.
+6. The UTxO RPC backend will fail startup unless Dolos is reachable, the
+   configured Cardano network matches live data, live protocol parameters can be
+   derived, and the configured reference script UTxO can be resolved.
+7. `utxos_at(payment, None)` will mean any UTxO whose address shares the given
+   payment credential, regardless of delegation.
+8. `konduit-server` will continue to communicate with the local `lnd` over
    localhost, using a dedicated least-privilege macaroon.
-5. Only `konduit-server` will be exposed publicly, via `nginx`; `dolos`,
+9. Only `konduit-server` will be exposed publicly, via `nginx`; `dolos`,
    `lnd`, and admin interfaces remain localhost-only.
 
-## Decent, counter, and comments
+## Dissent, Counterarguments, and Comments
 
 Alternatives considered:
 
@@ -105,6 +125,10 @@ Negative:
 - The UTxO RPC integration requires careful mapping into `cardano-sdk` data
   types.
 - Deployment becomes a multi-service stack that includes Dolos.
+- If UTxO RPC cannot supply the live data required by Konduit's current
+  transaction-building model, implementation should stop and the design should
+  be revised rather than silently falling back to static presets or local
+  non-UTxO-RPC sources.
 
 Neutral / follow-up:
 
@@ -112,3 +136,5 @@ Neutral / follow-up:
   specified in companion design and PRD documents.
 - `Ogmios` and `Kupo` remain available for other operator workloads but are not
   considered part of the Konduit adaptor runtime for this effort.
+- Unrelated repository subprojects, such as `cardano-connector-server`, are not
+  part of the backend parity scope for this implementation effort.

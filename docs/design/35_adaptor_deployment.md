@@ -1,7 +1,7 @@
 ---
 title: "Adaptor Deployment"
 authors:
-  - "@OpenCode"
+  - "AndrewWestberg"
 created-at: 2026-04-05
 status: draft
 ---
@@ -44,6 +44,10 @@ It should not be read as the only valid Konduit deployment model. Other
 deployments may choose different Cardano backends, different reverse proxies, or
 different runtime packaging depending on operator needs.
 
+This deployment document is scoped to the adaptor runtime and its operator
+tooling. It should not be read as implying repo-wide backend migration for
+unrelated repository subprojects.
+
 ## Runtime Topology
 
 ```mermaid
@@ -54,6 +58,7 @@ flowchart LR
     lnd[lnd REST 127.0.0.1]
     dolos[dolos UTxO RPC 127.0.0.1]
     cnode[cardano-node]
+    relay[external relay]
     bitcoind[bitcoind]
 
     wallets --> nginx --> konduit
@@ -61,6 +66,7 @@ flowchart LR
     konduit --> dolos
     lnd --> bitcoind
     dolos --> cnode
+    dolos -. optional upstream .-> relay
 ```
 
 ## Exposure Model
@@ -144,14 +150,18 @@ Konduit.
 Responsibilities:
 
 - answer Cardano UTxO queries through UTxO RPC
-- provide protocol parameters
+- provide live protocol parameters and related Cardano facts through UTxO RPC
 - submit Cardano transactions
 - remain localhost-only
+
+For this deployment profile, Konduit should treat Dolos UTxO RPC as the
+authoritative source for the Cardano data it needs at runtime.
 
 Non-goals for this deployment:
 
 - replacing `cardano-node`
 - replacing `Ogmios` or `Kupo` for other workloads
+- defining backend parity requirements for unrelated repository subprojects
 
 ## systemd Layout
 
@@ -166,7 +176,8 @@ Expected units:
 
 Suggested ordering:
 
-- `dolos.service` after `cardano-node.service`
+- `dolos.service` after `cardano-node.service` when the same-host node is used as
+  its upstream peer
 - `konduit.service` after `lnd.service` and `dolos.service`
 - `nginx.service` after `konduit.service`
 
@@ -225,9 +236,14 @@ Minimum recommended observability:
 - nginx access/error logs
 - health probes for Konduit backend dependencies
 - explicit checks that Dolos and LND remain reachable on localhost
+- explicit checks that Konduit startup validation succeeded for network,
+  protocol parameters, and reference script resolution
 
 ## Open Items
 
 - exact `systemd` unit files remain implementation work
 - exact Konduit env var surface depends on the UTxO RPC backend implementation
 - rate-limit values should be tuned based on real traffic and latency
+- exact readiness/health endpoint shapes remain implementation work, but should
+  reflect startup blockers for Dolos reachability, network match, live protocol
+  parameters, and reference script availability

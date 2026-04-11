@@ -1,0 +1,248 @@
+{
+  "metadata": {
+    "title": "Dolos UTxO RPC Implementation Tasks",
+    "created": "2026-04-11",
+    "version": "1.0.0",
+    "totalTasks": 8,
+    "prdReference": "docs/design/36_dolos_utxorpc_implementation_prd.md",
+    "description": "Add a parallel Dolos UTxO RPC Cardano backend across the Rust runtime surfaces that currently use direct Blockfrost, then validate, test, and finalize the implementation."
+  },
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Code Changes",
+      "description": "Implement the new UTxO RPC connector and wire it into the Rust runtime surfaces that currently instantiate or configure Blockfrost.",
+      "riskLevel": "high",
+      "tasks": [
+        {
+          "id": "task-001",
+          "title": "Add the UTxO RPC connector crate and workspace wiring",
+          "description": "Create a new `cardano-connector-utxorpc` crate, add the required workspace dependencies, and establish the minimal crate structure needed for a direct Dolos UTxO RPC implementation to live beside the existing Blockfrost connector.",
+          "status": "pending",
+          "priority": "high",
+          "estimatedHours": 2,
+          "dependencies": [],
+          "targetPaths": [
+            "rust/Cargo.toml",
+            "rust/crates/cardano-connector-utxorpc/Cargo.toml",
+            "rust/crates/cardano-connector-utxorpc/src/lib.rs"
+          ],
+          "acceptance": [
+            "The workspace contains a new `cardano-connector-utxorpc` crate",
+            "The new crate builds in the Rust workspace",
+            "The existing Blockfrost connector remains available in parallel"
+          ]
+        },
+        {
+          "id": "task-002",
+          "title": "Implement the UTxO RPC connector core",
+          "description": "Implement UTxO RPC client construction, explicit network configuration, health checks, live protocol parameter derivation, UTxO lookup and mapping, `utxos_at` semantics, and transaction submission so the new crate satisfies the existing `CardanoConnector` contract without Blockfrost-only assumptions.",
+          "status": "pending",
+          "priority": "high",
+          "estimatedHours": 8,
+          "dependencies": [
+            "task-001"
+          ],
+          "targetPaths": [
+            "rust/crates/cardano-connector-utxorpc/src/lib.rs",
+            "rust/crates/cardano-connector-utxorpc/src/config.rs",
+            "rust/crates/cardano-connector-utxorpc/src/mapping.rs",
+            "rust/crates/cardano-connector-utxorpc/src/params.rs"
+          ],
+          "acceptance": [
+            "The new connector implements `network`, `health`, `protocol_parameters`, `utxos_at`, and `submit`",
+            "Protocol parameters are derived from UTxO RPC data rather than static per-network presets",
+            "`utxos_at(payment, None)` returns UTxOs for any address sharing the payment credential regardless of delegation",
+            "Transaction submission works through Dolos and returns actionable failures"
+          ]
+        },
+        {
+          "id": "task-003",
+          "title": "Wire backend selection into the Rust runtime surfaces",
+          "description": "Replace the current hard-wired Blockfrost runtime bindings with explicit backend selection across `konduit-server` and `konduit-cli`, add the UTxO RPC config surface, and enforce the agreed Dolos readiness checks where startup validation is required.",
+          "status": "pending",
+          "priority": "high",
+          "estimatedHours": 8,
+          "dependencies": [
+            "task-002"
+          ],
+          "targetPaths": [
+            "rust/crates/konduit-server/Cargo.toml",
+            "rust/crates/konduit-server/src/cardano.rs",
+            "rust/crates/konduit-server/src/cardano/args.rs",
+            "rust/crates/konduit-server/src/admin/service.rs",
+            "rust/crates/konduit-server/src/env.rs",
+            "rust/crates/konduit-cli/Cargo.toml",
+            "rust/crates/konduit-cli/src/connector.rs",
+            "rust/crates/konduit-cli/src/config/connector.rs",
+            "rust/crates/konduit-cli/src/env/connector.rs",
+            "rust/crates/konduit-cli/src/env/admin.rs",
+            "rust/crates/konduit-cli/src/env/adaptor.rs",
+            "rust/crates/konduit-cli/src/env/consumer.rs",
+            "rust/crates/konduit-cli/src/cmd/admin/tx.rs",
+            "rust/crates/konduit-cli/src/cmd/adaptor/tx.rs",
+            "rust/crates/konduit-cli/src/tip.rs"
+          ],
+          "acceptance": [
+            "`konduit-server` supports explicit backend selection between `blockfrost` and `utxorpc`",
+            "`konduit-cli` can select either `blockfrost` or `utxorpc`",
+            "Server and CLI config parsing support explicit UTxO RPC URI and network values",
+            "Current CLI runtime flows can execute against the UTxO RPC backend",
+            "The server fails startup when Dolos is unreachable, on the wrong network, missing live parameters, or missing the configured reference script UTxO",
+            "The existing Blockfrost server and CLI paths remain available in parallel"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "Validation, Testing, and Final Docs",
+      "description": "Add strong automated coverage, validate the integrated runtime path, and finalize any remaining Rust-runtime-facing docs after the code path is working.",
+      "riskLevel": "medium",
+      "tasks": [
+        {
+          "id": "task-100",
+          "title": "Add connector unit tests for mapping, parameters, semantics, and submit errors",
+          "description": "Add focused automated tests around UTxO mapping, live protocol parameter derivation, network handling, `utxos_at` behavior, and submission error translation in the new connector crate so the core backend logic is well covered before broader runtime validation.",
+          "status": "pending",
+          "priority": "high",
+          "estimatedHours": 5,
+          "dependencies": [
+            "task-002"
+          ],
+          "targetPaths": [
+            "rust/crates/cardano-connector-utxorpc/src/lib.rs",
+            "rust/crates/cardano-connector-utxorpc/src/mapping.rs",
+            "rust/crates/cardano-connector-utxorpc/src/params.rs"
+          ],
+          "acceptance": [
+            "Automated tests cover successful and failing Cardano data mapping cases",
+            "Automated tests cover live protocol parameter derivation and error paths",
+            "Automated tests explicitly cover `utxos_at(payment, None)` semantics",
+            "Automated tests cover submit-path error translation"
+          ]
+        },
+        {
+          "id": "task-101",
+          "title": "Add server and CLI tests for backend selection and readiness checks",
+          "description": "Add automated coverage for server and CLI backend selection, config parsing, and the UTxO RPC readiness rules so the runtime surfaces are protected against regressions without depending on manual operator checks for every iteration.",
+          "status": "pending",
+          "priority": "high",
+          "estimatedHours": 4,
+          "dependencies": [
+            "task-003"
+          ],
+          "targetPaths": [
+            "rust/crates/konduit-server/src/cardano.rs",
+            "rust/crates/konduit-server/src/cardano/args.rs",
+            "rust/crates/konduit-cli/src/connector.rs",
+            "rust/crates/konduit-cli/src/config/connector.rs",
+            "rust/crates/konduit-cli/src/env/connector.rs"
+          ],
+          "acceptance": [
+            "Automated tests cover backend selection for both server and CLI",
+            "Automated tests cover invalid UTxO RPC configuration and readiness failures",
+            "Automated tests protect the existing Blockfrost path from regression"
+          ]
+        },
+        {
+          "id": "task-102",
+          "title": "Add autonomous integrated smoke coverage and run workspace verification",
+          "description": "Add the smallest useful autonomous smoke coverage for the integrated UTxO RPC path, then run the relevant workspace build and test commands so the implementation is validated beyond isolated unit tests.",
+          "status": "pending",
+          "priority": "medium",
+          "estimatedHours": 4,
+          "dependencies": [
+            "task-100",
+            "task-101"
+          ],
+          "targetPaths": [
+            "rust/crates/cardano-connector-utxorpc",
+            "rust/crates/konduit-server",
+            "rust/crates/konduit-cli",
+            "rust/Cargo.toml"
+          ],
+          "acceptance": [
+            "There is automated smoke coverage for the integrated UTxO RPC runtime path",
+            "The relevant Rust workspace targets build and test cleanly for the touched surfaces",
+            "The integrated smoke coverage remains autonomous and suitable for repeat execution"
+          ]
+        },
+        {
+          "id": "task-103",
+          "title": "Run live Dolos validation and capture operator evidence",
+          "description": "Perform the required manual or operator-assisted validation against a real Dolos-backed environment so the implemented UTxO RPC path is checked against live reachability, readiness, and at least one end-to-end submission path rather than only mocked or autonomous test coverage.",
+          "status": "pending",
+          "priority": "medium",
+          "estimatedHours": 3,
+          "dependencies": [
+            "task-102"
+          ],
+          "targetPaths": [
+            "docs/design/33_cardano_connector.md",
+            "docs/design/36_dolos_utxorpc_implementation_prd.md",
+            ".opencode/plans/dolos-utxorpc/task-plans"
+          ],
+          "acceptance": [
+            "A real Dolos-backed validation run is performed or handed off truthfully to the operator",
+            "Validation covers reachability, configured network match, live protocol parameter derivation, and reference script resolution",
+            "Validation includes at least one live transaction submission path or a clearly documented blocker"
+          ]
+        },
+        {
+          "id": "task-104",
+          "title": "Finalize Rust-runtime documentation and implementation cleanup",
+          "description": "Update any remaining Rust-runtime-facing documentation that still assumes Blockfrost-only behavior, record the final UTxO RPC configuration and readiness model, and perform any small cleanup discovered during validation so the implementation lands in a reviewable state.",
+          "status": "pending",
+          "priority": "medium",
+          "estimatedHours": 2,
+          "dependencies": [
+            "task-103"
+          ],
+          "targetPaths": [
+            "docs/adrs/06-dolos-utxorpc-adaptor-backend.md",
+            "docs/design/33_cardano_connector.md",
+            "docs/design/35_adaptor_deployment.md",
+            "docs/design/36_dolos_utxorpc_implementation_prd.md",
+            "docs/design/37_adaptor_deployment_prd.md",
+            "rust/crates/konduit-cli/README.md",
+            "rust/README.md"
+          ],
+          "acceptance": [
+            "Relevant docs describe the final Rust runtime behavior rather than Blockfrost-only assumptions",
+            "The UTxO RPC config and readiness model are documented clearly",
+            "The touched implementation surfaces are left in a clean, reviewable state"
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalPhases": 2,
+    "totalTasks": 8,
+    "estimatedTotalHours": 37,
+    "criticalPath": [
+      "task-001",
+      "task-002",
+      "task-003",
+      "task-100",
+      "task-101",
+      "task-102",
+      "task-103",
+      "task-104"
+    ],
+    "keyFiles": [
+      "rust/Cargo.toml",
+      "rust/crates/cardano-connector-utxorpc/Cargo.toml",
+      "rust/crates/cardano-connector-utxorpc/src/lib.rs",
+      "rust/crates/konduit-server/src/cardano.rs",
+      "rust/crates/konduit-server/src/cardano/args.rs",
+      "rust/crates/konduit-server/src/admin/service.rs",
+      "rust/crates/konduit-cli/src/connector.rs",
+      "rust/crates/konduit-cli/src/config/connector.rs",
+      "rust/crates/konduit-cli/src/env/connector.rs",
+      "rust/crates/konduit-cli/src/tip.rs",
+      "docs/design/36_dolos_utxorpc_implementation_prd.md"
+    ]
+  }
+}

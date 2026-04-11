@@ -32,13 +32,28 @@ The broader project direction is not to replace one universal Cardano provider
 with another, but to support multiple Cardano connectivity options behind a
 stable connector abstraction.
 
+For the implementation effort currently targeted by the companion ADR and PRDs,
+backend parity is required only across the Rust runtime surfaces that currently
+instantiate or configure the direct Blockfrost connector:
+
+- `konduit-server`
+- `konduit-cli`
+- the shared connector implementation layer
+
+This document does not imply repo-wide backend parity for unrelated repository
+subprojects.
+
 # Target state
 
 The target state for the next specific implementation effort is:
 
 - `konduit-server` uses a Cardano connector selected by configuration.
+- `konduit-cli` uses the same backend selection model for the runtime flows it
+  already supports.
 - the selected production backend is `dolos` over `UTxO RPC`.
-- `dolos` runs locally and connects to the operator's local `cardano-node`.
+- `dolos` runs locally and syncs from either the operator's same-host
+  `cardano-node` or an external relay, with same-host upstream preferred for
+  the primary deployment profile.
 - backend traffic remains localhost-only.
 
 # Connector contract
@@ -53,6 +68,18 @@ The adaptor currently needs a connector that can supply at least:
 
 These functions are sufficient for the current adaptor runtime and provide a
 clear seam for multiple backend implementations.
+
+For this implementation effort, backend selection is required where Rust runtime
+code currently instantiates or configures a concrete provider. Generic crates
+that only depend on `CardanoConnector` are not themselves parity targets unless
+they currently construct the direct Blockfrost connector.
+
+Connector semantics for this effort:
+
+- `utxos_at(payment, Some(delegation))` means UTxOs at addresses matching that
+  specific payment and delegation pair.
+- `utxos_at(payment, None)` means any UTxO whose address shares the given
+  payment credential, regardless of delegation.
 
 # Backend options
 
@@ -123,6 +150,12 @@ The connector must provide enough information to map into existing
 
 This mapping work is the main technical risk in the UTxO RPC integration.
 
+For the UTxO RPC backend, the authoritative sources of these facts must be UTxO
+RPC modules only. The backend should derive what it needs from UTxO RPC queries,
+including live chain parameters and related Cardano facts, rather than falling
+back to local genesis files, `cardano-node` artifacts, or static per-network
+presets inside Konduit.
+
 # Configuration
 
 The server should support selecting a Cardano backend explicitly. A likely shape
@@ -130,7 +163,16 @@ is:
 
 - backend kind, e.g. `blockfrost` or `utxorpc`
 - backend endpoint, e.g. Dolos gRPC address
-- network selection where automatic detection is insufficient
+- explicit network selection, cross-checked against live provider data
+
+For this effort, that explicit backend selection is required in the Rust runtime
+surfaces that currently expose direct Blockfrost configuration:
+
+- `konduit-server`
+- `konduit-cli`
+
+Unrelated repository subprojects, such as `cardano-connector-server`, are out of
+scope for this backend parity requirement.
 
 # Trust model
 
@@ -143,6 +185,8 @@ For the adaptor runtime here:
 - Dolos is trusted as the Cardano service boundary
 - Dolos is not exposed publicly
 - network and health mismatches should fail early at startup where possible
+- the configured network should be explicit in Konduit config and cross-checked
+  against live data from Dolos
 
 # Failure handling
 
@@ -151,8 +195,13 @@ The connector should fail clearly in the following cases:
 - Dolos is unreachable
 - Dolos is on the wrong network
 - protocol parameters are unavailable or incomplete
+- the configured reference script UTxO cannot be resolved at startup
 - UTxO query responses cannot be mapped into Konduit types
 - transaction submission fails or is rejected
+
+For the UTxO RPC backend, these are startup blockers for Rust runtime surfaces
+that need the backend to be ready before serving traffic or executing runtime
+flows.
 
 # Testing
 

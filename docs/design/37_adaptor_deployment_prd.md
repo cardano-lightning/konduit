@@ -1,7 +1,7 @@
 ---
 title: "Adaptor Deployment PRD"
 authors:
-  - "@OpenCode"
+  - "AndrewWestberg"
 created-at: 2026-04-05
 status: draft
 ---
@@ -40,6 +40,7 @@ Konduit needs a documented deployment shape that is:
 - Providing fully automated orchestration
 - Replacing the operator's existing node management
 - Defining generic cloud-native deployment for all environments
+- Defining repo-wide backend parity for unrelated repository subprojects
 
 # Users
 
@@ -57,9 +58,13 @@ Secondary users:
 - `systemd`
 - local `lnd` REST enabled on localhost
 - local `cardano-node`
+- Dolos may sync from the same-host `cardano-node` or an external relay
 - anonymous public traffic
 - nginx is acceptable and familiar
 - `Ogmios` and `Kupo` are ignored for this project
+
+This PRD is scoped to the adaptor runtime and operator tooling. It should not be
+read as requiring backend parity for unrelated repository subprojects.
 
 # Functional Requirements
 
@@ -85,6 +90,10 @@ Only the consumer-facing Konduit API should be publicly exposed.
 
 Konduit, Dolos, and LND backend traffic must remain on localhost.
 
+This locality requirement applies to Konduit's traffic to Dolos. Dolos may in
+turn use the same-host `cardano-node` or an external relay as its upstream sync
+source.
+
 ## Access Control
 
 Konduit must use a dedicated least-privilege LND macaroon.
@@ -92,6 +101,13 @@ Konduit must use a dedicated least-privilege LND macaroon.
 ## Upgrade Model
 
 Deployments must support manual, SHA-pinned upgrades and quick rollback.
+
+## Backend Readiness
+
+Konduit should not be considered ready to accept traffic with the UTxO RPC
+backend unless Dolos is reachable, the configured network matches live data,
+live protocol parameters can be derived, and the configured reference script
+UTxO can be resolved.
 
 # Non-functional Requirements
 
@@ -184,6 +200,8 @@ Definition of done:
 - confirm Dolos and LND are only reachable on localhost
 - confirm Konduit is only publicly reachable through nginx
 - confirm rate limiting and basic request guards are enabled
+- confirm Konduit backend readiness checks cover Dolos reachability, network
+  match, live protocol parameters, and reference script availability
 
 # Rollout Plan
 
