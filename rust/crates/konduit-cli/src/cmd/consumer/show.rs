@@ -1,5 +1,4 @@
 use crate::config::consumer::Config;
-use cardano_connector::CardanoConnector;
 use konduit_data::{Keytag, Tag};
 use tokio::runtime::Runtime;
 
@@ -28,15 +27,15 @@ impl Cmd {
             return Ok(());
         }
 
-        let connector = config.connector.connector()?;
         match self {
             Cmd::Address => {
+                let network_id = config
+                    .connector
+                    .network_id()
+                    .expect("connector network should always be available from config");
                 print!(
                     "{}",
-                    config
-                        .wallet
-                        .to_verification_key()
-                        .to_address(connector.network().into())
+                    config.wallet.to_verification_key().to_address(network_id)
                 );
                 Ok(())
             }
@@ -45,6 +44,7 @@ impl Cmd {
                 Ok(())
             }
             Cmd::Tip { verbose } => {
+                let connector = config.connector.connector()?;
                 let tip =
                     Runtime::new()?.block_on(crate::tip::Consumer::new(&connector, config))?;
                 if verbose {

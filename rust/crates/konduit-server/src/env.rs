@@ -4,7 +4,10 @@
 pub const SIGNING_KEY: &str = "KONDUIT_SIGNING_KEY";
 
 /// # Cardano connect
+pub const CARDANO_BACKEND: &str = "KONDUIT_CARDANO_BACKEND";
 pub const BLOCKFROST_PROJECT_ID: &str = "KONDUIT_BLOCKFROST_PROJECT_ID";
+pub const UTXORPC_URI: &str = "KONDUIT_UTXORPC_URI";
+pub const NETWORK: &str = "KONDUIT_NETWORK";
 
 /// # Db config
 pub const DB_PATH: &str = "KONDUIT_DB_PATH";

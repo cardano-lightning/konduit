@@ -63,7 +63,7 @@
           "id": "task-003",
           "title": "Wire backend selection into the Rust runtime surfaces",
           "description": "Replace the current hard-wired Blockfrost runtime bindings with explicit backend selection across `konduit-server` and `konduit-cli`, add the UTxO RPC config surface, and enforce the agreed Dolos readiness checks where startup validation is required.",
-          "status": "pending",
+          "status": "completed",
           "priority": "high",
           "estimatedHours": 8,
           "dependencies": [
@@ -93,7 +93,9 @@
             "Current CLI runtime flows can execute against the UTxO RPC backend",
             "The server fails startup when Dolos is unreachable, on the wrong network, missing live parameters, or missing the configured reference script UTxO",
             "The existing Blockfrost server and CLI paths remain available in parallel"
-          ]
+          ],
+          "completionNotes": "Completed with explicit `blockfrost`/`utxorpc` selection in `konduit-server` and `konduit-cli`, new `KONDUIT_CARDANO_BACKEND`, `KONDUIT_UTXORPC_URI`, and explicit `KONDUIT_NETWORK` handling for runnable UTxO RPC flows, server-side reachability plus live-network validation before startup continues, and CLI-side live validation before tip/tx flows proceed. Verified with `cargo fmt --all -- --check`, `cargo check -p konduit-server`, `cargo check -p konduit-cli`, `cargo test -p konduit-server`, `cargo test -p konduit-cli`, `cargo clippy -p konduit-server --all-targets -- -D warnings`, and `cargo clippy -p konduit-cli --all-targets -- -D warnings`.",
+          "completedAt": "2026-04-12T00:08:00Z"
         }
       ]
     },

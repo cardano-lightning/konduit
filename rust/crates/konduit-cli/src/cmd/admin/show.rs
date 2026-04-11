@@ -1,5 +1,4 @@
 use crate::config::admin::Config;
-use cardano_connector::CardanoConnector;
 use tokio::runtime::Runtime;
 
 /// Show
@@ -24,20 +23,20 @@ impl Cmd {
             return Ok(());
         }
 
-        let connector = config.connector.connector()?;
-
         match self {
             Cmd::Address => {
+                let network_id = config
+                    .connector
+                    .network_id()
+                    .expect("connector network should always be available from config");
                 print!(
                     "{}",
-                    config
-                        .wallet
-                        .to_verification_key()
-                        .to_address(connector.network().into())
+                    config.wallet.to_verification_key().to_address(network_id)
                 );
                 Ok(())
             }
             Cmd::Tip { verbose } => {
+                let connector = config.connector.connector()?;
                 let tip = Runtime::new()?.block_on(crate::tip::Admin::new(&connector, config))?;
                 if verbose {
                     println!("{:#}", tip);

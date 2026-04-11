@@ -18,7 +18,8 @@ async-trait.workspace = true
 bln-client = { workspace = true, features = ["cli", "namespaced"] }
 cardano-connector-direct.workspace = true
 cardano-connector.workspace = true
-cardano-sdk.workspace = true
+cardano-connector-utxorpc.workspace = true
+cardano-sdk = { workspace = true, features = ["clap"] }
 clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
 env_logger.workspace = true
@@ -41,3 +42,4 @@ tokio.workspace = true
 [dev-dependencies]
 proptest.workspace = true
 proptest-derive.workspace = true
+tokio.workspace = true

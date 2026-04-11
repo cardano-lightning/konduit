@@ -77,7 +77,7 @@ impl Fill for Env {
         let connector = self.connector.fill()?;
 
         let (wallet, host_address) =
-            default_wallet_and_address(connector.network_id(), self.wallet, self.host_address);
+            default_wallet_and_address(connector.network_id()?, self.wallet, self.host_address);
 
         Ok(Self {
             connector,
