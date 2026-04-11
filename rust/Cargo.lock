@@ -639,6 +639,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cardano-connector-utxorpc"
+version = "0.0.0"
+dependencies = [
+ "cardano-connector",
+ "cardano-sdk",
+]
+
+[[package]]
 name = "cardano-sdk"
 version = "0.0.0"
 dependencies = [

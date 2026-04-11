@@ -18,10 +18,11 @@
           "id": "task-001",
           "title": "Add the UTxO RPC connector crate and workspace wiring",
           "description": "Create a new `cardano-connector-utxorpc` crate, add the required workspace dependencies, and establish the minimal crate structure needed for a direct Dolos UTxO RPC implementation to live beside the existing Blockfrost connector.",
-          "status": "pending",
+          "status": "completed",
           "priority": "high",
           "estimatedHours": 2,
           "dependencies": [],
+          "completionNotes": "Completed with the new workspace member, a minimal crate manifest, and a placeholder `src/lib.rs`. Verified with `cargo check -p cardano-connector-utxorpc`, `cargo test -p cardano-connector-utxorpc`, and `cargo check --workspace`. The existing Blockfrost connector path remained untouched in parallel.",
           "targetPaths": [
             "rust/Cargo.toml",
             "rust/crates/cardano-connector-utxorpc/Cargo.toml",
