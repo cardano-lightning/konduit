@@ -38,7 +38,7 @@
           "id": "task-002",
           "title": "Implement the UTxO RPC connector core",
           "description": "Implement UTxO RPC client construction, explicit network configuration, health checks, live protocol parameter derivation, UTxO lookup and mapping, `utxos_at` semantics, and transaction submission so the new crate satisfies the existing `CardanoConnector` contract without Blockfrost-only assumptions.",
-          "status": "pending",
+          "status": "completed",
           "priority": "high",
           "estimatedHours": 8,
           "dependencies": [
@@ -50,6 +50,8 @@
             "rust/crates/cardano-connector-utxorpc/src/mapping.rs",
             "rust/crates/cardano-connector-utxorpc/src/params.rs"
           ],
+          "completionNotes": "Completed with a real `UtxoRpc` connector in `cardano-connector-utxorpc`, explicit endpoint/network config, live health and protocol-parameter reads from UTxO RPC, paginated `utxos_at` lookup preserving payment-only semantics, Dolos-backed submission, and focused connector-core unit tests. Verified with `cargo fmt --all -- --check`, `cargo check -p cardano-connector-utxorpc`, `cargo test -p cardano-connector-utxorpc`, `cargo clippy -p cardano-connector-utxorpc --all-targets -- -D warnings`, and `cargo doc -p cardano-connector-utxorpc --no-deps`. Protocol `start_time` is currently reconstructed from the Shelley era boundary and the ledger-fixed 20-second Byron slot length because the reviewed `utxorpc` helper path does not expose parsed genesis config directly.",
+          "completedAt": "2026-04-11T20:29:00Z",
           "acceptance": [
             "The new connector implements `network`, `health`, `protocol_parameters`, `utxos_at`, and `submit`",
             "Protocol parameters are derived from UTxO RPC data rather than static per-network presets",
