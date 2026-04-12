@@ -113,6 +113,11 @@ impl CardanoArgs {
 
         Ok(UtxoRpcConfig::new(endpoint.to_owned(), network))
     }
+
+    #[cfg(test)]
+    fn selected_backend_name(&self) -> &'static str {
+        self.backend.as_str()
+    }
 }
 
 impl CardanoBackend {
@@ -127,7 +132,7 @@ impl CardanoBackend {
 #[cfg(test)]
 mod tests {
     use super::{CardanoArgs, CardanoBackend};
-    use cardano_connector_utxorpc::ensure_network_matches;
+    use cardano_connector_utxorpc::{Config as UtxoRpcConfig, ensure_network_matches};
     use cardano_sdk::Network;
 
     #[test]
@@ -169,5 +174,69 @@ mod tests {
                 .expect_err("network mismatch should fail");
 
         assert!(error.to_string().contains("does not match"));
+    }
+
+    #[test]
+    fn blockfrost_backend_name_matches_selection() {
+        let args = CardanoArgs {
+            backend: CardanoBackend::Blockfrost,
+            blockfrost_project_id: Some("preview12345".to_string()),
+            utxorpc_uri: None,
+            network: None,
+        };
+
+        assert_eq!(args.selected_backend_name(), "blockfrost");
+    }
+
+    #[test]
+    fn utxorpc_config_preserves_endpoint_and_network() {
+        let args = CardanoArgs {
+            backend: CardanoBackend::Utxorpc,
+            blockfrost_project_id: None,
+            utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            network: Some(Network::Preview),
+        };
+
+        let config = args
+            .utxorpc_config()
+            .expect("complete UTxO RPC config should build");
+
+        assert_eq!(args.selected_backend_name(), "utxorpc");
+        assert_eq!(
+            config,
+            UtxoRpcConfig::new("http://127.0.0.1:1337", Network::Preview)
+        );
+    }
+
+    #[test]
+    fn blockfrost_project_id_rejects_whitespace_only_values() {
+        let args = CardanoArgs {
+            backend: CardanoBackend::Blockfrost,
+            blockfrost_project_id: Some("   ".to_string()),
+            utxorpc_uri: None,
+            network: None,
+        };
+
+        let error = args
+            .blockfrost_project_id()
+            .expect_err("whitespace-only project id should fail");
+
+        assert!(error.to_string().contains("KONDUIT_BLOCKFROST_PROJECT_ID"));
+    }
+
+    #[test]
+    fn utxorpc_backend_requires_network_after_uri_is_set() {
+        let args = CardanoArgs {
+            backend: CardanoBackend::Utxorpc,
+            blockfrost_project_id: None,
+            utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            network: None,
+        };
+
+        let error = args
+            .utxorpc_config()
+            .expect_err("missing network should still fail");
+
+        assert!(error.to_string().contains("KONDUIT_NETWORK"));
     }
 }

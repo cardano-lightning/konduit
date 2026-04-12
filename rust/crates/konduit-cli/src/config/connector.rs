@@ -106,8 +106,14 @@ impl fmt::Display for UtxoRpc {
 
 #[cfg(test)]
 mod tests {
-    use super::{Blockfrost, Connector};
-    use cardano_sdk::Network;
+    use super::{Backend, Blockfrost, Connector, UtxoRpc};
+    use cardano_sdk::{Network, NetworkId};
+
+    #[test]
+    fn backend_display_matches_explicit_selection() {
+        assert_eq!(Backend::Blockfrost.to_string(), "blockfrost");
+        assert_eq!(Backend::Utxorpc.to_string(), "utxorpc");
+    }
 
     #[test]
     fn blockfrost_inferred_network_is_validated() {
@@ -128,6 +134,17 @@ mod tests {
             project_id: None,
         });
 
-        assert_eq!(config.network_id(), Some(cardano_sdk::NetworkId::TESTNET));
+        assert_eq!(config.network_id(), Some(NetworkId::TESTNET));
+    }
+
+    #[test]
+    fn utxorpc_connector_reports_explicit_network_and_network_id() {
+        let config = Connector::UtxoRpc(UtxoRpc {
+            network: Network::Mainnet,
+            uri: Some("http://127.0.0.1:1337".to_string()),
+        });
+
+        assert_eq!(config.network(), Network::Mainnet);
+        assert_eq!(config.network_id(), Some(NetworkId::MAINNET));
     }
 }

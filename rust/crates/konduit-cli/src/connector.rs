@@ -27,13 +27,7 @@ impl Connector {
     }
 
     fn new_blockfrost(config: &BlockfrostConfig) -> anyhow::Result<Self> {
-        let project_id = config.project_id.as_deref().ok_or_else(|| {
-            anyhow!("Cardano backend blockfrost requires KONDUIT_BLOCKFROST_PROJECT_ID")
-        })?;
-
-        if let Some(inferred_network) = config.inferred_network()? {
-            ensure_network_matches(config.network, inferred_network, "blockfrost project id")?;
-        }
+        let project_id = validated_blockfrost_project_id(config)?;
 
         Ok(Self::Blockfrost(Blockfrost::new(project_id.to_string())))
     }
@@ -64,6 +58,18 @@ impl Connector {
             Ok(Self::UtxoRpc(Box::new(connector)))
         })
     }
+}
+
+fn validated_blockfrost_project_id(config: &BlockfrostConfig) -> anyhow::Result<&str> {
+    let project_id = config.project_id.as_deref().ok_or_else(|| {
+        anyhow!("Cardano backend blockfrost requires KONDUIT_BLOCKFROST_PROJECT_ID")
+    })?;
+
+    if let Some(inferred_network) = config.inferred_network()? {
+        ensure_network_matches(config.network, inferred_network, "blockfrost project id")?;
+    }
+
+    Ok(project_id)
 }
 
 impl CardanoConnector for Connector {
@@ -109,7 +115,7 @@ impl CardanoConnector for Connector {
 
 #[cfg(test)]
 mod tests {
-    use super::Connector;
+    use super::{Connector, validated_blockfrost_project_id};
     use crate::config::connector::{Blockfrost, Connector as ConnectorConfig, UtxoRpc};
     use cardano_sdk::Network;
 
@@ -156,5 +162,18 @@ mod tests {
         };
 
         assert!(error.to_string().contains("does not match"));
+    }
+
+    #[test]
+    fn blockfrost_validation_accepts_matching_project_id() {
+        let config = Blockfrost {
+            network: Network::Preview,
+            project_id: Some("preview12345".to_string()),
+        };
+
+        let project_id = validated_blockfrost_project_id(&config)
+            .expect("matching Blockfrost config should validate");
+
+        assert_eq!(project_id, "preview12345");
     }
 }

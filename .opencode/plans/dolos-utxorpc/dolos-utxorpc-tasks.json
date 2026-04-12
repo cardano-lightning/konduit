@@ -133,7 +133,7 @@
           "id": "task-101",
           "title": "Add server and CLI tests for backend selection and readiness checks",
           "description": "Add automated coverage for server and CLI backend selection, config parsing, and the UTxO RPC readiness rules so the runtime surfaces are protected against regressions without depending on manual operator checks for every iteration.",
-          "status": "pending",
+          "status": "completed",
           "priority": "high",
           "estimatedHours": 4,
           "dependencies": [
@@ -150,7 +150,9 @@
             "Automated tests cover backend selection for both server and CLI",
             "Automated tests cover invalid UTxO RPC configuration and readiness failures",
             "Automated tests protect the existing Blockfrost path from regression"
-          ]
+          ],
+          "completionNotes": "Completed with expanded runtime-layer regression coverage in `konduit-server` and `konduit-cli`, including backend-selection config validation, non-live `admin::Service::new` startup blockers, representative CLI env-consumer default derivation, and Blockfrost runnable-config validation. Verified with `cargo fmt --all -- --check`, `cargo check -p konduit-cli`, `cargo test -p konduit-cli`, `cargo clippy -p konduit-cli --all-targets -- -D warnings`, `cargo test -p konduit-server --lib`, and `cargo clippy -p konduit-server --lib -- -D warnings`. `cargo check/clippy` on the `konduit-server` binary target remain blocked by an existing `Send` failure in `src/main.rs` when building the UTxO RPC admin-sync spawn path, so that repo-level issue was recorded rather than misattributed to this task.",
+          "completedAt": "2026-04-12T00:26:00Z"
         },
         {
           "id": "task-102",

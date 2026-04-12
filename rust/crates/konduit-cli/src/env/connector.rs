@@ -136,7 +136,7 @@ mod tests {
     use super::ConnectorEnv;
     use crate::config::connector::{Backend, Connector};
     use crate::shared::Fill;
-    use cardano_sdk::Network;
+    use cardano_sdk::{Network, NetworkId};
 
     #[test]
     fn fill_keeps_missing_blockfrost_project_id_unset() {
@@ -202,5 +202,31 @@ mod tests {
         let filled = env.fill().expect("fill should succeed");
 
         assert_eq!(filled.network, Some(Network::Preview));
+    }
+
+    #[test]
+    fn blockfrost_fill_infers_network_from_project_id() {
+        let env = ConnectorEnv {
+            backend: Backend::Blockfrost,
+            network: None,
+            blockfrost_project_id: Some("preview12345".to_string()),
+            utxorpc_uri: None,
+        };
+
+        let filled = env.fill().expect("fill should infer Blockfrost network");
+
+        assert_eq!(filled.network, Some(Network::Preview));
+    }
+
+    #[test]
+    fn blockfrost_network_id_defaults_to_mainnet_when_unset() {
+        let env = ConnectorEnv {
+            backend: Backend::Blockfrost,
+            network: None,
+            blockfrost_project_id: None,
+            utxorpc_uri: None,
+        };
+
+        assert_eq!(env.network_id().unwrap(), NetworkId::MAINNET);
     }
 }
