@@ -50,5 +50,6 @@ pub mod fuel;
 pub mod tx;
 
 pub mod adaptor;
+pub use adaptor::InsufficientTotalGain;
 pub mod admin;
 pub mod consumer;

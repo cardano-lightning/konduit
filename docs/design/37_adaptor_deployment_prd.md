@@ -109,6 +109,11 @@ backend unless Dolos is reachable, the configured network matches live data,
 live protocol parameters can be derived, and the configured reference script
 UTxO can be resolved.
 
+Current implementation note:
+
+- this readiness path depends on Dolos successfully serving `read_genesis` so
+  Konduit can derive the live Cardano network before startup continues.
+
 # Non-functional Requirements
 
 - restart behavior suitable for `systemd`
@@ -202,6 +207,8 @@ Definition of done:
 - confirm rate limiting and basic request guards are enabled
 - confirm Konduit backend readiness checks cover Dolos reachability, network
   match, live protocol parameters, and reference script availability
+- if startup fails before the network check completes, confirm whether Dolos can
+  serve `read_genesis` at the configured UTxO RPC endpoint
 
 # Rollout Plan
 

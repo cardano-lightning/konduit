@@ -206,7 +206,7 @@
           "id": "task-104",
           "title": "Finalize Rust-runtime documentation and implementation cleanup",
           "description": "Update any remaining Rust-runtime-facing documentation that still assumes Blockfrost-only behavior, record the final UTxO RPC configuration and readiness model, and perform any small cleanup discovered during validation so the implementation lands in a reviewable state.",
-          "status": "pending",
+          "status": "completed",
           "priority": "medium",
           "estimatedHours": 2,
           "dependencies": [
@@ -225,7 +225,9 @@
             "Relevant docs describe the final Rust runtime behavior rather than Blockfrost-only assumptions",
             "The UTxO RPC config and readiness model are documented clearly",
             "The touched implementation surfaces are left in a clean, reviewable state"
-          ]
+          ],
+          "completionNotes": "Completed with a strict truth-first documentation pass across the ADR, connector design, deployment docs, implementation PRD, deployment PRD, Rust workflow guide, workspace overview, and CLI README. The final docs now record explicit backend selection and env/config surfaces, the server readiness split, the CLI parsed-config versus live-connector split, the Dolos `read_genesis` prerequisite, the UTxO RPC delegated-lookup watchpoint, and the remaining direct Blockfrost non-parity points. Verified by re-reading the updated docs against the live repository sources and closing the implementation review loop with approved recovery review entries.",
+          "completedAt": "2026-04-12T17:40:00Z"
         }
       ]
     }

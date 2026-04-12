@@ -157,6 +157,12 @@ Responsibilities:
 For this deployment profile, Konduit should treat Dolos UTxO RPC as the
 authoritative source for the Cardano data it needs at runtime.
 
+Current compatibility requirement:
+
+- Konduit's UTxO RPC startup path depends on Dolos successfully serving
+  `read_genesis` so the live network can be derived and validated before startup
+  continues.
+
 Non-goals for this deployment:
 
 - replacing `cardano-node`
@@ -242,8 +248,13 @@ Minimum recommended observability:
 ## Open Items
 
 - exact `systemd` unit files remain implementation work
-- exact Konduit env var surface depends on the UTxO RPC backend implementation
+- exact Konduit env var values remain deployment-specific, but the current Rust
+  runtime surface is `KONDUIT_CARDANO_BACKEND`,
+  `KONDUIT_BLOCKFROST_PROJECT_ID`, `KONDUIT_UTXORPC_URI`, and
+  `KONDUIT_NETWORK`
 - rate-limit values should be tuned based on real traffic and latency
 - exact readiness/health endpoint shapes remain implementation work, but should
   reflect startup blockers for Dolos reachability, network match, live protocol
   parameters, and reference script availability
+- the current background admin-sync log `insufficient total gain` is an
+  operational warning after successful startup, not a readiness failure

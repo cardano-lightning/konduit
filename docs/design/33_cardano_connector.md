@@ -78,8 +78,18 @@ Connector semantics for this effort:
 
 - `utxos_at(payment, Some(delegation))` means UTxOs at addresses matching that
   specific payment and delegation pair.
-- `utxos_at(payment, None)` means any UTxO whose address shares the given
-  payment credential, regardless of delegation.
+- for the UTxO RPC backend, `utxos_at(payment, None)` means any UTxO whose
+  address shares the given payment credential, regardless of delegation.
+
+Current implementation note:
+
+- `cardano-connector-utxorpc` satisfies the intended semantics by paging UTxOs by
+  payment credential and applying delegation filtering locally when
+  `delegation` is present.
+- the still-supported direct Blockfrost path does not currently have the same
+  `utxos_at(payment, None)` behavior because it queries one constructed address.
+  Treat that as a known limitation of the current Blockfrost connector, not as
+  documented parity.
 
 # Backend options
 
@@ -95,6 +105,9 @@ Cons:
 - external hosted dependency
 - credential management burden
 - weaker fit for a self-hosted adaptor deployment
+- current direct implementation still uses static per-network protocol parameter
+  presets and narrower `utxos_at(payment, None)` semantics than the UTxO RPC
+  connector contract intends
 
 ## Dolos MiniBF
 
@@ -158,12 +171,27 @@ presets inside Konduit.
 
 # Configuration
 
-The server should support selecting a Cardano backend explicitly. A likely shape
-is:
+The server and CLI support selecting a Cardano backend explicitly. The current
+runtime shape is:
 
 - backend kind, e.g. `blockfrost` or `utxorpc`
-- backend endpoint, e.g. Dolos gRPC address
-- explicit network selection, cross-checked against live provider data
+- backend endpoint, e.g. Dolos gRPC address for `utxorpc`
+- explicit network selection for `utxorpc`, cross-checked against live provider
+  data
+- Blockfrost project id for `blockfrost`
+
+Current config/runtime notes:
+
+- `konduit-server` uses `KONDUIT_CARDANO_BACKEND`,
+  `KONDUIT_BLOCKFROST_PROJECT_ID`, `KONDUIT_UTXORPC_URI`, and `KONDUIT_NETWORK`.
+- `konduit-cli` uses the same backend env vars, with dotenv precedence of CLI
+  args, exported env vars, `.env.<role>`, then `.env`.
+- parsed CLI `utxorpc` config requires explicit `KONDUIT_NETWORK`, while live
+  UTxO RPC connector use for tip and tx flows also requires
+  `KONDUIT_UTXORPC_URI`.
+- the direct Blockfrost path still allows network inference or defaulting from
+  the project id, so its config behavior is intentionally not identical to the
+  UTxO RPC path.
 
 For this effort, that explicit backend selection is required in the Rust runtime
 surfaces that currently expose direct Blockfrost configuration:
@@ -187,6 +215,9 @@ For the adaptor runtime here:
 - network and health mismatches should fail early at startup where possible
 - the configured network should be explicit in Konduit config and cross-checked
   against live data from Dolos
+- Konduit startup with the UTxO RPC backend depends on Dolos successfully
+  serving `read_genesis` so the live network can be derived before startup
+  continues
 
 # Failure handling
 
@@ -202,6 +233,20 @@ The connector should fail clearly in the following cases:
 For the UTxO RPC backend, these are startup blockers for Rust runtime surfaces
 that need the backend to be ready before serving traffic or executing runtime
 flows.
+
+Current runtime split:
+
+- `konduit-server/src/cardano/args.rs` checks backend construction,
+  reachability, and UTxO RPC live-network match.
+- `konduit-server/src/admin/service.rs` remains the startup blocker for live
+  protocol-parameter derivation and reference-script resolution.
+- `konduit-cli` performs the same live reachability and network validation only
+  for the UTxO RPC backend when a command constructs a live connector. Commands
+  such as `show config` and `show address` remain config-derived and can run
+  without a live backend.
+- the current direct Blockfrost CLI path validates project-id presence and
+  network-prefix consistency, but does not perform the same eager live
+  validation pass before connector use.
 
 # Testing
 

@@ -77,8 +77,8 @@ More precisely:
 6. The UTxO RPC backend will fail startup unless Dolos is reachable, the
    configured Cardano network matches live data, live protocol parameters can be
    derived, and the configured reference script UTxO can be resolved.
-7. `utxos_at(payment, None)` will mean any UTxO whose address shares the given
-   payment credential, regardless of delegation.
+7. For the UTxO RPC backend, `utxos_at(payment, None)` will mean any UTxO whose
+   address shares the given payment credential, regardless of delegation.
 8. `konduit-server` will continue to communicate with the local `lnd` over
    localhost, using a dedicated least-privilege macaroon.
 9. Only `konduit-server` will be exposed publicly, via `nginx`; `dolos`,
@@ -134,6 +134,12 @@ Neutral / follow-up:
 
 - The exact connector crate shape, test strategy, and deployment procedures are
   specified in companion design and PRD documents.
+- The implemented UTxO RPC path depends on Dolos successfully serving
+  `read_genesis` so Konduit can derive the live network before startup
+  continues.
+- The still-supported direct Blockfrost path remains available in parallel, but
+  it still differs from the UTxO RPC backend in protocol-parameter sourcing and
+  `utxos_at(payment, None)` behavior.
 - `Ogmios` and `Kupo` remain available for other operator workloads but are not
   considered part of the Konduit adaptor runtime for this effort.
 - Unrelated repository subprojects, such as `cardano-connector-server`, are not

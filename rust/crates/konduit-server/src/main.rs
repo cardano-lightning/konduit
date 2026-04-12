@@ -1,6 +1,7 @@
 use clap::Parser;
 use konduit_data::AdaptorInfo;
 use konduit_server::{admin, args, server};
+use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::interval};
 
@@ -67,7 +68,15 @@ async fn main() -> anyhow::Result<()> {
             ticker.tick().await;
             match admin.sync().await {
                 Ok(_) => log::info!("Admin sync ok"),
-                Err(e) => log::error!("Admin sync failed: {}", e),
+                Err(e) => {
+                    if let Some(low_gain) = e.downcast_ref::<InsufficientTotalGain>() {
+                        if low_gain.gain > 0 {
+                            log::info!("Admin sync skipped: {}", low_gain);
+                        }
+                    } else {
+                        log::error!("Admin sync failed: {}", e);
+                    }
+                }
             }
         }
     });

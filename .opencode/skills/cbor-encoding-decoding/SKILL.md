@@ -1,6 +1,6 @@
 ---
 name: cbor-encoding-decoding
-description: Guidance for encoding/decoding CBOR and interpreting cbor-hex/diag using cbor-diag.
+description: Guidance for encoding/decoding CBOR and interpreting cbor-hex/diag using cbor-diag. Useful for debugging cardano transactions and datum values.
 ---
 
 # CBOR Encoding/Decoding Skill

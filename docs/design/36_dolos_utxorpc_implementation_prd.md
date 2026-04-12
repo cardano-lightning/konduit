@@ -118,6 +118,12 @@ a way that maps correctly to Konduit's `cardano_sdk::Network` types.
 For this phase, the intended network is explicit Konduit configuration and must
 be cross-checked against live data available through UTxO RPC.
 
+Current implementation note:
+
+- live network derivation depends on Dolos successfully serving `read_genesis`.
+- `network_magic` is the authoritative discriminator, while Dolos `network_id`
+  casing is tolerated.
+
 ## Health
 
 The backend must expose a meaningful health signal based on reachability and
@@ -149,8 +155,16 @@ Semantics:
 
 - `utxos_at(payment, Some(delegation))` matches that specific payment and
   delegation pair.
-- `utxos_at(payment, None)` matches any UTxO whose address shares the given
-  payment credential, regardless of delegation.
+- for the UTxO RPC backend, `utxos_at(payment, None)` matches any UTxO whose
+  address shares the given payment credential, regardless of delegation.
+
+Current implementation note:
+
+- `cardano-connector-utxorpc` achieves the exact pair semantics by paging on the
+  payment credential and applying delegation filtering locally.
+- the direct Blockfrost implementation still does not satisfy the broader
+  payment-credential-wide `utxos_at(payment, None)` behavior; that remains a
+  known non-parity point outside this task's code-cleanup scope.
 
 ## Transaction Submission
 
@@ -265,6 +279,14 @@ Tasks:
 - ensure runtime flows fail clearly when startup-equivalent backend validation
   cannot be satisfied
 
+Current implementation note:
+
+- UTxO RPC commands perform eager connector reachability and live-network
+  validation during connector construction for live tip and tx flows.
+- the current Blockfrost path validates project-id presence and network-prefix
+  consistency, but otherwise fails lazily on later API use rather than through
+  the same eager live-validation path.
+
 Definition of done:
 
 - `konduit-cli` can run its current Blockfrost-backed runtime flows with either
@@ -297,6 +319,14 @@ Tasks:
 - update design docs and deployment docs
 - ensure config surface is documented
 - record known limits and follow-up work
+
+Current known limits to keep explicit:
+
+- UTxO RPC delegated lookup currently depends on payment-credential paging plus
+  local delegation filtering rather than a guaranteed Dolos-side delegation
+  index.
+- the direct Blockfrost path remains available in parallel, but still differs in
+  protocol-parameter sourcing and `utxos_at(payment, None)` behavior.
 
 Definition of done:
 

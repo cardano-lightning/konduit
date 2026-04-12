@@ -76,7 +76,7 @@ rust/
 `- Cargo.lock
 ```
 
-For the Dolos UTxO RPC effort, expect a new crate alongside these, such as:
+For the Dolos UTxO RPC effort, the workspace now includes:
 
 - `cardano-connector-utxorpc/`
 
@@ -131,11 +131,18 @@ cargo test -p konduit-cli
 cargo test -p cardano-connector-direct
 ```
 
-When the UTxO RPC crate exists:
+For the current UTxO RPC crate:
 
 ```bash
 cargo test -p cardano-connector-utxorpc
 ```
+
+Current backend-truth note:
+
+- `cardano-connector-utxorpc` is the production-targeted local-Dolos backend for
+  this effort.
+- the direct Blockfrost path still exists in parallel, but do not assume full
+  runtime parity when docs or code show otherwise.
 
 ### Format Check
 
@@ -329,6 +336,14 @@ For connector work, preserve and test the contract:
 - `utxos_at(payment, Some(delegation))` means the exact payment/delegation pair
 - `utxos_at(payment, None)` means any UTxO whose address shares the payment credential regardless of delegation
 - `submit(tx)` returns success or actionable failure
+
+Documented current-state caveat:
+
+- `cardano-connector-utxorpc` now implements the intended `utxos_at` semantics
+  through payment-credential paging plus local delegation filtering.
+- the direct Blockfrost path still has narrower `utxos_at(payment, None)`
+  behavior and static protocol-parameter fallback; when doing docs or review
+  work, record that non-parity explicitly instead of smoothing it over.
 
 ### Mapping
 
