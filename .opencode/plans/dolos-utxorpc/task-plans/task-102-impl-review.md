@@ -80,3 +80,26 @@ Deviations from the approved plan:
 - none; this iteration only completed the required scribe or tracking outputs that the first review correctly flagged as missing
 
 User interaction required now: no
+
+Code Review: Iteration 2
+Timestamp: 2026-04-12T00:45:18Z
+Outcome: Re-reviewed `task-102` against the approved plan, updated implementation log, new durable research note, updated task tracker, the touched Rust sources, and the live diff. The previously blocking tracking gaps are now resolved, and the earlier technical assessment of the code changes still stands.
+
+Findings:
+- No blocking findings.
+
+What I verified:
+- `.opencode/plans/dolos-utxorpc/research/task-102.md` now exists and truthfully records the accepted CLI smoke seam, the server startup smoke seam, the bounded runtime-boundary `Send` fix, the Actix spawn correction, and the verification outcome required by the approved plan.
+- `.opencode/plans/dolos-utxorpc/dolos-utxorpc-tasks.json` now marks `task-102` as `completed` and includes matching `completionNotes` and `completedAt`, so the canonical task ledger is now synchronized with the implemented outcome.
+- `.opencode/plans/dolos-utxorpc/task-plans/task-102.md` now reflects the implementation state and correctly records that the durable research output was produced and the task is in review pending approval.
+- The touched Rust diff remains within the approved scope:
+- `rust/crates/konduit-cli/src/cmd/admin/tx.rs` still provides the required tx-oriented autonomous smoke path proving network-derived address selection, UTxO lookup, protocol-parameter retrieval, transaction building, signing, and submit wiring together.
+- `rust/crates/konduit-server/src/admin/service.rs` still provides the minimal successful startup smoke for the documented readiness composition around protocol parameters and reference-script UTxO resolution.
+- `rust/crates/konduit-server/src/main.rs` and `rust/crates/cardano-connector-utxorpc/src/lib.rs` still keep the `Send` repair bounded to the approved runtime-local scope, with no crate-boundary drift or connector-trait refactor.
+- The rustdoc cleanup in `rust/crates/konduit-cli/src/cmd/adaptor/tx.rs` remains a justified task-local verification fix rather than scope expansion.
+
+Residual notes:
+- No new code-level verification was needed in Iteration 2 because the only follow-up work was plan-required research and tracker synchronization. The previously reviewed targeted and workspace verification remains the operative evidence for the code changes.
+- The server smoke remains startup-focused rather than exercising `sync()` submission wiring directly. That is still acceptable for this task because the plan only required `sync()` coverage if needed, and the CLI tx smoke already covers integrated submit wiring on a real runtime path.
+
+Decision: approved

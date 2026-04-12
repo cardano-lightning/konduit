@@ -4,7 +4,6 @@ use cardano_sdk::Credential;
 use konduit_data::{Keytag, Receipt};
 use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 use std::collections::BTreeMap;
-use tokio::runtime::Runtime;
 
 /// Create and submit Konduit transactions
 #[derive(Debug, Clone, clap::Args)]
@@ -20,8 +19,8 @@ pub struct Cmd {
 }
 
 impl Cmd {
-    pub fn run(self, config: &Config) -> anyhow::Result<()> {
-        let connector = config.connector.connector()?;
+    pub async fn run(self, config: &Config) -> anyhow::Result<()> {
+        let connector = config.connector.connector().await?;
         let own_key = config.wallet.to_verification_key();
         let own_address = own_key.to_address(connector.network().into());
         let receipts = self.receipt.into_iter().collect::<BTreeMap<_, _>>();
@@ -32,42 +31,40 @@ impl Cmd {
         let bounds = Bounds::twenty_mins();
         let upper = bounds.upper.unwrap();
 
-        Runtime::new()?.block_on(async {
-            let protocol_parameters = connector.protocol_parameters().await?;
-            let network_id = connector.network().into();
-            let network_parameters = NetworkParameters {
-                network_id,
-                protocol_parameters,
-            };
-            let utxos = connector
-                .utxos_at(&own_address.payment(), None)
-                .await?
-                .into_iter()
-                .chain(
-                    connector
-                        .utxos_at(
-                            &config.host_address.payment(),
-                            config.host_address.delegation().as_ref(),
-                        )
-                        .await?,
-                )
-                .chain(
-                    connector
-                        .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
-                        .await?,
-                )
-                .collect();
-            let mut tx = konduit_tx::adaptor::tx(
-                &network_parameters,
-                &preferences,
-                &own_key,
-                &receipts,
-                &utxos,
-                &upper,
-            )?;
-            println!("Tx id :: {}", tx.id());
-            tx.sign(&config.wallet);
-            connector.submit(&tx).await
-        })
+        let protocol_parameters = connector.protocol_parameters().await?;
+        let network_id = connector.network().into();
+        let network_parameters = NetworkParameters {
+            network_id,
+            protocol_parameters,
+        };
+        let utxos = connector
+            .utxos_at(&own_address.payment(), None)
+            .await?
+            .into_iter()
+            .chain(
+                connector
+                    .utxos_at(
+                        &config.host_address.payment(),
+                        config.host_address.delegation().as_ref(),
+                    )
+                    .await?,
+            )
+            .chain(
+                connector
+                    .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
+                    .await?,
+            )
+            .collect();
+        let mut tx = konduit_tx::adaptor::tx(
+            &network_parameters,
+            &preferences,
+            &own_key,
+            &receipts,
+            &utxos,
+            &upper,
+        )?;
+        println!("Tx id :: {}", tx.id());
+        tx.sign(&config.wallet);
+        connector.submit(&tx).await
     }
 }

@@ -48,16 +48,40 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         };
         // Treat reference script utxo as constant.
         // If this moves, the service needs to be restarted.
-        let Some(script_utxo) = cardano
+        let host_utxos = cardano
             .utxos_at(&host_address.payment(), host_address.delegation().as_ref())
-            .await?
-            .into_iter()
-            .find(|(_, o)| {
-                o.script()
-                    .is_some_and(|s| Hash::<28>::from(s) == KONDUIT_VALIDATOR.hash)
+            .await?;
+        let script_candidates = host_utxos
+            .iter()
+            .filter_map(|(input, output)| {
+                output
+                    .script()
+                    .map(|script| (input.clone(), Hash::<28>::from(script), script.version()))
             })
-        else {
-            return Err(anyhow::anyhow!("No reference script found"));
+            .collect::<Vec<_>>();
+        let Some(script_utxo) = host_utxos.into_iter().find(|(_, o)| {
+            o.script()
+                .is_some_and(|s| Hash::<28>::from(s) == KONDUIT_VALIDATOR.hash)
+        }) else {
+            let script_summary = if script_candidates.is_empty() {
+                "none".to_string()
+            } else {
+                script_candidates
+                    .iter()
+                    .map(|(input, hash, version)| {
+                        format!("{input} hash={hash} version={version:#}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+
+            return Err(anyhow::anyhow!(
+                "No reference script found at host address {}. Retrieved {} host UTxO(s); script candidates: {}. Expected script hash {}",
+                host_address,
+                script_candidates.len(),
+                script_summary,
+                KONDUIT_VALIDATOR.hash,
+            ));
         };
 
         Ok(Self {
@@ -361,7 +385,9 @@ mod tests {
         .err()
         .expect("missing reference script should fail startup");
 
-        assert_eq!(error.to_string(), "No reference script found");
+        let message = error.to_string();
+        assert!(message.contains("No reference script found at host address"));
+        assert!(message.contains("Retrieved 0 host UTxO(s)"));
     }
 
     #[tokio::test]

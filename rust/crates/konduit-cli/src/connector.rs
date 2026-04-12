@@ -19,10 +19,10 @@ pub enum Connector {
 }
 
 impl Connector {
-    pub fn from_config(config: &ConnectorConfig) -> anyhow::Result<Self> {
+    pub async fn from_config(config: &ConnectorConfig) -> anyhow::Result<Self> {
         match config {
             ConnectorConfig::Blockfrost(config) => Self::new_blockfrost(config),
-            ConnectorConfig::UtxoRpc(config) => Self::new_utxorpc(config),
+            ConnectorConfig::UtxoRpc(config) => Self::new_utxorpc(config).await,
         }
     }
 
@@ -32,31 +32,26 @@ impl Connector {
         Ok(Self::Blockfrost(Blockfrost::new(project_id.to_string())))
     }
 
-    fn new_utxorpc(config: &UtxoRpcConfig) -> anyhow::Result<Self> {
+    async fn new_utxorpc(config: &UtxoRpcConfig) -> anyhow::Result<Self> {
         let endpoint = config
             .uri
             .as_deref()
             .ok_or_else(|| anyhow!("Cardano backend utxorpc requires KONDUIT_UTXORPC_URI"))?;
 
-        let runtime = tokio::runtime::Runtime::new()
-            .context("failed to create runtime for Cardano backend validation")?;
+        let runtime_config = UtxoRpcRuntimeConfig::new(endpoint.to_string(), config.network);
+        let connector = UtxoRpc::connect(runtime_config.clone())
+            .await
+            .with_context(|| format!("failed to initialize UTxO RPC backend at {endpoint}"))?;
 
-        runtime.block_on(async {
-            let runtime_config = UtxoRpcRuntimeConfig::new(endpoint.to_string(), config.network);
-            let connector = UtxoRpc::connect(runtime_config.clone())
-                .await
-                .with_context(|| format!("failed to initialize UTxO RPC backend at {endpoint}"))?;
+        connector
+            .health()
+            .await
+            .with_context(|| format!("failed to reach UTxO RPC backend at {endpoint}"))?;
 
-            connector
-                .health()
-                .await
-                .with_context(|| format!("failed to reach UTxO RPC backend at {endpoint}"))?;
+        let live = live_network(endpoint).await?;
+        ensure_network_matches(config.network, live, endpoint)?;
 
-            let live = live_network(endpoint).await?;
-            ensure_network_matches(config.network, live, endpoint)?;
-
-            Ok(Self::UtxoRpc(Box::new(connector)))
-        })
+        Ok(Self::UtxoRpc(Box::new(connector)))
     }
 }
 
@@ -126,7 +121,8 @@ mod tests {
             project_id: None,
         });
 
-        let error = match Connector::from_config(&config) {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let error = match runtime.block_on(Connector::from_config(&config)) {
             Ok(_) => panic!("missing project id should fail"),
             Err(error) => error,
         };
@@ -141,7 +137,8 @@ mod tests {
             uri: None,
         });
 
-        let error = match Connector::from_config(&config) {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let error = match runtime.block_on(Connector::from_config(&config)) {
             Ok(_) => panic!("missing URI should fail"),
             Err(error) => error,
         };
@@ -156,7 +153,8 @@ mod tests {
             project_id: Some("preprod12345".to_string()),
         });
 
-        let error = match Connector::from_config(&config) {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let error = match runtime.block_on(Connector::from_config(&config)) {
             Ok(_) => panic!("network mismatch should fail"),
             Err(error) => error,
         };

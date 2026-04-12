@@ -25,8 +25,8 @@ pub enum Connector {
 }
 
 impl Connector {
-    pub fn connector(&self) -> anyhow::Result<crate::connector::Connector> {
-        crate::connector::Connector::from_config(self)
+    pub async fn connector(&self) -> anyhow::Result<crate::connector::Connector> {
+        crate::connector::Connector::from_config(self).await
     }
 
     pub const fn network(&self) -> Network {

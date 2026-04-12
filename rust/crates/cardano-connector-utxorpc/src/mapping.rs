@@ -50,13 +50,22 @@ pub fn matches_payment(output: &Output, payment: &Credential) -> bool {
         .is_some_and(|address| address.payment() == *payment)
 }
 
+pub fn matches_payment_and_delegation(
+    output: &Output,
+    payment: &Credential,
+    delegation: &Credential,
+) -> bool {
+    output.address().as_shelley().is_some_and(|address| {
+        address.payment() == *payment && address.delegation().as_ref() == Some(delegation)
+    })
+}
+
 pub fn predicate_for_credentials(
     _network: Network,
     payment: &Credential,
-    delegation: Option<&Credential>,
+    _delegation: Option<&Credential>,
 ) -> utxorpc::spec::query::UtxoPredicate {
     let payment_part: [u8; Credential::DIGEST_SIZE] = payment.into();
-    let delegation_part = delegation.map(<[u8; Credential::DIGEST_SIZE]>::from);
 
     utxorpc::spec::query::UtxoPredicate {
         r#match: Some(utxorpc::spec::query::AnyUtxoPattern {
@@ -66,9 +75,7 @@ pub fn predicate_for_credentials(
                         address: Some(cardano::AddressPattern {
                             exact_address: Default::default(),
                             payment_part: payment_part.to_vec().into(),
-                            delegation_part: delegation_part
-                                .map(|part| part.to_vec().into())
-                                .unwrap_or_default(),
+                            delegation_part: Default::default(),
                         }),
                         asset: None,
                     },
@@ -189,7 +196,10 @@ fn bytes_to_u64(bytes: &[u8]) -> anyhow::Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{big_int_to_u64, map_output_data, matches_payment, predicate_for_credentials};
+    use super::{
+        big_int_to_u64, map_output_data, matches_payment, matches_payment_and_delegation,
+        predicate_for_credentials,
+    };
     use cardano_sdk::{
         Address, Credential, Datum, Network, Output, PlutusData, PlutusVersion, Value,
         address_test, cbor::ToCbor, key_credential, plutus_script,
@@ -282,6 +292,22 @@ mod tests {
     }
 
     #[test]
+    fn payment_and_delegation_predicate_still_leaves_delegation_unset() {
+        let payment = key_credential!("11111111111111111111111111111111111111111111111111111111");
+        let delegation =
+            key_credential!("22222222222222222222222222222222222222222222222222222222");
+
+        let predicate = predicate_for_credentials(Network::Preprod, &payment, Some(&delegation));
+        let pattern = predicate.r#match.expect("match pattern").utxo_pattern;
+        let utxorpc::spec::query::any_utxo_pattern::UtxoPattern::Cardano(pattern) =
+            pattern.expect("cardano pattern");
+        let address = pattern.address.expect("address pattern");
+
+        assert_eq!(address.payment_part.len(), Credential::DIGEST_SIZE);
+        assert!(address.delegation_part.is_empty());
+    }
+
+    #[test]
     fn matches_payment_ignores_delegation() {
         let payment = key_credential!("11111111111111111111111111111111111111111111111111111111");
         let delegation =
@@ -291,6 +317,29 @@ mod tests {
         let output = cardano_sdk::Output::new(address.into(), cardano_sdk::Value::new(1_000_000));
 
         assert!(matches_payment(&output, &payment));
+    }
+
+    #[test]
+    fn matches_payment_and_delegation_requires_exact_pair() {
+        let payment = key_credential!("11111111111111111111111111111111111111111111111111111111");
+        let delegation =
+            key_credential!("22222222222222222222222222222222222222222222222222222222");
+        let other_delegation =
+            key_credential!("33333333333333333333333333333333333333333333333333333333");
+        let address = Address::new(Network::Preprod.into(), payment.clone())
+            .with_delegation(delegation.clone());
+        let output = cardano_sdk::Output::new(address.into(), cardano_sdk::Value::new(1_000_000));
+
+        assert!(matches_payment_and_delegation(
+            &output,
+            &payment,
+            &delegation
+        ));
+        assert!(!matches_payment_and_delegation(
+            &output,
+            &payment,
+            &other_delegation,
+        ));
     }
 
     #[test]

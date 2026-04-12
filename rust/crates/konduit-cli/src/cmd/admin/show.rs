@@ -1,5 +1,4 @@
 use crate::config::admin::Config;
-use tokio::runtime::Runtime;
 
 /// Show
 #[derive(Debug, clap::Subcommand)]
@@ -17,7 +16,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    pub(crate) fn run(self, config: &Config) -> anyhow::Result<()> {
+    pub(crate) async fn run(self, config: &Config) -> anyhow::Result<()> {
         if let Cmd::Config = self {
             print!("{}", config);
             return Ok(());
@@ -36,8 +35,8 @@ impl Cmd {
                 Ok(())
             }
             Cmd::Tip { verbose } => {
-                let connector = config.connector.connector()?;
-                let tip = Runtime::new()?.block_on(crate::tip::Admin::new(&connector, config))?;
+                let connector = config.connector.connector().await?;
+                let tip = crate::tip::Admin::new(&connector, config).await?;
                 if verbose {
                     println!("{:#}", tip);
                 } else {

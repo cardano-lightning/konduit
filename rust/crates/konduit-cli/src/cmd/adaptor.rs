@@ -26,7 +26,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    pub(crate) fn run(self, env: Env) -> anyhow::Result<()> {
+    pub(crate) async fn run(self, env: Env) -> anyhow::Result<()> {
         if let Cmd::Setup = self {
             return env.setup();
         }
@@ -35,8 +35,8 @@ impl Cmd {
 
         match self {
             Cmd::Verify(cmd) => cmd.run(&config),
-            Cmd::Show(cmd) => cmd.run(&config),
-            Cmd::Tx(cmd) => cmd.run(&config),
+            Cmd::Show(cmd) => cmd.run(&config).await,
+            Cmd::Tx(cmd) => cmd.run(&config).await,
             Cmd::Setup => unreachable!(),
         }
     }

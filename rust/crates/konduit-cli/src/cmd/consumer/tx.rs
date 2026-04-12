@@ -4,7 +4,6 @@ use konduit_client::l1;
 use konduit_data::{Duration, Tag};
 use konduit_tx::consumer::{Intent, OpenIntent};
 use std::{collections::BTreeMap, str};
-use tokio::runtime::Runtime;
 
 /// Consumer tx. Can open, add, close, expire, elapse, and end.
 /// Only open add and close need to be declared, the other steps are inferred from the context.
@@ -84,8 +83,8 @@ impl From<OpenArgs> for OpenIntent {
 }
 
 impl Cmd {
-    pub fn run(self, config: &Config) -> anyhow::Result<()> {
-        let connector = config.connector.connector()?;
+    pub async fn run(self, config: &Config) -> anyhow::Result<()> {
+        let connector = config.connector.connector().await?;
 
         let opens = self
             .open
@@ -100,12 +99,10 @@ impl Cmd {
             .chain(self.close.iter().map(|c| (c.clone(), Intent::Close)))
             .collect::<BTreeMap<_, _>>();
 
-        let id = Runtime::new()?.block_on(async {
-            let client = l1::Client::new(&connector, &config.wallet);
-            client
-                .execute(&config.wallet, None, opens, intents, &config.host_address)
-                .await
-        })?;
+        let client = l1::Client::new(&connector, &config.wallet);
+        let id = client
+            .execute(&config.wallet, None, opens, intents, &config.host_address)
+            .await?;
 
         println!("\"{id}\"");
 

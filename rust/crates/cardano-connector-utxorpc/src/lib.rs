@@ -120,7 +120,10 @@ fn accumulate_page(
     for utxo in page.items {
         let (input, output) = mapping::map_output(utxo)?;
 
-        if delegation.is_some() || mapping::matches_payment(&output, payment) {
+        if delegation.is_some_and(|delegation| {
+            mapping::matches_payment_and_delegation(&output, payment, delegation)
+        }) || (delegation.is_none() && mapping::matches_payment(&output, payment))
+        {
             all.insert(input, output);
         }
     }
@@ -187,13 +190,16 @@ fn network_from_genesis(genesis: &utxorpc::spec::cardano::Genesis) -> anyhow::Re
         }
     };
 
-    match (genesis.network_id.as_str(), network) {
+    let raw_network_id = genesis.network_id.trim();
+    let normalized_network_id = raw_network_id.to_ascii_lowercase();
+
+    match (normalized_network_id.as_str(), network) {
         ("mainnet", Network::Mainnet)
         | ("testnet", Network::Preprod)
         | ("testnet", Network::Preview)
         | ("", _) => Ok(network),
-        (network_id, derived) => Err(anyhow!(
-            "Dolos genesis network_id {network_id} is inconsistent with network magic for {derived}"
+        (normalized, derived) => Err(anyhow!(
+            "Dolos genesis network_id {raw_network_id} (normalized: {normalized}) is inconsistent with network magic for {derived}"
         )),
     }
 }
@@ -336,6 +342,22 @@ mod tests {
             .expect_err("inconsistent genesis should fail");
 
         assert!(error.to_string().contains("inconsistent"));
+    }
+
+    #[test]
+    fn network_from_genesis_accepts_case_insensitive_mainnet_id() {
+        let network = network_from_genesis(&genesis("Mainnet", Network::MAINNET_MAGIC as u32))
+            .expect("mainnet id casing should be accepted");
+
+        assert_eq!(network, Network::Mainnet);
+    }
+
+    #[test]
+    fn network_from_genesis_accepts_trimmed_case_insensitive_testnet_id() {
+        let network = network_from_genesis(&genesis(" Testnet ", Network::PREVIEW_MAGIC as u32))
+            .expect("testnet id casing should be accepted");
+
+        assert_eq!(network, Network::Preview);
     }
 
     #[test]

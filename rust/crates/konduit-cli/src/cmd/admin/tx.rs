@@ -3,7 +3,6 @@ use cardano_connector::CardanoConnector;
 use cardano_sdk::{Address, SigningKey, Value, address::kind};
 use konduit_tx::{self, KONDUIT_VALIDATOR};
 use std::str;
-use tokio::runtime::Runtime;
 
 /// Create and submit Konduit transactions
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -57,17 +56,13 @@ pub struct DeployArgs {
 }
 
 impl Cmd {
-    pub fn run(self, config: &Config) -> anyhow::Result<()> {
-        let connector = config.connector.connector()?;
+    pub async fn run(self, config: &Config) -> anyhow::Result<()> {
+        let connector = config.connector.connector().await?;
         match self {
-            Cmd::Send(args) => Runtime::new()?.block_on(run_send(&connector, &config.wallet, args)),
-
-            Cmd::Deploy(args) => Runtime::new()?.block_on(run_deploy(
-                &connector,
-                &config.wallet,
-                &config.host_address,
-                args,
-            )),
+            Cmd::Send(args) => run_send(&connector, &config.wallet, args).await,
+            Cmd::Deploy(args) => {
+                run_deploy(&connector, &config.wallet, &config.host_address, args).await
+            }
         }
     }
 }
@@ -109,7 +104,7 @@ async fn run_deploy(
         .utxos_at(&own_address.payment(), None)
         .await?
         .into_iter()
-        .filter(|(_, o)| o.script().is_some() || !args.spend_all)
+        .filter(|(_, o)| o.script().is_none() || args.spend_all)
         .collect();
     let protocol_parameters = connector.protocol_parameters().await?;
     let mut tx = konduit_tx::admin::deploy(
@@ -126,11 +121,11 @@ async fn run_deploy(
 
 #[cfg(test)]
 mod tests {
-    use super::{ADA, SendArgs, run_send};
+    use super::{ADA, DeployArgs, SendArgs, run_deploy, run_send};
     use cardano_connector::CardanoConnector;
     use cardano_sdk::{
-        Address, Credential, Hash, Input, Network, Output, ProtocolParameters, SigningKey,
-        Transaction, Value, address::kind, transaction::state,
+        Address, Credential, Hash, Input, Network, Output, PlutusVersion, ProtocolParameters,
+        SigningKey, Transaction, Value, address::kind, plutus_script, transaction::state,
     };
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
@@ -204,8 +199,28 @@ mod tests {
     fn wallet_utxos(address: &Address<kind::Shelley>) -> BTreeMap<Input, Output> {
         BTreeMap::from([(
             Input::new(Hash::<32>::from([9; 32]), 0),
-            Output::new(address.clone().into(), Value::new(10 * ADA)),
+            Output::new(address.clone().into(), Value::new(30 * ADA)),
         )])
+    }
+
+    fn wallet_utxos_with_reference_script(
+        address: &Address<kind::Shelley>,
+    ) -> BTreeMap<Input, Output> {
+        BTreeMap::from([
+            (
+                Input::new(Hash::<32>::from([9; 32]), 0),
+                Output::new(address.clone().into(), Value::new(30 * ADA)),
+            ),
+            (
+                Input::new(Hash::<32>::from([8; 32]), 1),
+                Output::new(address.clone().into(), Value::new(30 * ADA)).with_plutus_script(
+                    plutus_script!(
+                        PlutusVersion::V3,
+                        "581c0102030405060708090a0b0c0d0e0f101112131415161718191a1b"
+                    ),
+                ),
+            ),
+        ])
     }
 
     #[tokio::test]
@@ -225,6 +240,52 @@ mod tests {
         run_send(&connector, &wallet, args)
             .await
             .expect("send smoke path should succeed");
+
+        let state = connector.state.lock().expect("state lock");
+        assert_eq!(state.protocol_parameter_calls, 1);
+        assert_eq!(state.submit_calls, 1);
+    }
+
+    #[tokio::test]
+    async fn deploy_skips_reference_script_utxos_by_default() {
+        let wallet = SigningKey::from([6; 32]);
+        let own_address = payment_address(&wallet);
+        let connector = FakeConnector::new(
+            own_address.payment(),
+            wallet_utxos_with_reference_script(&own_address),
+        );
+
+        run_deploy(
+            &connector,
+            &wallet,
+            &own_address,
+            DeployArgs { spend_all: false },
+        )
+        .await
+        .expect("deploy should skip script utxos by default");
+
+        let state = connector.state.lock().expect("state lock");
+        assert_eq!(state.protocol_parameter_calls, 1);
+        assert_eq!(state.submit_calls, 1);
+    }
+
+    #[tokio::test]
+    async fn deploy_can_spend_reference_script_utxos_when_requested() {
+        let wallet = SigningKey::from([7; 32]);
+        let own_address = payment_address(&wallet);
+        let connector = FakeConnector::new(
+            own_address.payment(),
+            wallet_utxos_with_reference_script(&own_address),
+        );
+
+        run_deploy(
+            &connector,
+            &wallet,
+            &own_address,
+            DeployArgs { spend_all: true },
+        )
+        .await
+        .expect("deploy should allow script utxos when requested");
 
         let state = connector.state.lock().expect("state lock");
         assert_eq!(state.protocol_parameter_calls, 1);

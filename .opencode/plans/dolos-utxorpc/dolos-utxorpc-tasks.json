@@ -183,7 +183,7 @@
           "id": "task-103",
           "title": "Run live Dolos validation and capture operator evidence",
           "description": "Perform the required manual or operator-assisted validation against a real Dolos-backed environment so the implemented UTxO RPC path is checked against live reachability, readiness, and at least one end-to-end submission path rather than only mocked or autonomous test coverage.",
-          "status": "pending",
+          "status": "completed",
           "priority": "medium",
           "estimatedHours": 3,
           "dependencies": [
@@ -198,7 +198,9 @@
             "A real Dolos-backed validation run is performed or handed off truthfully to the operator",
             "Validation covers reachability, configured network match, live protocol parameter derivation, and reference script resolution",
             "Validation includes at least one live transaction submission path or a clearly documented blocker"
-          ]
+          ],
+          "completionNotes": "Completed with a live localhost Dolos validation run. Operator evidence showed successful `konduit-cli admin tx deploy` submission with tx id `b090e09ae05b947e2818f807dba874a205acacf1ffc4a3c5a53b8bc1cfe5c0ab`, followed by fresh sequential `cargo build -p konduit-cli -p konduit-server && ./target/debug/konduit-server` startup reaching steady state. During validation, Konduit was updated to tolerate Dolos `network_id` casing, keep CLI UTxO RPC use within a single Tokio runtime, fix `admin tx deploy` script-spend filtering, and enforce `utxos_at(payment, Some(delegation))` semantics locally after payment-only UTxO RPC lookup. The post-startup `insufficient total gain` log was observed as a non-blocking background admin-sync condition rather than a readiness failure.",
+          "completedAt": "2026-04-12T16:59:38Z"
         },
         {
           "id": "task-104",
