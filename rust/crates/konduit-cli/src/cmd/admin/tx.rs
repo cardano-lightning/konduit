@@ -1,6 +1,6 @@
 use crate::{cardano::ADA, config::admin::Config};
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{Address, Value, address::kind};
+use cardano_sdk::{Address, SigningKey, Value, address::kind};
 use konduit_tx::{self, KONDUIT_VALIDATOR};
 use std::str;
 use tokio::runtime::Runtime;
@@ -59,57 +59,175 @@ pub struct DeployArgs {
 impl Cmd {
     pub fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector()?;
-        let own_address = config
-            .wallet
-            .to_verification_key()
-            .to_address(connector.network().into());
         match self {
-            Cmd::Send(args) => {
-                let tos = args.to.iter().map(|a| a.clone().into()).collect::<Vec<_>>();
-                let change_address = args.rest.unwrap_or(own_address.clone()).into();
-                Runtime::new()?.block_on(async {
-                    let utxos = connector
-                        .utxos_at(&own_address.payment(), None)
-                        .await?
-                        .into_iter()
-                        .filter(|(_, o)| o.script().is_none() || args.spend_all)
-                        .collect();
-                    let protocol_parameters = &connector.protocol_parameters().await?;
-                    let mut tx =
-                        konduit_tx::admin::send(protocol_parameters, &utxos, tos, change_address)?;
-                    println!("Tx id :: {}", tx.id());
-                    tx.sign(&config.wallet);
-                    connector.submit(&tx).await
-                })
-            }
+            Cmd::Send(args) => Runtime::new()?.block_on(run_send(&connector, &config.wallet, args)),
 
-            Cmd::Deploy(args) => {
-                let host_address = Address::<kind::Any>::from(config.host_address.clone());
-                let own_address = config
-                    .wallet
-                    .to_verification_key()
-                    .to_address(connector.network().into());
-                let change_address = Address::<kind::Any>::from(own_address.clone());
-                Runtime::new()?.block_on(async {
-                    let utxos = connector
-                        .utxos_at(&own_address.payment(), None)
-                        .await?
-                        .into_iter()
-                        .filter(|(_, o)| o.script().is_some() || !args.spend_all)
-                        .collect();
-                    let protocol_parameters = connector.protocol_parameters().await?;
-                    let mut tx = konduit_tx::admin::deploy(
-                        &protocol_parameters,
-                        &utxos,
-                        KONDUIT_VALIDATOR.script.clone(),
-                        host_address,
-                        change_address,
-                    )?;
-                    println!("Tx id :: {}", tx.id());
-                    tx.sign(&config.wallet);
-                    connector.submit(&tx).await
-                })
+            Cmd::Deploy(args) => Runtime::new()?.block_on(run_deploy(
+                &connector,
+                &config.wallet,
+                &config.host_address,
+                args,
+            )),
+        }
+    }
+}
+
+async fn run_send(
+    connector: &impl CardanoConnector,
+    wallet: &SigningKey,
+    args: SendArgs,
+) -> anyhow::Result<()> {
+    let own_address = wallet
+        .to_verification_key()
+        .to_address(connector.network().into());
+    let tos = args.to.iter().map(|a| a.clone().into()).collect::<Vec<_>>();
+    let change_address = args.rest.unwrap_or(own_address.clone()).into();
+    let utxos = connector
+        .utxos_at(&own_address.payment(), None)
+        .await?
+        .into_iter()
+        .filter(|(_, o)| o.script().is_none() || args.spend_all)
+        .collect();
+    let protocol_parameters = connector.protocol_parameters().await?;
+    let mut tx = konduit_tx::admin::send(&protocol_parameters, &utxos, tos, change_address)?;
+    println!("Tx id :: {}", tx.id());
+    tx.sign(wallet);
+    connector.submit(&tx).await
+}
+
+async fn run_deploy(
+    connector: &impl CardanoConnector,
+    wallet: &SigningKey,
+    host_address: &Address<kind::Shelley>,
+    args: DeployArgs,
+) -> anyhow::Result<()> {
+    let own_address = wallet
+        .to_verification_key()
+        .to_address(connector.network().into());
+    let change_address = Address::<kind::Any>::from(own_address.clone());
+    let utxos = connector
+        .utxos_at(&own_address.payment(), None)
+        .await?
+        .into_iter()
+        .filter(|(_, o)| o.script().is_some() || !args.spend_all)
+        .collect();
+    let protocol_parameters = connector.protocol_parameters().await?;
+    let mut tx = konduit_tx::admin::deploy(
+        &protocol_parameters,
+        &utxos,
+        KONDUIT_VALIDATOR.script.clone(),
+        Address::<kind::Any>::from(host_address.clone()),
+        change_address,
+    )?;
+    println!("Tx id :: {}", tx.id());
+    tx.sign(wallet);
+    connector.submit(&tx).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ADA, SendArgs, run_send};
+    use cardano_connector::CardanoConnector;
+    use cardano_sdk::{
+        Address, Credential, Hash, Input, Network, Output, ProtocolParameters, SigningKey,
+        Transaction, Value, address::kind, transaction::state,
+    };
+    use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct ConnectorState {
+        protocol_parameter_calls: usize,
+        submit_calls: usize,
+    }
+
+    struct FakeConnector {
+        network: Network,
+        expected_payment: Credential,
+        utxos: BTreeMap<Input, Output>,
+        state: Arc<Mutex<ConnectorState>>,
+    }
+
+    impl FakeConnector {
+        fn new(expected_payment: Credential, utxos: BTreeMap<Input, Output>) -> Self {
+            Self {
+                network: Network::Preview,
+                expected_payment,
+                utxos,
+                state: Arc::new(Mutex::new(ConnectorState::default())),
             }
         }
+    }
+
+    impl CardanoConnector for FakeConnector {
+        fn network(&self) -> Network {
+            self.network
+        }
+
+        async fn health(&self) -> anyhow::Result<String> {
+            Ok("ok".to_string())
+        }
+
+        async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
+            self.state
+                .lock()
+                .expect("state lock")
+                .protocol_parameter_calls += 1;
+            Ok(ProtocolParameters::preview())
+        }
+
+        async fn utxos_at(
+            &self,
+            payment: &Credential,
+            delegation: Option<&Credential>,
+        ) -> anyhow::Result<BTreeMap<Input, Output>> {
+            assert_eq!(payment, &self.expected_payment);
+            assert!(delegation.is_none());
+            Ok(self.utxos.clone())
+        }
+
+        async fn submit(
+            &self,
+            _transaction: &Transaction<state::ReadyForSigning>,
+        ) -> anyhow::Result<()> {
+            self.state.lock().expect("state lock").submit_calls += 1;
+            Ok(())
+        }
+    }
+
+    fn payment_address(wallet: &SigningKey) -> Address<kind::Shelley> {
+        wallet
+            .to_verification_key()
+            .to_address(Network::Preview.into())
+    }
+
+    fn wallet_utxos(address: &Address<kind::Shelley>) -> BTreeMap<Input, Output> {
+        BTreeMap::from([(
+            Input::new(Hash::<32>::from([9; 32]), 0),
+            Output::new(address.clone().into(), Value::new(10 * ADA)),
+        )])
+    }
+
+    #[tokio::test]
+    async fn send_smoke_path_builds_and_submits_transaction() {
+        let wallet = SigningKey::from([5; 32]);
+        let own_address = payment_address(&wallet);
+        let connector = FakeConnector::new(own_address.payment(), wallet_utxos(&own_address));
+        let destination = wallet
+            .to_verification_key()
+            .to_address(Network::Preview.into());
+        let args = SendArgs {
+            spend_all: false,
+            to: vec![super::AddressAmount(destination, 2)],
+            rest: None,
+        };
+
+        run_send(&connector, &wallet, args)
+            .await
+            .expect("send smoke path should succeed");
+
+        let state = connector.state.lock().expect("state lock");
+        assert_eq!(state.protocol_parameter_calls, 1);
+        assert_eq!(state.submit_calls, 1);
     }
 }

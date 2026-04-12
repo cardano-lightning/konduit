@@ -94,7 +94,7 @@ where
         &'a mut S,
         Option<String>,
     ) -> Pin<
-        Box<dyn Future<Output = anyhow::Result<utxorpc::UtxoPage<utxorpc::Cardano>>> + 'a>,
+        Box<dyn Future<Output = anyhow::Result<utxorpc::UtxoPage<utxorpc::Cardano>>> + Send + 'a>,
     >,
 {
     let mut start = None;

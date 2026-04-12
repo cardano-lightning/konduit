@@ -363,4 +363,22 @@ mod tests {
 
         assert_eq!(error.to_string(), "No reference script found");
     }
+
+    #[tokio::test]
+    async fn new_succeeds_with_protocol_parameters_and_reference_script() {
+        let connector = Arc::new(FakeConnector::new(
+            Ok::<_, &str>(ProtocolParameters::default()),
+            Ok::<_, &str>(host_utxos_with_reference_script()),
+        ));
+
+        let service = Service::new(
+            test_config(),
+            Arc::new(bln_client::mock::Client::new()),
+            connector,
+            Arc::new(FakeDb),
+        )
+        .await;
+
+        assert!(service.is_ok(), "startup smoke path should succeed");
+    }
 }

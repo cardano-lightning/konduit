@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let admin_for_sync = Arc::clone(&admin);
 
-    tokio::spawn(async move {
+    actix_web::rt::spawn(async move {
         let admin = Arc::clone(&admin_for_sync);
         let mut ticker = interval(admin_every);
         loop {

@@ -158,7 +158,7 @@
           "id": "task-102",
           "title": "Add autonomous integrated smoke coverage and run workspace verification",
           "description": "Add the smallest useful autonomous smoke coverage for the integrated UTxO RPC path, then run the relevant workspace build and test commands so the implementation is validated beyond isolated unit tests.",
-          "status": "pending",
+          "status": "completed",
           "priority": "medium",
           "estimatedHours": 4,
           "dependencies": [
@@ -175,7 +175,9 @@
             "There is automated smoke coverage for the integrated UTxO RPC runtime path",
             "The relevant Rust workspace targets build and test cleanly for the touched surfaces",
             "The integrated smoke coverage remains autonomous and suitable for repeat execution"
-          ]
+          ],
+          "completionNotes": "Completed with an autonomous tx-oriented CLI smoke test in `konduit-cli/src/cmd/admin/tx.rs`, a successful server-startup smoke test in `konduit-server/src/admin/service.rs`, a bounded runtime-local `Send` fix for the previously blocked `konduit-server` admin background path, and a small rustdoc cleanup surfaced by docs verification. Verified with `cargo fmt --all`, `cargo fmt --all -- --check`, `cargo check -p cardano-connector-utxorpc`, `cargo test -p cardano-connector-utxorpc`, `cargo clippy -p cardano-connector-utxorpc --all-targets -- -D warnings`, `cargo doc -p cardano-connector-utxorpc --no-deps`, `cargo check -p konduit-cli`, `cargo test -p konduit-cli`, `cargo clippy -p konduit-cli --all-targets -- -D warnings`, `cargo doc -p konduit-cli --no-deps`, `cargo check -p konduit-server`, `cargo test -p konduit-server`, `cargo clippy -p konduit-server --all-targets -- -D warnings`, `cargo doc -p konduit-server --no-deps`, `cargo check --workspace`, and `cargo test --workspace`.",
+          "completedAt": "2026-04-12T00:44:18Z"
         },
         {
           "id": "task-103",

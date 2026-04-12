@@ -13,7 +13,7 @@ pub struct Cmd {
     /// The first two items must be keytag and squash respectively;
     /// the rest are cheques.
     /// There are a few accepted formats of squash and of cheques
-    /// Format : <keytag>;<squash>;<cheque_0>;<cheque_1> ...
+    /// Format : `keytag;squash;cheque_0;cheque_1;...`
     /// squash_body,signature;cheque_body,signature,secret;cheque,secret;
     #[arg(long, value_parser=parse_keytag_receipt)]
     pub receipt: Vec<(Keytag, Receipt)>,
