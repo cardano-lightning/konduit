@@ -136,8 +136,63 @@ fn bytes_to_u64(bytes: &[u8], label: &str) -> anyhow::Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{bytes_to_u64, rational_to_f64};
-    use utxorpc::spec::cardano::RationalNumber;
+    use super::{build, bytes_to_u64, rational_to_f64};
+    use std::time::Duration;
+    use utxorpc::spec::{cardano, query};
+
+    fn bigint(value: i64) -> cardano::BigInt {
+        cardano::BigInt {
+            big_int: Some(cardano::big_int::BigInt::Int(value)),
+        }
+    }
+
+    fn rational(numerator: i32, denominator: u32) -> cardano::RationalNumber {
+        cardano::RationalNumber {
+            numerator,
+            denominator,
+        }
+    }
+
+    fn params() -> query::AnyChainParams {
+        query::AnyChainParams {
+            params: Some(query::any_chain_params::Params::Cardano(cardano::PParams {
+                min_fee_coefficient: Some(bigint(44)),
+                min_fee_constant: Some(bigint(155_381)),
+                collateral_percentage: 150,
+                min_fee_script_ref_cost_per_byte: Some(rational(15, 1)),
+                prices: Some(cardano::ExPrices {
+                    steps: Some(rational(721, 10_000_000)),
+                    memory: Some(rational(577, 10_000)),
+                }),
+                cost_models: Some(cardano::CostModels {
+                    plutus_v1: None,
+                    plutus_v2: None,
+                    plutus_v3: Some(cardano::CostModel {
+                        values: vec![1, 2, 3],
+                    }),
+                }),
+                ..Default::default()
+            })),
+        }
+    }
+
+    fn era_summary(
+        start_time_ms: u64,
+        first_shelley_slot: u64,
+    ) -> query::read_era_summary_response::Summary {
+        query::read_era_summary_response::Summary::Cardano(cardano::EraSummaries {
+            summaries: vec![cardano::EraSummary {
+                name: "Shelley".to_string(),
+                start: Some(cardano::EraBoundary {
+                    time: start_time_ms,
+                    slot: first_shelley_slot,
+                    epoch: 0,
+                }),
+                end: None,
+                protocol_params: None,
+            }],
+        })
+    }
 
     #[test]
     fn bytes_to_u64_rejects_values_larger_than_u64() {
@@ -148,7 +203,7 @@ mod tests {
     #[test]
     fn rational_to_f64_rejects_zero_denominator() {
         let error = rational_to_f64(
-            Some(&RationalNumber {
+            Some(&cardano::RationalNumber {
                 numerator: 1,
                 denominator: 0,
             }),
@@ -157,5 +212,74 @@ mod tests {
         .expect_err("zero denominator should fail");
 
         assert!(error.to_string().contains("zero denominator"));
+    }
+
+    #[test]
+    fn build_derives_protocol_parameters_from_era_boundary() {
+        let params = build(params(), era_summary(1_700_000_000_000, 4_492_800))
+            .expect("protocol parameters should build");
+
+        assert_eq!(params.base_fee(1), 155_425);
+        assert_eq!(params.minimum_collateral(100), 150);
+        assert_eq!(params.plutus_v3_cost_model(), &vec![1, 2, 3]);
+        assert_eq!(
+            params.posix_to_slot(Duration::from_secs(1_700_000_000)),
+            4_492_800
+        );
+    }
+
+    #[test]
+    fn build_rejects_negative_chain_start() {
+        let error = build(params(), era_summary(10_000, 1_000))
+            .expect_err("underflowing chain start should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("computed negative Cardano start time")
+        );
+    }
+
+    #[test]
+    fn build_requires_shelley_era_summary() {
+        let error = build(
+            params(),
+            query::read_era_summary_response::Summary::Cardano(cardano::EraSummaries {
+                summaries: vec![],
+            }),
+        )
+        .expect_err("missing shelley summary should fail");
+
+        assert!(error.to_string().contains("missing Shelley era"));
+    }
+
+    #[test]
+    fn build_requires_execution_prices() {
+        let mut params = params();
+        let query::any_chain_params::Params::Cardano(pparams) =
+            params.params.as_mut().expect("cardano params");
+        pparams.prices = None;
+
+        let error = build(params, era_summary(1_700_000_000_000, 4_492_800))
+            .expect_err("missing prices should fail");
+
+        assert!(error.to_string().contains("missing execution prices"));
+    }
+
+    #[test]
+    fn build_requires_plutus_v3_cost_model() {
+        let mut params = params();
+        let query::any_chain_params::Params::Cardano(pparams) =
+            params.params.as_mut().expect("cardano params");
+        pparams.cost_models = Some(cardano::CostModels {
+            plutus_v1: None,
+            plutus_v2: None,
+            plutus_v3: None,
+        });
+
+        let error = build(params, era_summary(1_700_000_000_000, 4_492_800))
+            .expect_err("missing plutus v3 should fail");
+
+        assert!(error.to_string().contains("missing Plutus V3 cost model"));
     }
 }

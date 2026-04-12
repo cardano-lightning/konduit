@@ -109,7 +109,7 @@
           "id": "task-100",
           "title": "Add connector unit tests for mapping, parameters, semantics, and submit errors",
           "description": "Add focused automated tests around UTxO mapping, live protocol parameter derivation, network handling, `utxos_at` behavior, and submission error translation in the new connector crate so the core backend logic is well covered before broader runtime validation.",
-          "status": "pending",
+          "status": "completed",
           "priority": "high",
           "estimatedHours": 5,
           "dependencies": [
@@ -125,7 +125,9 @@
             "Automated tests cover live protocol parameter derivation and error paths",
             "Automated tests explicitly cover `utxos_at(payment, None)` semantics",
             "Automated tests cover submit-path error translation"
-          ]
+          ],
+          "completionNotes": "Completed with connector-crate test expansion across `lib.rs`, `mapping.rs`, and `params.rs`, including native-bytes precedence, parsed fallback and rejection cases, Shelley-boundary-based protocol-parameter derivation and error paths, paginated payment-only `utxos_at` semantics, submit error translation, and connector-core network edge cases. Verified with `cargo fmt --all -- --check`, `cargo check -p cardano-connector-utxorpc`, `cargo test -p cardano-connector-utxorpc`, `cargo clippy -p cardano-connector-utxorpc --all-targets -- -D warnings`, and `cargo doc -p cardano-connector-utxorpc --no-deps`.",
+          "completedAt": "2026-04-12T00:05:10Z"
         },
         {
           "id": "task-101",
