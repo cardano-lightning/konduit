@@ -1,103 +1,110 @@
-# Roadmap
+# **Konduit Roadmap**
 
-## v1
+## **Phase 1: Foundation & Core Logic**
 
-### Product
+Focus: Establishing the mathematical and technical primitives for L1/L2
+interaction.
 
-- [ ] Kernel
-  - [ ] Specification
-    - [x] First draft - First complete version
-    - [ ] Second draft - Sweep after kernel implementation
-    - [ ] Final draft - Sweep after tests and e2e implementation
-  - [ ] Implementation
-    - [x] First draft - First complete "working" (yet untested) version
-    - [ ] Second draft - Test coverage and e2e suggests justifies "working"
-    - [ ] Final draft - Tidy up and align with final draft of docs
-  - [ ] Tests
-    - [ ] Baseline - Some basic tests of sharp edges
-    - [ ] Thorough - Testing coverage is thorough (subject to what is
-          manageable)
-- [ ] General tooling
-  - [ ] Cardano tx builder
-    - [x] First implementation - Initial complete version
-    - [ ] Collecting user feedback (even if that's mainly with dogfooding)
-    - [ ] Second draft - Iteration reflecting on user feedback
-  - [ ] Cardano connect (design)
-    - [x] First draft
-    - [ ] Blockfrost implementation
-    - [ ] Extra : Ogmios/Kupo implementation
-    - [ ] Cloudflare deployment
-    - [ ] Other deployment
-    - [ ] Collecting user feedback (even if that's mainly with dogfooding)
-    - [ ] Second draft - Iteration reflecting on user feedback
-- [ ] Konduit tooling
-  - [ ] Konduit data - rust lib for encoding/decoding required for L1 and L2
-        interations
-    - [x] First implementation
-    - [ ] Iterations after second drafts of Kernel
-    - [ ] Roundtrip and cross compat with kernel tests
-  - [ ] Konduit tx - tx builders for Consumer and Adaptor
-    - [ ] First implementation: Support for all steps, in variety of scenarios.
-          May ignore mutual txs, and may ignore support for simultaneous use of
-          Consumer and Adaptor steps.
-    - [ ] Iterations after second draft of Kernel
-  - [ ] Konduit cli
-    - [x] First implementation
-    - [ ] Iterations after second drafts of Kernel
-    - [ ] Demonstrates full lifecycle management
-    - [ ] Bench for adaptor of "sub" in real-ish world conditions
-    - [ ] Hand driven tests work after final version of Kernel
-- [ ] Konduit server - Adaptor service
-  - [ ] Interface specification
-    - [x] First draft (roughly compelete upto Auth)
-    - [ ] Second draft - Justifiable "complete" given a first version of App
-          works.
-    - [ ] Final draft - Tidy and aligns with final version
-  - [ ] Implementation
-    - [x] First implementation
-    - [ ] Supports multiple service backends (price feeds, connectors, BLN
-          nodes)
-    - [ ] Second implementation
-    - [ ] Final implementation
-  - [ ] Tests
-    - [ ] Runs some headless tests against the different services independently
-    - [ ] Runs some integration tests
-- [ ] Konduit app - Consumer App
-  - [ ] Specification / Design
-    - [x] Requirements doc
-    - [x] Wireframe
-    - [x] Mockup
-    - [ ] Second iteration
-  - [ ] Implementation
-    - [ ] First implementation - Basic channel management operations; payments.
-    - [ ] Support for bolt11 payments
-    - [ ] Extra : Support for other payment request types
-    - [ ] Second iteration - Works with adaptor server final implementation
-  - [ ] Tests
-    - [ ] Distinct service "unit" testing
-    - [ ] Integration testing
-    - [ ] User driven tests
-  - [ ] Deployment
-    - [ ] "Easy" instal as PWA
+### **Protocol Kernel**
 
-### Maturity metrics
+- [x] \[P1-KER-SPEC\] First draft specification
+- [x] \[P1-KER-IMPL\] Initial "working" implementation
+- [x] \[P1-KER-TEST\] Baseline testing of sharp edges
+- [ ] \[P1-KER-PROP\] Property-based testing for fund safety invariants
+- [x] \[P1-KER-REF\] Refine specification based on initial implementation
+      findings
 
-- [ ] Docs
-  - [ ] API (openapi or equivalent)
-  - [ ] High level explainer
-  - [ ] Setup and maintainence guide(s)
-  - [ ] Quantified Adaptor risk assessment
-- [ ] Consumer / Payments
-  - [ ] > 100 stickers sold (on testnet if not mainnet)
-  - [ ] > 10 distinct devices
-  - [ ] > 100 separate payments
-  - [ ] > 5 contexts (ie different merchants)
-  - [ ] Active feedback collection and reflection
-- [ ] Adaptor / Infra
-  - [ ] > 2 distinct (Externally maintained) deployments
-  - [ ] > 1 BLN backend
-- [ ] Engagement
-  - [ ] > 30 gh stars
-  - [ ] > 10 gh users that have in someway engaged (forked/ gh issue/ _etc_)
-  - [ ] > 5 Whatever the eqivalent of LoI is for an OS project like Konduit
-  - [ ] Live presentation
+### **Essential SDKs & Data**
+
+- [x] \[P1-CSDK-INIT\] Cardano SDK: Initial version
+- [x] \[P1-KCOR-INIT\] Konduit data: Rust lib for L1/L2 encoding/decoding
+- [x] \[P1-KCOR-WASM\] JS/Wasm Bindings: Export KCOR logic for use in web-based
+      Consumer App
+- [x] \[P1-CCON-BLK\] Cardano connect: Initial design and Blockfrost
+      implementation
+- [x] \[P1-KTX-INIT\] Konduit tx: Support for primary Consumer and Adaptor steps
+
+### **Phase 1 Success Criteria**
+
+- [ ] \[P1-CRIT-CPAT\] Kernel and Rust libs pass cross-compatibility tests
+- [ ] \[P1-CRIT-IDOC\] Stable internal documentation for core protocol logic
+
+## **Phase 2: Functional Lifecycle (Alpha)**
+
+Focus: Connecting the components to enable a full end-to-end payment flow using
+the current/initial server.
+
+### **Infrastructure & Server**
+
+- [x] \[P2-SRV-INIT\] Adaptor server: First implementation
+- [ ] \[P2-SRV-BKND\] Adaptor server: Support for price feeds and BLN nodes
+      backends
+- [ ] \[P2-SRV-TEST\] Headless testing against independent services
+- [ ] \[P2-SRV-SYNC\] State Re-sync: Reconciling state with chain and with app.
+
+### **Client Interfaces**
+
+- [x] \[P2-CLI-INIT\] Konduit CLI: Initial version
+- [x] \[P2-APP-DSGN\] Consumer App: Requirements and design mocks
+- [ ] \[P2-APP-IDEM\] App-level Idempotency: Ensure duplicate UI actions don't
+      trigger double payments
+- [ ] \[P2-APP-IMPL\] Consumer App: First implementation of channel management
+      and payments
+- [ ] \[P2-CLI-LIFE\] CLI: Demonstrates full lifecycle management (Hand-driven
+      tests)
+
+### **Phase 2 Success Criteria**
+
+- [ ] \[P2-CRIT-E2E\] Successful end-to-end payment via CLI in real-ish
+      conditions
+- [ ] \[P2-CRIT-OAPI\] Initial API documentation (OpenAPI) completed
+- [ ] \[P2-CRIT-STAR\] \> 10 GitHub stars and initial community engagement
+
+## **Phase 3: Product Maturity (Beta)**
+
+Focus: Reliability, security, and architectural stability.
+
+### **Hardening & Features**
+
+- [ ] \[P3-SRV-CBOR\] CBOR-Native API: Transition server API entirely to CBOR
+      with an optional JSON translation layer
+- [ ] \[P3-SRV-VER\] Protocol Versioning: Implement version negotiation between
+      Consumer and Adaptor for binary schemas
+- [ ] \[P3-SRV-REDG\] Server Interface Redesign: Finalize standard/usable API
+      based on CBOR-native schema
+- [ ] \[P3-SRV-AUTH\] Implementation of Auth layer for Server/Adaptor
+- [ ] \[P3-SRV-FIN\] Adaptor Server: Final implementation with multiple backend
+      support
+- [ ] \[P3-APP-BOLT\] Consumer App: Support for bolt11 and extra payment request
+      types
+- [ ] \[P3-APP-RECO\] Recovery Logic: Tools for fund recovery if PWA/Server
+      state is lost
+
+### **Validation & Documentation**
+
+- [ ] \[P3-KER-TEST\] Kernel: Full test and benchmark suite
+- [ ] \[P3-VAL-INTG\] Integration testing across all distinct service units
+- [ ] \[P3-DOC-GUID\] High-level explainer and setup/maintenance guides
+- [ ] \[P3-RSK-ASSS\] Quantified Adaptor risk assessment
+
+### **Phase 3 Success Criteria**
+
+- [ ] \[P3-CRIT-TRAX\] \> 100 payments / stickers sold (testnet or mainnet)
+- [ ] \[P3-CRIT-DEVS\] \> 10 distinct devices interacting with the protocol
+- [ ] \[P3-CRIT-DPLY\] \> 2 externally maintained Adaptor deployments
+
+## **Sidequests**
+
+Focus: Alternative implementations and infrastructure flexibility.
+
+- [ ] \[SQ-CCON-OGM\] Support for Ogmios/Kupo and other deployment environments
+- [ ] \[SQ-DPLY-CLD\] Cloudflare deployment options
+- [ ] \[SQ-KTX-NCHE\] Extra : Support for niche payment request types
+- [ ] \[SQ-SRV-BNCH\] Benchmarking adaptor for "sub" (recurring/automated)
+      conditions
+
+## **Future Horizons**
+
+- [ ] \[HZ-APP-PAY\] Expansion of supported payment request types
+- [ ] \[HZ-KTX-MUTL\] Advanced mutual transaction support in tx builders
+- [ ] \[HZ-SRV-BCK\] Additional service backends for connectors
