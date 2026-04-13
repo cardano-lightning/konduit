@@ -134,9 +134,8 @@ pub async fn squash(
 
             if let Err(err) = data.admin().sync().await {
                 log::error!(
-                    "squash: forced admin sync failed while recovering {}: {}",
-                    keytag,
-                    err
+                    "squash: forced admin sync failed while recovering {}: {err:#}",
+                    keytag
                 );
                 return Ok(HttpResponse::InternalServerError().body(format!(
                     "failed to sync latest tip while recovering channel: {err}"

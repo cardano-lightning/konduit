@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
                             log::info!("Admin sync skipped: {}", low_gain);
                         }
                     } else {
-                        log::error!("Admin sync failed: {}", e);
+                        log::error!("Admin sync failed: {e:#}");
                     }
                 }
             }
