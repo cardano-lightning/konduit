@@ -92,7 +92,7 @@ where
             .await?,
         );
 
-        if opens.is_empty() && intents.is_empty() && utxos_konduit.is_empty() {
+        if opens.is_empty() && utxos_konduit.is_empty() {
             return Err(anyhow!("nothing to do"));
         }
 

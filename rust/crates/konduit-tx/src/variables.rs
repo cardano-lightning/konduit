@@ -56,7 +56,7 @@ impl Variables {
         let Stage::Closed(_, _, elapse_at) = &self.stage else {
             return Err(StepError::pair(self.stage.label(), "Elapse"));
         };
-        if lower >= elapse_at {
+        if lower <= elapse_at {
             Err(StepError::Early(*lower, *elapse_at))
         } else {
             Ok(())
