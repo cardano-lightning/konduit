@@ -500,6 +500,7 @@ dependencies = [
  "hex",
  "lightning-invoice",
  "lightning-types",
+ "minicbor",
  "serde",
  "serde_with",
  "thiserror 2.0.17",
@@ -662,6 +663,14 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "uplc",
+]
+
+[[package]]
+name = "cbor-with"
+version = "0.0.0"
+dependencies = [
+ "cardano-sdk",
+ "minicbor",
 ]
 
 [[package]]
@@ -2017,6 +2026,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "konduit-api"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bln-sdk",
+ "cardano-sdk",
+ "cbor-with",
+ "chrono",
+ "cryptoxide 0.5.1",
+ "hex",
+ "konduit-data",
+ "minicbor",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.17",
+ "uplc",
+ "web-time",
+]
+
+[[package]]
 name = "konduit-cli"
 version = "0.0.0"
 dependencies = [
@@ -2066,6 +2097,7 @@ dependencies = [
  "chrono",
  "cryptoxide 0.5.1",
  "hex",
+ "minicbor",
  "rand_core 0.6.4",
  "serde",
  "serde_json",

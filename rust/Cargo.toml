@@ -6,12 +6,14 @@ members = [
   "crates/cardano-connector-client",
   "crates/cardano-connector-direct",
   "crates/cardano-sdk",
+  "crates/cbor-with",
   "crates/fx-client",
   "crates/http-client",
   "crates/http-client-native",
   "crates/http-client-wasm",
   "crates/konduit-cli",
   "crates/konduit-client",
+  "crates/konduit-api",
   "crates/konduit-data",
   "crates/konduit-server",
   "crates/konduit-tx",
@@ -106,12 +108,14 @@ cardano-connector = { path = "crates/cardano-connector" }
 cardano-connector-client = { path = "crates/cardano-connector-client" }
 cardano-connector-direct = { path = "crates/cardano-connector-direct" }
 cardano-sdk = { path = "crates/cardano-sdk" }
+cbor-with = { path = "crates/cbor-with" }
 fx-client = { path = "crates/fx-client" }
 http-client = { path = "crates/http-client" }
 http-client-native = { path = "crates/http-client-native" }
 http-client-wasm = { path = "crates/http-client-wasm" }
 konduit-client = { path = "crates/konduit-client" }
 konduit-data = { path = "crates/konduit-data" }
+konduit-api = { path = "crates/konduit-api" }
 konduit-server = { path = "crates/konduit-server" }
 konduit-tx = { path = "crates/konduit-tx" }
 

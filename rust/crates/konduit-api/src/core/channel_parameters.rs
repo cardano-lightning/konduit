@@ -1,15 +1,11 @@
-use crate::Duration;
 use cardano_sdk::VerificationKey;
+use konduit_data::Duration;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::cbor_with;
 
-/// These variables are either those used by more than one component,
-/// or are mandatory.
-/// These are not all variables required: component specific ones
-/// are colocated with the component.
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct ChannelParameters {
@@ -25,8 +21,6 @@ pub struct ChannelParameters {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Duration;
-    use cardano_sdk::VerificationKey;
 
     fn sample_vk() -> VerificationKey {
         VerificationKey::from([0u8; 32])
