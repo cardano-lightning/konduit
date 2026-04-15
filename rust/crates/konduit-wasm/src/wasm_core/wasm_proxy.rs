@@ -7,7 +7,7 @@ pub trait WasmProxy {
 #[macro_export]
 macro_rules! wasm_proxy_min_api {
     ($wrapper:ident => $parent:ty) => {
-        impl $crate::wasm::WasmProxy for $wrapper {
+        impl $crate::wasm_core::WasmProxy for $wrapper {
             type T = $parent;
         }
 

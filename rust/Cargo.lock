@@ -2140,6 +2140,7 @@ dependencies = [
  "konduit-data",
  "konduit-tx",
  "log",
+ "minicbor",
  "serde",
  "serde_json",
  "wasm-bindgen",

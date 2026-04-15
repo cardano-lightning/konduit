@@ -13,6 +13,7 @@ rust-version.workspace = true
 [features]
 default = []
 black-box-api = []
+tx-builder = []
 
 [lib]
 crate-type = ["cdylib"]
@@ -38,6 +39,7 @@ konduit-client.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
+minicbor.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 wasm-bindgen-futures.workspace = true
