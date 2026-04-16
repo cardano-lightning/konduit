@@ -1,77 +1,53 @@
 ---
-title: "Konduit: Core Processes"
-author: waalge
+title: "Konduit Protocol: Technical Briefing for Legal & Finance"
+author: "@waalge"
 ---
 
-# Intro
+## Introduction
 
-This document details the processes of Konduit.
+This document provides a comprehensive overview of the Konduit protocol,
+specifically addressing the requirements for internal risk assessment and
+external legal opinion.
 
-Konduit allows Cardano users, hereby referred to as Consumers, to pay Merchants
-over the Bitcoin Lightning Network (BLN). BLN is an existing protocol, with
-existing adoption. Merchants who accept BLN payments will accept payments via
-Konduit with no further action required. In fact, they won't even know Consumer
-is paying via Konduit. Konduit is enabled by Adaptors that route payments from
-Cardano to Bitcoin.
+Konduit is a Cardano-backed extension of the Bitcoin Lightning Network (BLN). It
+allows Consumers to open and maintain payment channels on Cardano that can route
+payments to Merchants via the BLN.
 
-## Principle Process
+Pay is the principal process of Konduit. BLN is an existing e2e payment
+solution. It enables users to pay via generating and scanning QR codes. It
+boasts near instant settlement and very low fees. Konduit Consumers access the
+same ecosystem with the same benefits, without leaving Cardano.
 
-The Principle Process of Konduit is as follows:
+### Key Actors
 
-- Merchant generates a BLN invoice
-- Consumer scan a BLN invoice
-- Consumer requests quotes (ie conditions of servicing the invoice including
-  cost) from their partnered Adaptors
-- Consumer selects a quote, and commits to pay Adaptor
-- Adaptor commits to pay merchant via BLN
-- Adaptor provides proof of payment
-- Consumer finalizes the payment
+- Consumer: The party locking assets on Cardano to facilitate payments.
+- Adaptor: A specialized channel participant existing on both Cardano and BLN.
+  They facilitate the cross-layer exchange by accepting payments on Cardano
+  backed by atomic proof of routing on BLN.
+- Merchant: The ultimate recipient of value, accepting payment via BLN. Note
+  that the protocol is designed such that the Merchant interacts strictly with
+  the BLN and requires no specific knowledge of Konduit.
 
-On the happy path, the payment section resolves very quickly, often < 1s. On the
-unhappy path where the payment fails to fully resolve, the protocol extends the
-guarantees of BLN that all users will eventually claim funds rightfully theirs.
+### Core Concept
 
-All other processes described are to facilitate the Principle Process.
+Konduit operates as a non-custodial coordination layer. It uses the Cardano UTXO
+ledger to enforce payment obligations, ensuring that value only moves when
+cryptographic "Secrets" are revealed, equivalent to the atomicity of BLN's
+Hashed Timelock Contracts (HTLCs).
 
-## Lighting Network Topology
+The protocol is asset-agnostic, supporting any Cardano native asset as the
+primary unit of account.
 
-Fundamentally, lightning networks consist of many two party channels. What
-enables it to act as a network, is that a participant with two channels may
-commit to pay one on the condition of commitment to being paid on another.
-Cryptography magic makes these commitments bindings. There are additional
-components to, for example, finding routes from one member of the network to
-another.
+## Protocol
 
-Konduit channels provide the same guarantee: commitment to pay, realized on
-proof of onward payment made. A key difference is that Konduit channels are
-_unidirectional_: Consumer can pay via the channel, but not be paid. This
-limitation greatly simplifies other aspects of the protocol.
+### Channel lifecycle
 
-## Routing payments
-
-```d2
-direction: right
-vars: {
-d2-config: {
-layout-engine: elk
-pad: 5
-}
-}
-Consumers: { icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/smartphone.svg }
-Adaptors: { icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/server.svg }
-BLN: { icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/bitcoin.svg }
-Merchants: { icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/shopping-cart.svg }
-
-Consumers -> Adaptors: "Konduit\nChannel"
-Adaptors -> BLN: "BLN\nChannel"
-BLN -> Merchants: "BLN\nChannel"
-```
-
-# Channel lifecycle
-
-Konduit Channels are **retained** by UTXO at a Konduit script address. The UTXO
-both locks funds and maintains the Channel's on-chain state. We view the UTXO as
-a state machine:
+A Konduit channel lifecycle is manifest in the state of a UTXO at a Konduit
+script address on Cardano, acting as a state maching. Transitions are **steps**
+between **"stages** and correspond to a spend transaction. Note that a single
+transaction may step many channels. Only Consumer and Adaptor can step a
+channel. All steps are unilateral and subject to script logic, which treats each
+channel independently.
 
 ```d2
 direction: right
@@ -103,185 +79,189 @@ Responded -> Responded: unlock, expire
 Responded -> x: end
 ```
 
-We refer to the nodes as **stages** and arrows as **steps**.
+### Pay
 
-Consumer can `open` a channel with Adaptor. The `open` locks Consumer funds on
-the L1. These funds underwrite the payments Adaptor makes on the behalf of
-Consumer on BLN.
+Pay is the principal process of Konduit.
 
-On an `Opened` channel:
+#### Standard path
 
-- Adaptor can `sub` owed funds
-- Consumer can `add` more funds
-
-Consumer can `close` the channel. This indicates to Adaptor they no longer wish
-to use the channel.
-
-Adaptor `respond`s to a `Closed` channel. They are permitted to pull all owed
-funds, while leaving locked all unresolved funds. Unresolved funds correspond to
-commitments made but for which the outcome is unknown.
-
-On an `Responded` channel:
-
-- Adaptor can `unlock` funds if a commitment payment goes through
-- Consumer can `expire` funds if the commitment expires. They reclaim all funds
-  not still locked.
-- In the case there are no unexpired commitments remaining, Consumer `end`s the
-  channel. They reclaim all remaining funds.
-
-If the case Adaptor fails to `respond` within a given time window, then Consumer
-`elapses` the channel. Consumer reclaims all funds in the channel.
-
-# Adaptor
-
-Adaptor may refer to either the person, or entity, or to the service the person
-or entity maintains. The core part of the service is a server that repsonds to
-requests from Consumers.
-
-## Adaptor Init
-
-To init a service, the following must be configured:
-
-- [ ] Running of a BLN node, or access to a running node, together with open
-      channels with spendable liquidity
-- [ ] Access to pricefeed data
-- [ ] Access to exchange services, specifically from Ada to BTC.
-- [ ] Funding a cardano fuel wallet. This simply pays for txs fees and provides
-      collateral
-- [ ] Cardano Tx creating a reference script for Konduit
-
-Once these have been established, a Konduit adaptor server can be configured and
-run.
-
-## Adaptor Ops
-
-During operation adaptor can carry out different operations.
-
-### Liquidity
-
-- pull: Submit Cardano transaction(s) removing owed funds from channel UTXOs.
-  The output address may be the Adaptors fuel wallet, an exhange address, or
-  otherwise.
-- push: Increase spendable liquidity by BLN node. Either increasing liquidity in
-  existing channels or opening additional channels.
-- mv: pull and push via an exchange, or other service provider.
-
-### Consumers
-
-- ammend: ammend channel state. In particular, can mark as `is_active = false`
-  to discontinue service of the channel.
-
-### Db
-
-- prune: drop all entries pertaining to channels where no further fund will be
-  pulled. In particular, channels without backing, channels that are responded
-  with no unexpired.
-- stash: backup the db
-
-# Consumer
-
-Consumer may refer to either the person, or entity or the application driving
-their part of the Konduit protcol.
-
-## Open
-
-Before `open`ning a channel, Consumer needs fund on cardano in order to lock
-funds up to back payements and pay transaction fees.
-
-An `open` locks funds at a Konduit script address. A prioiri all locked funds
-belong to, and are claimable by, Consumer.
-
-More precisely a single transaction may open multiple channels, and can be done
-in conjuction with other steps.
-
-## Opened
-
-While channel is opened, all funds Adaptor cannot prove they are owed belong to,
-and are claimable by, the Consumer.
-
-## Adaptor Rm
-
-###
-
-## Adaptor Service lifecycle
-
-Adaptor simply inits their service, manages while they wish to provide service,
-and then rm the service.
+The following outlines the standard sequence involved in a pay.
 
 ```d2
-direction: right
-vars: {
-  d2-config: {
-    layout-engine: elk
-    pad: 5
-  }
-}
-
-# States
-o: "" { shape: circle; width: 15; height: 15 }
-x: "" { shape: circle; width: 15; height: 15 }
-
-# Minimal Lifecycle
-o -> Service: init
-Service -> Service: manage
-Service -> x: rm
-```
-
-## Adaptor init
-
-```d2
-direction: right
-vars: {
-  d2-config: {
-    layout-engine: elk
-    pad: 5
-  }
-}
-
-Adaptor: {
-  icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/server.svg
-}
-Cardano: {
-  icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/layers.svg
-}
-BLN: {
-  icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/bitcoin.svg
+vars {
+    d2-config {
+        layout-engine: elk
+    }
 }
 
 shape: sequence_diagram
-Adaptor -> Cardano: fuel\nwallet
-Adaptor -> Cardano: reference\nscript
-Adaptor -> BLN: open\nchannel
 
-Adaptor."Configure &\nrun server"
+Consumer: Consumer
+Adaptor: Adaptor
+BLN: BLN
+Merchant: Merchant
+
+Merchant -> Consumer: invoice
+Consumer -> Adaptor: quote?
+Adaptor -> BLN: route?
+BLN -> Adaptor: routes
+Adaptor -> Consumer: quote
+Consumer -> Adaptor: cheque
+Adaptor -> BLN: htlc
+BLN -> Merchant: htlc
+Merchant -> BLN: secret
+BLN -> Adaptor: secret
+Adaptor -> Consumer: secret
+Consumer -> Adaptor: squash
 ```
 
-## Adaptor manage
+#### Deviations
+
+The following flowchart goes through the possible deviations in the standard
+sequence of a pay.
 
 ```d2
-direction: right
-vars: {
-  d2-config: {
+direction: down
+
+vars {
+  d2-config {
     layout-engine: elk
-    pad: 5
   }
 }
 
-# Define Actors with Icons
-Adaptor: {
-  icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/server.svg
-}
-Cardano: {
-  icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/layers.svg
-}
-BLN: {
-  icon: https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/bitcoin.svg
-}
+# Decision Nodes
+D0: "[Consumer]\nInvoice Valid?" {shape: diamond}
+D1: "[Consumer]\nAdaptor Online?" {shape: diamond}
+D2: "[Adaptor]\nServe Quote?" {shape: diamond}
+D3: "[Adaptor]\nRoute Inbound Failed?" {shape: diamond}
+D4: "[Consumer]\nAccept Quote?" {shape: diamond}
+D5: "[Adaptor]\nServe Pay?" {shape: diamond}
+D6: "[Merchant]\nRoute Outbound Failed?" {shape: diamond}
+D7: "[Merchant]\nSecret Revealed?" {shape: diamond}
+D8: "[Adaptor]\nNo Squash?" {shape: diamond}
 
-shape: sequence_diagram
-Adaptor -> Cardano: fuel\nwallet
-Adaptor -> Cardano: reference\nscript
-Adaptor -> BLN: open\nchannel
+F1: "Fail: pre-commitment" {style.fill: "#f2dede"}
+F2: "Fail: post-commitment.\nMerchant unpaid" {style.fill: "#f2dede"}
+F3: "Fail: post-commitment.\nMerchant paid" {style.fill: "#f2dede"}
+S1: "Ok" {style.fill: "#dff0d8"}
+S2: "Ok via L1 tx" {style.fill: "#dff0d8"}
 
-Adaptor."Configure &\nrun server"
+D0 -> F1: "No (Invalid)"
+D0 -> D1: "Yes"
+
+D1 -> F1: "No (Offline)"
+D1 -> D2: "Yes"
+
+D2 -> F1: "No (Refusal)"
+D2 -> D3: "Yes"
+
+D3 -> F1: "Yes"
+D3 -> D4: "No (Provide Quote)"
+
+D4 -> F1: "No (User Exit)"
+D4 -> D5: "Yes"
+
+D5 -> F1: "No (Refusal)"
+D5 -> D6: "Yes"
+
+D6 -> F2: "Yes (Await Timeout)"
+D6 -> D7: "No"
+
+D7 -> F3: "No (Await Timeout)"
+D7 -> D8: "Yes (Secret Revealed)"
+
+D8 -> S2: "Yes (Force Submit)"
+D8 -> S1: "No (Squash Success)"
+
 ```
+
+## Matters legal & financial
+
+### Non-Custodial Confirmation
+
+Konduit is strictly non-custodial. The Adaptor provides routing services but
+possesses no discretionary control over Consumer assets.
+
+- Script-Governed Assets: The source of truth for all funds is a Cardano script
+  address (UTXO). Funds are held in a locked state and can only be released if
+  the script's logic is satisfied.
+- Cryptographic Enforcement: The Adaptor cannot claim assets without presenting
+  a Secret (pre-image). This Secret is only obtainable if the Merchant has been
+  paid on the BLN side, creating a hard link between delivery and payment.
+
+### Finality of Settlement
+
+The protocol ensures that engagement can be terminated by either party at any
+time, with a definitive path to finality that requires no subjective
+arbitration.
+
+- The Invitation to Finalize: A close step initiated by the Consumer is a formal
+  invitation for final settlement. It does not permit the immediate claiming of
+  funds but signals the start of the resolution phase.
+- The Respond Mechanism: Following a close, the Adaptor performs a respond step
+  to report final provably owed funds as well as all "Pending Cheques"—payments
+  currently in transit where a Secret is not yet known but the payment has not
+  expired.
+- Deterministic Resolution: Settlement is finalized strictly by cryptographic
+  evidence. Everything not provably owed to the Adaptor (via a Secret or a
+  signed Squash) is returned to the Consumer. There is no contestation period;
+  the math governs the distribution.
+
+### Liability and Recourse
+
+Legal and Finance require certainty regarding "worst-case" scenarios, such as
+participant inactivity.
+
+- Adaptor Inactivity: If the Adaptor fails to respond to a closure within the
+  defined close_period, the Consumer has the unilateral right to elapse the
+  channel, reclaiming 100% of the remaining balance.
+- Consumer Inactivity: The Consumer is not required to be online for the Adaptor
+  to secure their funds. The Adaptor can "sub" (redeem) funds on-chain using
+  individual Unlocked Cheques if the Consumer is unavailable to sign a
+  cumulative Squash.
+- Unilateral Exit: All state transitions on-chain are unilateral. Neither party
+  can "trap" the other in an indeterminate state.
+- Blockchain Assumptions: The protocol relies on standard blockchain liveness
+  and security assumptions. Timeout parameters are fixed a priori, and
+  participants consent to these durations—and their associated risks—upon
+  channel opening.
+
+### Clarity on Proof
+
+The "Receipt" is the primary legal and technical evidence of a completed
+transaction.
+
+- Atomic Proof: An Unlocked Cheque (Cheque \+ Secret) serves as self-contained,
+  atomic proof that a transaction was successfully routed. This proof is a
+  functional key that the script must accept during settlement.
+- Cumulative Debt Compression: The "Squash" acts as a running ledger of debt. By
+  signing a Squash, the Consumer acknowledges the total amount owed, allowing
+  the Adaptor to optimize L1 costs by postponing redemption.
+
+### Regulatory Categorization
+
+From a regulatory standpoint, Konduit functions as a neutral state-management
+protocol.
+
+- No Intermediary Discretion: The Adaptor acts as a relay that is
+  programmatically reimbursed.
+- Liquidity Commitment Risk: The Adaptor bears the financial risks associated
+  with the liquidity lockup required for BLN routing. This includes potential
+  exposure to relative currency volatility and time-unit mismatches in expiry
+  windows between layers.
+
+## Glossary
+
+- Cheque: A signed off-chain payload containing HTLC commitment details.
+- Unlocked Cheque: A cheque combined with its corresponding Secret, constituting
+  atomic proof of payment.
+- Squash: A cryptographically signed aggregate of processed payments. It
+  includes an "exclude" list—an implementation detail used to prevent
+  unresolved/pending cheques from becoming a bottleneck in the settlement flow.
+- Pending Cheque: A payment for which the timeout has not passed and the Secret
+  is unknown.
+- Secret: The cryptographic pre-image used to unlock an HTLC on BLN and
+  subsequently claim funds from the Konduit script.
+- Sub/Add: Primary L1 operations used to adjust the collateralized balance. A
+  sub operation realizes accrued debt to date without resetting the Squash
+  index.
