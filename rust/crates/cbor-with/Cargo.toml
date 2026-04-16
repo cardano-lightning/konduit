@@ -1,5 +1,5 @@
 [package]
-name = "bln-sdk"
+name = "cbor-with"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -11,11 +11,9 @@ documentation.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bitcoin.workspace = true
-hex.workspace = true
-lightning-invoice = { workspace = true, features = ["serde"] }
-lightning-types.workspace = true
 minicbor.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde_with.workspace = true
-thiserror.workspace = true
+
+cardano-sdk = { workspace = true, optional = true }
+
+[features]
+plutus-data = [ "dep:cardano-sdk" ]

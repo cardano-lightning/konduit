@@ -1,5 +1,5 @@
 [package]
-name = "konduit-data"
+name = "konduit-api"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -17,9 +17,11 @@ crate-type = ["cdylib", "rlib"]
 anyhow.workspace = true
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
+cbor-with.workspace = true
 chrono.workspace = true
 cryptoxide.workspace = true
 hex.workspace = true
+konduit-data.workspace = true
 minicbor.workspace = true
 rand_core.workspace = true
 serde.workspace = true

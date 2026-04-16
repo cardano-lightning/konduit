@@ -1,6 +1,8 @@
 mod args;
 pub use args::ServerArgs as Args;
 
+mod format;
+
 mod service;
 pub use service::Service;
 
