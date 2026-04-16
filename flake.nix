@@ -42,17 +42,25 @@
           '';
           packages =
             [
+              # aiken
               inputs'.aiken.packages.aiken
+              # JS
               pkgs.yarn
               pkgs.nodePackages_latest.nodejs
               pkgs.typescript-language-server
+              # RUST
               pkgs.openssl
               config.rust-project.toolchain
               wasm-pack
               clang-unwrapped
-              pkgs.just
-              pkgs.prek
               pkgs.cargo-machete
+              # PRE-COMMIT
+              pkgs.prek
+              # UTILS
+              pkgs.just
+              # DOC BUILING
+              pkgs.pandoc
+              pkgs.d2
             ]
             ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
           buildInputs =
