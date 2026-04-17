@@ -162,8 +162,8 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         // - treat as confirmed something that will rollback
         // - use as an input a utxo that has already been spent.
         let tip = iter::once(self.script_utxo.clone())
-            .chain(snapshot.into_iter())
-            .chain(self.wallet_utxos().await?.into_iter())
+            .chain(snapshot)
+            .chain(self.wallet_utxos().await?)
             .collect::<BTreeMap<_, _>>();
         let upper_bound = Bounds::twenty_mins().upper.expect("This returns `Some`!!");
         let mut tx = konduit_tx::adaptor::tx(

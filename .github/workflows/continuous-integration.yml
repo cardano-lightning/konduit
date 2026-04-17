@@ -91,11 +91,17 @@ jobs:
           cargo doc --workspace --no-deps
           rm -rf target/doc/konduit_wasm/*
 
-      - name: Upload docs
+      - name: Upload workspace docs
         uses: actions/upload-artifact@v4
         with:
           name: cargo-doc
           path: rust/target/doc
+
+      - name: Upload technical briefing
+        uses: actions/upload-artifact@v4
+        with:
+          name: technical-briefing
+          path: docs/processes
 
   wasm:
     runs-on: ubuntu-latest
@@ -172,6 +178,12 @@ jobs:
           name: cargo-doc
           path: site/rust
 
+      - name: Download technical briefing
+        uses: actions/download-artifact@v5
+        with:
+          name: technical-briefing
+          path: site/rust/technical-briefing
+
       - name: Download konduit_wasm artifacts
         uses: actions/download-artifact@v5
         with:
@@ -244,6 +256,7 @@ jobs:
           <body>
               <h1>📚 Workspace Documentation</h1>
               <ul>
+                <li><a href="./technical-briefing">Konduit Protocol: Technical Briefing</a></li>
                 <li><a href="./cardano_sdk">cardano-sdk</a></li>
                 <li><a href="./konduit_wasm">konduit-wasm</a></li>
               </ul>
