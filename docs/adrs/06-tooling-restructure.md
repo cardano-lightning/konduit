@@ -23,10 +23,10 @@ breaking changes across the ecosystem, **crate names within Cargo.toml will
 remain unchanged**. Only the physical paths and directory names will change.
 
 1. **Namespacing**: Organize crates into the following top-level directories:
-   - konduit/: Konduit-specific tooling, including bln-client, fx-client, and
-     all konduit-\* crates.
+   - konduit/: Konduit-specific tooling, fx-client, and all konduit-\* crates.
+   - bln/: bln-client, bln-sdk
    - cardano/: All Cardano-specific connectors and SDKs.
-   - shared/: Generic utilities such as http-client.
+   - shared/: Generic utilities such as http-client, generic codecs.
 2. **Directory Renaming & Path Refinement**:
    - Move konduit-server to the directory konduit/adaptor/.
    - Move konduit-client to the directory konduit/consumer/.
