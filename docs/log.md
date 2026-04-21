@@ -12,10 +12,21 @@ Below is an entry template.
 
 - Describe : **What** did you work on this week? (little prose, mostly links to
   PR, docs, source code, ..)
-- OKRs : **What** outcome/key result did it support?
+- Roadmap/OKRs : **What** outcome/key result did it support?
 - Next : **What** is immediately next?
 
 ## Entries
+
+### 2026-04-19
+
+@waalge: New road map. Preliminary attempt of kernel tests. Explainer for
+business.
+
+Roadmap items: P1-KER-PROP
+
+Next:
+
+- Kernel testing a la Amaru Treasury
 
 ### 2026-04-05
 
