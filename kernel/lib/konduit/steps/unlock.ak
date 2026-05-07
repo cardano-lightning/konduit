@@ -69,3 +69,60 @@ fn with_(
     }
   }
 }
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+const test_amount = 1_000_000
+
+// Timestamps: soon = now + 60s, later = now + 120s
+const test_now = 1_765_889_000_000
+
+const test_soon = test_now + 60_000
+
+const test_later = test_soon + 60_000
+
+const test_secret =
+  #"0000000000000000000000000000000000000000000000000000000000000000"
+
+const test_ub = Finite(test_soon)
+
+// account tests (private fn, must be inline)
+
+test test_unlock_account_empty() {
+  let total = account(test_ub, [], [], [])
+  total == 0
+}
+
+test test_unlock_account_unlock_one() {
+  let secret = test_secret
+  let hash = sha2_256(secret)
+  let pend = (test_amount, test_later, hash)
+  let total = account(test_ub, [secret], [pend], [])
+  total == test_amount
+}
+
+test test_unlock_account_continue_one() {
+  // #"" passes the pend through unchanged
+  let secret = test_secret
+  let hash = sha2_256(secret)
+  let pend = (test_amount, test_later, hash)
+  let total = account(test_ub, [#""], [pend], [pend])
+  total == 0
+}
+
+test test_unlock_account_wrong_preimage_length() fail {
+  // secret must be exactly 32 bytes
+  let short_secret = #"aabb"
+  let hash = sha2_256(short_secret)
+  let pend = (test_amount, test_later, hash)
+  expect _ = account(test_ub, [short_secret], [pend], [])
+}
+
+test test_unlock_account_timed_out() fail {
+  // upper_bound > timeout: the pend has expired, can't unlock
+  let secret = test_secret
+  let hash = sha2_256(secret)
+  let expired_timeout = test_soon - 1
+  let pend = (test_amount, expired_timeout, hash)
+  expect _ = account(test_ub, [secret], [pend], [])
+}
