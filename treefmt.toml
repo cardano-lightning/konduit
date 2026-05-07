@@ -1,0 +1,54 @@
+excludes = [
+    "*.lock",
+    "*.patch",
+    "package-lock.json",
+    "go.mod",
+    "go.sum",
+    ".gitattributes",
+    ".gitignore",
+    ".gitmodules",
+    ".hgignore",
+    ".svnignore",
+    "LICENSE",
+]
+
+[formatter.aiken]
+command = "aiken"
+excludes = []
+includes = ["*.ak"]
+options = ["fmt"]
+
+[formatter.alejandra]
+command = "alejandra"
+excludes = []
+includes = ["*.nix"]
+options = []
+
+[formatter.prettier]
+command = "prettier"
+excludes = []
+includes = [
+    "*.cjs",
+    "*.css",
+    "*.html",
+    "*.js",
+    "*.json",
+    "*.json5",
+    "*.jsx",
+    "*.md",
+    "*.mdx",
+    "*.mjs",
+    "*.scss",
+    "*.ts",
+    "*.tsx",
+    "*.vue",
+    "*.yaml",
+    "*.yml",
+]
+options = ["--write", "--config", "/nix/store/ssgpdafnjz3vmjpfi7xa93h0b3p0y0ad-prettierrc.json"]
+
+[formatter.rustfmt]
+command = "rustfmt"
+excludes = []
+includes = ["*.rs"]
+options = ["--config", "skip_children=true", "--edition", "2024"]

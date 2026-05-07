@@ -1,7 +1,5 @@
 {
-  "default_stages": [
-    "pre-commit"
-  ],
+  "default_stages": ["pre-commit"],
   "repos": [
     {
       "hooks": [
@@ -18,12 +16,8 @@
           "name": "cargo-machete",
           "pass_filenames": false,
           "require_serial": false,
-          "stages": [
-            "pre-commit"
-          ],
-          "types": [
-            "file"
-          ],
+          "stages": ["pre-commit"],
+          "types": ["file"],
           "types_or": [],
           "verbose": false
         },
@@ -40,34 +34,26 @@
           "name": "clippy",
           "pass_filenames": false,
           "require_serial": false,
-          "stages": [
-            "pre-commit"
-          ],
-          "types": [
-            "file"
-          ],
+          "stages": ["pre-commit"],
+          "types": ["file"],
           "types_or": [],
           "verbose": false
         },
         {
-          "always_run": false,
+          "always_run": true,
           "args": [],
-          "entry": "sh -c '\n  if [ -f .nix-prek-config.json ]; then\n    grep -v \"^#\" .nix-prek-config.json | jq \".repos[].hooks[].entry |= gsub(\\\"/nix/store/[^/]+/bin/\\\"; \\\"\\\")\" > .pre-commit-config.json\n    git add .pre-commit-config.json\n  fi\n'\n",
+          "entry": "sh -c '\n  if [ -f .nix-prek-config.json ]; then\n    grep -v \"^#\" .nix-prek-config.json | jq \".repos[].hooks[].entry |= gsub(\\\"/nix/store/[^/]+/bin/\\\"; \\\"\\\")\" > .pre-commit-config.json\n    treefmt .pre-commit-config.json\n    git add .pre-commit-config.json\n  fi\n'\n",
           "exclude": "^$",
           "exclude_types": [],
           "fail_fast": false,
-          "files": ".*",
-          "id": "sync-precommit-config",
+          "files": "",
+          "id": "nix-sync",
           "language": "system",
-          "name": "sync-precommit-config",
+          "name": "nix-sync",
           "pass_filenames": false,
           "require_serial": false,
-          "stages": [
-            "pre-commit"
-          ],
-          "types": [
-            "file"
-          ],
+          "stages": ["pre-commit"],
+          "types": ["file"],
           "types_or": [],
           "verbose": false
         },
@@ -84,12 +70,8 @@
           "name": "treefmt",
           "pass_filenames": true,
           "require_serial": false,
-          "stages": [
-            "pre-commit"
-          ],
-          "types": [
-            "file"
-          ],
+          "stages": ["pre-commit"],
+          "types": ["file"],
           "types_or": [],
           "verbose": false
         }

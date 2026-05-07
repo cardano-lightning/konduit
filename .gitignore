@@ -9,6 +9,9 @@
 .direnv/
 .envrc
 
+# Nix dev shell 
+.nix-prek-config.json
+
 # Rust
 debug/
 target/

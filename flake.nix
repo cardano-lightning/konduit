@@ -102,16 +102,6 @@
         treefmt = {
           projectRootFile = "flake.nix";
           flakeFormatter = true;
-          settings.formatter.jq = {
-            command = "${pkgs.writeShellScript "jq-fmt" ''
-              for f in "$@"; do
-                tmp=$(mktemp)
-                ${pkgs.jq}/bin/jq . "$f" > "$tmp" && mv "$tmp" "$f"
-              done
-            ''}";
-            args = ["."];
-            includes = ["*.json"];
-          };
           programs = {
             prettier = {
               enable = true;
@@ -119,7 +109,6 @@
                 printWidth = 80;
                 proseWrap = "always";
               };
-              excludes = ["*.json"];
             };
             # jq.enable = true;
             alejandra.enable = true;
@@ -141,20 +130,21 @@
             configPath = nixPrekConfig;
             hooks = {
               treefmt.enable = true;
-              sync-precommit-config = {
+              nix-sync = {
                 enable = true;
-                name = "sync-precommit-config";
+                name = "nix-sync";
                 description = "Copy nix-generated prek config to committed ${precommitConfig}. This strips the nixstore dependencies";
                 entry = ''
                   sh -c '
                     if [ -f ${nixPrekConfig} ]; then
                       grep -v "^#" ${nixPrekConfig} | jq ".repos[].hooks[].entry |= gsub(\"/nix/store/[^/]+/bin/\"; \"\")" > ${precommitConfig}
+                      treefmt ${precommitConfig}
                       git add ${precommitConfig}
                     fi
                   '
                 '';
                 pass_filenames = false;
-                files = ".*";
+                always_run = true;
               };
               # Transitive deps mean default clippy ends up using a different cargo.
               my-clippy = {
