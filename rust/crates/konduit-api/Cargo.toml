@@ -14,19 +14,26 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-anyhow.workspace = true
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
-cbor-with.workspace = true
-chrono.workspace = true
-cryptoxide.workspace = true
-hex.workspace = true
+cbor-with = { workspace = true, features = ["plutus-data"] }
 konduit-data.workspace = true
 minicbor.workspace = true
 rand_core.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
-uplc.workspace = true
 web-time.workspace = true
+# Clients
+reqwest  = { version = "0.12", optional = true }
+# Server
+actix-web = { version = "4", optional = true }
+futures   = { version = "0.3", optional = true }
+
+[features]
+client = ["dep:reqwest"]          # TODO: switch out for http-xxx
+actix = ["dep:actix-web", "dep:futures"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

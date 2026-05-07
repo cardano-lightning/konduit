@@ -2029,21 +2029,18 @@ dependencies = [
 name = "konduit-api"
 version = "0.0.0"
 dependencies = [
- "anyhow",
+ "actix-web",
  "bln-sdk",
  "cardano-sdk",
  "cbor-with",
- "chrono",
- "cryptoxide 0.5.1",
- "hex",
+ "futures",
  "konduit-data",
  "minicbor",
  "rand_core 0.6.4",
+ "reqwest",
  "serde",
- "serde_json",
  "serde_with",
  "thiserror 2.0.17",
- "uplc",
  "web-time",
 ]
 
