@@ -1,0 +1,100 @@
+{
+  "default_stages": [
+    "pre-commit"
+  ],
+  "repos": [
+    {
+      "hooks": [
+        {
+          "always_run": false,
+          "args": [],
+          "entry": "cargo-machete ./",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": "\\.toml$",
+          "id": "cargo-machete",
+          "language": "system",
+          "name": "cargo-machete",
+          "pass_filenames": false,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
+          ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        },
+        {
+          "always_run": false,
+          "args": [],
+          "entry": "cargo-clippy -- --manifest-path Cargo.toml",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": "",
+          "id": "my-clippy",
+          "language": "system",
+          "name": "clippy",
+          "pass_filenames": false,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
+          ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        },
+        {
+          "always_run": false,
+          "args": [],
+          "entry": "sh -c '\n  if [ -f .nix-prek-config.json ]; then\n    grep -v \"^#\" .nix-prek-config.json | jq \".repos[].hooks[].entry |= gsub(\\\"/nix/store/[^/]+/bin/\\\"; \\\"\\\")\" > .pre-commit-config.json\n    git add .pre-commit-config.json\n  fi\n'\n",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": ".*",
+          "id": "sync-precommit-config",
+          "language": "system",
+          "name": "sync-precommit-config",
+          "pass_filenames": false,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
+          ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        },
+        {
+          "always_run": false,
+          "args": [],
+          "entry": "treefmt --fail-on-change --no-cache",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": "",
+          "id": "treefmt",
+          "language": "system",
+          "name": "treefmt",
+          "pass_filenames": true,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
+          ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        }
+      ],
+      "repo": "local"
+    }
+  ]
+}

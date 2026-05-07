@@ -102,6 +102,16 @@
         treefmt = {
           projectRootFile = "flake.nix";
           flakeFormatter = true;
+          settings.formatter.jq = {
+            command = "${pkgs.writeShellScript "jq-fmt" ''
+              for f in "$@"; do
+                tmp=$(mktemp)
+                ${pkgs.jq}/bin/jq . "$f" > "$tmp" && mv "$tmp" "$f"
+              done
+            ''}";
+            args = ["."];
+            includes = ["*.json"];
+          };
           programs = {
             prettier = {
               enable = true;
@@ -109,7 +119,9 @@
                 printWidth = 80;
                 proseWrap = "always";
               };
+              excludes = ["*.json"];
             };
+            # jq.enable = true;
             alejandra.enable = true;
             rustfmt.enable = true;
             aiken.enable = true;
@@ -117,7 +129,8 @@
         };
 
         pre-commit = let
-          nixPrekConfig = ".nix-prek-config.yaml";
+          nixPrekConfig = ".nix-prek-config.json";
+          precommitConfig = ".pre-commit-config.json";
         in {
           # clippy checks are failing `nix flake check`
           # However, they come from rust-flakes, and our implicit workspace
@@ -131,15 +144,17 @@
               sync-precommit-config = {
                 enable = true;
                 name = "sync-precommit-config";
-                description = "Copy nix-generated prek config to committed .pre-commit-config.yaml";
+                description = "Copy nix-generated prek config to committed ${precommitConfig}. This strips the nixstore dependencies";
                 entry = ''
                   sh -c '
-                    cp --dereference ${nixPrekConfig} .pre-commit-config.yaml
-                    git add .pre-commit-config.yaml
+                    if [ -f ${nixPrekConfig} ]; then
+                      grep -v "^#" ${nixPrekConfig} | jq ".repos[].hooks[].entry |= gsub(\"/nix/store/[^/]+/bin/\"; \"\")" > ${precommitConfig}
+                      git add ${precommitConfig}
+                    fi
                   '
                 '';
-                files = nixPrekConfig;
                 pass_filenames = false;
+                files = ".*";
               };
               # Transitive deps mean default clippy ends up using a different cargo.
               my-clippy = {
