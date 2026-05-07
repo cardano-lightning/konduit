@@ -25,11 +25,11 @@ pub struct WithEnv<E: clap::Args, C: clap::Subcommand> {
 }
 
 impl Cmd {
-    pub(crate) fn run(self) -> anyhow::Result<()> {
+    pub(crate) async fn run(self) -> anyhow::Result<()> {
         match self {
-            Self::Adaptor(WithEnv { env, cmd }) => cmd.run(env),
-            Self::Admin(WithEnv { env, cmd }) => cmd.run(env),
-            Self::Consumer(WithEnv { env, cmd }) => cmd.run(env),
+            Self::Adaptor(WithEnv { env, cmd }) => cmd.run(env).await,
+            Self::Admin(WithEnv { env, cmd }) => cmd.run(env).await,
+            Self::Consumer(WithEnv { env, cmd }) => cmd.run(env).await,
         }
     }
 

@@ -1,0 +1,21 @@
+[package]
+name = "cardano-connector-utxorpc"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cardano-connector.workspace = true
+cardano-sdk.workspace = true
+hex.workspace = true
+num.workspace = true
+pallas-primitives.workspace = true
+tokio.workspace = true
+utxorpc = "0.13.0"

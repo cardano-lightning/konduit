@@ -7,6 +7,13 @@ use konduit_data::{Duration, Keytag, Receipt};
 
 use crate::{ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script};
 
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("insufficient total gain: preferences.min_total = {min_total}, gain = {gain}")]
+pub struct InsufficientTotalGain {
+    pub min_total: u64,
+    pub gain: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct AdaptorPreferences {
     // Prevents spending a utxo that would result in too little gain relative to the cost of inclusion.
@@ -46,11 +53,11 @@ pub fn tx(
     let steppeds = SteppedUtxos::from(steppeds);
 
     if steppeds.gain() < preferences.min_total as i64 {
-        return Err(anyhow::anyhow!(
-            "insufficient total gain: preferences.min_total = {}, gain = {}",
-            preferences.min_total,
-            steppeds.gain()
-        ));
+        return Err(InsufficientTotalGain {
+            min_total: preferences.min_total,
+            gain: steppeds.gain(),
+        }
+        .into());
     }
 
     let opens = vec![];

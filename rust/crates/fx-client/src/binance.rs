@@ -37,7 +37,7 @@ impl Api for Client {
         let ada_symbol = format!("ADA{}", base_ticker);
 
         let url = format!(
-            "https://api.binance.com/api/v3/ticker/price?symbols=[\"{}\",\"{}\"]",
+            "https://data-api.binance.vision/api/v3/ticker/price?symbols=[\"{}\",\"{}\"]",
             btc_symbol, ada_symbol
         );
 

@@ -6,6 +6,7 @@ mod env;
 mod shared;
 mod tip;
 
-fn main() -> anyhow::Result<()> {
-    cmd::Cmd::init()?.run()
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    cmd::Cmd::init()?.run().await
 }

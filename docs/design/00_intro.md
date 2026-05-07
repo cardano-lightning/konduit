@@ -69,3 +69,7 @@ See the [glossary](../glossary.md) (TBC)
    1. [Cardano Connector](./33_cardano_connector.md#) TODO!
    1. [Node](./34_node.md#) TODO!
    1. [Price Feeds](./35_price_feeds.md#) TODO!
+   1. [Partitioned App](./34_partitioned_app.md#)
+   1. [Adaptor Deployment](./35_adaptor_deployment.md#)
+   1. [Dolos UTxO RPC Implementation PRD](./36_dolos_utxorpc_implementation_prd.md#)
+   1. [Adaptor Deployment PRD](./37_adaptor_deployment_prd.md#)

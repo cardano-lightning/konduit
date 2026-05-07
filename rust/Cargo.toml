@@ -5,6 +5,7 @@ members = [
   "crates/cardano-connector",
   "crates/cardano-connector-client",
   "crates/cardano-connector-direct",
+  "crates/cardano-connector-utxorpc",
   "crates/cardano-sdk",
   "crates/fx-client",
   "crates/http-client",
@@ -105,6 +106,7 @@ bln-sdk = { path = "crates/bln-sdk" }
 cardano-connector = { path = "crates/cardano-connector" }
 cardano-connector-client = { path = "crates/cardano-connector-client" }
 cardano-connector-direct = { path = "crates/cardano-connector-direct" }
+cardano-connector-utxorpc = { path = "crates/cardano-connector-utxorpc" }
 cardano-sdk = { path = "crates/cardano-sdk" }
 fx-client = { path = "crates/fx-client" }
 http-client = { path = "crates/http-client" }

@@ -1,6 +1,4 @@
 use crate::config::admin::Config;
-use cardano_connector::CardanoConnector;
-use tokio::runtime::Runtime;
 
 /// Show
 #[derive(Debug, clap::Subcommand)]
@@ -18,27 +16,27 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    pub(crate) fn run(self, config: &Config) -> anyhow::Result<()> {
+    pub(crate) async fn run(self, config: &Config) -> anyhow::Result<()> {
         if let Cmd::Config = self {
             print!("{}", config);
             return Ok(());
         }
 
-        let connector = config.connector.connector()?;
-
         match self {
             Cmd::Address => {
+                let network_id = config
+                    .connector
+                    .network_id()
+                    .expect("connector network should always be available from config");
                 print!(
                     "{}",
-                    config
-                        .wallet
-                        .to_verification_key()
-                        .to_address(connector.network().into())
+                    config.wallet.to_verification_key().to_address(network_id)
                 );
                 Ok(())
             }
             Cmd::Tip { verbose } => {
-                let tip = Runtime::new()?.block_on(crate::tip::Admin::new(&connector, config))?;
+                let connector = config.connector.connector().await?;
+                let tip = crate::tip::Admin::new(&connector, config).await?;
                 if verbose {
                     println!("{:#}", tip);
                 } else {

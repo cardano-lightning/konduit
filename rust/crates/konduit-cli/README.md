@@ -22,9 +22,14 @@ The CLI is _user-centric_ , providing explicit interfaces for:
 
 ### Configuration
 
-Konduit CLI encourages, but does not require, the usage of dotenv files. Each
-role has command with shared options, defined at the root of each role
-sub-group. There is overlap in options expected by each user.
+Konduit CLI supports config from command-line options, exported env vars,
+`.env.<role>`, and `.env`. Each role has shared options defined at the root of
+its subcommand group, and there is overlap in the options expected by each
+user.
+
+Role-specific dotenv loading is a local-dev convenience implemented by the CLI
+itself. It is useful for local testing, but production secrets and long-lived
+operator config should live outside the repository checkout.
 
 In any case, environment variables exist for each of those options and can be
 declared in `.env[.<user>]` files. For example:
@@ -45,6 +50,22 @@ areas takes precedence):
 1. exported env var
 1. `.env.<user>`
 1. `.env`
+
+Backend-specific config truth:
+
+- parsed `utxorpc` CLI config requires `KONDUIT_NETWORK`.
+- live `utxorpc` connector use for commands such as `show tip` and tx flows also
+  requires `KONDUIT_UTXORPC_URI`.
+- `KONDUIT_CARDANO_BACKEND=blockfrost` requires
+  `KONDUIT_BLOCKFROST_PROJECT_ID`; the network can still be inferred from the
+  project id or default to `mainnet` in some CLI config paths.
+- live reachability and network validation during connector construction are
+  currently eager only for the UTxO RPC backend.
+
+`setup` commands print filled configuration to stdout, including sensitive
+values such as generated wallet material. Treat that output as secret material.
+Redirect it carefully for local development, and do not treat repo-local `.env*`
+files as the recommended production secret-management model.
 
 > [!TIP]
 >
@@ -73,14 +94,17 @@ alias conusmer="cargo run -- consumer"
 
 #### Admin deploy:
 
-Create admin .env file. Here we're inserting the project id.
+Create a local-dev admin dotenv file. For the current UTxO RPC path, set the
+backend explicitly and keep the generated output out of version control.
 
 ```sh
-konduit admin setup --blockfrost "preview..."  >> .env
+konduit admin --backend utxorpc --network preview --utxorpc http://127.0.0.1:1337 setup >> .env.admin
 ```
 
-Alternatively open the file and edit manually. It is optional to move the key to
-`.env.admin`.
+For Blockfrost-based local testing, use
+`konduit admin --backend blockfrost --blockfrost ... setup` instead. In both
+cases, `setup` output is sensitive and should be treated as local-dev bootstrap
+material, not production deployment guidance.
 
 Show wallet details
 
@@ -109,7 +133,7 @@ loaded if not overridden by CLI args, or other envvars.
 
 ```sh
 consumer setup >> .env.consumer
-adaptor setup >> .env.adaptot
+adaptor setup >> .env.adaptor
 ```
 
 Open the files in an editor and remove the connector and host address entries.
@@ -125,6 +149,16 @@ admin tx send --to "$(consumer show address),100" --to "$(adaptor show address),
 
 WARNING :: This is not supposed to spend the reference script UTXO. Double check
 that it hasn't!
+
+Current backend notes:
+
+- `admin show config` and `show address` use parsed config and do not require a
+  live connector.
+- `show tip` and tx commands do construct live connectors.
+- with `utxorpc`, those live commands perform eager reachability and network
+  validation.
+- with the current direct Blockfrost path, validation is limited to project-id
+  presence and network-prefix consistency before later API use.
 
 Consumer opens a channels with Adaptor with tag `deadbeef` and `10` Ada (+ min
 ada buffer).
