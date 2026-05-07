@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-staking
-description: "Staking guidance: registration, delegation, rewards. Provides templates (no execution). Use operator skill to execute."
+description:
+  "Staking guidance: registration, delegation, rewards. Provides templates (no
+  execution). Use operator skill to execute."
 allowed-tools:
   - Read
 user-invocable: true
@@ -8,14 +10,17 @@ user-invocable: true
 
 # cardano-cli-staking
 
-> **This is a guidance skill.** Provides templates and explanations. For execution, use `cardano-cli-staking-operator`.
+> **This is a guidance skill.** Provides templates and explanations. For
+> execution, use `cardano-cli-staking-operator`.
 
 ## When to use
+
 - Learning stake key registration and delegation
 - Understanding rewards withdrawal
 - Getting command templates for staking operations
 
 ## Operating rules (must follow)
+
 - Confirm network before providing commands
 - Never execute—only provide templates
 - Include deposit/fee information
@@ -24,17 +29,20 @@ user-invocable: true
 ## Key concepts
 
 ### Stake addresses vs payment addresses
+
 - **Payment address**: Holds funds, used for spending
 - **Stake address**: Controls delegation, receives rewards
 - **Base address**: Combines both (most common)
 
 ### Deposits
+
 - Stake key registration: ~2 ADA deposit (refundable)
 - Pool registration: ~500 ADA deposit (refundable)
 
 ## Workflow templates
 
 ### Check stake status
+
 ```bash
 # Derive stake address
 cardano-cli conway stake-address build \
@@ -49,6 +57,7 @@ cardano-cli conway query stake-address-info \
 ```
 
 ### Register stake key
+
 ```bash
 # 1. Create registration certificate
 cardano-cli conway stake-address registration-certificate \
@@ -78,6 +87,7 @@ cardano-cli conway transaction submit \
 ```
 
 ### Delegate to pool
+
 ```bash
 # 1. Create delegation certificate
 cardano-cli conway stake-address stake-delegation-certificate \
@@ -90,6 +100,7 @@ cardano-cli conway stake-address stake-delegation-certificate \
 ```
 
 ### Withdraw rewards
+
 ```bash
 # 1. Check rewards balance
 cardano-cli conway query stake-address-info \
@@ -108,6 +119,7 @@ cardano-cli conway transaction build \
 ```
 
 ### De-register stake key (get deposit back)
+
 ```bash
 cardano-cli conway stake-address deregistration-certificate \
   --stake-verification-key-file stake.vkey \
@@ -119,9 +131,11 @@ cardano-cli conway stake-address deregistration-certificate \
 ## Examples
 
 ### Example: Delegate to a pool
+
 **User request:** "Delegate my stake to pool1abc..."
 
 **Response:**
+
 ```bash
 # === Delegate to Pool ===
 
@@ -159,11 +173,13 @@ cardano-cli conway transaction sign \
 ```
 
 ## Safety / key handling
+
 - Verify pool ID from multiple sources (adapools, cexplorer)
 - Staking never risks your principal
 - Delegation can be changed anytime
 - Rewards accumulate until withdrawn
 
 ## References
+
 - `shared/PRINCIPLES.md`
 - `cardano-cli-staking-operator` (for execution)

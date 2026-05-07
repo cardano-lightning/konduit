@@ -3,6 +3,7 @@
 > This is a template. Verify syntax with your installed `cardano-cli`.
 
 ## Online build flow (`transaction build`)
+
 ```bash
 export MAGIC=<MAGIC>
 export FROM_ADDR=$(cat wallets/alice/base.addr)

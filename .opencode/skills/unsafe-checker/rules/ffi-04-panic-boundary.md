@@ -10,7 +10,8 @@ clippy: panic_in_result_fn
 
 ## Summary
 
-Panics must not unwind across FFI boundaries. Use `catch_unwind` or mark functions as `extern "C-unwind"`.
+Panics must not unwind across FFI boundaries. Use `catch_unwind` or mark
+functions as `extern "C-unwind"`.
 
 ## Rationale
 

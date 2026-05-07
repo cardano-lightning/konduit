@@ -1,6 +1,9 @@
 ---
 name: m10-performance
-description: "CRITICAL: Use for performance optimization. Triggers: performance, optimization, benchmark, profiling, flamegraph, criterion, slow, fast, allocation, cache, SIMD, make it faster, 性能优化, 基准测试"
+description:
+  "CRITICAL: Use for performance optimization. Triggers: performance,
+  optimization, benchmark, profiling, flamegraph, criterion, slow, fast,
+  allocation, cache, SIMD, make it faster, 性能优化, 基准测试"
 user-invocable: false
 ---
 
@@ -13,6 +16,7 @@ user-invocable: false
 **What's the bottleneck, and is optimization worth it?**
 
 Before optimizing:
+
 - Have you measured? (Don't guess)
 - What's the acceptable performance?
 - Will optimization add complexity?
@@ -21,13 +25,13 @@ Before optimizing:
 
 ## Performance Decision → Implementation
 
-| Goal | Design Choice | Implementation |
-|------|---------------|----------------|
+| Goal               | Design Choice       | Implementation                |
+| ------------------ | ------------------- | ----------------------------- |
 | Reduce allocations | Pre-allocate, reuse | `with_capacity`, object pools |
-| Improve cache | Contiguous data | `Vec`, `SmallVec` |
-| Parallelize | Data parallelism | `rayon`, threads |
-| Avoid copies | Zero-copy | References, `Cow<T>` |
-| Reduce indirection | Inline data | `smallvec`, arrays |
+| Improve cache      | Contiguous data     | `Vec`, `SmallVec`             |
+| Parallelize        | Data parallelism    | `rayon`, threads              |
+| Avoid copies       | Zero-copy           | References, `Cow<T>`          |
+| Reduce indirection | Inline data         | `smallvec`, arrays            |
 
 ---
 
@@ -64,11 +68,11 @@ To domain constraints (Layer 3):
     ↑ Check: Business requirements (acceptable response time)
 ```
 
-| Question | Trace To | Ask |
-|----------|----------|-----|
-| Latency requirements | domain-* | What's acceptable response time? |
-| Throughput needs | domain-* | How many requests per second? |
-| Memory constraints | domain-* | What's the memory budget? |
+| Question             | Trace To  | Ask                              |
+| -------------------- | --------- | -------------------------------- |
+| Latency requirements | domain-\* | What's acceptable response time? |
+| Throughput needs     | domain-\* | How many requests per second?    |
+| Memory constraints   | domain-\* | What's the memory budget?        |
 
 ---
 
@@ -94,13 +98,13 @@ To implementation (Layer 1):
 
 ## Quick Reference
 
-| Tool | Purpose |
-|------|---------|
-| `cargo bench` | Micro-benchmarks |
-| `criterion` | Statistical benchmarks |
-| `perf` / `flamegraph` | CPU profiling |
-| `heaptrack` | Allocation tracking |
-| `valgrind` / `cachegrind` | Cache analysis |
+| Tool                      | Purpose                |
+| ------------------------- | ---------------------- |
+| `cargo bench`             | Micro-benchmarks       |
+| `criterion`               | Statistical benchmarks |
+| `perf` / `flamegraph`     | CPU profiling          |
+| `heaptrack`               | Allocation tracking    |
+| `valgrind` / `cachegrind` | Cache analysis         |
 
 ## Optimization Priority
 
@@ -114,44 +118,44 @@ To implementation (Layer 1):
 
 ## Common Techniques
 
-| Technique | When | How |
-|-----------|------|-----|
-| Pre-allocation | Known size | `Vec::with_capacity(n)` |
-| Avoid cloning | Hot paths | Use references or `Cow<T>` |
-| Batch operations | Many small ops | Collect then process |
-| SmallVec | Usually small | `smallvec::SmallVec<[T; N]>` |
-| Inline buffers | Fixed-size data | Arrays over Vec |
+| Technique        | When            | How                          |
+| ---------------- | --------------- | ---------------------------- |
+| Pre-allocation   | Known size      | `Vec::with_capacity(n)`      |
+| Avoid cloning    | Hot paths       | Use references or `Cow<T>`   |
+| Batch operations | Many small ops  | Collect then process         |
+| SmallVec         | Usually small   | `smallvec::SmallVec<[T; N]>` |
+| Inline buffers   | Fixed-size data | Arrays over Vec              |
 
 ---
 
 ## Common Mistakes
 
-| Mistake | Why Wrong | Better |
-|---------|-----------|--------|
-| Optimize without profiling | Wrong target | Profile first |
-| Benchmark in debug mode | Meaningless | Always `--release` |
-| Use LinkedList | Cache unfriendly | `Vec` or `VecDeque` |
-| Hidden `.clone()` | Unnecessary allocs | Use references |
-| Premature optimization | Wasted effort | Make it work first |
+| Mistake                    | Why Wrong          | Better              |
+| -------------------------- | ------------------ | ------------------- |
+| Optimize without profiling | Wrong target       | Profile first       |
+| Benchmark in debug mode    | Meaningless        | Always `--release`  |
+| Use LinkedList             | Cache unfriendly   | `Vec` or `VecDeque` |
+| Hidden `.clone()`          | Unnecessary allocs | Use references      |
+| Premature optimization     | Wasted effort      | Make it work first  |
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern | Why Bad | Better |
-|--------------|---------|--------|
-| Clone to avoid lifetimes | Performance cost | Proper ownership |
-| Box everything | Indirection cost | Stack when possible |
-| HashMap for small sets | Overhead | Vec with linear search |
-| String concat in loop | O(n^2) | `String::with_capacity` or `format!` |
+| Anti-Pattern             | Why Bad          | Better                               |
+| ------------------------ | ---------------- | ------------------------------------ |
+| Clone to avoid lifetimes | Performance cost | Proper ownership                     |
+| Box everything           | Indirection cost | Stack when possible                  |
+| HashMap for small sets   | Overhead         | Vec with linear search               |
+| String concat in loop    | O(n^2)           | `String::with_capacity` or `format!` |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Reducing clones | m01-ownership |
-| Concurrency options | m07-concurrency |
-| Smart pointer choice | m02-resource |
-| Domain requirements | domain-* |
+| When                 | See             |
+| -------------------- | --------------- |
+| Reducing clones      | m01-ownership   |
+| Concurrency options  | m07-concurrency |
+| Smart pointer choice | m02-resource    |
+| Domain requirements  | domain-\*       |

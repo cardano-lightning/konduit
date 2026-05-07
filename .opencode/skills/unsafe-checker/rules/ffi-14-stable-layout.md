@@ -9,7 +9,8 @@ impact: HIGH
 
 ## Summary
 
-FFI types should not change layout between versions. Use `#[repr(C)]` and avoid types with unstable layout like generic `std` types.
+FFI types should not change layout between versions. Use `#[repr(C)]` and avoid
+types with unstable layout like generic `std` types.
 
 ## Rationale
 
@@ -112,15 +113,15 @@ impl From<Option<u32>> for OptionalU32 {
 
 ## Stable Types for FFI
 
-| Use Instead Of | Stable Type |
-|----------------|-------------|
-| `Vec<T>` | `*mut T` + `len` + `cap` |
-| `String` | `*const c_char` or `*mut c_char` + `len` |
-| `&[T]` | `*const T` + `len` |
-| `Option<T>` | Custom tagged struct |
-| `Result<T, E>` | Error code + out parameter |
-| `Box<T>` | `*mut T` |
-| `bool` | `c_int` or explicit `u8` |
+| Use Instead Of | Stable Type                              |
+| -------------- | ---------------------------------------- |
+| `Vec<T>`       | `*mut T` + `len` + `cap`                 |
+| `String`       | `*const c_char` or `*mut c_char` + `len` |
+| `&[T]`         | `*const T` + `len`                       |
+| `Option<T>`    | Custom tagged struct                     |
+| `Result<T, E>` | Error code + out parameter               |
+| `Box<T>`       | `*mut T`                                 |
+| `bool`         | `c_int` or explicit `u8`                 |
 
 ## Checklist
 

@@ -22,7 +22,8 @@ For each pointer dereference:
 
 ## 3. Memory Safety
 
-- [ ] **No aliasing**: Are `&` and `&mut` never created to the same memory simultaneously?
+- [ ] **No aliasing**: Are `&` and `&mut` never created to the same memory
+      simultaneously?
 - [ ] **No use-after-free**: Is memory not accessed after deallocation?
 - [ ] **No double-free**: Is memory freed exactly once?
 - [ ] **No data races**: Is concurrent access properly synchronized?
@@ -60,22 +61,23 @@ For each pointer dereference:
 
 ## 8. Red Flags (Require Extra Scrutiny)
 
-| Pattern | Concern |
-|---------|---------|
-| `transmute` | Type compatibility, provenance |
-| `as` on pointers | Alignment, type punning |
-| `static mut` | Data races |
-| `*const T as *mut T` | Aliasing violation |
-| Manual `Send`/`Sync` | Thread safety |
-| `assume_init` | Initialization |
-| `set_len` on Vec | Uninitialized memory |
-| `from_raw_parts` | Lifetime, validity |
-| `offset`/`add`/`sub` | Out of bounds |
-| FFI callbacks | Panic safety |
+| Pattern              | Concern                        |
+| -------------------- | ------------------------------ |
+| `transmute`          | Type compatibility, provenance |
+| `as` on pointers     | Alignment, type punning        |
+| `static mut`         | Data races                     |
+| `*const T as *mut T` | Aliasing violation             |
+| Manual `Send`/`Sync` | Thread safety                  |
+| `assume_init`        | Initialization                 |
+| `set_len` on Vec     | Uninitialized memory           |
+| `from_raw_parts`     | Lifetime, validity             |
+| `offset`/`add`/`sub` | Out of bounds                  |
+| FFI callbacks        | Panic safety                   |
 
 ## 9. Verification Questions
 
 Ask the author:
+
 - "What would happen if [X invariant] was violated?"
 - "How do you know [pointer/reference] is valid here?"
 - "What if this panics at [specific line]?"
@@ -90,13 +92,13 @@ Ask the author:
 
 ## Review Severity Guide
 
-| Severity | Requires |
-|----------|----------|
-| `transmute` | Two reviewers, Miri test |
-| Manual `Send`/`Sync` | Thread safety expert review |
-| FFI | Documentation of C interface |
-| `static mut` | Justification for not using atomic/mutex |
-| Pointer arithmetic | Bounds proof |
+| Severity             | Requires                                 |
+| -------------------- | ---------------------------------------- |
+| `transmute`          | Two reviewers, Miri test                 |
+| Manual `Send`/`Sync` | Thread safety expert review              |
+| FFI                  | Documentation of C interface             |
+| `static mut`         | Justification for not using atomic/mutex |
+| Pointer arithmetic   | Bounds proof                             |
 
 ## Sample Review Comments
 

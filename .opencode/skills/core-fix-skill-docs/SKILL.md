@@ -20,6 +20,7 @@ Check and fix missing reference files in dynamic skills.
 ```
 
 **Arguments:**
+
 - `crate_name`: Specific crate to check (optional, defaults to all)
 - `--check-only`: Only report issues, don't fix
 - `--remove-invalid`: Remove invalid references instead of creating files
@@ -29,6 +30,7 @@ Check and fix missing reference files in dynamic skills.
 **CRITICAL: Check if agent infrastructure is available.**
 
 This skill can run in two modes:
+
 - **Agent Mode**: Uses background agents for documentation fetching
 - **Inline Mode**: Executes directly using agent-browser CLI or WebFetch
 
@@ -58,6 +60,7 @@ Extract referenced files from Documentation section:
 
 ```markdown
 ## Documentation
+
 - `./references/file1.md` - Description
 ```
 
@@ -138,6 +141,7 @@ done
 ### Step 4: Report Status
 
 Output format:
+
 ```
 === {crate_name} ===
 SKILL.md: OK
@@ -153,6 +157,7 @@ Action needed: 1 file missing
 For each missing file:
 
 **Using agent-browser CLI:**
+
 ```bash
 agent-browser open "https://docs.rs/{crate_name}/latest/{crate_name}/{module}/"
 agent-browser get text ".docblock"
@@ -161,12 +166,14 @@ agent-browser close
 ```
 
 **Using WebFetch fallback:**
+
 ```
 WebFetch("https://docs.rs/{crate_name}/latest/{crate_name}/{module}/",
          "Extract the main documentation content for this module")
 ```
 
 Then write the content:
+
 ```bash
 Write("~/.claude/skills/{crate_name}/references/{module}.md", <fetched_content>)
 ```
@@ -240,10 +247,10 @@ Summary: 1 file missing in 1 skill
 
 ## Error Handling
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| Agent not available | Skills-only install | Use inline mode |
-| Skills directory empty | No skills installed | Run /sync-crate-skills first |
-| docs.rs unavailable | Network issue | Retry or use --remove-invalid |
-| Permission denied | Directory issue | Check ~/.claude/skills/ permissions |
-| Invalid SKILL.md format | Corrupted skill | Re-generate skill |
+| Error                   | Cause               | Solution                            |
+| ----------------------- | ------------------- | ----------------------------------- |
+| Agent not available     | Skills-only install | Use inline mode                     |
+| Skills directory empty  | No skills installed | Run /sync-crate-skills first        |
+| docs.rs unavailable     | Network issue       | Retry or use --remove-invalid       |
+| Permission denied       | Directory issue     | Check ~/.claude/skills/ permissions |
+| Invalid SKILL.md format | Corrupted skill     | Re-generate skill                   |

@@ -1,6 +1,7 @@
 # Script spend template (CLI)
 
-> Verify flags with your installed `cardano-cli`. Script spend syntax differs slightly between versions.
+> Verify flags with your installed `cardano-cli`. Script spend syntax differs
+> slightly between versions.
 
 ```bash
 export MAGIC=<MAGIC>

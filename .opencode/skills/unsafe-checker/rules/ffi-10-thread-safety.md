@@ -9,7 +9,8 @@ impact: CRITICAL
 
 ## Summary
 
-Functions exported to C with `#[no_mangle] extern "C"` may be called from multiple threads. Ensure they are thread-safe.
+Functions exported to C with `#[no_mangle] extern "C"` may be called from
+multiple threads. Ensure they are thread-safe.
 
 ## Rationale
 
@@ -111,12 +112,12 @@ struct SingleThreadHandle {
 
 ## Synchronization Patterns
 
-| Pattern | Use Case |
-|---------|----------|
-| `AtomicT` | Simple counters, flags |
-| `Mutex<T>` | Complex shared state |
-| `RwLock<T>` | Read-heavy shared state |
-| `OnceLock<T>` | Lazy one-time init |
+| Pattern         | Use Case                     |
+| --------------- | ---------------------------- |
+| `AtomicT`       | Simple counters, flags       |
+| `Mutex<T>`      | Complex shared state         |
+| `RwLock<T>`     | Read-heavy shared state      |
+| `OnceLock<T>`   | Lazy one-time init           |
 | `thread_local!` | Per-thread state (document!) |
 
 ## Checklist

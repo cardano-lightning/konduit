@@ -9,7 +9,8 @@ impact: CRITICAL
 
 ## Summary
 
-When wrapping a C pointer that owns memory, implement `Drop` to call the appropriate C deallocation function.
+When wrapping a C pointer that owns memory, implement `Drop` to call the
+appropriate C deallocation function.
 
 ## Rationale
 

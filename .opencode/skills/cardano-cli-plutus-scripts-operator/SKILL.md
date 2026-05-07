@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-plutus-scripts-operator
-description: "Execute Plutus script transactions: script spends, datum/redeemer submission. Manual invoke only."
+description:
+  "Execute Plutus script transactions: script spends, datum/redeemer submission.
+  Manual invoke only."
 allowed-tools:
   - Bash(cardano-cli:*)
   - Bash(cat:*)
@@ -15,13 +17,16 @@ context:
 
 # cardano-cli-plutus-scripts-operator
 
-> **OPERATOR SKILL**: Executes Plutus script transactions. Requires explicit human invocation due to collateral risk.
+> **OPERATOR SKILL**: Executes Plutus script transactions. Requires explicit
+> human invocation due to collateral risk.
 
 ## When to use
+
 - When ready to spend from a script address
 - After reviewing guidance from `cardano-cli-plutus-scripts`
 
 ## Operating rules (must follow)
+
 - **ALWAYS verify collateral UTxO is ADA-only**
 - Confirm script hash matches expected
 - Validate datum/redeemer JSON before use
@@ -29,6 +34,7 @@ context:
 - Test on preprod/preview before mainnet
 
 ## Pre-flight checklist
+
 ```
 [ ] Network: ___________
 [ ] Script file (.plutus) verified
@@ -42,6 +48,7 @@ context:
 ## Execution workflow
 
 ### Step 1: Verify script
+
 ```bash
 # Get script hash
 cardano-cli conway transaction policyid \
@@ -55,6 +62,7 @@ cardano-cli conway address build \
 ```
 
 ### Step 2: Query script UTxO
+
 ```bash
 cardano-cli conway query utxo \
   --address $(cat script.addr) \
@@ -62,6 +70,7 @@ cardano-cli conway query utxo \
 ```
 
 ### Step 3: Prepare collateral
+
 ```bash
 # Must be ADA-only UTxO at your payment address
 cardano-cli conway query utxo \
@@ -72,6 +81,7 @@ cardano-cli conway query utxo \
 ```
 
 ### Step 4: Build script spend
+
 ```bash
 cardano-cli conway transaction build \
   --testnet-magic 1 \
@@ -86,6 +96,7 @@ cardano-cli conway transaction build \
 ```
 
 ### Step 5: Sign and submit
+
 ```bash
 # Sign (collateral signer required)
 cardano-cli conway transaction sign \
@@ -107,6 +118,7 @@ cardano-cli conway transaction submit \
 ```
 
 ## Debugging failed scripts
+
 ```bash
 # If script fails, check execution units
 cardano-cli conway transaction build \
@@ -118,11 +130,13 @@ cat cost.json | jq .
 ```
 
 ## Safety / key handling
+
 - Collateral is at risk if script fails unexpectedly
 - Use minimal collateral (1-5 ADA typically sufficient)
 - Keep datum/redeemer free of secrets
 - Verify script logic on testnet first
 
 ## References
+
 - `cardano-cli-plutus-scripts` (guidance skill)
 - `shared/PRINCIPLES.md`

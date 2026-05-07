@@ -22,8 +22,8 @@ traffic coming mostly from mobile wallet applications.
 
 The project direction is to support multiple Cardano connectivity options behind
 a stable connector boundary. This PRD covers one concrete implementation of that
-direction: integrating Konduit with local Cardano infrastructure through
-`dolos` and `UTxO RPC`.
+direction: integrating Konduit with local Cardano infrastructure through `dolos`
+and `UTxO RPC`.
 
 # Problem Statement
 
@@ -221,8 +221,7 @@ Tasks:
 
 - add client dependency on UTxO RPC Rust tooling
 - implement connector construction and config parsing
-- implement `health`, `network`, `protocol_parameters`, `utxos_at`, and
-  `submit`
+- implement `health`, `network`, `protocol_parameters`, `utxos_at`, and `submit`
 
 Definition of done:
 
@@ -239,8 +238,8 @@ Tasks:
 - map outputs, values, multi-assets, datums, and script-relevant fields
 - map protocol parameters required by Konduit tx builders
 - explicitly document unsupported or deferred fields if any
-- confirm that the data required for live protocol parameters can be derived from
-  UTxO RPC modules only
+- confirm that the data required for live protocol parameters can be derived
+  from UTxO RPC modules only
 
 Definition of done:
 

@@ -3,6 +3,7 @@
 ## E0277: Cannot Send Between Threads
 
 ### Error Pattern
+
 ```rust
 use std::rc::Rc;
 
@@ -15,6 +16,7 @@ std::thread::spawn(move || {
 ### Fix Options
 
 **Option 1: Use Arc instead**
+
 ```rust
 use std::sync::Arc;
 
@@ -26,6 +28,7 @@ std::thread::spawn(move || {
 ```
 
 **Option 2: Move owned data**
+
 ```rust
 let data = 42;  // i32 is Copy and Send
 std::thread::spawn(move || {
@@ -38,6 +41,7 @@ std::thread::spawn(move || {
 ## E0277: Cannot Share Between Threads (Not Sync)
 
 ### Error Pattern
+
 ```rust
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -49,6 +53,7 @@ let data = Arc::new(RefCell::new(42));
 ### Fix Options
 
 **Option 1: Use Mutex for thread-safe interior mutability**
+
 ```rust
 use std::sync::{Arc, Mutex};
 
@@ -61,6 +66,7 @@ std::thread::spawn(move || {
 ```
 
 **Option 2: Use RwLock for read-heavy workloads**
+
 ```rust
 use std::sync::{Arc, RwLock};
 
@@ -77,6 +83,7 @@ std::thread::spawn(move || {
 ## Deadlock Patterns
 
 ### Pattern 1: Lock Ordering Deadlock
+
 ```rust
 // DANGER: potential deadlock
 use std::sync::{Arc, Mutex};
@@ -102,6 +109,7 @@ std::thread::spawn(move || {
 ```
 
 ### Fix: Consistent Lock Ordering
+
 ```rust
 // SAFE: always lock in same order (a before b)
 std::thread::spawn(move || {
@@ -116,6 +124,7 @@ std::thread::spawn(move || {
 ```
 
 ### Pattern 2: Self-Deadlock
+
 ```rust
 // DANGER: locking same mutex twice
 let m = Mutex::new(42);
@@ -131,6 +140,7 @@ let _g2 = m.lock().unwrap();  // DEADLOCK on std::Mutex
 ## Mutex Guard Across Await
 
 ### Error Pattern
+
 ```rust
 use std::sync::Mutex;
 use tokio::time::sleep;
@@ -146,6 +156,7 @@ async fn bad_async() {
 ### Fix Options
 
 **Option 1: Scope the lock**
+
 ```rust
 async fn good_async() {
     let m = Mutex::new(42);
@@ -159,6 +170,7 @@ async fn good_async() {
 ```
 
 **Option 2: Use tokio::sync::Mutex**
+
 ```rust
 use tokio::sync::Mutex;
 
@@ -175,6 +187,7 @@ async fn good_async() {
 ## Data Race Prevention
 
 ### Pattern: Missing Synchronization
+
 ```rust
 // This WON'T compile - Rust prevents data races
 use std::sync::Arc;
@@ -193,6 +206,7 @@ std::thread::spawn(move || {
 ```
 
 ### Fix: Add Synchronization
+
 ```rust
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -217,6 +231,7 @@ std::thread::spawn(move || {
 ## Channel Errors
 
 ### Disconnected Channel
+
 ```rust
 use std::sync::mpsc;
 
@@ -229,6 +244,7 @@ match rx.recv() {
 ```
 
 ### Fix: Handle Disconnection
+
 ```rust
 // Use try_recv for non-blocking
 loop {
@@ -250,6 +266,7 @@ for msg in rx {
 ## Async Common Errors
 
 ### Forgetting to Spawn
+
 ```rust
 // WRONG: future not polled
 async fn fetch_data() -> Result<Data, Error> { ... }
@@ -269,6 +286,7 @@ fn process_sync() {
 ```
 
 ### Blocking in Async Context
+
 ```rust
 // WRONG: blocks the executor
 async fn bad() {
@@ -295,6 +313,7 @@ async fn compute() {
 ## Thread Panic Handling
 
 ### Unhandled Panic
+
 ```rust
 let handle = std::thread::spawn(|| {
     panic!("oops");
@@ -305,6 +324,7 @@ handle.join().unwrap();  // panics here
 ```
 
 ### Proper Error Handling
+
 ```rust
 let handle = std::thread::spawn(|| {
     panic!("oops");

@@ -10,11 +10,14 @@ clippy: debug_assert_with_mut_call
 
 ## Summary
 
-In `unsafe` functions or functions containing unsafe blocks, prefer `assert!` over `debug_assert!` for checking safety invariants.
+In `unsafe` functions or functions containing unsafe blocks, prefer `assert!`
+over `debug_assert!` for checking safety invariants.
 
 ## Rationale
 
-`debug_assert!` is compiled out in release builds. If an invariant is important enough to check for safety, it should be checked in all builds to catch violations.
+`debug_assert!` is compiled out in release builds. If an invariant is important
+enough to check for safety, it should be checked in all builds to catch
+violations.
 
 ## Bad Example
 
@@ -67,11 +70,11 @@ pub fn get_checked(slice: &[i32], index: usize) -> Option<&i32> {
 
 ## When to Use Each
 
-| Assertion | Use When |
-|-----------|----------|
-| `assert!` | Invariant is not already checked; function is called with untrusted input |
+| Assertion       | Use When                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| `assert!`       | Invariant is not already checked; function is called with untrusted input                 |
 | `debug_assert!` | Invariant is the caller's responsibility (documented in `# Safety`); performance-critical |
-| No assert | Invariant is enforced by types or prior checks in the same function |
+| No assert       | Invariant is enforced by types or prior checks in the same function                       |
 
 ## Hybrid Approach
 

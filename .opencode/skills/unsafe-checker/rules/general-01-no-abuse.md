@@ -9,11 +9,14 @@ impact: CRITICAL
 
 ## Summary
 
-Unsafe Rust should not be used as an escape hatch from the borrow checker or other compiler safety mechanisms.
+Unsafe Rust should not be used as an escape hatch from the borrow checker or
+other compiler safety mechanisms.
 
 ## Rationale
 
-The borrow checker exists to prevent memory safety bugs. Using `unsafe` to bypass it defeats Rust's safety guarantees and introduces potential undefined behavior.
+The borrow checker exists to prevent memory safety bugs. Using `unsafe` to
+bypass it defeats Rust's safety guarantees and introduces potential undefined
+behavior.
 
 ## Bad Example
 
@@ -55,8 +58,10 @@ fn good_interior_mut() {
 ## Legitimate Uses of Unsafe
 
 1. **FFI**: Calling C functions or implementing C-compatible interfaces
-2. **Low-level abstractions**: Implementing collections, synchronization primitives
-3. **Performance**: Only after profiling shows measurable improvement, and with careful safety analysis
+2. **Low-level abstractions**: Implementing collections, synchronization
+   primitives
+3. **Performance**: Only after profiling shows measurable improvement, and with
+   careful safety analysis
 
 ## Checklist
 

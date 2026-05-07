@@ -1,27 +1,36 @@
 ---
 name: cbor-encoding-decoding
-description: Guidance for encoding/decoding CBOR and interpreting cbor-hex/diag using cbor-diag. Useful for debugging cardano transactions and datum values.
+description:
+  Guidance for encoding/decoding CBOR and interpreting cbor-hex/diag using
+  cbor-diag. Useful for debugging cardano transactions and datum values.
 ---
 
 # CBOR Encoding/Decoding Skill
 
-Use this skill when you need to interpret, validate, or transform CBOR payloads and their
-representations (hex, diagnostic notation, annotated hex). When cbor-hex is unclear, use the
-locally installed `cbor-diag` tool for authoritative decoding.
+Use this skill when you need to interpret, validate, or transform CBOR payloads
+and their representations (hex, diagnostic notation, annotated hex). When
+cbor-hex is unclear, use the locally installed `cbor-diag` tool for
+authoritative decoding.
 
 ## References
-- RFC 7049 diagnostic notation: https://datatracker.ietf.org/doc/html/rfc7049#section-6
+
+- RFC 7049 diagnostic notation:
+  https://datatracker.ietf.org/doc/html/rfc7049#section-6
 
 ## Tooling
+
 `cbor-diag` converts between bytes, hex, and diagnostic notation.
 
 Supported inputs:
+
 - `--from auto|hex|bytes|diag`
 - `--to annotated|hex|bytes|diag|compact|debug`
 - `--seq` for CBOR sequence (cbor-seq)
 
 ## Workflow
-1. Identify the representation you have (raw bytes, hex string, or diagnostic notation).
+
+1. Identify the representation you have (raw bytes, hex string, or diagnostic
+   notation).
 2. If you have cbor-hex, decode it to diagnostic notation:
    - `cbor-diag --from hex --to diag`
 3. If you have diagnostic notation and need canonical bytes/hex:
@@ -31,15 +40,21 @@ Supported inputs:
 5. For multiple concatenated CBOR items, add `--seq`.
 
 ## Interpretation Notes
-- Hex input ignores whitespace and `#` comments; keep payloads clean but comments are allowed.
-- Diagnostic notation follows RFC 7049; arrays, maps, tags, and byte strings are expressed
-  explicitly in diag form.
-- Use `--to compact` if you need a minimal diagnostic string for round-tripping or tests.
+
+- Hex input ignores whitespace and `#` comments; keep payloads clean but
+  comments are allowed.
+- Diagnostic notation follows RFC 7049; arrays, maps, tags, and byte strings are
+  expressed explicitly in diag form.
+- Use `--to compact` if you need a minimal diagnostic string for round-tripping
+  or tests.
 
 ## Quick Recognition (Appendix A/B)
-Use these Appendix A examples to quickly identify common CBOR blobs before decoding:
+
+Use these Appendix A examples to quickly identify common CBOR blobs before
+decoding:
 
 Integers and simple values:
+
 - `00` => `0`
 - `01` => `1`
 - `0a` => `10`
@@ -69,6 +84,7 @@ Integers and simple values:
 - `f8 ff` => `simple(255)`
 
 Floating-point values:
+
 - `f9 00 00` => `0.0`
 - `f9 80 00` => `-0.0`
 - `f9 3c 00` => `1.0`
@@ -79,6 +95,7 @@ Floating-point values:
 - `f9 fc 00` => `-Infinity`
 
 Strings and bytes:
+
 - `60` => `""`
 - `61 61` => `"a"`
 - `64 49 45 54 46` => `"IETF"`
@@ -86,18 +103,21 @@ Strings and bytes:
 - `44 01 02 03 04` => `h'01020304'`
 
 Arrays and maps:
+
 - `80` => `[]`
 - `83 01 02 03` => `[1, 2, 3]`
 - `82 61 61 a1 61 62 61 63` => `["a", {"b": "c"}]`
 - `98 19 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 18 18 19`
-  => `[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]`
+  =>
+  `[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]`
 - `a0` => `{}`
 - `a2 01 02 03 04` => `{1: 2, 3: 4}`
 - `a2 61 61 01 61 62 82 02 03` => `{"a": 1, "b": [2, 3]}`
-- `a5 61 61 61 41 61 62 61 42 61 63 61 43 61 64 61 44 61 65 61 45`
-  => `{"a": "A", "b": "B", "c": "C", "d": "D", "e": "E"}`
+- `a5 61 61 61 41 61 62 61 42 61 63 61 43 61 64 61 44 61 65 61 45` =>
+  `{"a": "A", "b": "B", "c": "C", "d": "D", "e": "E"}`
 
 Indefinite-length items:
+
 - `5f 42 01 02 43 03 04 05 ff` => `(_ h'0102', h'030405')`
 - `7f 65 73 74 72 65 61 64 65 6d 69 6e 67 ff` => `(_ "strea", "ming")`
 - `9f ff` => `[_ ]`
@@ -106,8 +126,9 @@ Indefinite-length items:
 - `bf 63 46 75 6e f5 63 41 6d 74 21 ff` => `{_ "Fun": true, "Amt": -2}`
 
 Tags:
-- `c0 74 32 30 31 33 2d 30 33 2d 32 31 54 32 30 3a 30 34 3a 30 30 5a`
-  => `0("2013-03-21T20:04:00Z")`
+
+- `c0 74 32 30 31 33 2d 30 33 2d 32 31 54 32 30 3a 30 34 3a 30 30 5a` =>
+  `0("2013-03-21T20:04:00Z")`
 - `c1 1a 51 4b 67 b0` => `1(1363896240)`
 - `c1 fb 41 d4 52 d9 ec 20 00 00` => `1(1363896240.5)`
 - `c2 42 01 02` => `2(h'0102')`
@@ -119,12 +140,14 @@ Tags:
   => `32("http://www.example.com")`
 
 Appendix B notation cues:
+
 - Byte strings use `h'...'` (hex) or `b64'...'` (base64).
 - Tags are `tag(value)`.
 - Indefinite-length items use `_`, e.g. `[_ 1, 2]` or `(_ "a", "b")`.
 - Unnamed simple values use `simple(value)`.
 
 Appendix B jump table clues (common prefixes):
+
 - `0x00..0x17`: small unsigned ints (0..23)
 - `0x18/19/1a/1b`: unsigned ints with 1/2/4/8 following bytes
 - `0x20..0x37`: small negative ints (-1..-24)
@@ -144,6 +167,7 @@ Appendix B jump table clues (common prefixes):
 - `0xff`: break for indefinite-length items
 
 Common tag IDs (major type 6):
+
 - `0`: date/time string (RFC 3339)
 - `1`: epoch-based date/time
 - `2`: positive bignum (byte string)
@@ -159,29 +183,39 @@ Common tag IDs (major type 6):
 - `55799`: self-describe CBOR
 
 ## Examples
+
 Decode hex to diag:
+
 ```bash
 cbor-diag --from hex --to diag <<< '83010203'
 ```
+
 Expected output:
+
 ```text
 [1, 2, 3]
 ```
 
 Encode diag to hex:
+
 ```bash
 cbor-diag --from diag --to hex <<< '["a", {"b": "c"}]'
 ```
+
 Expected output:
+
 ```text
 826161a161626163
 ```
 
 Annotate hex for explanation:
+
 ```bash
 cbor-diag --from hex --to annotated <<< 'a26161016162820203'
 ```
+
 Expected output:
+
 ```text
 a2       # map(2)
    61    #   text(1)
@@ -195,21 +229,30 @@ a2       # map(2)
 ```
 
 ## Common Pitfalls
-- Confusing CBOR hex (encoded bytes) with a hex string contained inside CBOR. Decode to diag to
-  confirm types.
-- Treating concatenated CBOR items as a single item; use `--seq` if the input is a sequence.
+
+- Confusing CBOR hex (encoded bytes) with a hex string contained inside CBOR.
+  Decode to diag to confirm types.
+- Treating concatenated CBOR items as a single item; use `--seq` if the input is
+  a sequence.
 
 ## Additional Guidance
-- Canonicalization: the same logical value can be encoded multiple ways; decoding to diag and
-  re-encoding may not preserve original bytes if encoding indicators differed.
-- Sequences: `--seq` only works with raw bytes input; avoid `--from` when using it.
-- Tags: preserve `tag(value)` even when the semantic meaning is unknown; tags are optional hints.
+
+- Canonicalization: the same logical value can be encoded multiple ways;
+  decoding to diag and re-encoding may not preserve original bytes if encoding
+  indicators differed.
+- Sequences: `--seq` only works with raw bytes input; avoid `--from` when using
+  it.
+- Tags: preserve `tag(value)` even when the semantic meaning is unknown; tags
+  are optional hints.
 
 Sequence example (raw bytes):
+
 ```bash
 printf '\x01\x02\x03' | cbor-diag --to diag --seq
 ```
+
 Expected output:
+
 ```text
 1
 

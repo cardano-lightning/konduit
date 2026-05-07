@@ -24,8 +24,7 @@ The CLI is _user-centric_ , providing explicit interfaces for:
 
 Konduit CLI supports config from command-line options, exported env vars,
 `.env.<role>`, and `.env`. Each role has shared options defined at the root of
-its subcommand group, and there is overlap in the options expected by each
-user.
+its subcommand group, and there is overlap in the options expected by each user.
 
 Role-specific dotenv loading is a local-dev convenience implemented by the CLI
 itself. It is useful for local testing, but production secrets and long-lived
@@ -56,9 +55,9 @@ Backend-specific config truth:
 - parsed `utxorpc` CLI config requires `KONDUIT_NETWORK`.
 - live `utxorpc` connector use for commands such as `show tip` and tx flows also
   requires `KONDUIT_UTXORPC_URI`.
-- `KONDUIT_CARDANO_BACKEND=blockfrost` requires
-  `KONDUIT_BLOCKFROST_PROJECT_ID`; the network can still be inferred from the
-  project id or default to `mainnet` in some CLI config paths.
+- `KONDUIT_CARDANO_BACKEND=blockfrost` requires `KONDUIT_BLOCKFROST_PROJECT_ID`;
+  the network can still be inferred from the project id or default to `mainnet`
+  in some CLI config paths.
 - live reachability and network validation during connector construction are
   currently eager only for the UTxO RPC backend.
 

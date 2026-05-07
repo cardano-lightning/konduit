@@ -2,15 +2,15 @@
 
 ## Section Overview
 
-| # | Section | Prefix | Level | Count | Impact |
-|---|---------|--------|-------|-------|--------|
-| 1 | General Principles | `general-` | CRITICAL | 3 | Foundational unsafe usage guidance |
-| 2 | Safety Abstraction | `safety-` | CRITICAL | 11 | Building sound safe APIs |
-| 3 | Raw Pointers | `ptr-` | HIGH | 6 | Pointer manipulation safety |
-| 4 | Union | `union-` | HIGH | 2 | Union type safety |
-| 5 | Memory Layout | `mem-` | HIGH | 6 | Data representation correctness |
-| 6 | FFI | `ffi-` | CRITICAL | 18 | C interoperability safety |
-| 7 | I/O Safety | `io-` | MEDIUM | 1 | Handle/resource safety |
+| #   | Section            | Prefix     | Level    | Count | Impact                             |
+| --- | ------------------ | ---------- | -------- | ----- | ---------------------------------- |
+| 1   | General Principles | `general-` | CRITICAL | 3     | Foundational unsafe usage guidance |
+| 2   | Safety Abstraction | `safety-`  | CRITICAL | 11    | Building sound safe APIs           |
+| 3   | Raw Pointers       | `ptr-`     | HIGH     | 6     | Pointer manipulation safety        |
+| 4   | Union              | `union-`   | HIGH     | 2     | Union type safety                  |
+| 5   | Memory Layout      | `mem-`     | HIGH     | 6     | Data representation correctness    |
+| 6   | FFI                | `ffi-`     | CRITICAL | 18    | C interoperability safety          |
+| 7   | I/O Safety         | `io-`      | MEDIUM   | 1     | Handle/resource safety             |
 
 ## Section Details
 
@@ -27,6 +27,7 @@
 **Focus**: Building sound safe abstractions over unsafe code
 
 Key invariants:
+
 - Panic safety
 - Memory initialization
 - Send/Sync correctness
@@ -63,6 +64,7 @@ Key invariants:
 **Focus**: Safe C interoperability
 
 Subcategories:
+
 - String handling (CString, CStr)
 - Type compatibility
 - Error handling across FFI

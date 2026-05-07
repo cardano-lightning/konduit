@@ -1,6 +1,9 @@
 ---
 name: m03-mutability
-description: "CRITICAL: Use for mutability issues. Triggers: E0596, E0499, E0502, cannot borrow as mutable, already borrowed as immutable, mut, &mut, interior mutability, Cell, RefCell, Mutex, RwLock, 可变性, 内部可变性, 借用冲突"
+description:
+  "CRITICAL: Use for mutability issues. Triggers: E0596, E0499, E0502, cannot
+  borrow as mutable, already borrowed as immutable, mut, &mut, interior
+  mutability, Cell, RefCell, Mutex, RwLock, 可变性, 内部可变性, 借用冲突"
 user-invocable: false
 ---
 
@@ -13,6 +16,7 @@ user-invocable: false
 **Why does this data need to change, and who can change it?**
 
 Before adding interior mutability, understand:
+
 - Is mutation essential or accidental complexity?
 - Who should control mutation?
 - Is the mutation pattern safe?
@@ -21,12 +25,12 @@ Before adding interior mutability, understand:
 
 ## Error → Design Question
 
-| Error | Don't Just Say | Ask Instead |
-|-------|----------------|-------------|
-| E0596 | "Add mut" | Should this really be mutable? |
-| E0499 | "Split borrows" | Is the data structure right? |
-| E0502 | "Separate scopes" | Why do we need both borrows? |
-| RefCell panic | "Use try_borrow" | Is runtime check appropriate? |
+| Error         | Don't Just Say    | Ask Instead                    |
+| ------------- | ----------------- | ------------------------------ |
+| E0596         | "Add mut"         | Should this really be mutable? |
+| E0499         | "Split borrows"   | Is the data structure right?   |
+| E0502         | "Separate scopes" | Why do we need both borrows?   |
+| RefCell panic | "Use try_borrow"  | Is runtime check appropriate?  |
 
 ---
 
@@ -60,11 +64,11 @@ E0499/E0502 (borrow conflicts)
     ↑ Check: m07-concurrency (is async involved?)
 ```
 
-| Persistent Error | Trace To | Question |
-|-----------------|----------|----------|
-| Repeated borrow conflicts | m09-domain | Should data be restructured? |
-| RefCell in async | m07-concurrency | Is Send/Sync needed? |
-| Mutex deadlocks | m07-concurrency | Is the lock design right? |
+| Persistent Error          | Trace To        | Question                     |
+| ------------------------- | --------------- | ---------------------------- |
+| Repeated borrow conflicts | m09-domain      | Should data be restructured? |
+| RefCell in async          | m07-concurrency | Is Send/Sync needed?         |
+| Mutex deadlocks           | m07-concurrency | Is the lock design right?    |
 
 ---
 
@@ -100,54 +104,54 @@ Never both simultaneously.
 
 ## Quick Reference
 
-| Pattern | Thread-Safe | Runtime Cost | Use When |
-|---------|-------------|--------------|----------|
-| `&mut T` | N/A | Zero | Exclusive mutable access |
-| `Cell<T>` | No | Zero | Copy types, no refs needed |
-| `RefCell<T>` | No | Runtime check | Non-Copy, need runtime borrow |
-| `Mutex<T>` | Yes | Lock contention | Thread-safe mutation |
-| `RwLock<T>` | Yes | Lock contention | Many readers, few writers |
-| `Atomic*` | Yes | Minimal | Simple types (bool, usize) |
+| Pattern      | Thread-Safe | Runtime Cost    | Use When                      |
+| ------------ | ----------- | --------------- | ----------------------------- |
+| `&mut T`     | N/A         | Zero            | Exclusive mutable access      |
+| `Cell<T>`    | No          | Zero            | Copy types, no refs needed    |
+| `RefCell<T>` | No          | Runtime check   | Non-Copy, need runtime borrow |
+| `Mutex<T>`   | Yes         | Lock contention | Thread-safe mutation          |
+| `RwLock<T>`  | Yes         | Lock contention | Many readers, few writers     |
+| `Atomic*`    | Yes         | Minimal         | Simple types (bool, usize)    |
 
 ## Error Code Reference
 
-| Error | Cause | Quick Fix |
-|-------|-------|-----------|
-| E0596 | Borrowing immutable as mutable | Add `mut` or redesign |
-| E0499 | Multiple mutable borrows | Restructure code flow |
-| E0502 | &mut while & exists | Separate borrow scopes |
+| Error | Cause                          | Quick Fix              |
+| ----- | ------------------------------ | ---------------------- |
+| E0596 | Borrowing immutable as mutable | Add `mut` or redesign  |
+| E0499 | Multiple mutable borrows       | Restructure code flow  |
+| E0502 | &mut while & exists            | Separate borrow scopes |
 
 ---
 
 ## Interior Mutability Decision
 
-| Scenario | Choose |
-|----------|--------|
-| T: Copy, single-thread | `Cell<T>` |
-| T: !Copy, single-thread | `RefCell<T>` |
-| T: Copy, multi-thread | `AtomicXxx` |
-| T: !Copy, multi-thread | `Mutex<T>` or `RwLock<T>` |
-| Read-heavy, multi-thread | `RwLock<T>` |
-| Simple flags/counters | `AtomicBool`, `AtomicUsize` |
+| Scenario                 | Choose                      |
+| ------------------------ | --------------------------- |
+| T: Copy, single-thread   | `Cell<T>`                   |
+| T: !Copy, single-thread  | `RefCell<T>`                |
+| T: Copy, multi-thread    | `AtomicXxx`                 |
+| T: !Copy, multi-thread   | `Mutex<T>` or `RwLock<T>`   |
+| Read-heavy, multi-thread | `RwLock<T>`                 |
+| Simple flags/counters    | `AtomicBool`, `AtomicUsize` |
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern | Why Bad | Better |
-|--------------|---------|--------|
-| RefCell everywhere | Runtime panics | Clear ownership design |
-| Mutex for single-thread | Unnecessary overhead | RefCell |
-| Ignore RefCell panic | Hard to debug | Handle or restructure |
-| Lock inside hot loop | Performance killer | Batch operations |
+| Anti-Pattern            | Why Bad              | Better                 |
+| ----------------------- | -------------------- | ---------------------- |
+| RefCell everywhere      | Runtime panics       | Clear ownership design |
+| Mutex for single-thread | Unnecessary overhead | RefCell                |
+| Ignore RefCell panic    | Hard to debug        | Handle or restructure  |
+| Lock inside hot loop    | Performance killer   | Batch operations       |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Smart pointer choice | m02-resource |
-| Thread safety | m07-concurrency |
-| Data structure design | m09-domain |
-| Anti-patterns | m15-anti-pattern |
+| When                  | See              |
+| --------------------- | ---------------- |
+| Smart pointer choice  | m02-resource     |
+| Thread safety         | m07-concurrency  |
+| Data structure design | m09-domain       |
+| Anti-patterns         | m15-anti-pattern |

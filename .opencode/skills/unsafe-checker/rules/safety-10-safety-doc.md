@@ -10,11 +10,14 @@ clippy: missing_safety_doc
 
 ## Summary
 
-Public `unsafe` functions must have a `# Safety` section in their documentation explaining the caller's obligations.
+Public `unsafe` functions must have a `# Safety` section in their documentation
+explaining the caller's obligations.
 
 ## Rationale
 
-Unlike SAFETY comments (which explain why an unsafe block is sound), `# Safety` docs tell callers what they must guarantee. Without this, users cannot safely call the function.
+Unlike SAFETY comments (which explain why an unsafe block is sound), `# Safety`
+docs tell callers what they must guarantee. Without this, users cannot safely
+call the function.
 
 ## Bad Example
 
@@ -35,7 +38,7 @@ pub unsafe fn process_buffer(ptr: *const u8, len: usize) {
 
 ## Good Example
 
-```rust
+````rust
 /// Processes a buffer of bytes.
 ///
 /// # Safety
@@ -77,11 +80,11 @@ pub unsafe fn process_buffer(ptr: *const u8, len: usize) {
 pub unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -> Vec<T> {
     // ...
 }
-```
+````
 
 ## Safety Documentation Template
 
-```rust
+````rust
 /// Brief description of what the function does.
 ///
 /// # Safety
@@ -101,18 +104,18 @@ pub unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -> Vec
 /// // SAFETY: explanation of why this call is safe
 /// unsafe { function_name(...) };
 /// ```
-```
+````
 
 ## What to Document
 
-| Category | Example |
-|----------|---------|
-| Pointer validity | "ptr must be non-null and aligned" |
-| Memory state | "must point to initialized memory" |
-| Aliasing | "no other references to this memory may exist" |
-| Lifetime | "pointer must be valid for the duration of the call" |
-| Thread safety | "must not be called concurrently with..." |
-| Invariants | "len must not exceed isize::MAX" |
+| Category         | Example                                              |
+| ---------------- | ---------------------------------------------------- |
+| Pointer validity | "ptr must be non-null and aligned"                   |
+| Memory state     | "must point to initialized memory"                   |
+| Aliasing         | "no other references to this memory may exist"       |
+| Lifetime         | "pointer must be valid for the duration of the call" |
+| Thread safety    | "must not be called concurrently with..."            |
+| Invariants       | "len must not exceed isize::MAX"                     |
 
 ## Checklist
 

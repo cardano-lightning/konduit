@@ -1,6 +1,8 @@
 ---
 name: cardano-protocol-params
-description: "Protocol parameters: fetch pparams, understand fees, min-UTxO, execution budgets. Read-only diagnostics."
+description:
+  "Protocol parameters: fetch pparams, understand fees, min-UTxO, execution
+  budgets. Read-only diagnostics."
 allowed-tools:
   - Bash(cardano-cli:*)
   - Read
@@ -11,12 +13,14 @@ context:
 # cardano-protocol-params
 
 ## When to use
+
 - Fetching fresh protocol parameters
 - Understanding fee calculation inputs
 - Debugging min-UTxO or execution budget issues
 - Comparing params across networks
 
 ## Operating rules (must follow)
+
 - Always fetch fresh params for the target network
 - Never assume mainnet params apply to testnets
 - Keep pparams.json with tx artifacts for reproducibility
@@ -24,19 +28,24 @@ context:
 ## Key parameters explained
 
 ### Fee calculation
+
 ```
 minFeeA: 44           # lovelace per byte
 minFeeB: 155381       # base fee in lovelace
 ```
+
 Formula: `fee = minFeeA * txSize + minFeeB`
 
 ### Min UTxO
+
 ```
 coinsPerUTxOByte: 4310   # lovelace per byte of UTxO
 ```
+
 Minimum ADA required = size of UTxO (including datum) × coinsPerUTxOByte
 
 ### Execution units (Plutus)
+
 ```
 maxTxExecutionUnits:
   steps: 10000000000     # CPU budget
@@ -47,6 +56,7 @@ executionUnitPrices:
 ```
 
 ### Reference scripts
+
 ```
 minFeeRefScriptCostPerByte: 15  # Cost for using reference scripts
 ```
@@ -54,6 +64,7 @@ minFeeRefScriptCostPerByte: 15  # Cost for using reference scripts
 ## Workflow
 
 ### Fetch parameters
+
 ```bash
 # Preprod
 cardano-cli conway query protocol-parameters \
@@ -67,6 +78,7 @@ cardano-cli conway query protocol-parameters \
 ```
 
 ### Extract key values
+
 ```bash
 # Using jq
 cat pparams.json | jq '{
@@ -79,6 +91,7 @@ cat pparams.json | jq '{
 ```
 
 ### Calculate min-UTxO for output
+
 ```bash
 # Approximate: base ~160 bytes + datum size
 # For simple ADA-only output: ~1 ADA minimum
@@ -88,9 +101,11 @@ cat pparams.json | jq '{
 ## Examples
 
 ### Example: Debug "UTxO too small" error
+
 **Problem:** Transaction fails with min-UTxO error
 
 **Response:**
+
 ```bash
 # 1. Fetch current params
 cardano-cli conway query protocol-parameters \
@@ -110,9 +125,11 @@ cat pparams.json | jq .utxoCostPerByte
 ```
 
 ### Example: Estimate script execution cost
+
 **Problem:** Need to budget for Plutus script
 
 **Response:**
+
 ```bash
 # 1. Get execution prices
 cat pparams.json | jq '{
@@ -128,6 +145,7 @@ cat pparams.json | jq '{
 ```
 
 ## Network magic reference
+
 ```
 Mainnet:  (no flag, use --mainnet)
 Preprod:  --testnet-magic 1
@@ -135,10 +153,12 @@ Preview:  --testnet-magic 2
 ```
 
 ## Safety / key handling
+
 - Protocol params are public, no secrets involved
 - Always verify you're querying the intended network
 - Store pparams with tx artifacts for debugging
 
 ## References
+
 - `shared/PRINCIPLES.md`
 - [Cardano Protocol Parameters](https://docs.cardano.org)

@@ -9,11 +9,13 @@ impact: CRITICAL
 
 ## Summary
 
-Do not directly manipulate memory belonging to other processes or dynamically loaded libraries. Use proper IPC or FFI mechanisms.
+Do not directly manipulate memory belonging to other processes or dynamically
+loaded libraries. Use proper IPC or FFI mechanisms.
 
 ## Rationale
 
-- Other processes have separate address spaces; direct access is impossible on modern OSes
+- Other processes have separate address spaces; direct access is impossible on
+  modern OSes
 - Shared memory requires explicit setup and synchronization
 - Dynamic library memory has ownership rules that must be respected
 - Violating these causes undefined behavior or security vulnerabilities
@@ -91,14 +93,14 @@ fn dynamic_library() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Memory Ownership Rules
 
-| Memory Type | Owner | Safe Access |
-|-------------|-------|-------------|
-| Stack variables | Current function | Direct |
-| Heap (Box, Vec) | Rust allocator | Through smart pointers |
-| Static | Program | With proper synchronization |
-| Shared memory | Multiple processes | Atomic ops, mutexes |
-| Library memory | Library | Through library API |
-| FFI-allocated | C allocator | Through C free functions |
+| Memory Type     | Owner              | Safe Access                 |
+| --------------- | ------------------ | --------------------------- |
+| Stack variables | Current function   | Direct                      |
+| Heap (Box, Vec) | Rust allocator     | Through smart pointers      |
+| Static          | Program            | With proper synchronization |
+| Shared memory   | Multiple processes | Atomic ops, mutexes         |
+| Library memory  | Library            | Through library API         |
+| FFI-allocated   | C allocator        | Through C free functions    |
 
 ## Checklist
 

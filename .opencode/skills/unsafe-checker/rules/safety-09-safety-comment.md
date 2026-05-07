@@ -10,11 +10,13 @@ clippy: undocumented_unsafe_blocks
 
 ## Summary
 
-Every `unsafe` block or `unsafe impl` must have a `// SAFETY:` comment explaining why the operation is safe.
+Every `unsafe` block or `unsafe impl` must have a `// SAFETY:` comment
+explaining why the operation is safe.
 
 ## Rationale
 
-SAFETY comments force the author to think about invariants and help reviewers verify correctness. They serve as documentation for future maintainers.
+SAFETY comments force the author to think about invariants and help reviewers
+verify correctness. They serve as documentation for future maintainers.
 
 ## Bad Example
 
@@ -99,7 +101,8 @@ fn complex_operation(data: &mut [u8], ranges: &[(usize, usize)]) {
 
 1. **What invariants must hold** for this to be safe
 2. **Why those invariants hold** at this specific call site
-3. **What could go wrong** if the invariants were violated (optional but helpful)
+3. **What could go wrong** if the invariants were violated (optional but
+   helpful)
 
 ## Clippy Configuration
 

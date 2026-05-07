@@ -9,7 +9,8 @@ impact: HIGH
 
 ## Summary
 
-When working with raw file descriptors or handles, ensure they are valid for the duration of use and properly ownership-tracked.
+When working with raw file descriptors or handles, ensure they are valid for the
+duration of use and properly ownership-tracked.
 
 ## Rationale
 
@@ -117,14 +118,14 @@ mod good_example {
 
 ## I/O Safety Types (Rust 1.63+)
 
-| Type | Meaning |
-|------|---------|
-| `OwnedFd` | Owns a file descriptor, closes on drop |
-| `BorrowedFd<'a>` | Borrows a fd for lifetime 'a |
-| `RawFd` | Raw integer, no safety guarantees |
-| `AsFd` | Trait for types that have a fd |
-| `From<OwnedFd>` | Create from owned fd |
-| `Into<OwnedFd>` | Convert to owned fd |
+| Type             | Meaning                                |
+| ---------------- | -------------------------------------- |
+| `OwnedFd`        | Owns a file descriptor, closes on drop |
+| `BorrowedFd<'a>` | Borrows a fd for lifetime 'a           |
+| `RawFd`          | Raw integer, no safety guarantees      |
+| `AsFd`           | Trait for types that have a fd         |
+| `From<OwnedFd>`  | Create from owned fd                   |
+| `Into<OwnedFd>`  | Convert to owned fd                    |
 
 ## Windows Equivalents
 

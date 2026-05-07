@@ -1,6 +1,9 @@
 ---
 name: m07-concurrency
-description: "CRITICAL: Use for concurrency/async. Triggers: E0277 Send Sync, cannot be sent between threads, thread, spawn, channel, mpsc, Mutex, RwLock, Atomic, async, await, Future, tokio, deadlock, race condition, 并发, 线程, 异步, 死锁"
+description:
+  "CRITICAL: Use for concurrency/async. Triggers: E0277 Send Sync, cannot be
+  sent between threads, thread, spawn, channel, mpsc, Mutex, RwLock, Atomic,
+  async, await, Future, tokio, deadlock, race condition, 并发, 线程, 异步, 死锁"
 user-invocable: false
 ---
 
@@ -13,6 +16,7 @@ user-invocable: false
 **Is this CPU-bound or I/O-bound, and what's the sharing model?**
 
 Before choosing concurrency primitives:
+
 - What's the workload type?
 - What data needs to be shared?
 - What's the thread safety requirement?
@@ -21,12 +25,12 @@ Before choosing concurrency primitives:
 
 ## Error → Design Question
 
-| Error | Don't Just Say | Ask Instead |
-|-------|----------------|-------------|
-| E0277 Send | "Add Send bound" | Should this type cross threads? |
-| E0277 Sync | "Wrap in Mutex" | Is shared access really needed? |
-| Future not Send | "Use spawn_local" | Is async the right choice? |
-| Deadlock | "Reorder locks" | Is the locking design correct? |
+| Error           | Don't Just Say    | Ask Instead                     |
+| --------------- | ----------------- | ------------------------------- |
+| E0277 Send      | "Add Send bound"  | Should this type cross threads? |
+| E0277 Sync      | "Wrap in Mutex"   | Is shared access really needed? |
+| Future not Send | "Use spawn_local" | Is async the right choice?      |
+| Deadlock        | "Reorder locks"   | Is the locking design correct?  |
 
 ---
 
@@ -57,12 +61,12 @@ Before adding concurrency:
 
 ### Domain Detection Table
 
-| Context Keywords | Load Domain Skill | Key Constraint |
-|-----------------|-------------------|----------------|
-| Web API, HTTP, axum, actix, handler | **domain-web** | Handlers run on any thread |
-| 交易, 支付, trading, payment | **domain-fintech** | Audit + thread safety |
-| gRPC, kubernetes, microservice | **domain-cloud-native** | Distributed tracing |
-| CLI, terminal, clap | **domain-cli** | Usually single-thread OK |
+| Context Keywords                    | Load Domain Skill       | Key Constraint             |
+| ----------------------------------- | ----------------------- | -------------------------- |
+| Web API, HTTP, axum, actix, handler | **domain-web**          | Handlers run on any thread |
+| 交易, 支付, trading, payment        | **domain-fintech**      | Audit + thread safety      |
+| gRPC, kubernetes, microservice      | **domain-cloud-native** | Distributed tracing        |
+| CLI, terminal, clap                 | **domain-cli**          | Usually single-thread OK   |
 
 ### Example: Web API + Rc Error
 
@@ -84,12 +88,12 @@ Before adding concurrency:
     ↑ Check: m09-domain (is the data model correct?)
 ```
 
-| Situation | Trace To | Question |
-|-----------|----------|----------|
-| Send/Sync in Web | **domain-web** | What's the state management pattern? |
-| Send/Sync in CLI | **domain-cli** | Is multi-thread really needed? |
-| Mutex vs channels | m09-domain | Shared state or message passing? |
-| Async vs threads | m10-performance | What's the workload profile? |
+| Situation         | Trace To        | Question                             |
+| ----------------- | --------------- | ------------------------------------ |
+| Send/Sync in Web  | **domain-web**  | What's the state management pattern? |
+| Send/Sync in CLI  | **domain-cli**  | Is multi-thread really needed?       |
+| Mutex vs channels | m09-domain      | Shared state or message passing?     |
+| Async vs threads  | m10-performance | What's the workload profile?         |
 
 ---
 
@@ -119,23 +123,23 @@ From design to implementation:
 
 ## Send/Sync Markers
 
-| Marker | Meaning | Example |
-|--------|---------|---------|
-| `Send` | Can transfer ownership between threads | Most types |
-| `Sync` | Can share references between threads | `Arc<T>` |
-| `!Send` | Must stay on one thread | `Rc<T>` |
-| `!Sync` | No shared refs across threads | `RefCell<T>` |
+| Marker  | Meaning                                | Example      |
+| ------- | -------------------------------------- | ------------ |
+| `Send`  | Can transfer ownership between threads | Most types   |
+| `Sync`  | Can share references between threads   | `Arc<T>`     |
+| `!Send` | Must stay on one thread                | `Rc<T>`      |
+| `!Sync` | No shared refs across threads          | `RefCell<T>` |
 
 ## Quick Reference
 
-| Pattern | Thread-Safe | Blocking | Use When |
-|---------|-------------|----------|----------|
-| `std::thread` | Yes | Yes | CPU-bound parallelism |
-| `async/await` | Yes | No | I/O-bound concurrency |
-| `Mutex<T>` | Yes | Yes | Shared mutable state |
-| `RwLock<T>` | Yes | Yes | Read-heavy shared state |
-| `mpsc::channel` | Yes | Optional | Message passing |
-| `Arc<Mutex<T>>` | Yes | Yes | Shared mutable across threads |
+| Pattern         | Thread-Safe | Blocking | Use When                      |
+| --------------- | ----------- | -------- | ----------------------------- |
+| `std::thread`   | Yes         | Yes      | CPU-bound parallelism         |
+| `async/await`   | Yes         | No       | I/O-bound concurrency         |
+| `Mutex<T>`      | Yes         | Yes      | Shared mutable state          |
+| `RwLock<T>`     | Yes         | Yes      | Read-heavy shared state       |
+| `mpsc::channel` | Yes         | Optional | Message passing               |
+| `Arc<Mutex<T>>` | Yes         | Yes      | Shared mutable across threads |
 
 ## Decision Flowchart
 
@@ -163,24 +167,24 @@ Async context?
 
 ## Common Errors
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| E0277 `Send` not satisfied | Non-Send in async | Use Arc or spawn_local |
-| E0277 `Sync` not satisfied | Non-Sync shared | Wrap with Mutex |
-| Deadlock | Lock ordering | Consistent lock order |
-| `future is not Send` | Non-Send across await | Drop before await |
-| `MutexGuard` across await | Guard held during suspend | Scope guard properly |
+| Error                      | Cause                     | Fix                    |
+| -------------------------- | ------------------------- | ---------------------- |
+| E0277 `Send` not satisfied | Non-Send in async         | Use Arc or spawn_local |
+| E0277 `Sync` not satisfied | Non-Sync shared           | Wrap with Mutex        |
+| Deadlock                   | Lock ordering             | Consistent lock order  |
+| `future is not Send`       | Non-Send across await     | Drop before await      |
+| `MutexGuard` across await  | Guard held during suspend | Scope guard properly   |
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern | Why Bad | Better |
-|--------------|---------|--------|
-| Arc<Mutex<T>> everywhere | Contention, complexity | Message passing |
-| thread::sleep in async | Blocks executor | tokio::time::sleep |
-| Holding locks across await | Blocks other tasks | Scope locks tightly |
-| Ignoring deadlock risk | Hard to debug | Lock ordering, try_lock |
+| Anti-Pattern               | Why Bad                | Better                  |
+| -------------------------- | ---------------------- | ----------------------- |
+| Arc<Mutex<T>> everywhere   | Contention, complexity | Message passing         |
+| thread::sleep in async     | Blocks executor        | tokio::time::sleep      |
+| Holding locks across await | Blocks other tasks     | Scope locks tightly     |
+| Ignoring deadlock risk     | Hard to debug          | Lock ordering, try_lock |
 
 ---
 
@@ -214,9 +218,9 @@ do_async().await;
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Smart pointer choice | m02-resource |
-| Interior mutability | m03-mutability |
-| Performance tuning | m10-performance |
-| Domain concurrency needs | domain-* |
+| When                     | See             |
+| ------------------------ | --------------- |
+| Smart pointer choice     | m02-resource    |
+| Interior mutability      | m03-mutability  |
+| Performance tuning       | m10-performance |
+| Domain concurrency needs | domain-\*       |

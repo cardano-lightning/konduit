@@ -1,6 +1,9 @@
 ---
 name: domain-iot
-description: "Use when building IoT apps. Keywords: IoT, Internet of Things, sensor, MQTT, device, edge computing, telemetry, actuator, smart home, gateway, protocol, 物联网, 传感器, 边缘计算, 智能家居"
+description:
+  "Use when building IoT apps. Keywords: IoT, Internet of Things, sensor, MQTT,
+  device, edge computing, telemetry, actuator, smart home, gateway, protocol,
+  物联网, 传感器, 边缘计算, 智能家居"
 user-invocable: false
 ---
 
@@ -10,14 +13,14 @@ user-invocable: false
 
 ## Domain Constraints → Design Implications
 
-| Domain Rule | Design Constraint | Rust Implication |
-|-------------|-------------------|------------------|
-| Unreliable network | Offline-first | Local buffering |
-| Power constraints | Efficient code | Sleep modes, minimal alloc |
-| Resource limits | Small footprint | no_std where needed |
-| Security | Encrypted comms | TLS, signed firmware |
-| Reliability | Self-recovery | Watchdog, error handling |
-| OTA updates | Safe upgrades | Rollback capability |
+| Domain Rule        | Design Constraint | Rust Implication           |
+| ------------------ | ----------------- | -------------------------- |
+| Unreliable network | Offline-first     | Local buffering            |
+| Power constraints  | Efficient code    | Sleep modes, minimal alloc |
+| Resource limits    | Small footprint   | no_std where needed        |
+| Security           | Encrypted comms   | TLS, signed firmware       |
+| Reliability        | Self-recovery     | Watchdog, error handling   |
+| OTA updates        | Safe upgrades     | Rollback capability        |
 
 ---
 
@@ -71,32 +74,32 @@ From constraints to design (Layer 2):
 
 ## Environment Comparison
 
-| Environment | Stack | Crates |
-|-------------|-------|--------|
-| Linux gateway | tokio + std | rumqttc, reqwest |
-| MCU device | embassy + no_std | embedded-hal |
-| Hybrid | Split workloads | Both |
+| Environment   | Stack            | Crates           |
+| ------------- | ---------------- | ---------------- |
+| Linux gateway | tokio + std      | rumqttc, reqwest |
+| MCU device    | embassy + no_std | embedded-hal     |
+| Hybrid        | Split workloads  | Both             |
 
 ## Key Crates
 
-| Purpose | Crate |
-|---------|-------|
-| MQTT (std) | rumqttc, paho-mqtt |
-| Embedded | embedded-hal, embassy |
-| Async (std) | tokio |
-| Async (no_std) | embassy |
-| Logging (no_std) | defmt |
-| Logging (std) | tracing |
+| Purpose          | Crate                 |
+| ---------------- | --------------------- |
+| MQTT (std)       | rumqttc, paho-mqtt    |
+| Embedded         | embedded-hal, embassy |
+| Async (std)      | tokio                 |
+| Async (no_std)   | embassy               |
+| Logging (no_std) | defmt                 |
+| Logging (std)    | tracing               |
 
 ## Design Patterns
 
-| Pattern | Purpose | Implementation |
-|---------|---------|----------------|
-| Pub/Sub | Device comms | MQTT topics |
-| Edge compute | Local processing | Filter before upload |
-| OTA updates | Firmware upgrade | Signed + rollback |
-| Power mgmt | Battery life | Sleep + wake events |
-| Store & forward | Network reliability | Local queue |
+| Pattern         | Purpose             | Implementation       |
+| --------------- | ------------------- | -------------------- |
+| Pub/Sub         | Device comms        | MQTT topics          |
+| Edge compute    | Local processing    | Filter before upload |
+| OTA updates     | Firmware upgrade    | Signed + rollback    |
+| Power mgmt      | Battery life        | Sleep + wake events  |
+| Store & forward | Network reliability | Local queue          |
 
 ## Code Pattern: MQTT Client
 
@@ -138,31 +141,31 @@ async fn run_mqtt() -> anyhow::Result<()> {
 
 ## Common Mistakes
 
-| Mistake | Domain Violation | Fix |
-|---------|-----------------|-----|
-| No retry logic | Lost data | Exponential backoff |
-| Always-on radio | Battery drain | Sleep between sends |
-| Unencrypted MQTT | Security risk | TLS |
-| No local buffer | Network outage = data loss | Persist locally |
+| Mistake          | Domain Violation           | Fix                 |
+| ---------------- | -------------------------- | ------------------- |
+| No retry logic   | Lost data                  | Exponential backoff |
+| Always-on radio  | Battery drain              | Sleep between sends |
+| Unencrypted MQTT | Security risk              | TLS                 |
+| No local buffer  | Network outage = data loss | Persist locally     |
 
 ---
 
 ## Trace to Layer 1
 
-| Constraint | Layer 2 Pattern | Layer 1 Implementation |
-|------------|-----------------|------------------------|
-| Offline-first | Store & forward | Local queue + flush |
-| Power efficiency | Sleep patterns | Timer-based wake |
-| Network reliability | Retry | tokio-retry, backoff |
-| Security | TLS | rustls, native-tls |
+| Constraint          | Layer 2 Pattern | Layer 1 Implementation |
+| ------------------- | --------------- | ---------------------- |
+| Offline-first       | Store & forward | Local queue + flush    |
+| Power efficiency    | Sleep patterns  | Timer-based wake       |
+| Network reliability | Retry           | tokio-retry, backoff   |
+| Security            | TLS             | rustls, native-tls     |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Embedded patterns | domain-embedded |
-| Async patterns | m07-concurrency |
-| Error recovery | m13-domain-error |
-| Performance | m10-performance |
+| When              | See              |
+| ----------------- | ---------------- |
+| Embedded patterns | domain-embedded  |
+| Async patterns    | m07-concurrency  |
+| Error recovery    | m13-domain-error |
+| Performance       | m10-performance  |

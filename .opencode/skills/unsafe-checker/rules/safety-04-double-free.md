@@ -9,11 +9,13 @@ impact: CRITICAL
 
 ## Summary
 
-Ensure that resources are not freed twice, especially when panics can occur during operations.
+Ensure that resources are not freed twice, especially when panics can occur
+during operations.
 
 ## Rationale
 
-Double-free is undefined behavior. Panics during unsafe operations can cause destructors to run on already-freed or partially-constructed data.
+Double-free is undefined behavior. Panics during unsafe operations can cause
+destructors to run on already-freed or partially-constructed data.
 
 ## Bad Example
 

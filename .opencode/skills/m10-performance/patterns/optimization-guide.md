@@ -3,6 +3,7 @@
 ## Profiling First
 
 ### Tools
+
 ```bash
 # CPU profiling
 cargo install flamegraph
@@ -20,6 +21,7 @@ valgrind --tool=cachegrind ./target/release/myapp
 ```
 
 ### Criterion Benchmarks
+
 ```rust
 use criterion::{criterion_group, criterion_main, Criterion};
 
@@ -82,13 +84,13 @@ for item in items {
 
 ### 3. Use Appropriate Collections
 
-| Need | Collection | Notes |
-|------|------------|-------|
-| Sequential access | `Vec<T>` | Best cache locality |
-| Random access by key | `HashMap<K, V>` | O(1) lookup |
-| Ordered keys | `BTreeMap<K, V>` | O(log n) lookup |
-| Small sets (<20) | `Vec<T>` + linear search | Lower overhead |
-| FIFO queue | `VecDeque<T>` | O(1) push/pop both ends |
+| Need                 | Collection               | Notes                   |
+| -------------------- | ------------------------ | ----------------------- |
+| Sequential access    | `Vec<T>`                 | Best cache locality     |
+| Random access by key | `HashMap<K, V>`          | O(1) lookup             |
+| Ordered keys         | `BTreeMap<K, V>`         | O(log n) lookup         |
+| Small sets (<20)     | `Vec<T>` + linear search | Lower overhead          |
+| FIFO queue           | `VecDeque<T>`            | O(1) push/pop both ends |
 
 ### 4. Pre-allocate Capacity
 
@@ -352,11 +354,13 @@ const _: () = assert!(std::mem::size_of::<MyStruct>() <= 64);
 ## Checklist
 
 Before optimizing:
+
 - [ ] Profile to find actual bottlenecks
 - [ ] Have benchmarks to measure improvement
 - [ ] Consider if optimization is worth complexity
 
 Common wins:
+
 - [ ] Reduce allocations (Cow, reuse buffers)
 - [ ] Use appropriate collections
 - [ ] Pre-allocate with_capacity

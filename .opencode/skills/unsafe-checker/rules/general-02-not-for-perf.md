@@ -9,13 +9,16 @@ impact: CRITICAL
 
 ## Summary
 
-Do not assume that using `unsafe` will automatically improve performance. Always measure first and verify the safety invariants.
+Do not assume that using `unsafe` will automatically improve performance. Always
+measure first and verify the safety invariants.
 
 ## Rationale
 
-1. Modern Rust optimizers often eliminate bounds checks when they can prove safety
+1. Modern Rust optimizers often eliminate bounds checks when they can prove
+   safety
 2. Unsafe code may prevent optimizations by breaking aliasing assumptions
-3. Unmeasured "optimizations" often provide no real benefit while introducing risk
+3. Unmeasured "optimizations" often provide no real benefit while introducing
+   risk
 
 ## Bad Example
 

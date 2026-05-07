@@ -28,6 +28,7 @@ Identify which specific unsafe operation you're performing:
 For each unsafe operation, document the invariants:
 
 ### For Pointer Dereference:
+
 - [ ] Is the pointer non-null?
 - [ ] Is the pointer properly aligned for the type?
 - [ ] Does the pointer point to valid, initialized memory?
@@ -35,17 +36,20 @@ For each unsafe operation, document the invariants:
 - [ ] Will the memory remain valid for the entire duration of use?
 
 ### For Mutable Aliasing:
+
 - [ ] Are you creating multiple mutable references to the same memory?
 - [ ] Is there any possibility of aliasing `&mut` and `&`?
 - [ ] Have you verified no other code can access this memory?
 
 ### For FFI:
+
 - [ ] Is the function signature correct (types, ABI)?
 - [ ] Are you handling potential null pointers?
 - [ ] Are you handling potential panics (catch_unwind)?
 - [ ] Is memory ownership clear (who allocates, who frees)?
 
 ### For Send/Sync:
+
 - [ ] Is concurrent access properly synchronized?
 - [ ] Are there any data races possible?
 - [ ] Does the type truly satisfy the trait requirements?
@@ -71,7 +75,8 @@ For each unsafe operation, document the invariants:
 
 - [ ] Can you add debug assertions to verify invariants?
 - [ ] Have you tested with Miri (`cargo miri test`)?
-- [ ] Have you tested with address sanitizer (`RUSTFLAGS="-Zsanitizer=address"`)?
+- [ ] Have you tested with address sanitizer
+      (`RUSTFLAGS="-Zsanitizer=address"`)?
 - [ ] Have you considered fuzzing the unsafe code?
 
 ## Quick Reference: Common SAFETY Comments

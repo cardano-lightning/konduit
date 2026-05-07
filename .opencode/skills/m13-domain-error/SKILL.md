@@ -1,6 +1,12 @@
 ---
 name: m13-domain-error
-description: "Use when designing domain error handling. Keywords: domain error, error categorization, recovery strategy, retry, fallback, domain error hierarchy, user-facing vs internal errors, error code design, circuit breaker, graceful degradation, resilience, error context, backoff, retry with backoff, error recovery, transient vs permanent error, 领域错误, 错误分类, 恢复策略, 重试, 熔断器, 优雅降级"
+description:
+  "Use when designing domain error handling. Keywords: domain error, error
+  categorization, recovery strategy, retry, fallback, domain error hierarchy,
+  user-facing vs internal errors, error code design, circuit breaker, graceful
+  degradation, resilience, error context, backoff, retry with backoff, error
+  recovery, transient vs permanent error, 领域错误, 错误分类, 恢复策略, 重试,
+  熔断器, 优雅降级"
 user-invocable: false
 ---
 
@@ -13,6 +19,7 @@ user-invocable: false
 **Who needs to handle this error, and how should they recover?**
 
 Before designing error types:
+
 - Is this user-facing or internal?
 - Is recovery possible?
 - What context is needed for debugging?
@@ -21,13 +28,13 @@ Before designing error types:
 
 ## Error Categorization
 
-| Error Type | Audience | Recovery | Example |
-|------------|----------|----------|---------|
-| User-facing | End users | Guide action | `InvalidEmail`, `NotFound` |
-| Internal | Developers | Debug info | `DatabaseError`, `ParseError` |
-| System | Ops/SRE | Monitor/alert | `ConnectionTimeout`, `RateLimited` |
-| Transient | Automation | Retry | `NetworkError`, `ServiceUnavailable` |
-| Permanent | Human | Investigate | `ConfigInvalid`, `DataCorrupted` |
+| Error Type  | Audience   | Recovery      | Example                              |
+| ----------- | ---------- | ------------- | ------------------------------------ |
+| User-facing | End users  | Guide action  | `InvalidEmail`, `NotFound`           |
+| Internal    | Developers | Debug info    | `DatabaseError`, `ParseError`        |
+| System      | Ops/SRE    | Monitor/alert | `ConnectionTimeout`, `RateLimited`   |
+| Transient   | Automation | Retry         | `NetworkError`, `ServiceUnavailable` |
+| Permanent   | Human      | Investigate   | `ConfigInvalid`, `DataCorrupted`     |
 
 ---
 
@@ -63,11 +70,11 @@ To domain constraints (Layer 3):
     ↑ Check: SLA (availability requirements)
 ```
 
-| Question | Trace To | Ask |
-|----------|----------|-----|
-| Retry policy | domain-* | What's acceptable latency for retry? |
-| User experience | domain-* | What message should users see? |
-| Compliance | domain-* | What must be logged for audit? |
+| Question        | Trace To  | Ask                                  |
+| --------------- | --------- | ------------------------------------ |
+| Retry policy    | domain-\* | What's acceptable latency for retry? |
+| User experience | domain-\* | What message should users see?       |
+| Compliance      | domain-\* | What must be logged for audit?       |
 
 ---
 
@@ -93,13 +100,13 @@ To implementation (Layer 1):
 
 ## Quick Reference
 
-| Recovery Pattern | When | Implementation |
-|------------------|------|----------------|
-| Retry | Transient failures | exponential backoff |
-| Fallback | Degraded mode | cached/default value |
-| Circuit Breaker | Cascading failures | failsafe-rs |
-| Timeout | Slow operations | `tokio::time::timeout` |
-| Bulkhead | Isolation | separate thread pools |
+| Recovery Pattern | When               | Implementation         |
+| ---------------- | ------------------ | ---------------------- |
+| Retry            | Transient failures | exponential backoff    |
+| Fallback         | Degraded mode      | cached/default value   |
+| Circuit Breaker  | Cascading failures | failsafe-rs            |
+| Timeout          | Slow operations    | `tokio::time::timeout` |
+| Bulkhead         | Isolation          | separate thread pools  |
 
 ## Error Hierarchy
 
@@ -148,33 +155,33 @@ where
 
 ## Common Mistakes
 
-| Mistake | Why Wrong | Better |
-|---------|-----------|--------|
-| Same error for all | No actionability | Categorize by audience |
-| Retry everything | Wasted resources | Only transient errors |
-| Infinite retry | DoS self | Max attempts + backoff |
-| Expose internal errors | Security risk | User-friendly messages |
-| No context | Hard to debug | .context() everywhere |
+| Mistake                | Why Wrong        | Better                 |
+| ---------------------- | ---------------- | ---------------------- |
+| Same error for all     | No actionability | Categorize by audience |
+| Retry everything       | Wasted resources | Only transient errors  |
+| Infinite retry         | DoS self         | Max attempts + backoff |
+| Expose internal errors | Security risk    | User-friendly messages |
+| No context             | Hard to debug    | .context() everywhere  |
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern | Why Bad | Better |
-|--------------|---------|--------|
-| String errors | No structure | thiserror types |
-| panic! for recoverable | Bad UX | Result with context |
-| Ignore errors | Silent failures | Log or propagate |
-| Box<dyn Error> everywhere | Lost type info | thiserror |
-| Error in happy path | Performance | Early validation |
+| Anti-Pattern              | Why Bad         | Better              |
+| ------------------------- | --------------- | ------------------- |
+| String errors             | No structure    | thiserror types     |
+| panic! for recoverable    | Bad UX          | Result with context |
+| Ignore errors             | Silent failures | Log or propagate    |
+| Box<dyn Error> everywhere | Lost type info  | thiserror           |
+| Error in happy path       | Performance     | Early validation    |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
+| When                  | See                |
+| --------------------- | ------------------ |
 | Error handling basics | m06-error-handling |
-| Retry implementation | m07-concurrency |
-| Domain modeling | m09-domain |
-| User-facing APIs | domain-* |
+| Retry implementation  | m07-concurrency    |
+| Domain modeling       | m09-domain         |
+| User-facing APIs      | domain-\*          |

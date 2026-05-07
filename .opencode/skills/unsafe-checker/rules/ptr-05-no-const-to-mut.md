@@ -10,11 +10,14 @@ clippy: cast_ref_to_mut
 
 ## Summary
 
-Never cast `*const T` to `*mut T` and dereference it to write. This violates aliasing rules and is undefined behavior.
+Never cast `*const T` to `*mut T` and dereference it to write. This violates
+aliasing rules and is undefined behavior.
 
 ## Rationale
 
-Creating `*const T` from `&T` implies immutability. Other references might exist. Writing through a `*mut T` created from `*const T` creates mutable aliasing, which is UB.
+Creating `*const T` from `&T` implies immutability. Other references might
+exist. Writing through a `*mut T` created from `*const T` creates mutable
+aliasing, which is UB.
 
 ## Bad Example
 
@@ -98,11 +101,13 @@ impl<T> MyMutex<T> {
 ## Why This Is Always UB
 
 The compiler assumes:
+
 1. `&T` means no mutation will occur
 2. Multiple `&T` can exist simultaneously
 3. Optimizations can be made based on these assumptions
 
 When you mutate through cast pointer:
+
 1. Other `&T` references see inconsistent values
 2. Compiler may cache/eliminate reads
 3. Results are unpredictable

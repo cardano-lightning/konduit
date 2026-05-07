@@ -9,7 +9,8 @@ impact: HIGH
 
 ## Summary
 
-When passing strings across FFI, ensure both sides agree on encoding, null-termination, and memory ownership.
+When passing strings across FFI, ensure both sides agree on encoding,
+null-termination, and memory ownership.
 
 ## Rationale
 

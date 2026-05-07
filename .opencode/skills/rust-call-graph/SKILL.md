@@ -1,6 +1,8 @@
 ---
 name: rust-call-graph
-description: "Visualize Rust function call graphs using LSP. Triggers on: /call-graph, call hierarchy, who calls, what calls, 调用图, 调用关系, 谁调用了, 调用了谁"
+description:
+  "Visualize Rust function call graphs using LSP. Triggers on: /call-graph, call
+  hierarchy, who calls, what calls, 调用图, 调用关系, 谁调用了, 调用了谁"
 argument-hint: "<function_name> [--depth N] [--direction in|out|both]"
 allowed-tools: ["LSP", "Read", "Glob"]
 ---
@@ -16,10 +18,12 @@ Visualize function call relationships using LSP call hierarchy.
 ```
 
 **Options:**
+
 - `--depth N`: How many levels to traverse (default: 3)
 - `--direction`: `in` (callers), `out` (callees), `both`
 
 **Examples:**
+
 - `/rust-call-graph process_request` - Show both callers and callees
 - `/rust-call-graph handle_error --direction in` - Show only callers
 - `/rust-call-graph main --direction out --depth 5` - Deep callee analysis
@@ -168,21 +172,21 @@ After generating the call graph, provide insights:
 
 ## Common Patterns
 
-| User Says | Direction | Use Case |
-|-----------|-----------|----------|
-| "Who calls X?" | incoming | Impact analysis |
-| "What does X call?" | outgoing | Understanding implementation |
-| "Show call graph" | both | Full picture |
-| "Trace from main to X" | outgoing | Execution path |
+| User Says              | Direction | Use Case                     |
+| ---------------------- | --------- | ---------------------------- |
+| "Who calls X?"         | incoming  | Impact analysis              |
+| "What does X call?"    | outgoing  | Understanding implementation |
+| "Show call graph"      | both      | Full picture                 |
+| "Trace from main to X" | outgoing  | Execution path               |
 
 ## Visualization Options
 
-| Style | Best For |
-|-------|----------|
-| Tree (default) | Simple hierarchies |
-| Box diagram | Complex relationships |
-| Flat list | Many connections |
-| Mermaid | Export to docs |
+| Style          | Best For              |
+| -------------- | --------------------- |
+| Tree (default) | Simple hierarchies    |
+| Box diagram    | Complex relationships |
+| Flat list      | Many connections      |
+| Mermaid        | Export to docs        |
 
 ### Mermaid Export
 
@@ -198,9 +202,9 @@ graph TD
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Find definition | rust-code-navigator |
-| Project structure | rust-symbol-analyzer |
-| Trait implementations | rust-trait-explorer |
-| Safe refactoring | rust-refactor-helper |
+| When                  | See                  |
+| --------------------- | -------------------- |
+| Find definition       | rust-code-navigator  |
+| Project structure     | rust-symbol-analyzer |
+| Trait implementations | rust-trait-explorer  |
+| Safe refactoring      | rust-refactor-helper |

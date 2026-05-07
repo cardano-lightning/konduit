@@ -407,15 +407,15 @@ fn test_macro_expansion() {
 
 ## Quick Reference
 
-| Anti-Pattern | Better Alternative |
-|--------------|-------------------|
-| Clone everywhere | Borrow when possible |
-| Unwrap everywhere | Propagate with `?` |
-| `String` parameters | `&str` parameters |
-| Index loops | Iterator loops |
-| Collect then process | Chain iterators |
-| Mutex for reads | RwLock for read-heavy |
-| Lock across await | Scope the lock |
-| Blocking in async | spawn_blocking |
-| Stringly typed | Strong types |
-| Boolean params | Builders or enums |
+| Anti-Pattern         | Better Alternative    |
+| -------------------- | --------------------- |
+| Clone everywhere     | Borrow when possible  |
+| Unwrap everywhere    | Propagate with `?`    |
+| `String` parameters  | `&str` parameters     |
+| Index loops          | Iterator loops        |
+| Collect then process | Chain iterators       |
+| Mutex for reads      | RwLock for read-heavy |
+| Lock across await    | Scope the lock        |
+| Blocking in async    | spawn_blocking        |
+| Stringly typed       | Strong types          |
+| Boolean params       | Builders or enums     |

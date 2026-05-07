@@ -4,12 +4,12 @@
 
 ### Memory Management
 
-| Aspect | Rust | C++ |
-|--------|------|-----|
-| Default | Move semantics | Copy semantics (pre-C++11) |
-| Move | `let b = a;` (a invalidated) | `auto b = std::move(a);` (a valid but unspecified) |
-| Copy | `let b = a.clone();` | `auto b = a;` |
-| Safety | Compile-time enforcement | Runtime responsibility |
+| Aspect  | Rust                         | C++                                                |
+| ------- | ---------------------------- | -------------------------------------------------- |
+| Default | Move semantics               | Copy semantics (pre-C++11)                         |
+| Move    | `let b = a;` (a invalidated) | `auto b = std::move(a);` (a valid but unspecified) |
+| Copy    | `let b = a.clone();`         | `auto b = a;`                                      |
+| Safety  | Compile-time enforcement     | Runtime responsibility                             |
 
 ### Rust Move vs C++ Move
 
@@ -27,12 +27,12 @@ let b = a;  // a moved
 
 ### Smart Pointers
 
-| Rust | C++ | Purpose |
-|------|-----|---------|
-| `Box<T>` | `std::unique_ptr<T>` | Unique ownership |
-| `Rc<T>` | `std::shared_ptr<T>` | Shared ownership |
-| `Arc<T>` | `std::shared_ptr<T>` + atomic | Thread-safe shared |
-| `RefCell<T>` | (manual runtime checks) | Interior mutability |
+| Rust         | C++                           | Purpose             |
+| ------------ | ----------------------------- | ------------------- |
+| `Box<T>`     | `std::unique_ptr<T>`          | Unique ownership    |
+| `Rc<T>`      | `std::shared_ptr<T>`          | Shared ownership    |
+| `Arc<T>`     | `std::shared_ptr<T>` + atomic | Thread-safe shared  |
+| `RefCell<T>` | (manual runtime checks)       | Interior mutability |
 
 ---
 
@@ -40,12 +40,12 @@ let b = a;  // a moved
 
 ### Memory Model
 
-| Aspect | Rust | Go |
-|--------|------|-----|
-| Memory | Stack + heap, explicit | GC manages all |
-| Ownership | Enforced at compile-time | None (GC handles) |
-| Null | `Option<T>` | `nil` for pointers |
-| Concurrency | `Send`/`Sync` traits | Channels (less strict) |
+| Aspect      | Rust                     | Go                     |
+| ----------- | ------------------------ | ---------------------- |
+| Memory      | Stack + heap, explicit   | GC manages all         |
+| Ownership   | Enforced at compile-time | None (GC handles)      |
+| Null        | `Option<T>`              | `nil` for pointers     |
+| Concurrency | `Send`/`Sync` traits     | Channels (less strict) |
 
 ### Sharing Data
 
@@ -78,12 +78,12 @@ std::thread::spawn(move || {
 
 ### Reference Semantics
 
-| Aspect | Rust | Java/C# |
-|--------|------|---------|
-| Objects | Owned by default | Reference by default |
-| Null | `Option<T>` | `null` (nullable) |
-| Immutability | Default | Must use `final`/`readonly` |
-| Copy | Explicit `.clone()` | Reference copy (shallow) |
+| Aspect       | Rust                | Java/C#                     |
+| ------------ | ------------------- | --------------------------- |
+| Objects      | Owned by default    | Reference by default        |
+| Null         | `Option<T>`         | `null` (nullable)           |
+| Immutability | Default             | Must use `final`/`readonly` |
+| Copy         | Explicit `.clone()` | Reference copy (shallow)    |
 
 ### Comparison
 
@@ -110,12 +110,12 @@ process(numbers);
 
 ### Memory Model
 
-| Aspect | Rust | Python |
-|--------|------|--------|
-| Typing | Static, compile-time | Dynamic, runtime |
-| Memory | Ownership-based | Reference counting + GC |
-| Mutability | Default immutable | Default mutable |
-| Performance | Native, zero-cost | Interpreted, higher overhead |
+| Aspect      | Rust                 | Python                       |
+| ----------- | -------------------- | ---------------------------- |
+| Typing      | Static, compile-time | Dynamic, runtime             |
+| Memory      | Ownership-based      | Reference counting + GC      |
+| Mutability  | Default immutable    | Default mutable              |
+| Performance | Native, zero-cost    | Interpreted, higher overhead |
 
 ### Common Pattern Translation
 
@@ -140,7 +140,8 @@ for item in &items {
 
 ### Concepts Other Languages Lack
 
-1. **Borrow Checker**: No other mainstream language has compile-time borrow checking
+1. **Borrow Checker**: No other mainstream language has compile-time borrow
+   checking
 2. **Lifetimes**: Explicit annotation of reference validity
 3. **Move by Default**: Values move, not copy
 4. **No Null**: `Option<T>` instead of null pointers
@@ -148,12 +149,12 @@ for item in &items {
 
 ### Learning Curve Areas
 
-| Concept | Coming From | Key Insight |
-|---------|-------------|-------------|
+| Concept   | Coming From  | Key Insight                 |
+| --------- | ------------ | --------------------------- |
 | Ownership | GC languages | Think about who "owns" data |
-| Borrowing | C/C++ | Like references but checked |
-| Lifetimes | Any | Explicit scope of validity |
-| Move | C++ | Move is default, not copy |
+| Borrowing | C/C++        | Like references but checked |
+| Lifetimes | Any          | Explicit scope of validity  |
+| Move      | C++          | Move is default, not copy   |
 
 ---
 
@@ -167,6 +168,7 @@ After:  "I explicitly decide who owns data and when it's freed"
 ```
 
 Key shifts:
+
 - Think about ownership at design time
 - Returning references requires lifetime thinking
 - No more `null` - use `Option<T>`
@@ -179,6 +181,7 @@ After:  "Compiler enforces correctness, I fight the borrow checker"
 ```
 
 Key shifts:
+
 - Trust the compiler's errors
 - Move is the default (unlike C++ copy)
 - Smart pointers are idiomatic, not overhead
@@ -191,6 +194,7 @@ After:  "Mutability is explicit, ownership prevents aliasing"
 ```
 
 Key shifts:
+
 - Mutability is safe because of ownership rules
 - No persistent data structures needed (usually)
 - Performance characteristics are explicit
@@ -199,13 +203,13 @@ Key shifts:
 
 ## Performance Trade-offs
 
-| Language | Memory Overhead | Latency | Throughput |
-|----------|-----------------|---------|------------|
-| Rust | Minimal (no GC) | Predictable | Excellent |
-| C++ | Minimal | Predictable | Excellent |
-| Go | GC overhead | GC pauses | Good |
-| Java | GC overhead | GC pauses | Good |
-| Python | High (ref counting + GC) | Variable | Lower |
+| Language | Memory Overhead          | Latency     | Throughput |
+| -------- | ------------------------ | ----------- | ---------- |
+| Rust     | Minimal (no GC)          | Predictable | Excellent  |
+| C++      | Minimal                  | Predictable | Excellent  |
+| Go       | GC overhead              | GC pauses   | Good       |
+| Java     | GC overhead              | GC pauses   | Good       |
+| Python   | High (ref counting + GC) | Variable    | Lower      |
 
 ### When Rust Ownership Wins
 

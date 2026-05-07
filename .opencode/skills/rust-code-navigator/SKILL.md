@@ -1,6 +1,8 @@
 ---
 name: rust-code-navigator
-description: "Navigate Rust code using LSP. Triggers on: /navigate, go to definition, find references, where is defined, 跳转定义, 查找引用, 定义在哪, 谁用了这个"
+description:
+  "Navigate Rust code using LSP. Triggers on: /navigate, go to definition, find
+  references, where is defined, 跳转定义, 查找引用, 定义在哪, 谁用了这个"
 argument-hint: "<symbol> [in file.rs:line]"
 allowed-tools: ["LSP", "Read", "Glob"]
 ---
@@ -16,8 +18,10 @@ Navigate large Rust codebases efficiently using Language Server Protocol.
 ```
 
 **Examples:**
+
 - `/rust-code-navigator parse_config` - Find definition of parse_config
-- `/rust-code-navigator MyStruct in src/lib.rs:42` - Navigate from specific location
+- `/rust-code-navigator MyStruct in src/lib.rs:42` - Navigate from specific
+  location
 
 ## LSP Operations
 
@@ -35,6 +39,7 @@ LSP(
 ```
 
 **Use when:**
+
 - User asks "where is X defined?"
 - User wants to understand a type/function
 - Ctrl+click equivalent
@@ -53,6 +58,7 @@ LSP(
 ```
 
 **Use when:**
+
 - User asks "who uses X?"
 - Before refactoring/renaming
 - Understanding impact of changes
@@ -71,6 +77,7 @@ LSP(
 ```
 
 **Use when:**
+
 - User asks "what type is X?"
 - User wants documentation
 - Quick type checking
@@ -100,7 +107,7 @@ User: "Where is the Config struct defined?"
 
 ### Definition Found
 
-```
+````
 ## Config (struct)
 
 **Defined in:** `src/config.rs:15`
@@ -115,7 +122,7 @@ pub struct Config {
 ​```
 
 **Documentation:** Configuration for the application server.
-```
+````
 
 ### References Found
 
@@ -133,27 +140,27 @@ pub struct Config {
 
 ## Common Patterns
 
-| User Says | LSP Operation |
-|-----------|---------------|
-| "Where is X defined?" | goToDefinition |
-| "Who uses X?" | findReferences |
-| "What type is X?" | hover |
-| "Find all structs" | workspaceSymbol |
-| "What's in this file?" | documentSymbol |
+| User Says              | LSP Operation   |
+| ---------------------- | --------------- |
+| "Where is X defined?"  | goToDefinition  |
+| "Who uses X?"          | findReferences  |
+| "What type is X?"      | hover           |
+| "Find all structs"     | workspaceSymbol |
+| "What's in this file?" | documentSymbol  |
 
 ## Error Handling
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| "No LSP server" | rust-analyzer not running | Suggest: `rustup component add rust-analyzer` |
-| "Symbol not found" | Typo or not in scope | Search with workspaceSymbol first |
-| "Multiple definitions" | Generics or macros | Show all and let user choose |
+| Error                  | Cause                     | Solution                                      |
+| ---------------------- | ------------------------- | --------------------------------------------- |
+| "No LSP server"        | rust-analyzer not running | Suggest: `rustup component add rust-analyzer` |
+| "Symbol not found"     | Typo or not in scope      | Search with workspaceSymbol first             |
+| "Multiple definitions" | Generics or macros        | Show all and let user choose                  |
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Call relationships | rust-call-graph |
-| Project structure | rust-symbol-analyzer |
-| Trait implementations | rust-trait-explorer |
-| Safe refactoring | rust-refactor-helper |
+| When                  | See                  |
+| --------------------- | -------------------- |
+| Call relationships    | rust-call-graph      |
+| Project structure     | rust-symbol-analyzer |
+| Trait implementations | rust-trait-explorer  |
+| Safe refactoring      | rust-refactor-helper |

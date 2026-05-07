@@ -9,21 +9,24 @@ impact: HIGH
 
 ## Summary
 
-Use `#[repr(...)]` attributes to control data layout when interfacing with C, doing memory mapping, or needing specific guarantees.
+Use `#[repr(...)]` attributes to control data layout when interfacing with C,
+doing memory mapping, or needing specific guarantees.
 
 ## Rationale
 
-Rust's default layout is unspecified and may change between compiler versions. For FFI, persistence, or low-level memory operations, you need predictable layout.
+Rust's default layout is unspecified and may change between compiler versions.
+For FFI, persistence, or low-level memory operations, you need predictable
+layout.
 
 ## Repr Attributes
 
-| Attribute | Use Case |
-|-----------|----------|
-| `#[repr(C)]` | C-compatible layout, stable field order |
-| `#[repr(transparent)]` | Single-field struct with same layout as field |
-| `#[repr(packed)]` | No padding (alignment = 1), careful with references! |
-| `#[repr(align(N))]` | Minimum alignment of N bytes |
-| `#[repr(u8)]`, `#[repr(i32)]`, etc. | Enum discriminant type |
+| Attribute                           | Use Case                                             |
+| ----------------------------------- | ---------------------------------------------------- |
+| `#[repr(C)]`                        | C-compatible layout, stable field order              |
+| `#[repr(transparent)]`              | Single-field struct with same layout as field        |
+| `#[repr(packed)]`                   | No padding (alignment = 1), careful with references! |
+| `#[repr(align(N))]`                 | Minimum alignment of N bytes                         |
+| `#[repr(u8)]`, `#[repr(i32)]`, etc. | Enum discriminant type                               |
 
 ## Bad Example
 

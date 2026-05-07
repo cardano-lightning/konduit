@@ -144,8 +144,7 @@ Current expected permission envelope:
 
 ## Dolos Role
 
-In this deployment profile, `dolos` is the Cardano service boundary for
-Konduit.
+In this deployment profile, `dolos` is the Cardano service boundary for Konduit.
 
 Responsibilities:
 
@@ -182,8 +181,8 @@ Expected units:
 
 Suggested ordering:
 
-- `dolos.service` after `cardano-node.service` when the same-host node is used as
-  its upstream peer
+- `dolos.service` after `cardano-node.service` when the same-host node is used
+  as its upstream peer
 - `konduit.service` after `lnd.service` and `dolos.service`
 - `nginx.service` after `konduit.service`
 
@@ -249,9 +248,8 @@ Minimum recommended observability:
 
 - exact `systemd` unit files remain implementation work
 - exact Konduit env var values remain deployment-specific, but the current Rust
-  runtime surface is `KONDUIT_CARDANO_BACKEND`,
-  `KONDUIT_BLOCKFROST_PROJECT_ID`, `KONDUIT_UTXORPC_URI`, and
-  `KONDUIT_NETWORK`
+  runtime surface is `KONDUIT_CARDANO_BACKEND`, `KONDUIT_BLOCKFROST_PROJECT_ID`,
+  `KONDUIT_UTXORPC_URI`, and `KONDUIT_NETWORK`
 - rate-limit values should be tuned based on real traffic and latency
 - exact readiness/health endpoint shapes remain implementation work, but should
   reflect startup blockers for Dolos reachability, network match, live protocol

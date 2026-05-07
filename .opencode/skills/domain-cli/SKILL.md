@@ -1,6 +1,10 @@
 ---
 name: domain-cli
-description: "Use when building CLI tools. Keywords: CLI, command line, terminal, clap, structopt, argument parsing, subcommand, interactive, TUI, ratatui, crossterm, indicatif, progress bar, colored output, shell completion, config file, environment variable, 命令行, 终端应用, 参数解析"
+description:
+  "Use when building CLI tools. Keywords: CLI, command line, terminal, clap,
+  structopt, argument parsing, subcommand, interactive, TUI, ratatui, crossterm,
+  indicatif, progress bar, colored output, shell completion, config file,
+  environment variable, 命令行, 终端应用, 参数解析"
 globs: ["**/Cargo.toml"]
 user-invocable: false
 ---
@@ -11,13 +15,13 @@ user-invocable: false
 
 ## Domain Constraints → Design Implications
 
-| Domain Rule | Design Constraint | Rust Implication |
-|-------------|-------------------|------------------|
-| User ergonomics | Clear help, errors | clap derive macros |
-| Config precedence | CLI > env > file | Layered config loading |
-| Exit codes | Non-zero on error | Proper Result handling |
-| Stdout/stderr | Data vs errors | eprintln! for errors |
-| Interruptible | Handle Ctrl+C | Signal handling |
+| Domain Rule       | Design Constraint  | Rust Implication       |
+| ----------------- | ------------------ | ---------------------- |
+| User ergonomics   | Clear help, errors | clap derive macros     |
+| Config precedence | CLI > env > file   | Layered config loading |
+| Exit codes        | Non-zero on error  | Proper Result handling |
+| Stdout/stderr     | Data vs errors     | eprintln! for errors   |
+| Interruptible     | Handle Ctrl+C      | Signal handling        |
 
 ---
 
@@ -71,24 +75,24 @@ From constraints to design (Layer 2):
 
 ## Key Crates
 
-| Purpose | Crate |
-|---------|-------|
-| Argument parsing | clap |
+| Purpose             | Crate     |
+| ------------------- | --------- |
+| Argument parsing    | clap      |
 | Interactive prompts | dialoguer |
-| Progress bars | indicatif |
-| Colored output | colored |
-| Terminal UI | ratatui |
-| Terminal control | crossterm |
-| Console utilities | console |
+| Progress bars       | indicatif |
+| Colored output      | colored   |
+| Terminal UI         | ratatui   |
+| Terminal control    | crossterm |
+| Console utilities   | console   |
 
 ## Design Patterns
 
-| Pattern | Purpose | Implementation |
-|---------|---------|----------------|
-| Args struct | Type-safe args | `#[derive(Parser)]` |
-| Subcommands | Command hierarchy | `#[derive(Subcommand)]` |
-| Config layers | Override precedence | CLI > env > file |
-| Progress | User feedback | `ProgressBar::new(len)` |
+| Pattern       | Purpose             | Implementation          |
+| ------------- | ------------------- | ----------------------- |
+| Args struct   | Type-safe args      | `#[derive(Parser)]`     |
+| Subcommands   | Command hierarchy   | `#[derive(Subcommand)]` |
+| Config layers | Override precedence | CLI > env > file        |
+| Progress      | User feedback       | `ProgressBar::new(len)` |
 
 ## Code Pattern: CLI Structure
 
@@ -131,31 +135,31 @@ fn main() -> anyhow::Result<()> {
 
 ## Common Mistakes
 
-| Mistake | Domain Violation | Fix |
-|---------|-----------------|-----|
-| Errors to stdout | Breaks piping | eprintln! |
-| No help text | Poor UX | #[arg(help = "...")] |
-| Panic on error | Bad exit code | Result + proper handling |
-| No progress for long ops | User uncertainty | indicatif |
+| Mistake                  | Domain Violation | Fix                      |
+| ------------------------ | ---------------- | ------------------------ |
+| Errors to stdout         | Breaks piping    | eprintln!                |
+| No help text             | Poor UX          | #[arg(help = "...")]     |
+| Panic on error           | Bad exit code    | Result + proper handling |
+| No progress for long ops | User uncertainty | indicatif                |
 
 ---
 
 ## Trace to Layer 1
 
-| Constraint | Layer 2 Pattern | Layer 1 Implementation |
-|------------|-----------------|------------------------|
-| Type-safe args | Derive macros | clap Parser |
-| Error handling | Result propagation | anyhow + exit codes |
-| User feedback | Progress RAII | indicatif ProgressBar |
-| Config precedence | Builder pattern | Layered sources |
+| Constraint        | Layer 2 Pattern    | Layer 1 Implementation |
+| ----------------- | ------------------ | ---------------------- |
+| Type-safe args    | Derive macros      | clap Parser            |
+| Error handling    | Result propagation | anyhow + exit codes    |
+| User feedback     | Progress RAII      | indicatif ProgressBar  |
+| Config precedence | Builder pattern    | Layered sources        |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Error handling | m06-error-handling |
-| Type-driven args | m05-type-driven |
-| Progress lifecycle | m12-lifecycle |
-| Async CLI | m07-concurrency |
+| When               | See                |
+| ------------------ | ------------------ |
+| Error handling     | m06-error-handling |
+| Type-driven args   | m05-type-driven    |
+| Progress lifecycle | m12-lifecycle      |
+| Async CLI          | m07-concurrency    |

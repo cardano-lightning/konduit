@@ -3,6 +3,7 @@
 ## Thread Spawning Best Practices
 
 ### Basic Thread Spawn
+
 ```rust
 use std::thread;
 
@@ -18,6 +19,7 @@ fn main() {
 ```
 
 ### Named Threads for Debugging
+
 ```rust
 use std::thread;
 
@@ -31,6 +33,7 @@ let handle = builder.spawn(|| {
 ```
 
 ### Scoped Threads (No 'static Required)
+
 ```rust
 use std::thread;
 
@@ -64,6 +67,7 @@ fn main() {
 ## Shared State Patterns
 
 ### Arc + Mutex (Read-Write)
+
 ```rust
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -90,6 +94,7 @@ fn shared_counter() {
 ```
 
 ### Arc + RwLock (Read-Heavy)
+
 ```rust
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -119,6 +124,7 @@ fn read_heavy_cache() {
 ```
 
 ### Atomic for Simple Types
+
 ```rust
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -150,6 +156,7 @@ fn atomic_counter() {
 ## Channel Patterns
 
 ### MPSC Channel
+
 ```rust
 use std::sync::mpsc;
 use std::thread;
@@ -176,6 +183,7 @@ fn producer_consumer() {
 ```
 
 ### Sync Channel (Bounded)
+
 ```rust
 use std::sync::mpsc;
 use std::thread;
@@ -204,6 +212,7 @@ fn bounded_channel() {
 ## Thread Pool Patterns
 
 ### Using rayon for Parallel Iteration
+
 ```rust
 use rayon::prelude::*;
 
@@ -230,6 +239,7 @@ fn parallel_filter_map() {
 ```
 
 ### Custom Thread Pool with crossbeam
+
 ```rust
 use crossbeam::channel;
 use std::thread;
@@ -269,6 +279,7 @@ fn custom_pool(num_workers: usize) {
 ## Synchronization Primitives
 
 ### Barrier (Wait for All)
+
 ```rust
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -296,6 +307,7 @@ fn barrier_example() {
 ```
 
 ### Condvar (Condition Variable)
+
 ```rust
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
@@ -328,6 +340,7 @@ fn condvar_example() {
 ```
 
 ### Once (One-Time Initialization)
+
 ```rust
 use std::sync::Once;
 
@@ -356,6 +369,7 @@ static CONFIG: Lazy<Config> = Lazy::new(|| {
 ## Error Handling in Threads
 
 ### Handling Panics
+
 ```rust
 use std::thread;
 
@@ -380,6 +394,7 @@ fn handle_panic() {
 ```
 
 ### Catching Panics
+
 ```rust
 use std::panic;
 

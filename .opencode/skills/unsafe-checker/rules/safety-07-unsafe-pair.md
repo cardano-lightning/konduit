@@ -9,11 +9,13 @@ impact: MEDIUM
 
 ## Summary
 
-When providing performance-critical operations that skip safety checks, offer both a safe checked version and an unsafe unchecked version.
+When providing performance-critical operations that skip safety checks, offer
+both a safe checked version and an unsafe unchecked version.
 
 ## Rationale
 
-Users who need maximum performance can opt into unsafe, while others get safety by default. This follows the "safe by default, unsafe opt-in" principle.
+Users who need maximum performance can opt into unsafe, while others get safety
+by default. This follows the "safe by default, unsafe opt-in" principle.
 
 ## Bad Example
 
@@ -81,11 +83,11 @@ impl<T> MySlice<T> {
 
 ## Standard Library Patterns
 
-| Safe Method | Unsafe Counterpart |
-|-------------|-------------------|
-| `slice.get(i)` | `slice.get_unchecked(i)` |
-| `str.chars().nth(i)` | `str.get_unchecked(range)` |
-| `vec.pop()` | `vec.set_len()` + `ptr::read` |
+| Safe Method           | Unsafe Counterpart              |
+| --------------------- | ------------------------------- |
+| `slice.get(i)`        | `slice.get_unchecked(i)`        |
+| `str.chars().nth(i)`  | `str.get_unchecked(range)`      |
+| `vec.pop()`           | `vec.set_len()` + `ptr::read`   |
 | `String::from_utf8()` | `String::from_utf8_unchecked()` |
 
 ## Naming Conventions

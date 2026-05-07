@@ -3,6 +3,7 @@
 ## Library Error Design
 
 ### Principles
+
 1. **Define specific error types** - Don't use `anyhow` in libraries
 2. **Implement std::error::Error** - For compatibility
 3. **Provide error variants** - Let users match on errors
@@ -10,6 +11,7 @@
 5. **Be `Send + Sync`** - For async compatibility
 
 ### Example: Library Error Type
+
 ```rust
 // lib.rs
 use thiserror::Error;
@@ -52,6 +54,7 @@ pub fn query(conn: &Connection, sql: &str) -> Result<Rows> {
 ```
 
 ### Library Usage of Errors
+
 ```rust
 impl Database {
     pub fn get_user(&self, id: &str) -> Result<User> {
@@ -72,12 +75,14 @@ impl Database {
 ## Application Error Design
 
 ### Principles
+
 1. **Use anyhow for convenience** - Or custom unified error
 2. **Add context liberally** - Help debugging
 3. **Log at boundaries** - Don't log in libraries
 4. **Convert to user-friendly messages** - For display
 
 ### Example: Application Error Handling
+
 ```rust
 // main.rs
 use anyhow::{Context, Result};
@@ -114,6 +119,7 @@ async fn main() {
 ```
 
 ### Converting Library Errors
+
 ```rust
 use mylib::DatabaseError;
 
@@ -176,6 +182,7 @@ async fn get_user_handler(id: &str) -> Result<Response> {
 ## Practical Examples
 
 ### HTTP API Error Response
+
 ```rust
 use axum::{response::IntoResponse, http::StatusCode};
 use serde::Serialize;
@@ -222,6 +229,7 @@ impl IntoResponse for AppError {
 ```
 
 ### CLI Error Handling
+
 ```rust
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -260,6 +268,7 @@ fn run() -> Result<()> {
 ## Testing Error Handling
 
 ### Testing Error Cases
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -306,6 +315,7 @@ mod tests {
 ```
 
 ### Testing with anyhow
+
 ```rust
 #[cfg(test)]
 mod tests {

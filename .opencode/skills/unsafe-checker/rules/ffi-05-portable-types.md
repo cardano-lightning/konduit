@@ -9,7 +9,8 @@ impact: HIGH
 
 ## Summary
 
-Use type aliases from `std::os::raw` or the `libc` crate for C-compatible types. Don't assume sizes of C types.
+Use type aliases from `std::os::raw` or the `libc` crate for C-compatible types.
+Don't assume sizes of C types.
 
 ## Rationale
 
@@ -71,21 +72,21 @@ struct PointerSized {
 
 ## Type Mapping Reference
 
-| C Type | Rust Type | Notes |
-|--------|-----------|-------|
-| `char` | `c_char` | May be signed or unsigned! |
-| `signed char` | `i8` | |
-| `unsigned char` | `u8` | |
-| `short` | `c_short` | Usually i16 |
-| `int` | `c_int` | Usually i32 |
-| `long` | `c_long` | 32 or 64 bits! |
-| `long long` | `c_longlong` | Usually i64 |
-| `size_t` | `usize` or `libc::size_t` | |
-| `ssize_t` | `isize` or `libc::ssize_t` | |
-| `float` | `c_float` / `f32` | |
-| `double` | `c_double` / `f64` | |
-| `void*` | `*mut c_void` | |
-| `const void*` | `*const c_void` | |
+| C Type          | Rust Type                  | Notes                      |
+| --------------- | -------------------------- | -------------------------- |
+| `char`          | `c_char`                   | May be signed or unsigned! |
+| `signed char`   | `i8`                       |                            |
+| `unsigned char` | `u8`                       |                            |
+| `short`         | `c_short`                  | Usually i16                |
+| `int`           | `c_int`                    | Usually i32                |
+| `long`          | `c_long`                   | 32 or 64 bits!             |
+| `long long`     | `c_longlong`               | Usually i64                |
+| `size_t`        | `usize` or `libc::size_t`  |                            |
+| `ssize_t`       | `isize` or `libc::ssize_t` |                            |
+| `float`         | `c_float` / `f32`          |                            |
+| `double`        | `c_double` / `f64`         |                            |
+| `void*`         | `*mut c_void`              |                            |
+| `const void*`   | `*const c_void`            |                            |
 
 ## Platform Differences
 

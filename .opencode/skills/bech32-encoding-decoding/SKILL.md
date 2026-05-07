@@ -1,6 +1,8 @@
 ---
 name: bech32-encoding-decoding
-description: Encode and decode bech32 and bech32m strings using the local bech32 and bech32m CLI.
+description:
+  Encode and decode bech32 and bech32m strings using the local bech32 and
+  bech32m CLI.
 allowed-tools:
   - Bash(bech32:*)
   - Bash(bech32m:*)
@@ -11,55 +13,71 @@ user-invocable: true
 
 # Bech32 / Bech32m Encoding/Decoding Skill
 
-Use this skill to convert between hex/base58 inputs and bech32/bech32m strings, or to decode bech32/bech32m back to base16. The local `bech32` and `bech32m` binaries read data from standard input and writes to standard output.
+Use this skill to convert between hex/base58 inputs and bech32/bech32m strings,
+or to decode bech32/bech32m back to base16. The local `bech32` and `bech32m`
+binaries read data from standard input and writes to standard output.
 
 ## When to use
-- When you need to inspect or transform bech32/bech32m strings for debugging or tests
+
+- When you need to inspect or transform bech32/bech32m strings for debugging or
+  tests
 - When you need to encode raw bytes (hex/base58) to a bech32/bech32m prefix
 - When you need to decode a bech32/bech32m string to base16
 
 ## Tooling
-- `bech32 [PREFIX]` converts to/from bech32 strings (useful for Cardano addresses)
-- `bech32m [PREFIX]` converts to/from bech32m strings (useful for Midnight addresses)
+
+- `bech32 [PREFIX]` converts to/from bech32 strings (useful for Cardano
+  addresses)
+- `bech32m [PREFIX]` converts to/from bech32m strings (useful for Midnight
+  addresses)
 - Input is read from `stdin`
 - Output is printed to `stdout`
 - Supported input formats: Base16, Bech32, Base58 (bech32)
 - Supported input formats: Base16, Bech32m, Base58 (bech32m)
 
 ## Operating rules (must follow)
+
 - Confirm the target human-readable prefix (HRP) before encoding
 - Prefer piping input via `<<<` or `printf` so the payload is explicit
 - For decoding, omit the prefix argument to ensure base16 output
-- Use `bech32m` for Midnight bech32m strings; omit the prefix to decode to base16
+- Use `bech32m` for Midnight bech32m strings; omit the prefix to decode to
+  base16
 - Never alter user data; report exact output from the tool
 
 ## Common HRPs
-- Midnight (bech32m): `mn_shield-addr_<network>`, `mn_addr_<network>`, `mn_dust_<network>`
+
+- Midnight (bech32m): `mn_shield-addr_<network>`, `mn_addr_<network>`,
+  `mn_dust_<network>`
 - Cardano (bech32): `addr`, `addr_test`
 
 ## Execution workflow
 
 ### Step 1: Identify the input type
+
 - Base16 hex string (preferred for raw bytes)
 - Base58 string
 - Bech32 string
 
 ### Step 2: Encode to bech32
+
 ```bash
 bech32 <prefix> <<< <hex-or-base58-input>
 ```
 
 ### Step 3: Decode from bech32 to base16
+
 ```bash
 bech32 <<< <bech32-input>
 ```
 
 ### Step 4: Encode to bech32m (Midnight)
+
 ```bash
 bech32m <prefix> <<< <hex-or-base58-input>
 ```
 
 ### Step 5: Decode from bech32m to base16
+
 ```bash
 bech32m <<< <bech32m-input>
 ```
@@ -67,78 +85,104 @@ bech32m <<< <bech32m-input>
 ## Examples
 
 Encode hex to bech32:
+
 ```bash
 bech32 addr <<< 71ab222c7f223c4c0e297d11fbf6e6a082eb41db5e8539fcfb822c76c3
 ```
+
 Expected output:
+
 ```text
 addr1wx4jytrlyg7ycr3f05glhahx5zpwkswmt6znnl8msgk8dsccv8766
 ```
 
 Decode bech32 to hex:
+
 ```bash
 bech32 <<< addr1wx4jytrlyg7ycr3f05glhahx5zpwkswmt6znnl8msgk8dsccv8766
 ```
+
 Expected output:
+
 ```text
 71ab222c7f223c4c0e297d11fbf6e6a082eb41db5e8539fcfb822c76c3
 ```
 
 Convert from base58 to bech32:
+
 ```bash
 bech32 base58_ <<< Ae2tdPwUPEYy
 ```
+
 Expected output:
+
 ```text
 base58_1p58rejhd9592uusa8pzj2
 ```
 
 Encode hex to bech32m (Midnight address HRP):
+
 ```bash
 bech32m mn_addr_testnet <<< 706174617465
 ```
+
 Expected output:
+
 ```text
 mn_addr_testnet1wpshgct5v5ucrhhp
 ```
 
 Decode Midnight bech32m to hex:
+
 ```bash
 bech32m <<< mn_addr_testnet1wpshgct5v5ucrhhp
 ```
+
 Expected output:
+
 ```text
 706174617465
 ```
 
 Encode hex to bech32m (shield addr HRP):
+
 ```bash
 bech32m mn_shield-addr_testnet <<< 706174617465
 ```
+
 Expected output:
+
 ```text
 mn_shield-addr_testnet1wpshgct5v5m3l88f
 ```
 
 Encode hex to bech32m (dust HRP):
+
 ```bash
 bech32m mn_dust_testnet <<< 706174617465
 ```
+
 Expected output:
+
 ```text
 mn_dust_testnet1wpshgct5v5p6cup0
 ```
 
 ## Common pitfalls
+
 - Using the wrong HRP when encoding; bech32/bech32m are prefix-sensitive
-- Passing bech32/bech32m input with a prefix argument (this re-encodes instead of decoding)
+- Passing bech32/bech32m input with a prefix argument (this re-encodes instead
+  of decoding)
 - Including whitespace or newlines inside the input payload
 - Prefixing hex input with `0x`; the tool expects raw hex only
 
 ## Error signals
-- `Unable to detect input encoding` usually means the input contains a prefix (`0x`) or non-hex characters
+
+- `Unable to detect input encoding` usually means the input contains a prefix
+  (`0x`) or non-hex characters
 
 ## Diagnosis workflow (quick)
+
 1. Confirm input type and remove any `0x` prefix for hex.
 2. If encoding: verify the HRP you intend to use.
 3. If decoding: ensure you omit the prefix argument.
@@ -147,5 +191,6 @@ mn_dust_testnet1wpshgct5v5p6cup0
    - `bech32 <<< base16_1wpshgct5v5r5mxh0`
 
 ## References
+
 - `bech32 --help`
 - `bech32m --help`

@@ -9,7 +9,8 @@ impact: HIGH
 
 ## Summary
 
-Only use `union` for FFI with C code. For Rust-only code, use `enum` with explicit tags.
+Only use `union` for FFI with C code. For Rust-only code, use `enum` with
+explicit tags.
 
 ## Rationale
 
@@ -93,16 +94,17 @@ impl SafeUnion {
 
 1. **C FFI**: Matching C union layout for interoperability
 2. **MaybeUninit**: The standard library uses union internally
-3. **Very low-level optimization**: Only after profiling and careful safety analysis
+3. **Very low-level optimization**: Only after profiling and careful safety
+   analysis
 
 ## Alternatives to Union
 
-| Use Case | Instead of Union | Use |
-|----------|-----------------|-----|
-| Variant types | union + tag | `enum` |
-| Optional value | union + bool | `Option<T>` |
-| Type punning | union | `transmute` or `from_ne_bytes` |
-| Uninitialized memory | union | `MaybeUninit<T>` |
+| Use Case             | Instead of Union | Use                            |
+| -------------------- | ---------------- | ------------------------------ |
+| Variant types        | union + tag      | `enum`                         |
+| Optional value       | union + bool     | `Option<T>`                    |
+| Type punning         | union            | `transmute` or `from_ne_bytes` |
+| Uninitialized memory | union            | `MaybeUninit<T>`               |
 
 ## Checklist
 

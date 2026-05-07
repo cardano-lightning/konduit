@@ -9,11 +9,14 @@ impact: CRITICAL
 
 ## Summary
 
-When writing unsafe code, you are taking responsibility for upholding all safety invariants that the compiler normally enforces.
+When writing unsafe code, you are taking responsibility for upholding all safety
+invariants that the compiler normally enforces.
 
 ## Rationale
 
-Unsafe blocks don't disable safety requirements - they transfer responsibility from the compiler to the programmer. You must manually verify what the compiler normally checks.
+Unsafe blocks don't disable safety requirements - they transfer responsibility
+from the compiler to the programmer. You must manually verify what the compiler
+normally checks.
 
 ## Safety Invariants to Verify
 

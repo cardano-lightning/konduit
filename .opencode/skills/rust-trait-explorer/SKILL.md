@@ -1,6 +1,8 @@
 ---
 name: rust-trait-explorer
-description: "Explore Rust trait implementations using LSP. Triggers on: /trait-impl, find implementations, who implements, trait 实现, 谁实现了, 实现了哪些trait"
+description:
+  "Explore Rust trait implementations using LSP. Triggers on: /trait-impl, find
+  implementations, who implements, trait 实现, 谁实现了, 实现了哪些trait"
 argument-hint: "<TraitName|StructName>"
 allowed-tools: ["LSP", "Read", "Glob", "Grep"]
 ---
@@ -16,6 +18,7 @@ Discover trait implementations and understand polymorphic designs.
 ```
 
 **Examples:**
+
 - `/rust-trait-explorer Handler` - Find all implementors of Handler trait
 - `/rust-trait-explorer MyStruct` - Find all traits implemented by MyStruct
 
@@ -35,6 +38,7 @@ LSP(
 ```
 
 **Use when:**
+
 - Trait name is known
 - Want to find all implementors
 - Understanding polymorphic code
@@ -85,7 +89,7 @@ User: "What traits does MyStruct implement?"
 
 ### Trait Implementors
 
-```
+````
 ## Implementations of `Handler`
 
 **Trait defined at:** src/traits.rs:15
@@ -133,11 +137,11 @@ impl Handler for ApiHandler {
     }
 }
 ​```
-```
+````
 
 ### Traits for a Type
 
-```
+````
 ## Traits implemented by `User`
 
 **Struct defined at:** src/models/user.rs:10
@@ -177,7 +181,7 @@ User
     ├── Entity (src/models/user.rs:70)
     └── Validatable (src/models/user.rs:85)
 ​```
-```
+````
 
 ## Trait Hierarchy Visualization
 
@@ -231,18 +235,18 @@ The following blanket impls may apply to your types:
 
 ## Common Patterns
 
-| User Says | Action |
-|-----------|--------|
-| "Who implements X?" | goToImplementation on trait |
-| "What traits does Y impl?" | Grep for `impl * for Y` |
-| "Show trait hierarchy" | Find super-traits recursively |
-| "Is X: Send + Sync?" | Check std trait impls |
+| User Says                  | Action                        |
+| -------------------------- | ----------------------------- |
+| "Who implements X?"        | goToImplementation on trait   |
+| "What traits does Y impl?" | Grep for `impl * for Y`       |
+| "Show trait hierarchy"     | Find super-traits recursively |
+| "Is X: Send + Sync?"       | Check std trait impls         |
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Navigate to impl | rust-code-navigator |
-| Call relationships | rust-call-graph |
-| Project structure | rust-symbol-analyzer |
-| Safe refactoring | rust-refactor-helper |
+| When               | See                  |
+| ------------------ | -------------------- |
+| Navigate to impl   | rust-code-navigator  |
+| Call relationships | rust-call-graph      |
+| Project structure  | rust-symbol-analyzer |
+| Safe refactoring   | rust-refactor-helper |

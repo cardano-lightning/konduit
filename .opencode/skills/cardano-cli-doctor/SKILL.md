@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-doctor
-description: "Diagnose cardano-cli: version, era-prefixed vs legacy syntax, network flags. Produces compatibility report."
+description:
+  "Diagnose cardano-cli: version, era-prefixed vs legacy syntax, network flags.
+  Produces compatibility report."
 allowed-tools:
   - Bash(cardano-cli:*)
   - Bash(which:*)
@@ -16,32 +18,36 @@ context:
 # cardano-cli-doctor
 
 ## When to use
-- Before generating CLI workflows to detect correct command style (era-prefixed vs legacy)
+
+- Before generating CLI workflows to detect correct command style (era-prefixed
+  vs legacy)
 - When debugging CLI flag errors or version mismatches
 - When setting up a new environment
 
 ## Operating rules (must follow)
+
 - Never ask for or log secret key contents
 - Prefer **read-only** diagnostics (`--help`, `version`, `query tip`)
 - If air-gapped machine, avoid network commands unless explicitly requested
 - Output a **Compat Report** with recommended command style
 
 ## Workflow
-1) Collect environment facts (auto-injected via context)
+
+1. Collect environment facts (auto-injected via context)
    - CLI version
    - Available era-prefixed commands (conway, latest)
    - Legacy flag presence (--babbage-era, etc.)
 
-2) Decide command style
+2. Decide command style
    - `cardano-cli conway --help` works → **era-prefixed supported**
    - `--babbage-era` in help → **legacy flags supported**
    - Both exist → prefer **era-prefixed** (newer)
 
-3) Network sanity (optional, if socket available)
+3. Network sanity (optional, if socket available)
    - `cardano-cli query tip --mainnet` or `--testnet-magic <N>`
    - Detect: missing socket, wrong magic, sync status
 
-4) Produce Compat Report
+4. Produce Compat Report
    ```
    CLI Version: X.Y.Z
    Era-prefixed: ✓ conway, latest
@@ -53,9 +59,11 @@ context:
 ## Examples
 
 ### Example 1: Modern CLI (era-prefixed)
+
 **Input:** User has cardano-cli 10.1.0
 
 **Output:**
+
 ```
 === Cardano CLI Compatibility Report ===
 
@@ -78,9 +86,11 @@ Network Flags:
 ```
 
 ### Example 2: Legacy CLI
+
 **Input:** User has cardano-cli 8.x
 
 **Output:**
+
 ```
 === Cardano CLI Compatibility Report ===
 
@@ -98,10 +108,12 @@ Recommended Style: LEGACY FLAGS
 ```
 
 ## Safety / key handling
+
 - Avoid commands that print or touch `.skey` files
 - Recommend `chmod 600 *.skey` for real funds
 - Prefer offline keygen for mainnet
 
 ## References
+
 - `shared/PRINCIPLES.md` (repo)
 - [Cardano CLI documentation](https://github.com/IntersectMBO/cardano-cli)
