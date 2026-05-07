@@ -85,9 +85,9 @@
           };
       in {
         rust-project = {
-          src = ./rust;
-          cargoToml = fromTOML (builtins.readFile ./rust/Cargo.toml);
-          toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust/rust-toolchain.toml;
+          src = ./.;
+          cargoToml = fromTOML (builtins.readFile ./Cargo.toml);
+          toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           crates = {
             konduit-server = {
               crane = {
@@ -116,28 +116,44 @@
           };
         };
 
-        pre-commit = {
+        pre-commit = let
+          nixPrekConfig = ".nix-prek-config.yaml";
+        in {
           # clippy checks are failing `nix flake check`
           # However, they come from rust-flakes, and our implicit workspace
           # makes it awkward to turn these off
           check.enable = false;
           settings = {
             package = pkgs.prek;
+            configPath = nixPrekConfig;
             hooks = {
               treefmt.enable = true;
+              sync-precommit-config = {
+                enable = true;
+                name = "sync-precommit-config";
+                description = "Copy nix-generated prek config to committed .pre-commit-config.yaml";
+                entry = ''
+                  sh -c '
+                    cp --dereference ${nixPrekConfig} .pre-commit-config.yaml
+                    git add .pre-commit-config.yaml
+                  '
+                '';
+                files = nixPrekConfig;
+                pass_filenames = false;
+              };
               # Transitive deps mean default clippy ends up using a different cargo.
               my-clippy = {
                 enable = true;
                 name = "clippy";
                 description = "Run clippy";
-                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path rust/Cargo.toml";
+                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path Cargo.toml";
                 pass_filenames = false;
               };
               cargo-machete = {
                 enable = true;
                 name = "cargo-machete";
                 description = "Check for unused dependencies";
-                entry = "${pkgs.cargo-machete}/bin/cargo-machete rust/";
+                entry = "${pkgs.cargo-machete}/bin/cargo-machete ./";
                 files = "\\.toml$";
                 pass_filenames = false;
               };

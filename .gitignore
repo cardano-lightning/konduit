@@ -1,3 +1,21 @@
+# No idea :) 
 .idea
+
+# Cardano keys
 **/*.skey
 **/*.vkey
+
+# Direnv
+.direnv/
+.envrc
+
+# Rust
+debug/
+target/
+
+# Envs
+.env
+.env.*
+
+# Server db default
+db
