@@ -10,12 +10,14 @@ clippy: uninit_assumed_init, uninit_vec
 
 ## Summary
 
-Use `MaybeUninit<T>` instead of `mem::uninitialized()` or `mem::zeroed()` when working with uninitialized memory.
+Use `MaybeUninit<T>` instead of `mem::uninitialized()` or `mem::zeroed()` when
+working with uninitialized memory.
 
 ## Rationale
 
 - `mem::uninitialized()` is deprecated and unsound
-- `mem::zeroed()` is UB for types where zero is invalid (references, NonZero, bool)
+- `mem::zeroed()` is UB for types where zero is invalid (references, NonZero,
+  bool)
 - `MaybeUninit<T>` clearly marks memory as potentially uninitialized
 - Compiler can optimize based on initialization state
 
@@ -137,7 +139,8 @@ let mut_ptr: *mut T = uninit.as_mut_ptr();
 
 - [ ] Am I using `mem::uninitialized()`? → Replace with `MaybeUninit`
 - [ ] Am I using `mem::zeroed()` for non-POD types? → Use `MaybeUninit`
-- [ ] Am I setting Vec length without initialization? → Use proper initialization
+- [ ] Am I setting Vec length without initialization? → Use proper
+      initialization
 - [ ] Have I initialized all MaybeUninit before assume_init?
 
 ## Related Rules

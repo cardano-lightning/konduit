@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-wallets
-description: "Wallet guidance: key generation, address building, UTxO queries. Provides templates and explanations (no execution)."
+description:
+  "Wallet guidance: key generation, address building, UTxO queries. Provides
+  templates and explanations (no execution)."
 allowed-tools:
   - Read
 user-invocable: true
@@ -8,25 +10,30 @@ user-invocable: true
 
 # cardano-cli-wallets
 
-> **This is a guidance skill.** It provides templates and explanations but does not execute commands. For execution, use `cardano-cli-wallets-operator`.
+> **This is a guidance skill.** It provides templates and explanations but does
+> not execute commands. For execution, use `cardano-cli-wallets-operator`.
 
 ## When to use
+
 - Learning how to create payment/stake keys and addresses
 - Understanding wallet structure and UTxO model
 - Getting copy-paste command templates
 
 ## Operating rules (must follow)
+
 - Confirm network (mainnet vs preprod/preview) before providing commands
 - Never execute commands—only provide templates
 - Include verification steps in every template
 - Keep secrets out of examples
 
 ## Workflow
-1) Identify network
+
+1. Identify network
    - Ask for **mainnet** or **preprod/preview** and magic number
    - Determine CLI style (era-prefixed vs legacy) via doctor
 
-2) Provide key generation template
+2. Provide key generation template
+
    ```bash
    # Create wallet directory
    mkdir -p wallet && cd wallet
@@ -45,7 +52,8 @@ user-invocable: true
    chmod 600 *.skey
    ```
 
-3) Provide address building template
+3. Provide address building template
+
    ```bash
    # Build base address (payment + stake)
    cardano-cli conway address build \
@@ -61,14 +69,15 @@ user-invocable: true
      --testnet-magic 1
    ```
 
-4) Provide UTxO query template
+4. Provide UTxO query template
+
    ```bash
    cardano-cli conway query utxo \
      --address $(cat base.addr) \
      --testnet-magic 1
    ```
 
-5) Wallet dossier output format
+5. Wallet dossier output format
    ```
    === Wallet Dossier ===
    Network: preprod (magic 1)
@@ -82,9 +91,11 @@ user-invocable: true
 ## Examples
 
 ### Example: Create preprod wallet
+
 **User request:** "Create a wallet for preprod testing"
 
 **Response:**
+
 ```bash
 # === Preprod Wallet Setup ===
 
@@ -122,11 +133,13 @@ cardano-cli conway query utxo \
 ```
 
 ## Safety / key handling
+
 - Never paste `.skey` contents into chat
 - Prefer offline key generation for real funds
 - Lock permissions: `chmod 600 *.skey`
 - Avoid cloud sync for key directories
 
 ## References
+
 - `shared/PRINCIPLES.md` (repo)
 - [Cardano Docs: Keys and Addresses](https://docs.cardano.org)

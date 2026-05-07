@@ -5,11 +5,12 @@ level: P
 impact: MEDIUM
 ---
 
-# Prefer NonNull<T> Over *mut T
+# Prefer NonNull<T> Over \*mut T
 
 ## Summary
 
-Use `NonNull<T>` instead of `*mut T` when the pointer should never be null. This enables null pointer optimization and makes the intent clear.
+Use `NonNull<T>` instead of `*mut T` when the pointer should never be null. This
+enables null pointer optimization and makes the intent clear.
 
 ## Rationale
 
@@ -96,7 +97,7 @@ let mut_ref: &mut i32 = unsafe { ptr.as_mut() };
 let ptr: NonNull<u8> = ptr.cast::<u8>();
 ```
 
-## When to Use *mut T Instead
+## When to Use \*mut T Instead
 
 - When null is a valid/expected value
 - FFI with C code that may return null

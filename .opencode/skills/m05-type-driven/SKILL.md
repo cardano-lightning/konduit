@@ -1,6 +1,9 @@
 ---
 name: m05-type-driven
-description: "CRITICAL: Use for type-driven design. Triggers: type state, PhantomData, newtype, marker trait, builder pattern, make invalid states unrepresentable, compile-time validation, sealed trait, ZST, 类型状态, 新类型模式, 类型驱动设计"
+description:
+  "CRITICAL: Use for type-driven design. Triggers: type state, PhantomData,
+  newtype, marker trait, builder pattern, make invalid states unrepresentable,
+  compile-time validation, sealed trait, ZST, 类型状态, 新类型模式, 类型驱动设计"
 user-invocable: false
 ---
 
@@ -13,6 +16,7 @@ user-invocable: false
 **How can the type system prevent invalid states?**
 
 Before reaching for runtime checks:
+
 - Can the compiler catch this error?
 - Can invalid states be unrepresentable?
 - Can the type encode the invariant?
@@ -21,11 +25,11 @@ Before reaching for runtime checks:
 
 ## Error → Design Question
 
-| Pattern | Don't Just Say | Ask Instead |
-|---------|----------------|-------------|
-| Primitive obsession | "It's just a string" | What does this value represent? |
-| Boolean flags | "Add an is_valid flag" | Can states be types? |
-| Optional everywhere | "Check for None" | Is absence really possible? |
+| Pattern               | Don't Just Say          | Ask Instead                      |
+| --------------------- | ----------------------- | -------------------------------- |
+| Primitive obsession   | "It's just a string"    | What does this value represent?  |
+| Boolean flags         | "Add an is_valid flag"  | Can states be types?             |
+| Optional everywhere   | "Check for None"        | Is absence really possible?      |
 | Validation at runtime | "Return Err if invalid" | Can we validate at construction? |
 
 ---
@@ -62,11 +66,11 @@ When type design is unclear:
     ↑ Check: domain-* (validation requirements)
 ```
 
-| Situation | Trace To | Question |
-|-----------|----------|----------|
-| What types to create | m09-domain | What's the domain model? |
-| State machine design | m09-domain | What are valid transitions? |
-| Marker trait usage | m04-zero-cost | Static or dynamic dispatch? |
+| Situation            | Trace To      | Question                    |
+| -------------------- | ------------- | --------------------------- |
+| What types to create | m09-domain    | What's the domain model?    |
+| State machine design | m09-domain    | What are valid transitions? |
+| Marker trait usage   | m04-zero-cost | Static or dynamic dispatch? |
 
 ---
 
@@ -95,13 +99,13 @@ From design to implementation:
 
 ## Quick Reference
 
-| Pattern | Purpose | Example |
-|---------|---------|---------|
-| Newtype | Type safety | `struct UserId(u64);` |
-| Type State | State machine | `Connection<Connected>` |
-| PhantomData | Variance/lifetime | `PhantomData<&'a T>` |
-| Marker Trait | Capability flag | `trait Validated {}` |
-| Builder | Gradual construction | `Builder::new().name("x").build()` |
+| Pattern      | Purpose               | Example                               |
+| ------------ | --------------------- | ------------------------------------- |
+| Newtype      | Type safety           | `struct UserId(u64);`                 |
+| Type State   | State machine         | `Connection<Connected>`               |
+| PhantomData  | Variance/lifetime     | `PhantomData<&'a T>`                  |
+| Marker Trait | Capability flag       | `trait Validated {}`                  |
+| Builder      | Gradual construction  | `Builder::new().name("x").build()`    |
 | Sealed Trait | Prevent external impl | `mod private { pub trait Sealed {} }` |
 
 ## Pattern Examples
@@ -142,34 +146,34 @@ impl Connection<Connected> {
 
 ## Decision Guide
 
-| Need | Pattern |
-|------|---------|
-| Type safety for primitives | Newtype |
-| Compile-time state validation | Type State |
-| Lifetime/variance markers | PhantomData |
-| Capability flags | Marker Trait |
-| Gradual construction | Builder |
-| Closed set of impls | Sealed Trait |
-| Zero-sized type marker | ZST struct |
+| Need                          | Pattern      |
+| ----------------------------- | ------------ |
+| Type safety for primitives    | Newtype      |
+| Compile-time state validation | Type State   |
+| Lifetime/variance markers     | PhantomData  |
+| Capability flags              | Marker Trait |
+| Gradual construction          | Builder      |
+| Closed set of impls           | Sealed Trait |
+| Zero-sized type marker        | ZST struct   |
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern | Why Bad | Better |
-|--------------|---------|--------|
-| Boolean flags for states | Runtime errors | Type state |
-| String for semantic types | No type safety | Newtype |
-| Option for uninitialized | Unclear invariant | Builder |
+| Anti-Pattern                  | Why Bad             | Better                    |
+| ----------------------------- | ------------------- | ------------------------- |
+| Boolean flags for states      | Runtime errors      | Type state                |
+| String for semantic types     | No type safety      | Newtype                   |
+| Option for uninitialized      | Unclear invariant   | Builder                   |
 | Public fields with invariants | Invariant violation | Private + validated new() |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Domain modeling | m09-domain |
-| Trait design | m04-zero-cost |
+| When                           | See                |
+| ------------------------------ | ------------------ |
+| Domain modeling                | m09-domain         |
+| Trait design                   | m04-zero-cost      |
 | Error handling in constructors | m06-error-handling |
-| Anti-patterns | m15-anti-pattern |
+| Anti-patterns                  | m15-anti-pattern   |

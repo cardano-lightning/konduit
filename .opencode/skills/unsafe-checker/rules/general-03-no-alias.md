@@ -9,11 +9,14 @@ impact: MEDIUM
 
 ## Summary
 
-Do not create type aliases, re-exports, or wrapper methods that hide the "unsafe" nature of operations.
+Do not create type aliases, re-exports, or wrapper methods that hide the
+"unsafe" nature of operations.
 
 ## Rationale
 
-The word "unsafe" in Rust is a signal to developers that extra scrutiny is required. Hiding this signal makes code review harder and can lead to accidental misuse.
+The word "unsafe" in Rust is a signal to developers that extra scrutiny is
+required. Hiding this signal makes code review harder and can lead to accidental
+misuse.
 
 ## Bad Example
 
@@ -59,7 +62,8 @@ type RawHandle = *mut c_void;  // "Raw" signals potential unsafety
 ## Common Violations
 
 1. Creating type aliases that hide pointer types
-2. Wrapping unsafe functions in safe-looking functions without proper safety analysis
+2. Wrapping unsafe functions in safe-looking functions without proper safety
+   analysis
 3. Re-exporting unsafe functions with "friendlier" names
 
 ## Checklist

@@ -41,9 +41,7 @@
           "status": "completed",
           "priority": "high",
           "estimatedHours": 8,
-          "dependencies": [
-            "task-001"
-          ],
+          "dependencies": ["task-001"],
           "targetPaths": [
             "rust/crates/cardano-connector-utxorpc/src/lib.rs",
             "rust/crates/cardano-connector-utxorpc/src/config.rs",
@@ -66,9 +64,7 @@
           "status": "completed",
           "priority": "high",
           "estimatedHours": 8,
-          "dependencies": [
-            "task-002"
-          ],
+          "dependencies": ["task-002"],
           "targetPaths": [
             "rust/crates/konduit-server/Cargo.toml",
             "rust/crates/konduit-server/src/cardano.rs",
@@ -112,9 +108,7 @@
           "status": "completed",
           "priority": "high",
           "estimatedHours": 5,
-          "dependencies": [
-            "task-002"
-          ],
+          "dependencies": ["task-002"],
           "targetPaths": [
             "rust/crates/cardano-connector-utxorpc/src/lib.rs",
             "rust/crates/cardano-connector-utxorpc/src/mapping.rs",
@@ -136,9 +130,7 @@
           "status": "completed",
           "priority": "high",
           "estimatedHours": 4,
-          "dependencies": [
-            "task-003"
-          ],
+          "dependencies": ["task-003"],
           "targetPaths": [
             "rust/crates/konduit-server/src/cardano.rs",
             "rust/crates/konduit-server/src/cardano/args.rs",
@@ -161,10 +153,7 @@
           "status": "completed",
           "priority": "medium",
           "estimatedHours": 4,
-          "dependencies": [
-            "task-100",
-            "task-101"
-          ],
+          "dependencies": ["task-100", "task-101"],
           "targetPaths": [
             "rust/crates/cardano-connector-utxorpc",
             "rust/crates/konduit-server",
@@ -186,9 +175,7 @@
           "status": "completed",
           "priority": "medium",
           "estimatedHours": 3,
-          "dependencies": [
-            "task-102"
-          ],
+          "dependencies": ["task-102"],
           "targetPaths": [
             "docs/design/33_cardano_connector.md",
             "docs/design/36_dolos_utxorpc_implementation_prd.md",
@@ -209,9 +196,7 @@
           "status": "completed",
           "priority": "medium",
           "estimatedHours": 2,
-          "dependencies": [
-            "task-103"
-          ],
+          "dependencies": ["task-103"],
           "targetPaths": [
             "docs/adrs/06-dolos-utxorpc-adaptor-backend.md",
             "docs/design/33_cardano_connector.md",

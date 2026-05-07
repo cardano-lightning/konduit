@@ -1,6 +1,9 @@
 ---
 name: m09-domain
-description: "CRITICAL: Use for domain modeling. Triggers: domain model, DDD, domain-driven design, entity, value object, aggregate, repository pattern, business rules, validation, invariant, 领域模型, 领域驱动设计, 业务规则"
+description:
+  "CRITICAL: Use for domain modeling. Triggers: domain model, DDD, domain-driven
+  design, entity, value object, aggregate, repository pattern, business rules,
+  validation, invariant, 领域模型, 领域驱动设计, 业务规则"
 user-invocable: false
 ---
 
@@ -13,6 +16,7 @@ user-invocable: false
 **What is this concept's role in the domain?**
 
 Before modeling in code, understand:
+
 - Is it an Entity (identity matters) or Value Object (interchangeable)?
 - What invariants must be maintained?
 - Where are the aggregate boundaries?
@@ -21,14 +25,14 @@ Before modeling in code, understand:
 
 ## Domain Concept → Rust Pattern
 
-| Domain Concept | Rust Pattern | Ownership Implication |
-|----------------|--------------|----------------------|
-| Entity | struct + Id | Owned, unique identity |
-| Value Object | struct + Clone/Copy | Shareable, immutable |
-| Aggregate Root | struct owns children | Clear ownership tree |
-| Repository | trait | Abstracts persistence |
-| Domain Event | enum | Captures state changes |
-| Service | impl block / free fn | Stateless operations |
+| Domain Concept | Rust Pattern         | Ownership Implication  |
+| -------------- | -------------------- | ---------------------- |
+| Entity         | struct + Id          | Owned, unique identity |
+| Value Object   | struct + Clone/Copy  | Shareable, immutable   |
+| Aggregate Root | struct owns children | Clear ownership tree   |
+| Repository     | trait                | Abstracts persistence  |
+| Domain Event   | enum                 | Captures state changes |
+| Service        | impl block / free fn | Stateless operations   |
 
 ---
 
@@ -62,11 +66,11 @@ To domain constraints (Layer 3):
     ↑ Check: Business stakeholders (what invariants?)
 ```
 
-| Design Question | Trace To | Ask |
-|-----------------|----------|-----|
-| Entity vs Value Object | domain-* | What makes two instances "the same"? |
-| Aggregate boundaries | domain-* | What must be consistent together? |
-| Validation rules | domain-* | What business rules apply? |
+| Design Question        | Trace To  | Ask                                  |
+| ---------------------- | --------- | ------------------------------------ |
+| Entity vs Value Object | domain-\* | What makes two instances "the same"? |
+| Aggregate boundaries   | domain-\* | What must be consistent together?    |
+| Validation rules       | domain-\* | What business rules apply?           |
 
 ---
 
@@ -92,13 +96,13 @@ To implementation (Layer 1):
 
 ## Quick Reference
 
-| DDD Concept | Rust Pattern | Example |
-|-------------|--------------|---------|
-| Value Object | Newtype | `struct Email(String);` |
-| Entity | Struct + ID | `struct User { id: UserId, ... }` |
-| Aggregate | Module boundary | `mod order { ... }` |
-| Repository | Trait | `trait UserRepo { fn find(...) }` |
-| Domain Event | Enum | `enum OrderEvent { Created, ... }` |
+| DDD Concept  | Rust Pattern    | Example                            |
+| ------------ | --------------- | ---------------------------------- |
+| Value Object | Newtype         | `struct Email(String);`            |
+| Entity       | Struct + ID     | `struct User { id: UserId, ... }`  |
+| Aggregate    | Module boundary | `mod order { ... }`                |
+| Repository   | Trait           | `trait UserRepo { fn find(...) }`  |
+| Domain Event | Enum            | `enum OrderEvent { Created, ... }` |
 
 ## Pattern Templates
 
@@ -155,20 +159,20 @@ mod order {
 
 ## Common Mistakes
 
-| Mistake | Why Wrong | Better |
-|---------|-----------|--------|
-| Primitive obsession | No type safety | Newtype wrappers |
-| Public fields with invariants | Invariants violated | Private + accessor |
-| Leaked aggregate internals | Broken encapsulation | Methods on root |
-| String for semantic types | No validation | Validated newtype |
+| Mistake                       | Why Wrong            | Better             |
+| ----------------------------- | -------------------- | ------------------ |
+| Primitive obsession           | No type safety       | Newtype wrappers   |
+| Public fields with invariants | Invariants violated  | Private + accessor |
+| Leaked aggregate internals    | Broken encapsulation | Methods on root    |
+| String for semantic types     | No validation        | Validated newtype  |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Type-driven implementation | m05-type-driven |
-| Ownership for aggregates | m01-ownership |
-| Domain error handling | m13-domain-error |
-| Specific domain rules | domain-* |
+| When                       | See              |
+| -------------------------- | ---------------- |
+| Type-driven implementation | m05-type-driven  |
+| Ownership for aggregates   | m01-ownership    |
+| Domain error handling      | m13-domain-error |
+| Specific domain rules      | domain-\*        |

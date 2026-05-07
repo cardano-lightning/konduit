@@ -10,11 +10,14 @@ clippy: cast_ptr_alignment
 
 ## Summary
 
-When casting a pointer to a different type, ensure the resulting pointer is properly aligned for the target type.
+When casting a pointer to a different type, ensure the resulting pointer is
+properly aligned for the target type.
 
 ## Rationale
 
-Misaligned pointer dereferences are undefined behavior on most architectures. Even on architectures that support unaligned access, it may cause performance penalties or subtle bugs.
+Misaligned pointer dereferences are undefined behavior on most architectures.
+Even on architectures that support unaligned access, it may cause performance
+penalties or subtle bugs.
 
 ## Bad Example
 
@@ -97,12 +100,12 @@ fn align_up<T>(ptr: *const u8) -> *const u8 {
 
 ## Architecture Notes
 
-| Arch | Misaligned Access |
-|------|-------------------|
-| x86/x64 | Works but slower |
-| ARM | UB, may trap or give wrong results |
-| RISC-V | UB, may trap |
-| WASM | UB |
+| Arch    | Misaligned Access                  |
+| ------- | ---------------------------------- |
+| x86/x64 | Works but slower                   |
+| ARM     | UB, may trap or give wrong results |
+| RISC-V  | UB, may trap                       |
+| WASM    | UB                                 |
 
 ## Checklist
 

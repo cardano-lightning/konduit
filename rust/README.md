@@ -39,8 +39,8 @@
   flows.
 - `show config` and `show address` commands remain config-derived and do not
   require a live backend.
-- the current Blockfrost path remains weaker than UTxO RPC in two known ways:
-  it still uses static per-network protocol-parameter presets and its
+- the current Blockfrost path remains weaker than UTxO RPC in two known ways: it
+  still uses static per-network protocol-parameter presets and its
   `utxos_at(payment, None)` path still queries one constructed address rather
   than the broader payment-credential-wide behavior the UTxO RPC backend now
   implements.

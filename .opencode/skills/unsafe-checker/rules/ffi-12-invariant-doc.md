@@ -9,7 +9,8 @@ impact: MEDIUM
 
 ## Summary
 
-When receiving parameters from C, document what invariants you assume (non-null, alignment, validity, lifetime) and verify them when possible.
+When receiving parameters from C, document what invariants you assume (non-null,
+alignment, validity, lifetime) and verify them when possible.
 
 ## Rationale
 

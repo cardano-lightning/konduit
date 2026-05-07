@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-plutus-scripts
-description: "Plutus script guidance: datums, redeemers, collateral, reference scripts. Templates only—use operator to execute."
+description:
+  "Plutus script guidance: datums, redeemers, collateral, reference scripts.
+  Templates only—use operator to execute."
 allowed-tools:
   - Read
 user-invocable: true
@@ -8,14 +10,17 @@ user-invocable: true
 
 # cardano-cli-plutus-scripts
 
-> **This is a guidance skill.** Provides templates and explanations. For execution, use `cardano-cli-plutus-scripts-operator`.
+> **This is a guidance skill.** Provides templates and explanations. For
+> execution, use `cardano-cli-plutus-scripts-operator`.
 
 ## When to use
+
 - Learning Plutus script transaction patterns
 - Understanding datums, redeemers, collateral
 - Getting templates for script interactions
 
 ## Operating rules (must follow)
+
 - Confirm network and script version (V2/V3)
 - Never execute—only provide templates
 - Always include collateral handling
@@ -24,16 +29,19 @@ user-invocable: true
 ## Key concepts
 
 ### Script versions
+
 - **V1** (Alonzo): Legacy, limited features
 - **V2** (Babbage): Reference scripts, inline datums
 - **V3** (Conway): Governance, simplified interface
 
 ### Datum handling
+
 - **Inline datum**: Stored on-chain with UTxO
 - **Datum hash**: Only hash on-chain, provide full datum when spending
 - **No datum**: For some V3 scripts
 
 ### Collateral
+
 - Required for all Plutus script transactions
 - Must be ADA-only UTxO
 - Forfeit if script fails unexpectedly
@@ -42,6 +50,7 @@ user-invocable: true
 ## Workflow templates
 
 ### Lock funds at script address
+
 ```bash
 # 1. Derive script address
 cardano-cli conway address build \
@@ -65,6 +74,7 @@ cardano-cli conway transaction build \
 ```
 
 ### Spend from script
+
 ```bash
 # 1. Create redeemer
 echo '{"constructor": 0, "fields": []}' > redeemer.json
@@ -85,6 +95,7 @@ cardano-cli conway transaction build \
 ```
 
 ### With reference script
+
 ```bash
 # Script already on-chain at reference UTxO
 cardano-cli conway transaction build \
@@ -103,9 +114,11 @@ cardano-cli conway transaction build \
 ## Examples
 
 ### Example: Simple validator spend
+
 **User request:** "Spend from my always-succeeds script"
 
 **Response:**
+
 ```bash
 # === Spend from Always-Succeeds Script ===
 
@@ -145,6 +158,7 @@ cardano-cli conway transaction build \
 ## Debugging
 
 ### Calculate execution costs
+
 ```bash
 cardano-cli conway transaction build \
   ... \
@@ -154,18 +168,21 @@ cat costs.json | jq .
 ```
 
 ### Common failures
+
 - **ExUnitsTooBig**: Script exceeds execution budget
 - **CollateralNotFound**: Missing or invalid collateral
 - **DatumMismatch**: Provided datum doesn't match hash
 - **ScriptFailure**: Validator returned False
 
 ## Safety / key handling
+
 - Test scripts on preprod/preview first
 - Use minimal collateral
 - Datum/redeemer are public—no secrets
 - Verify script hash after rebuilds
 
 ## References
+
 - `shared/PRINCIPLES.md`
 - `cardano-cli-plutus-scripts-operator` (for execution)
 - `aiken-smart-contracts` (for writing validators)

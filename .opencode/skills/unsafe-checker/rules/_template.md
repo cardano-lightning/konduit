@@ -4,7 +4,7 @@ Use this template for all unsafe-checker rules.
 
 ---
 
-```markdown
+````markdown
 ---
 id: {prefix}-{number}
 original_id: P.UNS.XXX.YY or G.UNS.XXX.YY
@@ -29,6 +29,7 @@ Why this rule matters for safety/soundness.
 // DON'T: Description of the anti-pattern
 <code that violates the rule>
 ```
+````
 
 ## Good Example
 
@@ -50,4 +51,7 @@ Why this rule matters for safety/soundness.
 ## Related Rules
 
 - `{other-rule-id}`: Brief description
+
+```
+
 ```

@@ -9,7 +9,8 @@ impact: MEDIUM
 
 ## Summary
 
-When wrapping C functions that don't need null pointers, use Rust references in the safe wrapper to enforce non-null at compile time.
+When wrapping C functions that don't need null pointers, use Rust references in
+the safe wrapper to enforce non-null at compile time.
 
 ## Rationale
 

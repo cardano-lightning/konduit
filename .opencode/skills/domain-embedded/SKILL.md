@@ -1,6 +1,10 @@
 ---
 name: domain-embedded
-description: "Use when developing embedded/no_std Rust. Keywords: embedded, no_std, microcontroller, MCU, ARM, RISC-V, bare metal, firmware, HAL, PAC, RTIC, embassy, interrupt, DMA, peripheral, GPIO, SPI, I2C, UART, embedded-hal, cortex-m, esp32, stm32, nrf, 嵌入式, 单片机, 固件, 裸机"
+description:
+  "Use when developing embedded/no_std Rust. Keywords: embedded, no_std,
+  microcontroller, MCU, ARM, RISC-V, bare metal, firmware, HAL, PAC, RTIC,
+  embassy, interrupt, DMA, peripheral, GPIO, SPI, I2C, UART, embedded-hal,
+  cortex-m, esp32, stm32, nrf, 嵌入式, 单片机, 固件, 裸机"
 globs: ["**/Cargo.toml", "**/.cargo/config.toml"]
 user-invocable: false
 ---
@@ -18,14 +22,14 @@ user-invocable: false
 
 ## Domain Constraints → Design Implications
 
-| Domain Rule | Design Constraint | Rust Implication |
-|-------------|-------------------|------------------|
-| No heap | Stack allocation | heapless, no Box/Vec |
-| No std | Core only | #![no_std] |
-| Real-time | Predictable timing | No dynamic alloc |
-| Resource limited | Minimal memory | Static buffers |
-| Hardware safety | Safe peripheral access | HAL + ownership |
-| Interrupt safe | No blocking in ISR | Atomic, critical sections |
+| Domain Rule      | Design Constraint      | Rust Implication          |
+| ---------------- | ---------------------- | ------------------------- |
+| No heap          | Stack allocation       | heapless, no Box/Vec      |
+| No std           | Core only              | #![no_std]                |
+| Real-time        | Predictable timing     | No dynamic alloc          |
+| Resource limited | Minimal memory         | Static buffers            |
+| Hardware safety  | Safe peripheral access | HAL + ownership           |
+| Interrupt safe   | No blocking in ISR     | Atomic, critical sections |
 
 ---
 
@@ -79,40 +83,40 @@ From constraints to design (Layer 2):
 
 ## Layer Stack
 
-| Layer | Examples | Purpose |
-|-------|----------|---------|
-| PAC | stm32f4, esp32c3 | Register access |
-| HAL | stm32f4xx-hal | Hardware abstraction |
-| Framework | RTIC, Embassy | Concurrency |
-| Traits | embedded-hal | Portable drivers |
+| Layer     | Examples         | Purpose              |
+| --------- | ---------------- | -------------------- |
+| PAC       | stm32f4, esp32c3 | Register access      |
+| HAL       | stm32f4xx-hal    | Hardware abstraction |
+| Framework | RTIC, Embassy    | Concurrency          |
+| Traits    | embedded-hal     | Portable drivers     |
 
 ## Framework Comparison
 
-| Framework | Style | Best For |
-|-----------|-------|----------|
-| RTIC | Priority-based | Interrupt-driven apps |
-| Embassy | Async | Complex state machines |
-| Bare metal | Manual | Simple apps |
+| Framework  | Style          | Best For               |
+| ---------- | -------------- | ---------------------- |
+| RTIC       | Priority-based | Interrupt-driven apps  |
+| Embassy    | Async          | Complex state machines |
+| Bare metal | Manual         | Simple apps            |
 
 ## Key Crates
 
-| Purpose | Crate |
-|---------|-------|
-| Runtime (ARM) | cortex-m-rt |
+| Purpose       | Crate                   |
+| ------------- | ----------------------- |
+| Runtime (ARM) | cortex-m-rt             |
 | Panic handler | panic-halt, panic-probe |
-| Collections | heapless |
-| HAL traits | embedded-hal |
-| Logging | defmt |
-| Flash/debug | probe-run |
+| Collections   | heapless                |
+| HAL traits    | embedded-hal            |
+| Logging       | defmt                   |
+| Flash/debug   | probe-run               |
 
 ## Design Patterns
 
-| Pattern | Purpose | Implementation |
-|---------|---------|----------------|
-| no_std setup | Bare metal | `#![no_std]` + `#![no_main]` |
-| Entry point | Startup | `#[entry]` or embassy |
-| Static state | ISR access | `Mutex<RefCell<Option<T>>>` |
-| Fixed buffers | No heap | `heapless::Vec<T, N>` |
+| Pattern       | Purpose    | Implementation               |
+| ------------- | ---------- | ---------------------------- |
+| no_std setup  | Bare metal | `#![no_std]` + `#![no_main]` |
+| Entry point   | Startup    | `#[entry]` or embassy        |
+| Static state  | ISR access | `Mutex<RefCell<Option<T>>>`  |
+| Fixed buffers | No heap    | `heapless::Vec<T, N>`        |
 
 ## Code Pattern: Static Peripheral
 
@@ -148,31 +152,31 @@ fn main() -> ! {
 
 ## Common Mistakes
 
-| Mistake | Domain Violation | Fix |
-|---------|-----------------|-----|
-| Using Vec | Heap allocation | heapless::Vec |
-| No critical section | Race with ISR | Mutex + interrupt::free |
-| Blocking in ISR | Missed interrupts | Defer to main loop |
-| Unsafe peripheral | Hardware conflict | HAL ownership |
+| Mistake             | Domain Violation  | Fix                     |
+| ------------------- | ----------------- | ----------------------- |
+| Using Vec           | Heap allocation   | heapless::Vec           |
+| No critical section | Race with ISR     | Mutex + interrupt::free |
+| Blocking in ISR     | Missed interrupts | Defer to main loop      |
+| Unsafe peripheral   | Hardware conflict | HAL ownership           |
 
 ---
 
 ## Trace to Layer 1
 
-| Constraint | Layer 2 Pattern | Layer 1 Implementation |
-|------------|-----------------|------------------------|
-| No heap | Static collections | heapless::Vec<T, N> |
-| ISR safety | Critical sections | Mutex<RefCell<T>> |
-| Hardware ownership | Singleton | take().unwrap() |
-| no_std | Core-only | #![no_std], #![no_main] |
+| Constraint         | Layer 2 Pattern    | Layer 1 Implementation  |
+| ------------------ | ------------------ | ----------------------- |
+| No heap            | Static collections | heapless::Vec<T, N>     |
+| ISR safety         | Critical sections  | Mutex<RefCell<T>>       |
+| Hardware ownership | Singleton          | take().unwrap()         |
+| no_std             | Core-only          | #![no_std], #![no_main] |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Static memory | m02-resource |
-| Interior mutability | m03-mutability |
-| Interrupt patterns | m07-concurrency |
-| Unsafe for hardware | unsafe-checker |
+| When                | See             |
+| ------------------- | --------------- |
+| Static memory       | m02-resource    |
+| Interior mutability | m03-mutability  |
+| Interrupt patterns  | m07-concurrency |
+| Unsafe for hardware | unsafe-checker  |

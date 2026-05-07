@@ -9,11 +9,14 @@ impact: HIGH
 
 ## Summary
 
-When calling C functions or system calls, use reentrant (`_r`) versions to avoid data races from global state.
+When calling C functions or system calls, use reentrant (`_r`) versions to avoid
+data races from global state.
 
 ## Rationale
 
-Many C library functions use static buffers or global state, making them unsafe in multithreaded programs. Reentrant versions use caller-provided buffers instead.
+Many C library functions use static buffers or global state, making them unsafe
+in multithreaded programs. Reentrant versions use caller-provided buffers
+instead.
 
 ## Bad Example
 
@@ -96,17 +99,17 @@ fn best_random() -> u32 {
 
 ## Common Non-Reentrant Functions
 
-| Non-Reentrant | Reentrant | Rust Alternative |
-|---------------|-----------|------------------|
-| `strtok` | `strtok_r` | `str::split` |
-| `localtime` | `localtime_r` | `chrono` crate |
-| `gmtime` | `gmtime_r` | `chrono` crate |
-| `ctime` | `ctime_r` | `chrono` crate |
-| `rand` | `rand_r` | `rand` crate |
-| `strerror` | `strerror_r` | `std::io::Error` |
-| `getenv` | None (inherent race) | `std::env::var` (not atomic) |
-| `readdir` | `readdir_r` | `std::fs::read_dir` |
-| `gethostbyname` | `getaddrinfo` | `std::net::ToSocketAddrs` |
+| Non-Reentrant   | Reentrant            | Rust Alternative             |
+| --------------- | -------------------- | ---------------------------- |
+| `strtok`        | `strtok_r`           | `str::split`                 |
+| `localtime`     | `localtime_r`        | `chrono` crate               |
+| `gmtime`        | `gmtime_r`           | `chrono` crate               |
+| `ctime`         | `ctime_r`            | `chrono` crate               |
+| `rand`          | `rand_r`             | `rand` crate                 |
+| `strerror`      | `strerror_r`         | `std::io::Error`             |
+| `getenv`        | None (inherent race) | `std::env::var` (not atomic) |
+| `readdir`       | `readdir_r`          | `std::fs::read_dir`          |
+| `gethostbyname` | `getaddrinfo`        | `std::net::ToSocketAddrs`    |
 
 ## Checklist
 

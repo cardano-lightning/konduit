@@ -9,7 +9,8 @@ Traditional: "Who has a pointer to this data?"
 Rust:        "Who OWNS this data and is responsible for freeing it?"
 ```
 
-Key insight: Every value has exactly one owner. When the owner goes out of scope, the value is dropped.
+Key insight: Every value has exactly one owner. When the owner goes out of
+scope, the value is dropped.
 
 ```rust
 {
@@ -25,7 +26,8 @@ Traditional: "I'll just read from this pointer"
 Rust:        "I'm borrowing this value, owner still responsible for it"
 ```
 
-Key insight: Borrows are like library books - you can read them, but must return them.
+Key insight: Borrows are like library books - you can read them, but must return
+them.
 
 ```rust
 fn print_length(s: &String) {  // borrows s
@@ -60,6 +62,7 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 ### From "Everything is a Reference" (Java/C#)
 
 Java mental model:
+
 ```java
 // Everything is implicitly a reference
 User user = new User("Alice");  // user is a reference
@@ -69,6 +72,7 @@ user.setName("Bob");  // affects the list too!
 ```
 
 Rust mental model:
+
 ```rust
 // Values are owned, sharing is explicit
 let user = User::new("Alice");  // user is owned
@@ -85,6 +89,7 @@ let user2 = Rc::clone(&user);  // explicit shared ownership
 ### From "Manual Memory Management" (C/C++)
 
 C mental model:
+
 ```c
 char* s = malloc(100);
 // ... must remember to free(s) ...
@@ -94,6 +99,7 @@ free(s);
 ```
 
 Rust mental model:
+
 ```rust
 let s = String::with_capacity(100);
 // ... use s ...
@@ -104,6 +110,7 @@ let s = String::with_capacity(100);
 ### From "Garbage Collection" (Go/Python)
 
 GC mental model:
+
 ```python
 # Create objects, GC will figure it out
 users = []
@@ -113,6 +120,7 @@ for name in names:
 ```
 
 Rust mental model:
+
 ```rust
 let users: Vec<User> = names
     .iter()
@@ -180,7 +188,8 @@ for key in keys {
 }
 ```
 
-But ask: "Is there a better design?" Often, restructuring is better than cloning.
+But ask: "Is there a better design?" Often, restructuring is better than
+cloning.
 
 ### The "Make It Own" Pattern
 
@@ -281,6 +290,7 @@ fn process(data: ???) -> ???
 5. **The compiler is your friend** - work with it, not against it
 
 When stuck:
+
 - Clone to make progress
 - Restructure to own instead of borrow
 - Ask: "What is the compiler trying to tell me?"

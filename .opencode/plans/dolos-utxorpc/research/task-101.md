@@ -1,6 +1,26 @@
 # task-101 research
 
-- server-readiness coverage finding: the most regression-sensitive non-live server startup blockers are not in `konduit-server/src/cardano/args.rs` but in `konduit-server/src/admin/service.rs`, where `Service::new(...)` fails if live protocol parameters cannot be loaded or the configured reference script UTxO cannot be resolved; a narrow in-test fake `CardanoConnector` is sufficient to cover those paths without adding production abstractions
-- CLI env-consumer finding: lower-level `ConnectorEnv` tests are not enough by themselves because `env/admin.rs`, `env/adaptor.rs`, and `env/consumer.rs` consume `connector.network_id()?` for default wallet and host-address derivation; one representative higher-level env test is enough to lock down that UTxO RPC keeps explicit-network behavior and does not inherit Blockfrost-only defaults
-- Blockfrost validation finding: extracting a tiny `validated_blockfrost_project_id` helper in `konduit-cli/src/connector.rs` is the smallest truthful seam for runnable-config validation coverage; it keeps the shared inference and mismatch checks in one place without introducing a fake connector layer
-- verification finding: `cargo test -p konduit-server --lib` and `cargo clippy -p konduit-server --lib -- -D warnings` are currently the narrowest truthful verification for this task because building the `konduit-server` binary target still hits a pre-existing `Send` failure at `src/main.rs:63` when `tokio::spawn` captures the current UTxO RPC-backed admin sync future; this blocker predates task-101's test-only changes and should be addressed separately from this task
+- server-readiness coverage finding: the most regression-sensitive non-live
+  server startup blockers are not in `konduit-server/src/cardano/args.rs` but in
+  `konduit-server/src/admin/service.rs`, where `Service::new(...)` fails if live
+  protocol parameters cannot be loaded or the configured reference script UTxO
+  cannot be resolved; a narrow in-test fake `CardanoConnector` is sufficient to
+  cover those paths without adding production abstractions
+- CLI env-consumer finding: lower-level `ConnectorEnv` tests are not enough by
+  themselves because `env/admin.rs`, `env/adaptor.rs`, and `env/consumer.rs`
+  consume `connector.network_id()?` for default wallet and host-address
+  derivation; one representative higher-level env test is enough to lock down
+  that UTxO RPC keeps explicit-network behavior and does not inherit
+  Blockfrost-only defaults
+- Blockfrost validation finding: extracting a tiny
+  `validated_blockfrost_project_id` helper in `konduit-cli/src/connector.rs` is
+  the smallest truthful seam for runnable-config validation coverage; it keeps
+  the shared inference and mismatch checks in one place without introducing a
+  fake connector layer
+- verification finding: `cargo test -p konduit-server --lib` and
+  `cargo clippy -p konduit-server --lib -- -D warnings` are currently the
+  narrowest truthful verification for this task because building the
+  `konduit-server` binary target still hits a pre-existing `Send` failure at
+  `src/main.rs:63` when `tokio::spawn` captures the current UTxO RPC-backed
+  admin sync future; this blocker predates task-101's test-only changes and
+  should be addressed separately from this task

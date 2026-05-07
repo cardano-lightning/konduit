@@ -5,6 +5,7 @@ A reference of frequently encountered unsafe bugs and how to fix them.
 ## Pitfall 1: Dangling Pointer from Local
 
 **Bug:**
+
 ```rust
 fn bad() -> *const i32 {
     let x = 42;
@@ -13,6 +14,7 @@ fn bad() -> *const i32 {
 ```
 
 **Fix:**
+
 ```rust
 fn good() -> Box<i32> {
     Box::new(42)  // Heap allocation lives beyond function
@@ -27,6 +29,7 @@ fn better() -> i32 {
 ## Pitfall 2: CString Lifetime
 
 **Bug:**
+
 ```rust
 fn bad() -> *const c_char {
     let s = CString::new("hello").unwrap();
@@ -35,6 +38,7 @@ fn bad() -> *const c_char {
 ```
 
 **Fix:**
+
 ```rust
 fn good(s: &CString) -> *const c_char {
     s.as_ptr()  // Caller keeps CString alive
@@ -49,6 +53,7 @@ fn also_good(s: CString) -> *const c_char {
 ## Pitfall 3: Vec set_len with Uninitialized Data
 
 **Bug:**
+
 ```rust
 fn bad() -> Vec<String> {
     let mut v = Vec::with_capacity(10);
@@ -58,6 +63,7 @@ fn bad() -> Vec<String> {
 ```
 
 **Fix:**
+
 ```rust
 fn good() -> Vec<String> {
     let mut v = Vec::with_capacity(10);
@@ -78,6 +84,7 @@ fn also_good() -> Vec<String> {
 ## Pitfall 4: Reference to Packed Field
 
 **Bug:**
+
 ```rust
 #[repr(packed)]
 struct Packed { a: u8, b: u32 }
@@ -88,6 +95,7 @@ fn bad(p: &Packed) -> &u32 {
 ```
 
 **Fix:**
+
 ```rust
 fn good(p: &Packed) -> u32 {
     unsafe { std::ptr::addr_of!(p.b).read_unaligned() }
@@ -97,6 +105,7 @@ fn good(p: &Packed) -> u32 {
 ## Pitfall 5: Mutable Aliasing Through Raw Pointers
 
 **Bug:**
+
 ```rust
 fn bad() {
     let mut x = 42;
@@ -110,6 +119,7 @@ fn bad() {
 ```
 
 **Fix:**
+
 ```rust
 fn good() {
     let mut x = 42;
@@ -124,6 +134,7 @@ fn good() {
 ## Pitfall 6: Transmute to Wrong Size
 
 **Bug:**
+
 ```rust
 fn bad() {
     let x: u32 = 42;
@@ -132,6 +143,7 @@ fn bad() {
 ```
 
 **Fix:**
+
 ```rust
 fn good() {
     let x: u32 = 42;
@@ -142,6 +154,7 @@ fn good() {
 ## Pitfall 7: Invalid Enum Discriminant
 
 **Bug:**
+
 ```rust
 #[repr(u8)]
 enum Status { A = 0, B = 1, C = 2 }
@@ -152,6 +165,7 @@ fn bad(raw: u8) -> Status {
 ```
 
 **Fix:**
+
 ```rust
 fn good(raw: u8) -> Option<Status> {
     match raw {
@@ -166,6 +180,7 @@ fn good(raw: u8) -> Option<Status> {
 ## Pitfall 8: FFI Panic Unwinding
 
 **Bug:**
+
 ```rust
 #[no_mangle]
 extern "C" fn callback(x: i32) -> i32 {
@@ -177,6 +192,7 @@ extern "C" fn callback(x: i32) -> i32 {
 ```
 
 **Fix:**
+
 ```rust
 #[no_mangle]
 extern "C" fn callback(x: i32) -> i32 {
@@ -192,6 +208,7 @@ extern "C" fn callback(x: i32) -> i32 {
 ## Pitfall 9: Double Free from Clone + into_raw
 
 **Bug:**
+
 ```rust
 struct Handle(*mut c_void);
 
@@ -209,6 +226,7 @@ impl Drop for Handle {
 ```
 
 **Fix:**
+
 ```rust
 struct Handle(*mut c_void);
 
@@ -223,6 +241,7 @@ impl Handle {
 ## Pitfall 10: Forget Doesn't Run Destructors
 
 **Bug:**
+
 ```rust
 fn bad() {
     let guard = lock.lock();
@@ -231,6 +250,7 @@ fn bad() {
 ```
 
 **Fix:**
+
 ```rust
 fn good() {
     let guard = lock.lock();
@@ -241,13 +261,13 @@ fn good() {
 
 ## Quick Reference Table
 
-| Pitfall | Detection | Fix |
-|---------|-----------|-----|
-| Dangling pointer | Miri | Extend lifetime or heap allocate |
-| Uninitialized read | Miri | Use MaybeUninit properly |
-| Misaligned access | Miri, UBsan | read_unaligned, copy by value |
-| Data race | TSan | Use atomics or mutex |
-| Double free | ASan | Track ownership carefully |
-| Invalid enum | Manual review | Use TryFrom |
-| FFI panic | Testing | catch_unwind |
-| Type confusion | Miri | Match types exactly |
+| Pitfall            | Detection     | Fix                              |
+| ------------------ | ------------- | -------------------------------- |
+| Dangling pointer   | Miri          | Extend lifetime or heap allocate |
+| Uninitialized read | Miri          | Use MaybeUninit properly         |
+| Misaligned access  | Miri, UBsan   | read_unaligned, copy by value    |
+| Data race          | TSan          | Use atomics or mutex             |
+| Double free        | ASan          | Track ownership carefully        |
+| Invalid enum       | Manual review | Use TryFrom                      |
+| FFI panic          | Testing       | catch_unwind                     |
+| Type confusion     | Miri          | Match types exactly              |

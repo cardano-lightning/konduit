@@ -1,6 +1,9 @@
 ---
 name: rust-deps-visualizer
-description: "Visualize Rust project dependencies as ASCII art. Triggers on: /deps-viz, dependency graph, show dependencies, visualize deps, 依赖图, 依赖可视化, 显示依赖"
+description:
+  "Visualize Rust project dependencies as ASCII art. Triggers on: /deps-viz,
+  dependency graph, show dependencies, visualize deps, 依赖图, 依赖可视化,
+  显示依赖"
 argument-hint: "[--depth N] [--features]"
 allowed-tools: ["Bash", "Read", "Glob"]
 ---
@@ -16,6 +19,7 @@ Generate ASCII art visualizations of your Rust project's dependency tree.
 ```
 
 **Options:**
+
 - `--depth N`: Limit tree depth (default: 3)
 - `--features`: Show feature flags
 
@@ -62,6 +66,7 @@ cargo tree --depth=${DEPTH:-3} ${FEATURES:+--features} 2>/dev/null
 **Step 3:** Format as ASCII art tree
 
 Use these box-drawing characters:
+
 - `├──` for middle items
 - `└──` for last items
 - `│   ` for continuation lines
@@ -107,8 +112,8 @@ my-project v0.1.0
 
 ## Related Skills
 
-| When | See |
-|------|-----|
+| When                   | See           |
+| ---------------------- | ------------- |
 | Crate selection advice | m11-ecosystem |
-| Workspace management | m11-ecosystem |
+| Workspace management   | m11-ecosystem |
 | Feature flag decisions | m11-ecosystem |

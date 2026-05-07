@@ -9,7 +9,8 @@ impact: HIGH
 
 ## Summary
 
-Trait objects (`dyn Trait`) have Rust-specific layout (fat pointers with vtable) that is not compatible with C.
+Trait objects (`dyn Trait`) have Rust-specific layout (fat pointers with vtable)
+that is not compatible with C.
 
 ## Rationale
 
@@ -145,12 +146,12 @@ The sizes don't match!
 
 ## Alternatives to Trait Objects
 
-| Instead of | Use |
-|------------|-----|
-| `dyn Trait` | Function pointer + user_data |
+| Instead of       | Use                              |
+| ---------------- | -------------------------------- |
+| `dyn Trait`      | Function pointer + user_data     |
 | `Box<dyn Trait>` | Boxed concrete type + trampoline |
-| `&dyn Trait` | C-compatible vtable struct |
-| `Arc<dyn Trait>` | Reference counting wrapper |
+| `&dyn Trait`     | C-compatible vtable struct       |
+| `Arc<dyn Trait>` | Reference counting wrapper       |
 
 ## Checklist
 

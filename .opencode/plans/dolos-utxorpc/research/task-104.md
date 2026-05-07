@@ -1,8 +1,29 @@
 # task-104 research
 
-- docs-truth finding: the final Rust-runtime docs need to describe backend asymmetry explicitly rather than claiming broad parity; the current direct Blockfrost path still differs from UTxO RPC in both protocol-parameter sourcing and `utxos_at(payment, None)` semantics
-- config-surface finding: the truthful backend-config surface is shared across server and CLI through `KONDUIT_CARDANO_BACKEND`, `KONDUIT_BLOCKFROST_PROJECT_ID`, `KONDUIT_UTXORPC_URI`, and `KONDUIT_NETWORK`, but Blockfrost still allows inferred or defaulted network behavior in CLI env/config paths while UTxO RPC requires explicit network
-- cli-validation finding: `konduit-cli` performs eager live reachability and network validation only for the UTxO RPC backend during connector construction for live tip and tx flows; the current direct Blockfrost path validates project-id presence and network-prefix consistency but otherwise fails later on API use
-- cli-local-dev finding: role-local `.env.<role>` loading plus `setup` output redirection are supported local-dev workflows, but `setup` prints sensitive filled config to stdout and should not be documented as production secret handling
-- live-compatibility finding: the final deployment-facing docs should name the observed Dolos compatibility prerequisite from `task-103`: Konduit startup and live-network validation for the UTxO RPC backend depend on Dolos successfully serving `read_genesis`
-- performance-watchpoint finding: the accepted UTxO RPC correctness fix for `utxos_at(payment, Some(delegation))` is payment-credential paging plus local delegation filtering, which should remain documented as a backend-specific watchpoint rather than being mistaken for guaranteed Dolos-side delegated indexing
+- docs-truth finding: the final Rust-runtime docs need to describe backend
+  asymmetry explicitly rather than claiming broad parity; the current direct
+  Blockfrost path still differs from UTxO RPC in both protocol-parameter
+  sourcing and `utxos_at(payment, None)` semantics
+- config-surface finding: the truthful backend-config surface is shared across
+  server and CLI through `KONDUIT_CARDANO_BACKEND`,
+  `KONDUIT_BLOCKFROST_PROJECT_ID`, `KONDUIT_UTXORPC_URI`, and `KONDUIT_NETWORK`,
+  but Blockfrost still allows inferred or defaulted network behavior in CLI
+  env/config paths while UTxO RPC requires explicit network
+- cli-validation finding: `konduit-cli` performs eager live reachability and
+  network validation only for the UTxO RPC backend during connector construction
+  for live tip and tx flows; the current direct Blockfrost path validates
+  project-id presence and network-prefix consistency but otherwise fails later
+  on API use
+- cli-local-dev finding: role-local `.env.<role>` loading plus `setup` output
+  redirection are supported local-dev workflows, but `setup` prints sensitive
+  filled config to stdout and should not be documented as production secret
+  handling
+- live-compatibility finding: the final deployment-facing docs should name the
+  observed Dolos compatibility prerequisite from `task-103`: Konduit startup and
+  live-network validation for the UTxO RPC backend depend on Dolos successfully
+  serving `read_genesis`
+- performance-watchpoint finding: the accepted UTxO RPC correctness fix for
+  `utxos_at(payment, Some(delegation))` is payment-credential paging plus local
+  delegation filtering, which should remain documented as a backend-specific
+  watchpoint rather than being mistaken for guaranteed Dolos-side delegated
+  indexing

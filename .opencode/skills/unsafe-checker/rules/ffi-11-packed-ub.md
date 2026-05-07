@@ -10,7 +10,9 @@ clippy: unaligned_references
 
 ## Summary
 
-Creating references to fields in `#[repr(packed)]` structs is undefined behavior if the field is misaligned. Use raw pointers and `read_unaligned`/`write_unaligned` instead.
+Creating references to fields in `#[repr(packed)]` structs is undefined behavior
+if the field is misaligned. Use raw pointers and
+`read_unaligned`/`write_unaligned` instead.
 
 ## Rationale
 

@@ -9,11 +9,14 @@ impact: CRITICAL
 
 ## Summary
 
-Do not write to one union field and read from another field that has a different lifetime or references data with a different lifetime.
+Do not write to one union field and read from another field that has a different
+lifetime or references data with a different lifetime.
 
 ## Rationale
 
-Union fields share the same memory. If one field stores a reference with lifetime `'a` and you read it as a reference with lifetime `'b`, you bypass lifetime checking and can create dangling references.
+Union fields share the same memory. If one field stores a reference with
+lifetime `'a` and you read it as a reference with lifetime `'b`, you bypass
+lifetime checking and can create dangling references.
 
 ## Bad Example
 
@@ -75,7 +78,8 @@ fn delayed_init<T>(init: impl FnOnce() -> T) -> T {
 
 ## Why This Is Dangerous
 
-The Rust lifetime system prevents use-after-free by tracking how long references are valid. Unions can subvert this:
+The Rust lifetime system prevents use-after-free by tracking how long references
+are valid. Unions can subvert this:
 
 ```
 Memory: [pointer to "hello"]

@@ -10,11 +10,14 @@ clippy: mut_from_ref
 
 ## Summary
 
-A function taking `&self` or `&T` must not return `&mut T` to the same data without interior mutability.
+A function taking `&self` or `&T` must not return `&mut T` to the same data
+without interior mutability.
 
 ## Rationale
 
-Returning `&mut` from `&` violates Rust's aliasing rules. The caller has an immutable borrow, so they can create additional `&` references. Returning `&mut` creates mutable aliasing, which is undefined behavior.
+Returning `&mut` from `&` violates Rust's aliasing rules. The caller has an
+immutable borrow, so they can create additional `&` references. Returning `&mut`
+creates mutable aliasing, which is undefined behavior.
 
 ## Bad Example
 

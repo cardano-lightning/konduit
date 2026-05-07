@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-transactions
-description: "Transaction guidance: build, sign, submit patterns. Provides templates (no execution). Use operator skill to execute."
+description:
+  "Transaction guidance: build, sign, submit patterns. Provides templates (no
+  execution). Use operator skill to execute."
 allowed-tools:
   - Read
 user-invocable: true
@@ -10,14 +12,17 @@ context:
 
 # cardano-cli-transactions
 
-> **This is a guidance skill.** Provides templates and explanations. For execution, use `cardano-cli-transactions-operator`.
+> **This is a guidance skill.** Provides templates and explanations. For
+> execution, use `cardano-cli-transactions-operator`.
 
 ## When to use
+
 - Learning transaction building patterns
 - Understanding UTxO selection and change
 - Getting command templates for various tx types
 
 ## Operating rules (must follow)
+
 - Confirm network (mainnet/preprod/preview) before providing commands
 - Never execute—only provide templates
 - Always include fee handling and change
@@ -26,6 +31,7 @@ context:
 ## Workflow templates
 
 ### Simple ADA transfer
+
 ```bash
 # 1. Query sender UTxOs
 cardano-cli conway query utxo \
@@ -62,6 +68,7 @@ cardano-cli conway transaction txid --tx-file tx.signed
 ```
 
 ### Multi-output transaction
+
 ```bash
 cardano-cli conway transaction build \
   --testnet-magic 1 \
@@ -74,6 +81,7 @@ cardano-cli conway transaction build \
 ```
 
 ### With native tokens
+
 ```bash
 cardano-cli conway transaction build \
   --testnet-magic 1 \
@@ -84,6 +92,7 @@ cardano-cli conway transaction build \
 ```
 
 ### With metadata
+
 ```bash
 cardano-cli conway transaction build \
   --testnet-magic 1 \
@@ -97,9 +106,11 @@ cardano-cli conway transaction build \
 ## Examples
 
 ### Example: Send 10 ADA on preprod
+
 **User request:** "Send 10 ADA to addr_test1qz..."
 
 **Response:**
+
 ```bash
 # === Send 10 ADA on Preprod ===
 
@@ -133,6 +144,7 @@ cardano-cli conway transaction sign \
 ```
 
 ## Tx bundle folder structure
+
 ```
 tx-20240115-143022/
 ├── pparams.json       # Protocol parameters used
@@ -143,11 +155,13 @@ tx-20240115-143022/
 ```
 
 ## Safety / key handling
+
 - Never expose signing keys
 - Verify recipient address carefully
 - On mainnet: small test transfer first
 - Keep tx bundle for audit trail
 
 ## References
+
 - `shared/PRINCIPLES.md`
 - `cardano-cli-transactions-operator` (for execution)

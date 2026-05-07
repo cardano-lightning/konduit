@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-staking-operator
-description: "Execute staking operations: registration, delegation, rewards withdrawal. Manual invoke only."
+description:
+  "Execute staking operations: registration, delegation, rewards withdrawal.
+  Manual invoke only."
 allowed-tools:
   - Bash(cardano-cli:*)
   - Bash(cat:*)
@@ -14,19 +16,23 @@ context:
 
 # cardano-cli-staking-operator
 
-> **OPERATOR SKILL**: Executes staking operations that modify on-chain state. Requires explicit human invocation.
+> **OPERATOR SKILL**: Executes staking operations that modify on-chain state.
+> Requires explicit human invocation.
 
 ## When to use
+
 - When ready to register stake key, delegate, or withdraw rewards
 - After reviewing guidance from `cardano-cli-staking`
 
 ## Operating rules (must follow)
+
 - Confirm network and pool ID before delegation
 - Verify stake key registration status before operations
 - **REQUIRE explicit confirmation before any certificate submission**
 - Show deposit/fee costs before proceeding
 
 ## Pre-flight checklist
+
 ```
 [ ] Network: ___________
 [ ] Stake key files exist and are correct
@@ -38,6 +44,7 @@ context:
 ## Execution workflow
 
 ### Check stake status first
+
 ```bash
 cardano-cli conway query stake-address-info \
   --testnet-magic 1 \
@@ -45,6 +52,7 @@ cardano-cli conway query stake-address-info \
 ```
 
 ### Register stake key (if not registered)
+
 ```bash
 # Create registration certificate
 cardano-cli conway stake-address registration-certificate \
@@ -74,6 +82,7 @@ cardano-cli conway transaction submit \
 ```
 
 ### Delegate to pool
+
 ```bash
 # Create delegation certificate
 cardano-cli conway stake-address stake-delegation-certificate \
@@ -86,6 +95,7 @@ cardano-cli conway stake-address stake-delegation-certificate \
 ```
 
 ### Withdraw rewards
+
 ```bash
 # Check rewards balance first
 cardano-cli conway query stake-address-info \
@@ -104,11 +114,13 @@ cardano-cli conway transaction build \
 ```
 
 ## Safety / key handling
+
 - Verify pool ID from multiple sources before delegating
 - Double-check reward withdrawal amounts
 - Keep certificates for records
 - Registration deposit is refundable on de-registration
 
 ## References
+
 - `cardano-cli-staking` (guidance skill)
 - `shared/PRINCIPLES.md`

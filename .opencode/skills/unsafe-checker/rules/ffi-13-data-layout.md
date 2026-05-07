@@ -9,7 +9,8 @@ impact: HIGH
 
 ## Summary
 
-Types shared between Rust and C must have `#[repr(C)]` to ensure the memory layout matches what C expects.
+Types shared between Rust and C must have `#[repr(C)]` to ensure the memory
+layout matches what C expects.
 
 ## Rationale
 
@@ -125,13 +126,13 @@ fn verify_layout() {
 
 ## repr Options
 
-| Attribute | Effect |
-|-----------|--------|
-| `#[repr(C)]` | C-compatible layout |
-| `#[repr(C, packed)]` | C layout, no padding |
-| `#[repr(C, align(N))]` | C layout, minimum align N |
+| Attribute              | Effect                      |
+| ---------------------- | --------------------------- |
+| `#[repr(C)]`           | C-compatible layout         |
+| `#[repr(C, packed)]`   | C layout, no padding        |
+| `#[repr(C, align(N))]` | C layout, minimum align N   |
 | `#[repr(transparent)]` | Same layout as single field |
-| `#[repr(u8)]` etc. | Enum discriminant type |
+| `#[repr(u8)]` etc.     | Enum discriminant type      |
 
 ## Checklist
 

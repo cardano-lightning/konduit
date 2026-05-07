@@ -1,6 +1,8 @@
 ---
 name: cardano-cli-transactions-operator
-description: "Execute transaction builds and submits. Manual invoke only—requires explicit confirmation before submit."
+description:
+  "Execute transaction builds and submits. Manual invoke only—requires explicit
+  confirmation before submit."
 allowed-tools:
   - Bash(cardano-cli:*)
   - Bash(mkdir:*)
@@ -16,13 +18,16 @@ context:
 
 # cardano-cli-transactions-operator
 
-> **OPERATOR SKILL**: This skill executes commands including transaction submission. Requires explicit human invocation.
+> **OPERATOR SKILL**: This skill executes commands including transaction
+> submission. Requires explicit human invocation.
 
 ## When to use
+
 - When ready to build and submit a transaction
 - After reviewing guidance from `cardano-cli-transactions`
 
 ## Operating rules (must follow)
+
 - Confirm network before ANY operation
 - Show full transaction details before signing
 - **REQUIRE explicit "yes" confirmation before submit**
@@ -30,6 +35,7 @@ context:
 - Verify UTxO changes after submit
 
 ## Pre-flight checklist
+
 ```
 [ ] Network confirmed: ___________
 [ ] Sender address verified
@@ -42,12 +48,14 @@ context:
 ## Execution workflow
 
 ### Step 1: Setup tx bundle
+
 ```bash
 TX_DIR="tx-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$TX_DIR" && cd "$TX_DIR"
 ```
 
 ### Step 2: Query UTxOs
+
 ```bash
 cardano-cli conway query utxo \
   --address <sender-addr> \
@@ -56,6 +64,7 @@ cardano-cli conway query utxo \
 ```
 
 ### Step 3: Fetch protocol parameters
+
 ```bash
 cardano-cli conway query protocol-parameters \
   --testnet-magic 1 \
@@ -63,6 +72,7 @@ cardano-cli conway query protocol-parameters \
 ```
 
 ### Step 4: Build transaction
+
 ```bash
 cardano-cli conway transaction build \
   --testnet-magic 1 \
@@ -73,6 +83,7 @@ cardano-cli conway transaction build \
 ```
 
 ### Step 5: Sign (show what's being signed)
+
 ```bash
 echo "=== SIGNING TRANSACTION ==="
 echo "Inputs: <utxo>"
@@ -87,6 +98,7 @@ cardano-cli conway transaction sign \
 ```
 
 ### Step 6: Submit (REQUIRES CONFIRMATION)
+
 ```
 ⚠️  CONFIRM SUBMISSION ⚠️
 Network: preprod
@@ -103,6 +115,7 @@ cardano-cli conway transaction submit \
 ```
 
 ### Step 7: Verify
+
 ```bash
 # Get tx hash
 cardano-cli conway transaction txid --tx-file tx.signed
@@ -114,11 +127,13 @@ cardano-cli conway query utxo \
 ```
 
 ## Safety / key handling
+
 - Never submit without explicit user confirmation
 - For mainnet: require double confirmation
 - Keep tx bundle for audit trail
 - Recommend small test tx first on mainnet
 
 ## References
+
 - `cardano-cli-transactions` (guidance skill)
 - `shared/PRINCIPLES.md`

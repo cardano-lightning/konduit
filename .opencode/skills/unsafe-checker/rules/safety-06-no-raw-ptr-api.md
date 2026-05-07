@@ -9,11 +9,13 @@ impact: HIGH
 
 ## Summary
 
-Public APIs should use safe abstractions (references, slices, smart pointers) instead of exposing raw pointers.
+Public APIs should use safe abstractions (references, slices, smart pointers)
+instead of exposing raw pointers.
 
 ## Rationale
 
-Raw pointers bypass Rust's safety guarantees. Exposing them in public APIs forces users into unsafe code and makes it easy to create undefined behavior.
+Raw pointers bypass Rust's safety guarantees. Exposing them in public APIs
+forces users into unsafe code and makes it easy to create undefined behavior.
 
 ## Bad Example
 

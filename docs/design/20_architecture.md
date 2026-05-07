@@ -29,8 +29,8 @@ Software System >> Containers >> Compontents >> Code
 
 ## Production Adaptor Deployment for self-hosting
 
-The target production deployment is a single Ubuntu host running local
-Bitcoin, Lightning, and Cardano services under `systemd`.
+The target production deployment is a single Ubuntu host running local Bitcoin,
+Lightning, and Cardano services under `systemd`.
 
 ```mermaid
 flowchart LR

@@ -10,11 +10,13 @@ clippy: panic_in_result_fn
 
 ## Summary
 
-Panics in unsafe code can leave data structures in an inconsistent state, leading to undefined behavior when the panic is caught.
+Panics in unsafe code can leave data structures in an inconsistent state,
+leading to undefined behavior when the panic is caught.
 
 ## Rationale
 
-When a panic occurs, Rust unwinds the stack and runs destructors. If unsafe code has partially modified data, the destructors may observe invalid state.
+When a panic occurs, Rust unwinds the stack and runs destructors. If unsafe code
+has partially modified data, the destructors may observe invalid state.
 
 ## Bad Example
 
@@ -99,7 +101,8 @@ impl<T> Drop for PanicGuard<'_, T> {
 
 1. **Update bookkeeping after operations**: Increment length only after writing
 2. **Use panic guards**: RAII types that clean up on panic
-3. **Order operations carefully**: Ensure invariants hold if panic occurs at any point
+3. **Order operations carefully**: Ensure invariants hold if panic occurs at any
+   point
 
 ## Checklist
 

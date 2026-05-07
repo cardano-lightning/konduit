@@ -9,11 +9,13 @@ impact: CRITICAL
 
 ## Summary
 
-Raw pointers (`*const T`, `*mut T`) are not `Send` or `Sync` by default. Do not share them across threads without ensuring proper synchronization.
+Raw pointers (`*const T`, `*mut T`) are not `Send` or `Sync` by default. Do not
+share them across threads without ensuring proper synchronization.
 
 ## Rationale
 
-Raw pointers have no synchronization guarantees. Sharing them across threads can lead to data races, which are undefined behavior.
+Raw pointers have no synchronization guarantees. Sharing them across threads can
+lead to data races, which are undefined behavior.
 
 ## Bad Example
 
@@ -96,6 +98,7 @@ fn good_exclusive() {
 ## When Raw Pointers Across Threads Are Valid
 
 Only with proper synchronization:
+
 - Through `AtomicPtr` with appropriate memory orderings
 - Protected by a `Mutex` (don't share the pointer, share the Mutex)
 - Using lock-free algorithms with careful memory ordering

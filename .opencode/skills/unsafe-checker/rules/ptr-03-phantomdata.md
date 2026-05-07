@@ -9,11 +9,14 @@ impact: HIGH
 
 ## Summary
 
-When a struct contains raw pointers but logically owns or borrows the pointed-to data, use `PhantomData<T>` to tell the compiler about the relationship.
+When a struct contains raw pointers but logically owns or borrows the pointed-to
+data, use `PhantomData<T>` to tell the compiler about the relationship.
 
 ## Rationale
 
-Raw pointers don't carry ownership or lifetime information. `PhantomData` lets you:
+Raw pointers don't carry ownership or lifetime information. `PhantomData` lets
+you:
+
 - Indicate ownership (for `Drop` check)
 - Control variance (covariant, contravariant, invariant)
 - Participate in lifetime elision
@@ -79,15 +82,15 @@ impl<'a, T> Iterator for Iter<'a, T> {
 
 ## PhantomData Patterns
 
-| Phantom Type | Meaning | Variance |
-|--------------|---------|----------|
-| `PhantomData<T>` | Owns T | Covariant |
-| `PhantomData<&'a T>` | Borrows T for 'a | Covariant in T, covariant in 'a |
+| Phantom Type             | Meaning           | Variance                        |
+| ------------------------ | ----------------- | ------------------------------- |
+| `PhantomData<T>`         | Owns T            | Covariant                       |
+| `PhantomData<&'a T>`     | Borrows T for 'a  | Covariant in T, covariant in 'a |
 | `PhantomData<&'a mut T>` | Mutably borrows T | Invariant in T, covariant in 'a |
-| `PhantomData<*const T>` | Just has pointer | Covariant |
-| `PhantomData<*mut T>` | Just has pointer | Invariant |
-| `PhantomData<fn(T)>` | Consumes T | Contravariant |
-| `PhantomData<fn() -> T>` | Produces T | Covariant |
+| `PhantomData<*const T>`  | Just has pointer  | Covariant                       |
+| `PhantomData<*mut T>`    | Just has pointer  | Invariant                       |
+| `PhantomData<fn(T)>`     | Consumes T        | Contravariant                   |
+| `PhantomData<fn() -> T>` | Produces T        | Covariant                       |
 
 ## Drop Check
 
@@ -121,5 +124,5 @@ impl<T> Drop for MyVec<T> {
 
 ## Related Rules
 
-- `ptr-02`: Prefer NonNull over *mut T
+- `ptr-02`: Prefer NonNull over \*mut T
 - `safety-05`: Send/Sync implementation safety

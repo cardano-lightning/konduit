@@ -2,8 +2,8 @@
 title: "Cardano Connector"
 ---
 
-Cardano Connector (CaCo) is the boundary between Cardano L1 data and the rest
-of Konduit.
+Cardano Connector (CaCo) is the boundary between Cardano L1 data and the rest of
+Konduit.
 
 The key design point is that Konduit business logic should depend on a compact,
 well-defined connector contract rather than on a specific Cardano provider such
@@ -52,8 +52,8 @@ The target state for the next specific implementation effort is:
   already supports.
 - the selected production backend is `dolos` over `UTxO RPC`.
 - `dolos` runs locally and syncs from either the operator's same-host
-  `cardano-node` or an external relay, with same-host upstream preferred for
-  the primary deployment profile.
+  `cardano-node` or an external relay, with same-host upstream preferred for the
+  primary deployment profile.
 - backend traffic remains localhost-only.
 
 # Connector contract
@@ -83,8 +83,8 @@ Connector semantics for this effort:
 
 Current implementation note:
 
-- `cardano-connector-utxorpc` satisfies the intended semantics by paging UTxOs by
-  payment credential and applying delegation filtering locally when
+- `cardano-connector-utxorpc` satisfies the intended semantics by paging UTxOs
+  by payment credential and applying delegation filtering locally when
   `delegation` is present.
 - the still-supported direct Blockfrost path does not currently have the same
   `utxos_at(payment, None)` behavior because it queries one constructed address.
@@ -141,8 +141,8 @@ because it lets Konduit integrate with a local Cardano service using a typed
 interface that is not tied to one vendor's HTTP surface.
 
 This should not be read as excluding other connector implementations. The
-project-level direction remains support for multiple Cardano backends selected by
-configuration and deployment needs.
+project-level direction remains support for multiple Cardano backends selected
+by configuration and deployment needs.
 
 This fits the adaptor service model well:
 
@@ -152,8 +152,8 @@ This fits the adaptor service model well:
 
 # Data requirements
 
-The connector must provide enough information to map into existing
-`cardano-sdk` types used by Konduit. In practice this means careful handling of:
+The connector must provide enough information to map into existing `cardano-sdk`
+types used by Konduit. In practice this means careful handling of:
 
 - addresses and credentials
 - lovelace and multi-asset values

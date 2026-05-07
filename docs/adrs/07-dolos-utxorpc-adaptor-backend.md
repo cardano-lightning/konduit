@@ -40,8 +40,8 @@ For the target deployment discussed here, the operator already runs:
 - `bitcoind` on the same Ubuntu 24.04 host.
 - `lnd` on the same host, managed by `systemd`.
 - `cardano-node` on the same host, managed independently.
-- `Ogmios` and `Kupo` for other workloads, but they are not part of this
-  project scope.
+- `Ogmios` and `Kupo` for other workloads, but they are not part of this project
+  scope.
 
 The desired runtime shape is:
 
@@ -66,8 +66,8 @@ More precisely:
 
 1. `konduit-server` will gain a Cardano backend selection that can target a new
    UTxO RPC connector implementation.
-2. `konduit-cli` will gain the same backend selection model for the Rust
-   runtime flows that currently use the direct Blockfrost connector.
+2. `konduit-cli` will gain the same backend selection model for the Rust runtime
+   flows that currently use the direct Blockfrost connector.
 3. The new connector will communicate with a local `dolos` instance over
    localhost gRPC.
 4. `dolos` will be deployed beside the existing `cardano-node`, using the local
@@ -81,8 +81,8 @@ More precisely:
    address shares the given payment credential, regardless of delegation.
 8. `konduit-server` will continue to communicate with the local `lnd` over
    localhost, using a dedicated least-privilege macaroon.
-9. Only `konduit-server` will be exposed publicly, via `nginx`; `dolos`,
-   `lnd`, and admin interfaces remain localhost-only.
+9. Only `konduit-server` will be exposed publicly, via `nginx`; `dolos`, `lnd`,
+   and admin interfaces remain localhost-only.
 
 ## Dissent, Counterarguments, and Comments
 

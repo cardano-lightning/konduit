@@ -9,7 +9,8 @@ impact: MEDIUM
 
 ## Summary
 
-Instead of using `*mut c_void` for opaque C handles, create dedicated marker types that provide type safety.
+Instead of using `*mut c_void` for opaque C handles, create dedicated marker
+types that provide type safety.
 
 ## Rationale
 

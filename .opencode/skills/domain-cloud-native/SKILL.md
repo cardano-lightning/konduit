@@ -1,6 +1,9 @@
 ---
 name: domain-cloud-native
-description: "Use when building cloud-native apps. Keywords: kubernetes, k8s, docker, container, grpc, tonic, microservice, service mesh, observability, tracing, metrics, health check, cloud, deployment, 云原生, 微服务, 容器"
+description:
+  "Use when building cloud-native apps. Keywords: kubernetes, k8s, docker,
+  container, grpc, tonic, microservice, service mesh, observability, tracing,
+  metrics, health check, cloud, deployment, 云原生, 微服务, 容器"
 user-invocable: false
 ---
 
@@ -10,14 +13,14 @@ user-invocable: false
 
 ## Domain Constraints → Design Implications
 
-| Domain Rule | Design Constraint | Rust Implication |
-|-------------|-------------------|------------------|
-| 12-Factor | Config from env | Environment-based config |
-| Observability | Metrics + traces | tracing + opentelemetry |
-| Health checks | Liveness/readiness | Dedicated endpoints |
-| Graceful shutdown | Clean termination | Signal handling |
-| Horizontal scale | Stateless design | No local state |
-| Container-friendly | Small binaries | Release optimization |
+| Domain Rule        | Design Constraint  | Rust Implication         |
+| ------------------ | ------------------ | ------------------------ |
+| 12-Factor          | Config from env    | Environment-based config |
+| Observability      | Metrics + traces   | tracing + opentelemetry  |
+| Health checks      | Liveness/readiness | Dedicated endpoints      |
+| Graceful shutdown  | Clean termination  | Signal handling          |
+| Horizontal scale   | Stateless design   | No local state           |
+| Container-friendly | Small binaries     | Release optimization     |
 
 ---
 
@@ -71,25 +74,25 @@ From constraints to design (Layer 2):
 
 ## Key Crates
 
-| Purpose | Crate |
-|---------|-------|
-| gRPC | tonic |
-| Kubernetes | kube, kube-runtime |
-| Docker | bollard |
-| Tracing | tracing, opentelemetry |
-| Metrics | prometheus, metrics |
-| Config | config, figment |
-| Health | HTTP endpoints |
+| Purpose    | Crate                  |
+| ---------- | ---------------------- |
+| gRPC       | tonic                  |
+| Kubernetes | kube, kube-runtime     |
+| Docker     | bollard                |
+| Tracing    | tracing, opentelemetry |
+| Metrics    | prometheus, metrics    |
+| Config     | config, figment        |
+| Health     | HTTP endpoints         |
 
 ## Design Patterns
 
-| Pattern | Purpose | Implementation |
-|---------|---------|----------------|
-| gRPC services | Service mesh | tonic + tower |
+| Pattern       | Purpose          | Implementation          |
+| ------------- | ---------------- | ----------------------- |
+| gRPC services | Service mesh     | tonic + tower           |
 | K8s operators | Custom resources | kube-runtime Controller |
-| Observability | Debugging | tracing + OTEL |
-| Health checks | Orchestration | `/health`, `/ready` |
-| Config | 12-factor | Env vars + secrets |
+| Observability | Debugging        | tracing + OTEL          |
+| Health checks | Orchestration    | `/health`, `/ready`     |
+| Config        | 12-factor        | Env vars + secrets      |
 
 ## Code Pattern: Graceful Shutdown
 
@@ -136,31 +139,31 @@ async fn ready(State(db): State<Arc<DbPool>>) -> StatusCode {
 
 ## Common Mistakes
 
-| Mistake | Domain Violation | Fix |
-|---------|-----------------|-----|
-| Local file state | Not stateless | External storage |
-| No SIGTERM handling | Hard kills | Graceful shutdown |
-| No tracing | Can't debug | tracing spans |
-| Static config | Not 12-factor | Env vars |
+| Mistake             | Domain Violation | Fix               |
+| ------------------- | ---------------- | ----------------- |
+| Local file state    | Not stateless    | External storage  |
+| No SIGTERM handling | Hard kills       | Graceful shutdown |
+| No tracing          | Can't debug      | tracing spans     |
+| Static config       | Not 12-factor    | Env vars          |
 
 ---
 
 ## Trace to Layer 1
 
-| Constraint | Layer 2 Pattern | Layer 1 Implementation |
-|------------|-----------------|------------------------|
-| Stateless | External state | Arc<Client> for external |
-| Graceful shutdown | Signal handling | tokio::signal |
-| Tracing | Span lifecycle | tracing + OTEL |
-| Health checks | HTTP endpoints | Dedicated routes |
+| Constraint        | Layer 2 Pattern | Layer 1 Implementation   |
+| ----------------- | --------------- | ------------------------ |
+| Stateless         | External state  | Arc<Client> for external |
+| Graceful shutdown | Signal handling | tokio::signal            |
+| Tracing           | Span lifecycle  | tracing + OTEL           |
+| Health checks     | HTTP endpoints  | Dedicated routes         |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Async patterns | m07-concurrency |
-| HTTP endpoints | domain-web |
-| Error handling | m13-domain-error |
-| Resource lifecycle | m12-lifecycle |
+| When               | See              |
+| ------------------ | ---------------- |
+| Async patterns     | m07-concurrency  |
+| HTTP endpoints     | domain-web       |
+| Error handling     | m13-domain-error |
+| Resource lifecycle | m12-lifecycle    |

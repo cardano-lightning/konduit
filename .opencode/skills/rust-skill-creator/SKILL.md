@@ -1,6 +1,11 @@
 ---
 name: rust-skill-creator
-description: "Use when creating skills for Rust crates or std library documentation. Keywords: create rust skill, create crate skill, create std skill, 创建 rust skill, 创建 crate skill, 创建 std skill, 动态 rust skill, 动态 crate skill, skill for tokio, skill for serde, skill for axum, generate rust skill, rust 技能, crate 技能, 从文档创建skill, from docs create skill"
+description:
+  "Use when creating skills for Rust crates or std library documentation.
+  Keywords: create rust skill, create crate skill, create std skill, 创建 rust
+  skill, 创建 crate skill, 创建 std skill, 动态 rust skill, 动态 crate skill,
+  skill for tokio, skill for serde, skill for axum, generate rust skill, rust
+  技能, crate 技能, 从文档创建skill, from docs create skill"
 argument-hint: "<crate_name|std::module>"
 context: fork
 agent: general-purpose
@@ -15,6 +20,7 @@ agent: general-purpose
 ## When to Use
 
 This skill handles requests to create skills for:
+
 - Third-party crates (tokio, serde, axum, etc.)
 - Rust standard library (std::sync, std::marker, etc.)
 - Any Rust documentation URL
@@ -24,6 +30,7 @@ This skill handles requests to create skills for:
 **CRITICAL: Check if related commands/skills are available.**
 
 This skill relies on:
+
 - `/create-llms-for-skills` command
 - `/create-skills-via-llms` command
 
@@ -37,11 +44,11 @@ This skill relies on:
 
 #### 1. Identify the Target
 
-| User Request | Target Type | URL Pattern |
-|--------------|-------------|-------------|
-| "create tokio skill" | Third-party crate | `docs.rs/tokio/latest/tokio/` |
-| "create Send trait skill" | Std library | `doc.rust-lang.org/std/marker/trait.Send.html` |
-| "create skill from URL" + URL | Custom URL | User-provided URL |
+| User Request                  | Target Type       | URL Pattern                                    |
+| ----------------------------- | ----------------- | ---------------------------------------------- |
+| "create tokio skill"          | Third-party crate | `docs.rs/tokio/latest/tokio/`                  |
+| "create Send trait skill"     | Std library       | `doc.rust-lang.org/std/marker/trait.Send.html` |
+| "create skill from URL" + URL | Custom URL        | User-provided URL                              |
 
 #### 2. Execute the Command
 
@@ -80,13 +87,13 @@ After llms.txt is generated, use:
 
 ### Step 1: Identify Target and Construct URL
 
-| Target | URL Template |
-|--------|--------------|
-| Crate overview | `https://docs.rs/{crate}/latest/{crate}/` |
-| Crate module | `https://docs.rs/{crate}/latest/{crate}/{module}/` |
-| Std trait | `https://doc.rust-lang.org/std/{module}/trait.{Name}.html` |
-| Std struct | `https://doc.rust-lang.org/std/{module}/struct.{Name}.html` |
-| Std module | `https://doc.rust-lang.org/std/{module}/index.html` |
+| Target         | URL Template                                                |
+| -------------- | ----------------------------------------------------------- |
+| Crate overview | `https://docs.rs/{crate}/latest/{crate}/`                   |
+| Crate module   | `https://docs.rs/{crate}/latest/{crate}/{module}/`          |
+| Std trait      | `https://doc.rust-lang.org/std/{module}/trait.{Name}.html`  |
+| Std struct     | `https://doc.rust-lang.org/std/{module}/struct.{Name}.html` |
+| Std module     | `https://doc.rust-lang.org/std/{module}/index.html`         |
 
 ### Step 2: Fetch Documentation
 
@@ -98,6 +105,7 @@ agent-browser close
 ```
 
 **Or with WebFetch fallback:**
+
 ```
 WebFetch("<documentation_url>", "Extract API documentation including types, functions, and examples")
 ```
@@ -113,9 +121,9 @@ mkdir -p ~/.claude/skills/{crate_name}/references
 
 Create `~/.claude/skills/{crate_name}/SKILL.md` with this template:
 
-```markdown
+````markdown
 ---
-name: {crate_name}
+name: { crate_name }
 description: "Documentation for {crate_name} crate. Keywords: {keywords}"
 ---
 
@@ -130,9 +138,11 @@ description: "Documentation for {crate_name} crate. Keywords: {keywords}"
 ## Key Types
 
 ### {Type1}
+
 {Description and usage}
 
 ### {Type2}
+
 {Description and usage}
 
 ## Common Patterns
@@ -144,6 +154,7 @@ description: "Documentation for {crate_name} crate. Keywords: {keywords}"
 ```rust
 {Example code from documentation}
 ```
+````
 
 ## Documentation
 
@@ -154,7 +165,8 @@ description: "Documentation for {crate_name} crate. Keywords: {keywords}"
 
 - [docs.rs](https://docs.rs/{crate})
 - [crates.io](https://crates.io/crates/{crate})
-```
+
+````
 
 ### Step 5: Generate Reference Files
 
@@ -165,7 +177,7 @@ For each major module or type, create a reference file:
 agent-browser open "https://docs.rs/{crate}/latest/{crate}/{module}/"
 agent-browser get text ".docblock" > ~/.claude/skills/{crate_name}/references/{module}.md
 agent-browser close
-```
+````
 
 ### Step 6: Verify Skill
 
@@ -179,27 +191,27 @@ cat ~/.claude/skills/{crate_name}/SKILL.md
 
 ## URL Construction Helper
 
-| Target | URL Template |
-|--------|--------------|
-| Crate overview | `https://docs.rs/{crate}/latest/{crate}/` |
-| Crate module | `https://docs.rs/{crate}/latest/{crate}/{module}/` |
-| Std trait | `https://doc.rust-lang.org/std/{module}/trait.{Name}.html` |
-| Std struct | `https://doc.rust-lang.org/std/{module}/struct.{Name}.html` |
-| Std module | `https://doc.rust-lang.org/std/{module}/index.html` |
+| Target         | URL Template                                                |
+| -------------- | ----------------------------------------------------------- |
+| Crate overview | `https://docs.rs/{crate}/latest/{crate}/`                   |
+| Crate module   | `https://docs.rs/{crate}/latest/{crate}/{module}/`          |
+| Std trait      | `https://doc.rust-lang.org/std/{module}/trait.{Name}.html`  |
+| Std struct     | `https://doc.rust-lang.org/std/{module}/struct.{Name}.html` |
+| Std module     | `https://doc.rust-lang.org/std/{module}/index.html`         |
 
 ## Common Std Library Paths
 
-| Item | Path |
-|------|------|
-| Send, Sync, Copy, Clone | `std/marker/trait.{Name}.html` |
-| Arc, Mutex, RwLock | `std/sync/struct.{Name}.html` |
-| Rc, Weak | `std/rc/struct.{Name}.html` |
-| RefCell, Cell | `std/cell/struct.{Name}.html` |
-| Box | `std/boxed/struct.Box.html` |
-| Vec | `std/vec/struct.Vec.html` |
-| String | `std/string/struct.String.html` |
-| Option | `std/option/enum.Option.html` |
-| Result | `std/result/enum.Result.html` |
+| Item                    | Path                            |
+| ----------------------- | ------------------------------- |
+| Send, Sync, Copy, Clone | `std/marker/trait.{Name}.html`  |
+| Arc, Mutex, RwLock      | `std/sync/struct.{Name}.html`   |
+| Rc, Weak                | `std/rc/struct.{Name}.html`     |
+| RefCell, Cell           | `std/cell/struct.{Name}.html`   |
+| Box                     | `std/boxed/struct.Box.html`     |
+| Vec                     | `std/vec/struct.Vec.html`       |
+| String                  | `std/string/struct.String.html` |
+| Option                  | `std/option/enum.Option.html`   |
+| Result                  | `std/result/enum.Result.html`   |
 
 ---
 
@@ -257,9 +269,9 @@ All generated skills are saved to: `~/.claude/skills/`
 
 ## Error Handling
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| Commands not found | Skills-only install | Use inline mode |
-| URL not found | Invalid crate/module | Verify crate exists on crates.io |
-| Empty documentation | API changed | Use alternative selectors |
-| Permission denied | Directory issue | Check ~/.claude/skills/ permissions |
+| Error               | Cause                | Solution                            |
+| ------------------- | -------------------- | ----------------------------------- |
+| Commands not found  | Skills-only install  | Use inline mode                     |
+| URL not found       | Invalid crate/module | Verify crate exists on crates.io    |
+| Empty documentation | API changed          | Use alternative selectors           |
+| Permission denied   | Directory issue      | Check ~/.claude/skills/ permissions |

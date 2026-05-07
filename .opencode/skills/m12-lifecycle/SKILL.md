@@ -1,6 +1,12 @@
 ---
 name: m12-lifecycle
-description: "Use when designing resource lifecycles. Keywords: RAII, Drop, resource lifecycle, connection pool, lazy initialization, connection pool design, resource cleanup patterns, cleanup, scope, OnceCell, Lazy, once_cell, OnceLock, transaction, session management, when is Drop called, cleanup on error, guard pattern, scope guard, 资源生命周期, 连接池, 惰性初始化, 资源清理, RAII 模式"
+description:
+  "Use when designing resource lifecycles. Keywords: RAII, Drop, resource
+  lifecycle, connection pool, lazy initialization, connection pool design,
+  resource cleanup patterns, cleanup, scope, OnceCell, Lazy, once_cell,
+  OnceLock, transaction, session management, when is Drop called, cleanup on
+  error, guard pattern, scope guard, 资源生命周期, 连接池, 惰性初始化, 资源清理,
+  RAII 模式"
 user-invocable: false
 ---
 
@@ -13,6 +19,7 @@ user-invocable: false
 **When should this resource be created, used, and cleaned up?**
 
 Before implementing lifecycle:
+
 - What's the resource's scope?
 - Who owns the cleanup responsibility?
 - What happens on error?
@@ -21,13 +28,13 @@ Before implementing lifecycle:
 
 ## Lifecycle Pattern → Implementation
 
-| Pattern | When | Implementation |
-|---------|------|----------------|
-| RAII | Auto cleanup | `Drop` trait |
-| Lazy init | Deferred creation | `OnceLock`, `LazyLock` |
-| Pool | Reuse expensive resources | `r2d2`, `deadpool` |
-| Guard | Scoped access | `MutexGuard` pattern |
-| Scope | Transaction boundary | Custom struct + Drop |
+| Pattern   | When                      | Implementation         |
+| --------- | ------------------------- | ---------------------- |
+| RAII      | Auto cleanup              | `Drop` trait           |
+| Lazy init | Deferred creation         | `OnceLock`, `LazyLock` |
+| Pool      | Reuse expensive resources | `r2d2`, `deadpool`     |
+| Guard     | Scoped access             | `MutexGuard` pattern   |
+| Scope     | Transaction boundary      | Custom struct + Drop   |
 
 ---
 
@@ -63,11 +70,11 @@ To domain constraints (Layer 3):
     ↑ Check: Infrastructure (connection limits)
 ```
 
-| Question | Trace To | Ask |
-|----------|----------|-----|
-| Connection pooling | domain-* | What's acceptable latency? |
-| Resource limits | domain-* | What are infra constraints? |
-| Transaction scope | domain-* | What must be atomic? |
+| Question           | Trace To  | Ask                         |
+| ------------------ | --------- | --------------------------- |
+| Connection pooling | domain-\* | What's acceptable latency?  |
+| Resource limits    | domain-\* | What are infra constraints? |
+| Transaction scope  | domain-\* | What must be atomic?        |
 
 ---
 
@@ -93,22 +100,22 @@ To implementation (Layer 1):
 
 ## Quick Reference
 
-| Pattern | Type | Use Case |
-|---------|------|----------|
-| RAII | `Drop` trait | Auto cleanup on scope exit |
-| Lazy Init | `OnceLock`, `LazyLock` | Deferred initialization |
-| Pool | `r2d2`, `deadpool` | Connection reuse |
-| Guard | `MutexGuard` | Scoped lock release |
-| Scope | Custom struct | Transaction boundaries |
+| Pattern   | Type                   | Use Case                   |
+| --------- | ---------------------- | -------------------------- |
+| RAII      | `Drop` trait           | Auto cleanup on scope exit |
+| Lazy Init | `OnceLock`, `LazyLock` | Deferred initialization    |
+| Pool      | `r2d2`, `deadpool`     | Connection reuse           |
+| Guard     | `MutexGuard`           | Scoped lock release        |
+| Scope     | Custom struct          | Transaction boundaries     |
 
 ## Lifecycle Events
 
-| Event | Rust Mechanism |
-|-------|----------------|
-| Creation | `new()`, `Default` |
+| Event     | Rust Mechanism          |
+| --------- | ----------------------- |
+| Creation  | `new()`, `Default`      |
 | Lazy Init | `OnceLock::get_or_init` |
-| Usage | `&self`, `&mut self` |
-| Cleanup | `Drop::drop()` |
+| Usage     | `&self`, `&mut self`    |
+| Cleanup   | `Drop::drop()`          |
 
 ## Pattern Templates
 
@@ -146,32 +153,32 @@ fn get_config() -> &'static Config {
 
 ## Common Errors
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| Resource leak | Forgot Drop | Implement Drop or RAII wrapper |
-| Double free | Manual memory | Let Rust handle |
-| Use after drop | Dangling reference | Check lifetimes |
-| E0509 move out of Drop | Moving owned field | `Option::take()` |
-| Pool exhaustion | Not returned | Ensure Drop returns |
+| Error                  | Cause              | Fix                            |
+| ---------------------- | ------------------ | ------------------------------ |
+| Resource leak          | Forgot Drop        | Implement Drop or RAII wrapper |
+| Double free            | Manual memory      | Let Rust handle                |
+| Use after drop         | Dangling reference | Check lifetimes                |
+| E0509 move out of Drop | Moving owned field | `Option::take()`               |
+| Pool exhaustion        | Not returned       | Ensure Drop returns            |
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern | Why Bad | Better |
-|--------------|---------|--------|
-| Manual cleanup | Easy to forget | RAII/Drop |
-| `lazy_static!` | External dep | `std::sync::OnceLock` |
+| Anti-Pattern         | Why Bad         | Better                    |
+| -------------------- | --------------- | ------------------------- |
+| Manual cleanup       | Easy to forget  | RAII/Drop                 |
+| `lazy_static!`       | External dep    | `std::sync::OnceLock`     |
 | Global mutable state | Thread unsafety | `OnceLock` or proper sync |
-| Forget to close | Resource leak | Drop impl |
+| Forget to close      | Resource leak   | Drop impl                 |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Smart pointers | m02-resource |
-| Thread-safe init | m07-concurrency |
-| Domain scopes | m09-domain |
+| When             | See                |
+| ---------------- | ------------------ |
+| Smart pointers   | m02-resource       |
+| Thread-safe init | m07-concurrency    |
+| Domain scopes    | m09-domain         |
 | Error in cleanup | m06-error-handling |

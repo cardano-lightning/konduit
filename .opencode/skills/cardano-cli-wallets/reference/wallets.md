@@ -1,10 +1,12 @@
 # Wallet creation + common commands (templates)
 
 ## Network flags
+
 - Mainnet: `--mainnet`
 - Testnet: `--testnet-magic <MAGIC>`
 
 ## Key generation (examples)
+
 ```bash
 mkdir -p wallets/alice && cd wallets/alice
 
@@ -22,6 +24,7 @@ cardano-cli address build       --payment-verification-key-file payment.vkey    
 ```
 
 ## Query UTxOs
+
 ```bash
 cardano-cli query utxo       --address $(cat base.addr)       --testnet-magic <MAGIC>
 ```

@@ -9,11 +9,15 @@ impact: CRITICAL
 
 ## Summary
 
-Never create `String`, `Vec`, or `Box` from memory allocated outside Rust's allocator. They will try to free the memory with the wrong deallocator.
+Never create `String`, `Vec`, or `Box` from memory allocated outside Rust's
+allocator. They will try to free the memory with the wrong deallocator.
 
 ## Rationale
 
-`String`, `Vec`, and `Box` assume memory was allocated by Rust's global allocator. When dropped, they call `dealloc`. If the memory came from C's `malloc`, a different allocator, or shared memory, this causes undefined behavior.
+`String`, `Vec`, and `Box` assume memory was allocated by Rust's global
+allocator. When dropped, they call `dealloc`. If the memory came from C's
+`malloc`, a different allocator, or shared memory, this causes undefined
+behavior.
 
 ## Bad Example
 
@@ -104,14 +108,14 @@ impl Drop for SharedBuffer {
 
 ## Memory Allocation Compatibility
 
-| Allocator | Can use Rust Vec/String/Box? |
-|-----------|------------------------------|
-| Rust global allocator | Yes |
-| C malloc | No - use wrapper with C free |
-| C++ new | No - use wrapper with C++ delete |
-| Custom allocator | No - use allocator_api |
-| mmap/shared memory | No - use munmap |
-| Stack/static | No - never "free" |
+| Allocator             | Can use Rust Vec/String/Box?     |
+| --------------------- | -------------------------------- |
+| Rust global allocator | Yes                              |
+| C malloc              | No - use wrapper with C free     |
+| C++ new               | No - use wrapper with C++ delete |
+| Custom allocator      | No - use allocator_api           |
+| mmap/shared memory    | No - use munmap                  |
+| Stack/static          | No - never "free"                |
 
 ## Checklist
 

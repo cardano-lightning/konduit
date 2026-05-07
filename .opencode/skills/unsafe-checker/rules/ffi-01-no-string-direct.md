@@ -9,14 +9,15 @@ impact: HIGH
 
 ## Summary
 
-Use `CString` and `CStr` for string handling at FFI boundaries. Never pass Rust `String` or `&str` directly to C.
+Use `CString` and `CStr` for string handling at FFI boundaries. Never pass Rust
+`String` or `&str` directly to C.
 
 ## Rationale
 
 - Rust strings are UTF-8, not null-terminated
 - C strings require null terminator
 - Rust strings may contain interior null bytes
-- Memory layout differs between Rust String and C char*
+- Memory layout differs between Rust String and C char\*
 
 ## Bad Example
 
@@ -100,14 +101,14 @@ extern "C" fn good_callback(s: *const c_char) {
 
 ## String Type Comparison
 
-| Type | Null-terminated | Encoding | Use |
-|------|-----------------|----------|-----|
-| `String` | No | UTF-8 | Rust owned |
-| `&str` | No | UTF-8 | Rust borrowed |
-| `CString` | Yes | Byte | Rust-to-C owned |
-| `&CStr` | Yes | Byte | Rust-to-C borrowed |
-| `*const c_char` | Yes | Byte | FFI pointer |
-| `OsString` | Platform | Platform | Paths, env |
+| Type            | Null-terminated | Encoding | Use                |
+| --------------- | --------------- | -------- | ------------------ |
+| `String`        | No              | UTF-8    | Rust owned         |
+| `&str`          | No              | UTF-8    | Rust borrowed      |
+| `CString`       | Yes             | Byte     | Rust-to-C owned    |
+| `&CStr`         | Yes             | Byte     | Rust-to-C borrowed |
+| `*const c_char` | Yes             | Byte     | FFI pointer        |
+| `OsString`      | Platform        | Platform | Paths, env         |
 
 ## Checklist
 

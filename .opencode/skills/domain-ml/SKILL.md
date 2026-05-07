@@ -1,6 +1,9 @@
 ---
 name: domain-ml
-description: "Use when building ML/AI apps in Rust. Keywords: machine learning, ML, AI, tensor, model, inference, neural network, deep learning, training, prediction, ndarray, tch-rs, burn, candle, 机器学习, 人工智能, 模型推理"
+description:
+  "Use when building ML/AI apps in Rust. Keywords: machine learning, ML, AI,
+  tensor, model, inference, neural network, deep learning, training, prediction,
+  ndarray, tch-rs, burn, candle, 机器学习, 人工智能, 模型推理"
 user-invocable: false
 ---
 
@@ -10,14 +13,14 @@ user-invocable: false
 
 ## Domain Constraints → Design Implications
 
-| Domain Rule | Design Constraint | Rust Implication |
-|-------------|-------------------|------------------|
-| Large data | Efficient memory | Zero-copy, streaming |
-| GPU acceleration | CUDA/Metal support | candle, tch-rs |
-| Model portability | Standard formats | ONNX |
-| Batch processing | Throughput over latency | Batched inference |
-| Numerical precision | Float handling | ndarray, careful f32/f64 |
-| Reproducibility | Deterministic | Seeded random, versioning |
+| Domain Rule         | Design Constraint       | Rust Implication          |
+| ------------------- | ----------------------- | ------------------------- |
+| Large data          | Efficient memory        | Zero-copy, streaming      |
+| GPU acceleration    | CUDA/Metal support      | candle, tch-rs            |
+| Model portability   | Standard formats        | ONNX                      |
+| Batch processing    | Throughput over latency | Batched inference         |
+| Numerical precision | Float handling          | ndarray, careful f32/f64  |
+| Reproducibility     | Deterministic           | Seeded random, versioning |
 
 ---
 
@@ -71,32 +74,32 @@ From constraints to design (Layer 2):
 
 ## Use Case → Framework
 
-| Use Case | Recommended | Why |
-|----------|-------------|-----|
-| Inference only | tract (ONNX) | Lightweight, portable |
-| Training + inference | candle, burn | Pure Rust, GPU |
-| PyTorch models | tch-rs | Direct bindings |
-| Data pipelines | polars | Fast, lazy eval |
+| Use Case             | Recommended  | Why                   |
+| -------------------- | ------------ | --------------------- |
+| Inference only       | tract (ONNX) | Lightweight, portable |
+| Training + inference | candle, burn | Pure Rust, GPU        |
+| PyTorch models       | tch-rs       | Direct bindings       |
+| Data pipelines       | polars       | Fast, lazy eval       |
 
 ## Key Crates
 
-| Purpose | Crate |
-|---------|-------|
-| Tensors | ndarray |
-| ONNX inference | tract |
-| ML framework | candle, burn |
-| PyTorch bindings | tch-rs |
-| Data processing | polars |
-| Embeddings | fastembed |
+| Purpose          | Crate        |
+| ---------------- | ------------ |
+| Tensors          | ndarray      |
+| ONNX inference   | tract        |
+| ML framework     | candle, burn |
+| PyTorch bindings | tch-rs       |
+| Data processing  | polars       |
+| Embeddings       | fastembed    |
 
 ## Design Patterns
 
-| Pattern | Purpose | Implementation |
-|---------|---------|----------------|
-| Model loading | Once, reuse | `OnceLock<Model>` |
-| Batching | Throughput | Collect then process |
-| Streaming | Large data | Iterator-based |
-| GPU async | Parallelism | Data loading parallel to compute |
+| Pattern       | Purpose     | Implementation                   |
+| ------------- | ----------- | -------------------------------- |
+| Model loading | Once, reuse | `OnceLock<Model>`                |
+| Batching      | Throughput  | Collect then process             |
+| Streaming     | Large data  | Iterator-based                   |
+| GPU async     | Parallelism | Data loading parallel to compute |
 
 ## Code Pattern: Inference Server
 
@@ -151,31 +154,31 @@ async fn batch_predict(inputs: Vec<Vec<f32>>, batch_size: usize) -> Vec<Vec<f32>
 
 ## Common Mistakes
 
-| Mistake | Domain Violation | Fix |
-|---------|-----------------|-----|
-| Clone tensors | Memory waste | Use views |
-| Single inference | GPU underutilized | Batch processing |
-| Load model per request | Slow | Singleton pattern |
-| Sync data loading | GPU idle | Async pipeline |
+| Mistake                | Domain Violation  | Fix               |
+| ---------------------- | ----------------- | ----------------- |
+| Clone tensors          | Memory waste      | Use views         |
+| Single inference       | GPU underutilized | Batch processing  |
+| Load model per request | Slow              | Singleton pattern |
+| Sync data loading      | GPU idle          | Async pipeline    |
 
 ---
 
 ## Trace to Layer 1
 
-| Constraint | Layer 2 Pattern | Layer 1 Implementation |
-|------------|-----------------|------------------------|
-| Memory efficiency | Zero-copy | ndarray views |
-| Model singleton | Lazy init | OnceLock<Model> |
-| Batch processing | Chunked iteration | chunks() + parallel |
-| GPU async | Concurrent loading | tokio::spawn + GPU |
+| Constraint        | Layer 2 Pattern    | Layer 1 Implementation |
+| ----------------- | ------------------ | ---------------------- |
+| Memory efficiency | Zero-copy          | ndarray views          |
+| Model singleton   | Lazy init          | OnceLock<Model>        |
+| Batch processing  | Chunked iteration  | chunks() + parallel    |
+| GPU async         | Concurrent loading | tokio::spawn + GPU     |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Performance | m10-performance |
-| Lazy initialization | m12-lifecycle |
-| Async patterns | m07-concurrency |
-| Memory efficiency | m01-ownership |
+| When                | See             |
+| ------------------- | --------------- |
+| Performance         | m10-performance |
+| Lazy initialization | m12-lifecycle   |
+| Async patterns      | m07-concurrency |
+| Memory efficiency   | m01-ownership   |

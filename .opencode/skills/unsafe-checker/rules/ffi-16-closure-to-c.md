@@ -9,7 +9,9 @@ impact: HIGH
 
 ## Summary
 
-C callbacks are function pointers without captured state. To pass Rust closures to C, separate the function pointer from the closure data using a "trampoline" pattern.
+C callbacks are function pointers without captured state. To pass Rust closures
+to C, separate the function pointer from the closure data using a "trampoline"
+pattern.
 
 ## Rationale
 

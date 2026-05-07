@@ -9,7 +9,9 @@ impact: HIGH
 
 ## Summary
 
-If a type will be passed to external code that manages its lifetime, don't implement `Drop`. Otherwise, both Rust and the external code will try to free it.
+If a type will be passed to external code that manages its lifetime, don't
+implement `Drop`. Otherwise, both Rust and the external code will try to free
+it.
 
 ## Rationale
 
@@ -111,12 +113,12 @@ fn explicit_ownership() {
 
 ## Ownership Patterns
 
-| Pattern | Who Owns | Rust Drop? |
-|---------|----------|------------|
-| Rust creates, Rust frees | Rust | Yes |
-| Rust creates, C frees | C | No |
-| C creates, C frees | C | No (use wrapper) |
-| C creates, Rust frees | Rust | Yes (in wrapper) |
+| Pattern                  | Who Owns | Rust Drop?       |
+| ------------------------ | -------- | ---------------- |
+| Rust creates, Rust frees | Rust     | Yes              |
+| Rust creates, C frees    | C        | No               |
+| C creates, C frees       | C        | No (use wrapper) |
+| C creates, Rust frees    | Rust     | Yes (in wrapper) |
 
 ## Checklist
 

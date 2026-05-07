@@ -1,6 +1,11 @@
 ---
 name: domain-web
-description: "Use when building web services. Keywords: web server, HTTP, REST API, GraphQL, WebSocket, axum, actix, warp, rocket, tower, hyper, reqwest, middleware, router, handler, extractor, state management, authentication, authorization, JWT, session, cookie, CORS, rate limiting, web 开发, HTTP 服务, API 设计, 中间件, 路由"
+description:
+  "Use when building web services. Keywords: web server, HTTP, REST API,
+  GraphQL, WebSocket, axum, actix, warp, rocket, tower, hyper, reqwest,
+  middleware, router, handler, extractor, state management, authentication,
+  authorization, JWT, session, cookie, CORS, rate limiting, web 开发, HTTP 服务,
+  API 设计, 中间件, 路由"
 globs: ["**/Cargo.toml"]
 user-invocable: false
 ---
@@ -11,13 +16,13 @@ user-invocable: false
 
 ## Domain Constraints → Design Implications
 
-| Domain Rule | Design Constraint | Rust Implication |
-|-------------|-------------------|------------------|
-| Stateless HTTP | No request-local globals | State in extractors |
-| Concurrency | Handle many connections | Async, Send + Sync |
-| Latency SLA | Fast response | Efficient ownership |
-| Security | Input validation | Type-safe extractors |
-| Observability | Request tracing | tracing + tower layers |
+| Domain Rule    | Design Constraint        | Rust Implication       |
+| -------------- | ------------------------ | ---------------------- |
+| Stateless HTTP | No request-local globals | State in extractors    |
+| Concurrency    | Handle many connections  | Async, Send + Sync     |
+| Latency SLA    | Fast response            | Efficient ownership    |
+| Security       | Input validation         | Type-safe extractors   |
+| Observability  | Request tracing          | tracing + tower layers |
 
 ---
 
@@ -71,33 +76,33 @@ From constraints to design (Layer 2):
 
 ## Framework Comparison
 
-| Framework | Style | Best For |
-|-----------|-------|----------|
-| axum | Functional, tower | Modern APIs |
-| actix-web | Actor-based | High performance |
-| warp | Filter composition | Composable APIs |
-| rocket | Macro-driven | Rapid development |
+| Framework | Style              | Best For          |
+| --------- | ------------------ | ----------------- |
+| axum      | Functional, tower  | Modern APIs       |
+| actix-web | Actor-based        | High performance  |
+| warp      | Filter composition | Composable APIs   |
+| rocket    | Macro-driven       | Rapid development |
 
 ## Key Crates
 
-| Purpose | Crate |
-|---------|-------|
+| Purpose     | Crate           |
+| ----------- | --------------- |
 | HTTP server | axum, actix-web |
-| HTTP client | reqwest |
-| JSON | serde_json |
-| Auth/JWT | jsonwebtoken |
-| Session | tower-sessions |
-| Database | sqlx, diesel |
-| Middleware | tower |
+| HTTP client | reqwest         |
+| JSON        | serde_json      |
+| Auth/JWT    | jsonwebtoken    |
+| Session     | tower-sessions  |
+| Database    | sqlx, diesel    |
+| Middleware  | tower           |
 
 ## Design Patterns
 
-| Pattern | Purpose | Implementation |
-|---------|---------|----------------|
-| Extractors | Request parsing | `State(db)`, `Json(payload)` |
-| Error response | Unified errors | `impl IntoResponse` |
-| Middleware | Cross-cutting | Tower layers |
-| Shared state | App config | `Arc<AppState>` |
+| Pattern        | Purpose         | Implementation               |
+| -------------- | --------------- | ---------------------------- |
+| Extractors     | Request parsing | `State(db)`, `Json(payload)` |
+| Error response | Unified errors  | `impl IntoResponse`          |
+| Middleware     | Cross-cutting   | Tower layers                 |
+| Shared state   | App config      | `Arc<AppState>`              |
 
 ## Code Pattern: Axum Handler
 
@@ -126,31 +131,31 @@ impl IntoResponse for AppError {
 
 ## Common Mistakes
 
-| Mistake | Domain Violation | Fix |
-|---------|-----------------|-----|
-| Blocking in handler | Latency spike | spawn_blocking |
-| Rc in state | Not Send + Sync | Use Arc |
-| No validation | Security risk | Type-safe extractors |
-| No error response | Bad UX | IntoResponse impl |
+| Mistake             | Domain Violation | Fix                  |
+| ------------------- | ---------------- | -------------------- |
+| Blocking in handler | Latency spike    | spawn_blocking       |
+| Rc in state         | Not Send + Sync  | Use Arc              |
+| No validation       | Security risk    | Type-safe extractors |
+| No error response   | Bad UX           | IntoResponse impl    |
 
 ---
 
 ## Trace to Layer 1
 
-| Constraint | Layer 2 Pattern | Layer 1 Implementation |
-|------------|-----------------|------------------------|
-| Async handlers | Async/await | tokio runtime |
-| Thread-safe state | Shared state | Arc<T>, Arc<RwLock<T>> |
-| Request lifecycle | Extractors | Ownership via From<Request> |
-| Middleware | Tower layers | Trait-based composition |
+| Constraint        | Layer 2 Pattern | Layer 1 Implementation      |
+| ----------------- | --------------- | --------------------------- |
+| Async handlers    | Async/await     | tokio runtime               |
+| Thread-safe state | Shared state    | Arc<T>, Arc<RwLock<T>>      |
+| Request lifecycle | Extractors      | Ownership via From<Request> |
+| Middleware        | Tower layers    | Trait-based composition     |
 
 ---
 
 ## Related Skills
 
-| When | See |
-|------|-----|
-| Async patterns | m07-concurrency |
-| State management | m02-resource |
-| Error handling | m06-error-handling |
-| Middleware design | m12-lifecycle |
+| When              | See                |
+| ----------------- | ------------------ |
+| Async patterns    | m07-concurrency    |
+| State management  | m02-resource       |
+| Error handling    | m06-error-handling |
+| Middleware design | m12-lifecycle      |

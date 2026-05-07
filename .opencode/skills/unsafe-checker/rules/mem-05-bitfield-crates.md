@@ -9,7 +9,8 @@ impact: MEDIUM
 
 ## Summary
 
-Use crates like `bitflags`, `bitvec`, or `modular-bitfield` instead of manual bit manipulation for complex bitfield operations.
+Use crates like `bitflags`, `bitvec`, or `modular-bitfield` instead of manual
+bit manipulation for complex bitfield operations.
 
 ## Rationale
 
@@ -126,18 +127,19 @@ fn use_bitvec() {
 
 ## Recommended Crates
 
-| Crate | Use Case | Features |
-|-------|----------|----------|
-| `bitflags` | Flag sets (like C enums) | Type-safe, const, derives |
-| `modular-bitfield` | Packed struct fields | Proc macro, repr(C) |
-| `bitvec` | Arbitrary bit arrays | Slicing, iteration |
-| `packed_struct` | Binary protocol structs | Endianness, derive |
-| `deku` | Binary parsing | Derive, read/write |
+| Crate              | Use Case                 | Features                  |
+| ------------------ | ------------------------ | ------------------------- |
+| `bitflags`         | Flag sets (like C enums) | Type-safe, const, derives |
+| `modular-bitfield` | Packed struct fields     | Proc macro, repr(C)       |
+| `bitvec`           | Arbitrary bit arrays     | Slicing, iteration        |
+| `packed_struct`    | Binary protocol structs  | Endianness, derive        |
+| `deku`             | Binary parsing           | Derive, read/write        |
 
 ## Checklist
 
 - [ ] Am I manipulating multiple bit flags? → Use `bitflags`
-- [ ] Am I packing fields into bytes? → Use `modular-bitfield` or `packed_struct`
+- [ ] Am I packing fields into bytes? → Use `modular-bitfield` or
+      `packed_struct`
 - [ ] Am I doing binary protocol work? → Consider `deku`
 - [ ] Is the manual approach really simpler?
 

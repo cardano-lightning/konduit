@@ -14,7 +14,8 @@ Public APIs must never return or expose uninitialized memory to callers.
 
 ## Rationale
 
-Reading uninitialized memory is undefined behavior in Rust. Safe code should never be able to access uninitialized memory through your API.
+Reading uninitialized memory is undefined behavior in Rust. Safe code should
+never be able to access uninitialized memory through your API.
 
 ## Bad Example
 
