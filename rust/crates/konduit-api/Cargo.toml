@@ -16,7 +16,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
-cbor-with = { workspace = true, features = ["plutus-data"] }
 konduit-data.workspace = true
 minicbor.workspace = true
 rand_core.workspace = true

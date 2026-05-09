@@ -8,6 +8,11 @@ use crate::CborWith;
 /// `U` must implement minicbor's native [`minicbor::Encode`] and [`minicbor::Decode`] traits
 /// directly. If `U` does not have native minicbor impls but can be encoded via another
 /// [`CborWith`] adapter, use `AsIntoFrom<U, A>` instead (unimplemented).
+///
+/// # Note
+/// Encoding requires `T: Clone` because [`Into`] is a consuming conversion
+/// but encoding only has `&T`. If cloning is expensive, consider implementing
+/// a dedicated adapter that borrows instead.
 pub struct IntoFrom<U>(PhantomData<U>);
 
 impl<U, T, C> CborWith<T, C> for IntoFrom<U>

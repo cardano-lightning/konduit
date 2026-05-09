@@ -13,7 +13,12 @@ rust-version.workspace = true
 [dependencies]
 minicbor.workspace = true
 
-cardano-sdk = { workspace = true, optional = true }
-
+# Cargo.toml
 [features]
-plutus-data = [ "dep:cardano-sdk" ]
+default = []
+std     = []
+crypto  = []
+full    = ["std", "crypto"]
+
+[dev-dependencies]
+cbor-with = { path = ".", features = ["std", "crypto"] }

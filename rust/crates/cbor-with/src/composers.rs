@@ -1,5 +1,8 @@
-mod as_option;
-pub use as_option::AsOption;
+mod as_nullable;
+pub use as_nullable::AsNullable;
+
+mod as_optional;
+pub use as_optional::AsOptional;
 
 mod as_array;
 pub use as_array::AsArray;

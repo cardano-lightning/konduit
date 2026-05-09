@@ -16,7 +16,5 @@ pub use into_try_from::IntoTryFrom;
 mod fixed_bytes;
 pub use fixed_bytes::FixedBytes;
 
-#[cfg(feature = "plutus-data")]
-mod plutus_data;
-#[cfg(feature = "plutus-data")]
-pub use plutus_data::PlutusData;
+mod same;
+pub use same::Same;

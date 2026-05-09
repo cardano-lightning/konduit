@@ -669,7 +669,7 @@ dependencies = [
 name = "cbor-with"
 version = "0.0.0"
 dependencies = [
- "cardano-sdk",
+ "cbor-with",
  "minicbor",
 ]
 
@@ -2032,7 +2032,6 @@ dependencies = [
  "actix-web",
  "bln-sdk",
  "cardano-sdk",
- "cbor-with",
  "futures",
  "konduit-data",
  "minicbor",

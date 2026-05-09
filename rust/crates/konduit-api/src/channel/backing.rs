@@ -1,3 +1,21 @@
+pub mod cardano;
+
+mod succession;
+use minicbor::{Decode, Encode};
+use serde::{Serialize, Deserialize};
+pub use succession::Succession;
+
+mod chain;
+pub use chain::Chain;
+
+mod non_empty;
+pub use non_empty::NonEmpty;
+
+mod backing_utxo;
+pub use backing_utxo::BackingUtxo;
+
+use crate::channel::backing::cardano::{BlockDepth, BlockHeight};
+
 // Models the on-chain backing of L2 payments by UTXOs locked on the L1.
 //
 // A `Backing` is a set of `Chain`s. Each `Chain` is either `Live` (its tip
@@ -11,27 +29,6 @@
 //
 // Exposure is reported as a discretized step function over `DepthBucket`s,
 // suitable for fee calculation without floating point.
-
-// ---------------------------------------------------------------------------
-// Primitive types
-// ---------------------------------------------------------------------------
-
-use konduit_data::Used;
-
-/// Number of blocks since a UTXO was first observed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct BlockDepth(pub u32);
-
-/// Absolute block height.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct BlockHeight(pub u64);
-
-/// Unique reference to a UTXO: (transaction hash, output index).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct UtxoRef {
-    pub tx_hash: [u8; 32],
-    pub output_index: u32,
-}
 
 // ---------------------------------------------------------------------------
 // Depth buckets — coarse discretization of rollback risk
@@ -68,239 +65,6 @@ impl DepthBucket {
 }
 
 // ---------------------------------------------------------------------------
-// BackingUtxo — a single link in a chain
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct BackingUtxo {
-    pub utxo_ref: UtxoRef,
-    /// Amount locked in this UTXO as observed on-chain.
-    /// The *effective* backing amount requires datum interpretation against
-    /// L2 state — that is the caller's responsibility.
-    pub amount: u64,
-    /// Confirmation depth at the time of last observation.
-    pub depth: BlockDepth,
-    pub subbed: u64,
-    pub useds: Vec<Used>,
-}
-
-impl BackingUtxo {
-    pub fn new(utxo_ref: UtxoRef, amount: u64, depth: BlockDepth) -> Self {
-        Self {
-            utxo_ref,
-            amount,
-            depth,
-        }
-    }
-
-    pub fn bucket(&self) -> DepthBucket {
-        DepthBucket::from_depth(self.depth)
-    }
-
-    pub fn is_settled(&self) -> bool {
-        self.bucket() == DepthBucket::Settled
-    }
-}
-
-// ---------------------------------------------------------------------------
-// NonEmpty<T> — a Vec guaranteed to have at least one element
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct NonEmpty<T> {
-    head: T,
-    tail: Vec<T>,
-}
-
-impl<T> NonEmpty<T> {
-    pub fn singleton(value: T) -> Self {
-        Self {
-            head: value,
-            tail: vec![],
-        }
-    }
-
-    pub fn push(&mut self, value: T) {
-        self.tail.push(value);
-    }
-
-    pub fn head(&self) -> &T {
-        &self.head
-    }
-
-    pub fn tip(&self) -> &T {
-        self.tail.last().unwrap_or(&self.head)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        std::iter::once(&self.head).chain(self.tail.iter())
-    }
-
-    pub fn len(&self) -> usize {
-        1 + self.tail.len()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Chain — a lineage of BackingUtxos, Live or Lost
-// ---------------------------------------------------------------------------
-
-/// A witnessed lineage of backing UTXOs.
-///
-/// `Live`  — tip is currently observed; contributes to effective backing.
-/// `Lost`  — tip has vanished (spent or rolled back, indistinguishable in
-///           snapshot mode); retained as rollback fallback until the finality
-///           window closes on the gap.
-///
-/// In snapshot mode chains are always singletons: lineage cannot be threaded
-/// across snapshot boundaries without a `LineageWitness`.
-#[derive(Debug, Clone)]
-pub enum Chain {
-    Live {
-        links: NonEmpty<BackingUtxo>,
-    },
-    Lost {
-        links: NonEmpty<BackingUtxo>,
-        lost_at: BlockHeight,
-    },
-}
-
-/// Proof that a spend was witnessed, allowing lineage to be extended.
-/// Produced either by the chain indexer (full lineage mode) or by the
-/// server observing its own submitted TX appear on-chain.
-pub struct LineageWitness {
-    /// The UTXO that was spent.
-    pub spent: UtxoRef,
-    /// The UTXO produced as its successor.
-    pub successor: UtxoRef,
-}
-
-impl Chain {
-    // --- Constructors -------------------------------------------------------
-
-    /// A fresh chain from a single newly-observed UTXO. Always `Live`.
-    pub fn new(utxo: BackingUtxo) -> Self {
-        Chain::Live {
-            links: NonEmpty::singleton(utxo),
-        }
-    }
-
-    /// A fresh chain from a single newly-observed UTXO. Always `Live`.
-    pub fn links(&self) -> &NonEmpty<BackingUtxo> {
-        match self {
-            Chain::Live { links } | Chain::Lost { links, .. } => links,
-        }
-    }
-
-    // --- State transitions --------------------------------------------------
-
-    /// Mark this chain as Lost (tip no longer observed on-chain).
-    pub fn lose(self, now: BlockHeight) -> Self {
-        match self {
-            Chain::Live { links } => Chain::Lost {
-                links,
-                lost_at: now,
-            },
-            lost => lost,
-        }
-    }
-
-    /// Mark this chain as Live again (tip reappeared — rollback of successor).
-    pub fn recover(self) -> Self {
-        match self {
-            Chain::Lost { links, .. } => Chain::Live { links },
-            live => live,
-        }
-    }
-
-    /// Extend a Live chain with a witnessed successor UTXO.
-    /// Returns `Err` if the chain is Lost or the witness does not match the tip.
-    pub fn extend(
-        self,
-        successor: BackingUtxo,
-        witness: &LineageWitness,
-    ) -> Result<Self, ChainError> {
-        match self {
-            Chain::Live { mut links } => {
-                if links.tip().utxo_ref != witness.spent {
-                    return Err(ChainError::WitnessMismatch);
-                }
-                if successor.utxo_ref != witness.successor {
-                    return Err(ChainError::WitnessMismatch);
-                }
-                links.push(successor);
-                Ok(Chain::Live { links })
-            }
-            Chain::Lost { .. } => Err(ChainError::ExtendLost),
-        }
-    }
-
-    /// Update the confirmation depth of the tip (called on each new block).
-    pub fn advance(&mut self, new_depth: BlockDepth) {
-        let links = self.links();
-        // We'd update the tip in-place; shown here as a conceptual sketch
-        // since NonEmpty exposes tip by reference only.
-        let _ = new_depth; // integrate with mutable tip access as needed
-    }
-
-    // --- Accessors ----------------------------------------------------------
-
-    pub fn is_live(&self) -> bool {
-        matches!(self, Chain::Live { .. })
-    }
-
-    pub fn is_lost(&self) -> bool {
-        matches!(self, Chain::Lost { .. })
-    }
-
-    pub fn tip(&self) -> &BackingUtxo {
-        self.links().tip()
-    }
-
-    pub fn head(&self) -> &BackingUtxo {
-        self.links().head()
-    }
-
-    /// The settled floor: the amount covered with zero rollback exposure.
-    /// This is the amount of the deepest settled UTXO in the lineage,
-    /// or zero if no UTXO has reached the finality window.
-    pub fn settled_floor(&self) -> u64 {
-        if !self.is_live() {
-            return 0;
-        }
-        self.links()
-            .iter()
-            .filter(|u| u.is_settled())
-            .map(|u| u.amount)
-            // The most recent settled link is the tightest floor.
-            .last()
-            .unwrap_or(0)
-    }
-
-    /// The tip amount — what this chain can back at the tip's depth.
-    pub fn tip_amount(&self) -> u64 {
-        if self.is_live() { self.tip().amount } else { 0 }
-    }
-
-    /// The depth bucket of the tip.
-    pub fn tip_bucket(&self) -> Option<DepthBucket> {
-        if self.is_live() {
-            Some(self.tip().bucket())
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ChainError {
-    /// Attempted to extend a Lost chain.
-    ExtendLost,
-    /// The witness does not match the chain tip or the successor.
-    WitnessMismatch,
-}
-
-// ---------------------------------------------------------------------------
 // Exposure — the risk step function
 // ---------------------------------------------------------------------------
 
@@ -332,10 +96,16 @@ pub enum Exposure {
 // Backing — the top-level type
 // ---------------------------------------------------------------------------
 
+pub enum BackingError {
+}
+
 /// The complete set of backing chains for an L2 commitment.
 /// Empty = no backing whatsoever.
-#[derive(Debug, Clone, Default)]
-pub struct Backing(pub Vec<Chain>);
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[repr(transparent)]
+#[serde(transparent)]
+#[cbor(transparent)]
+pub struct Backing(#[n(0)] pub Vec<Chain>);
 
 impl Backing {
     // --- Constructors -------------------------------------------------------
@@ -346,7 +116,7 @@ impl Backing {
     }
 
     /// A single live chain from a freshly observed UTXO.
-    pub fn from_utxo(utxo: BackingUtxo) -> Self {
+    pub fn new(utxo: BackingUtxo) -> Self {
         Backing(vec![Chain::new(utxo)])
     }
 
@@ -357,263 +127,324 @@ impl Backing {
 
     // --- Chain management ---------------------------------------------------
 
-    pub fn add_chain(&mut self, chain: Chain) {
+    pub fn append(&mut self, chains: Vec<Chain>) {
+        // FIXME :: How to append to vecs without faffing wiht muts
+        let mut chains = chains;
+        self.0.append(&mut chains);
+    }
+
+    pub fn push(&mut self, chain: Chain) {
         self.0.push(chain);
     }
 
-    /// Remove chains whose tips have been absent beyond the finality window
-    /// and whose predecessors are also settled — safe to discard.
-    pub fn gc_settled_lost(&mut self, finality_depth: BlockDepth) {
-        self.0.retain(|chain| {
-            match chain {
-                Chain::Lost { links, .. } => {
-                    // Retain if any link is not yet settled — still a fallback.
-                    links.iter().any(|u| u.depth < finality_depth)
-                }
-                Chain::Live { .. } => true,
-            }
-        });
-    }
+    // /// Remove chains whose tips have been absent beyond the finality window
+    // /// and whose predecessors are also settled — safe to discard.
+    // pub fn gc_settled_lost(&mut self, finality_depth: BlockDepth) {
+    //     self.0.retain(|chain| {
+    //         match chain {
+    //             Chain::Lost { links, .. } => {
+    //                 // Retain if any link is not yet settled — still a fallback.
+    //                 links.iter().any(|u| u.depth < finality_depth)
+    //             }
+    //             Chain::Live { .. } => true,
+    //         }
+    //     });
+    // }
 
-    // --- Derived values -----------------------------------------------------
+    // // --- Derived values -----------------------------------------------------
 
-    /// All live chains.
-    pub fn live_chains(&self) -> impl Iterator<Item = &Chain> {
-        self.0.iter().filter(|c| c.is_live())
-    }
+    // // /// All live chains.
+    // // pub fn live_chains(&self) -> impl Iterator<Item = &Chain> {
+    // //     self.0.iter().filter(|c| c.is_live())
+    // // }
 
-    /// The effective settled floor across all live chains.
-    /// We take the max: a single well-settled chain is sufficient.
-    pub fn settled_floor(&self) -> u64 {
-        self.live_chains()
-            .map(|c| c.settled_floor())
-            .max()
-            .unwrap_or(0)
-    }
+    // // /// The effective settled floor across all live chains.
+    // // /// We take the max: a single well-settled chain is sufficient.
+    // // pub fn settled_floor(&self) -> u64 {
+    // //     self.live_chains()
+    // //         .map(|c| c.settled_floor())
+    // //         .max()
+    // //         .unwrap_or(0)
+    // // }
 
-    /// The total live backing at tip (max across live chains).
-    /// We take max, not sum: mimics are redundant, not additive.
-    pub fn effective_amount(&self) -> u64 {
-        self.live_chains()
-            .map(|c| c.tip_amount())
-            .max()
-            .unwrap_or(0)
-    }
+    // // /// The total live backing at tip (max across live chains).
+    // // /// We take max, not sum: mimics are redundant, not additive.
+    // // pub fn effective_amount(&self) -> u64 {
+    // //     self.live_chains()
+    // //         .map(|c| c.tip_amount())
+    // //         .max()
+    // //         .unwrap_or(0)
+    // // }
 
-    /// The best (deepest) bucket across live chain tips.
-    pub fn best_bucket(&self) -> Option<DepthBucket> {
-        self.live_chains().filter_map(|c| c.tip_bucket()).max()
-    }
+    // /// The best (deepest) bucket across live chain tips.
+    // pub fn best_bucket(&self) -> Option<DepthBucket> {
+    //     self.live_chains().filter_map(|c| c.tip_bucket()).max()
+    // }
 
-    // --- Exposure -----------------------------------------------------------
-
-    /// Compute the discretized coverage step function for a payment of size `z`.
+    /// The assumptions of a snapshot:
     ///
-    /// Returns `FullyCovered` if `z` is within the settled floor.
-    /// Returns `Unbacked` if `z` exceeds all live backing.
-    /// Otherwise returns `PartiallyExposed` with steps describing each
-    /// coverage slice and its exposure in basis points.
+    /// + All utxos are at tip.
+    /// + Any new utxo is added as a singleton.
+    /// + If a utxo matches an existing one then
+    ///     + if its last, then continue.
+    ///     + else split decendents into `Lost` chain.
+    /// + Any existing chain with no matching utxo, is lost.
     ///
-    /// `bucket_exposure_bps` maps a `DepthBucket` to basis points of exposure
-    /// (0 = zero risk, 10_000 = certain loss). Supplied by the caller so that
-    /// `Backing` remains agnostic of the risk model.
-    pub fn exposure_for(
-        &self,
-        z: u64,
-        bucket_exposure_bps: impl Fn(DepthBucket) -> u32,
-    ) -> Exposure {
-        let floor = self.settled_floor();
-        let total = self.effective_amount();
-
-        if z <= floor {
-            return Exposure::FullyCovered;
-        }
-
-        if z > total {
-            return Exposure::Unbacked;
-        }
-
-        // Build the step function over the exposed slice (floor, z].
-        // Collect all live tips, deduplicate by bucket (take deepest amount
-        // per bucket), then emit steps from most-settled to least-settled.
-        let mut steps: Vec<CoverageStep> = {
-            // Group live chain tips by bucket, taking max amount per bucket.
-            let mut by_bucket: std::collections::BTreeMap<DepthBucket, u64> =
-                std::collections::BTreeMap::new();
-
-            for chain in self.live_chains() {
-                if let Some(bucket) = chain.tip_bucket() {
-                    let amt = chain.tip_amount();
-                    let entry = by_bucket.entry(bucket).or_insert(0);
-                    if amt > *entry {
-                        *entry = amt;
-                    }
-                }
+    /// The logic relies on the inability to split a chain.
+    /// ie, there is at most one Utxo in a snapshot that correpsonds to a chain
+    pub fn snapshot(
+        &mut self,
+        block_height: BlockHeight,
+        utxos: Vec<BackingUtxo>,
+    ) -> Result<(), BackingError> {
+        let mut utxos = utxos;
+        for chain in self.0.iter_mut() {
+            for utxo in utxos.iter() {
+                // Find a Utxo in snapshot;
+                // If yes, pop
+                todo!()
             }
-
-            // Emit steps: for each bucket (deepest first), the slice between
-            // the previous cumulative amount and this bucket's amount.
-            let mut prev = floor;
-            let mut steps = vec![];
-
-            // BTreeMap iterates in key order; DepthBucket derives Ord deepest-last,
-            // so we reverse to go deepest-first (lowest exposure first).
-            for (bucket, cumulative) in by_bucket.into_iter().rev() {
-                if cumulative <= prev {
-                    continue;
-                }
-                let slice_top = cumulative.min(z);
-                steps.push(CoverageStep {
-                    cumulative_amount: slice_top,
-                    exposure_bps: bucket_exposure_bps(bucket),
-                    bucket,
-                });
-                prev = slice_top;
-                if prev >= z {
-                    break;
-                }
-            }
-
-            steps
-        };
-
-        // Ensure steps are ordered settled → unconfirmed (exposure ascending).
-        steps.sort_by_key(|s| s.exposure_bps);
-
-        Exposure::PartiallyExposed(steps)
+            // Else, chain is lost
+            chain.lose(block_height);
+            todo!()
+        }
+        self.append(utxos.into_iter().map(|u| Chain::new(u)).collect());
+        todo!()
     }
 
-    /// Convenience: compute a single scalar fee in u64 given a risk
-    /// weight function (basis points per u64 at each bucket).
+    /// The assumptions of a successsion:
     ///
-    /// fee = Σ slice_amount_i × exposure_bps_i / 10_000
-    pub fn fee_for(&self, z: u64, bucket_exposure_bps: impl Fn(DepthBucket) -> u32) -> u64 {
-        match self.exposure_for(z, &bucket_exposure_bps) {
-            Exposure::FullyCovered => 0,
-            Exposure::Unbacked => u64::MAX, // caller should reject
-            Exposure::PartiallyExposed(steps) => {
-                let mut prev = self.settled_floor();
-                let mut fee: u64 = 0;
-                for step in &steps {
-                    let slice = step.cumulative_amount.saturating_sub(prev);
-                    fee = fee.saturating_add(
-                        (slice as u128 * step.exposure_bps as u128 / 10_000) as u64,
-                    );
-                    prev = step.cumulative_amount;
-                }
-                fee
-            }
-        }
+    /// + If the parent is `last`, then the child is appended.
+    /// If `is_tip == true`, then chain is treated as `Chain::Live`.
+    /// + If the parent already has child, then the exisitng lineage is split off into a
+    /// `Chain::Lost`. and (new) child is appended to Parent.
+    /// + If there is no recorded parent, a new singleton chain with the child,
+    /// and return an error `NoParent`
+    /// + If the child already exists and is already succeeding parent, then error already exists.
+    /// + If the child is the head of an existing chain, the chains are merged.
+    /// + Else the child is succeding not the parent, then something has gone very wrong.
+    /// Error Inconsistent update
+    pub fn succede(&mut self, succession: Succession, is_tip: bool) -> Result<(), BackingError> {
+        todo!()
     }
+
+    pub fn rollback(&mut self, block_height: BlockHeight) {
+        todo!()
+    }
+
+    // // --- Exposure -----------------------------------------------------------
+
+    // /// Compute the discretized coverage step function for a payment of size `z`.
+    // ///
+    // /// Returns `FullyCovered` if `z` is within the settled floor.
+    // /// Returns `Unbacked` if `z` exceeds all live backing.
+    // /// Otherwise returns `PartiallyExposed` with steps describing each
+    // /// coverage slice and its exposure in basis points.
+    // ///
+    // /// `bucket_exposure_bps` maps a `DepthBucket` to basis points of exposure
+    // /// (0 = zero risk, 10_000 = certain loss). Supplied by the caller so that
+    // /// `Backing` remains agnostic of the risk model.
+    // pub fn exposure_for(
+    //     &self,
+    //     z: u64,
+    //     bucket_exposure_bps: impl Fn(DepthBucket) -> u32,
+    // ) -> Exposure {
+    //     let floor = self.settled_floor();
+    //     let total = self.effective_amount();
+
+    //     if z <= floor {
+    //         return Exposure::FullyCovered;
+    //     }
+
+    //     if z > total {
+    //         return Exposure::Unbacked;
+    //     }
+
+    //     // Build the step function over the exposed slice (floor, z].
+    //     // Collect all live tips, deduplicate by bucket (take deepest amount
+    //     // per bucket), then emit steps from most-settled to least-settled.
+    //     let mut steps: Vec<CoverageStep> = {
+    //         // Group live chain tips by bucket, taking max amount per bucket.
+    //         let mut by_bucket: std::collections::BTreeMap<DepthBucket, u64> =
+    //             std::collections::BTreeMap::new();
+
+    //         for chain in self.live_chains() {
+    //             if let Some(bucket) = chain.tip_bucket() {
+    //                 let amt = chain.tip_amount();
+    //                 let entry = by_bucket.entry(bucket).or_insert(0);
+    //                 if amt > *entry {
+    //                     *entry = amt;
+    //                 }
+    //             }
+    //         }
+
+    //         // Emit steps: for each bucket (deepest first), the slice between
+    //         // the previous cumulative amount and this bucket's amount.
+    //         let mut prev = floor;
+    //         let mut steps = vec![];
+
+    //         // BTreeMap iterates in key order; DepthBucket derives Ord deepest-last,
+    //         // so we reverse to go deepest-first (lowest exposure first).
+    //         for (bucket, cumulative) in by_bucket.into_iter().rev() {
+    //             if cumulative <= prev {
+    //                 continue;
+    //             }
+    //             let slice_top = cumulative.min(z);
+    //             steps.push(CoverageStep {
+    //                 cumulative_amount: slice_top,
+    //                 exposure_bps: bucket_exposure_bps(bucket),
+    //                 bucket,
+    //             });
+    //             prev = slice_top;
+    //             if prev >= z {
+    //                 break;
+    //             }
+    //         }
+
+    //         steps
+    //     };
+
+    //     // Ensure steps are ordered settled → unconfirmed (exposure ascending).
+    //     steps.sort_by_key(|s| s.exposure_bps);
+
+    //     Exposure::PartiallyExposed(steps)
+    // }
+
+    // /// Convenience: compute a single scalar fee in u64 given a risk
+    // /// weight function (basis points per u64 at each bucket).
+    // ///
+    // /// fee = Σ slice_amount_i × exposure_bps_i / 10_000
+    // pub fn fee_for(&self, z: u64, bucket_exposure_bps: impl Fn(DepthBucket) -> u32) -> u64 {
+    //     match self.exposure_for(z, &bucket_exposure_bps) {
+    //         Exposure::FullyCovered => 0,
+    //         Exposure::Unbacked => u64::MAX, // caller should reject
+    //         Exposure::PartiallyExposed(steps) => {
+    //             let mut prev = self.settled_floor();
+    //             let mut fee: u64 = 0;
+    //             for step in &steps {
+    //                 let slice = step.cumulative_amount.saturating_sub(prev);
+    //                 fee = fee.saturating_add(
+    //                     (slice as u128 * step.exposure_bps as u128 / 10_000) as u64,
+    //                 );
+    //                 prev = step.cumulative_amount;
+    //             }
+    //             fee
+    //         }
+    //     }
+    // }
 }
 
-// ---------------------------------------------------------------------------
-// Default risk model (illustrative)
-// ---------------------------------------------------------------------------
-
-/// A simple default mapping from depth bucket to exposure basis points.
-/// Replace with your actual risk model.
-pub fn default_exposure_bps(bucket: DepthBucket) -> u32 {
-    match bucket {
-        DepthBucket::Settled => 0,
-        DepthBucket::Deep => 10,         // 0.1%
-        DepthBucket::Probable => 50,     // 0.5%
-        DepthBucket::Shallow => 200,     // 2%
-        DepthBucket::Unconfirmed => 800, // 8%
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn utxo(n: u8) -> UtxoRef {
-        UtxoRef {
-            tx_hash: [n; 32],
-            output_index: 0,
-        }
-    }
-
-    fn backing_utxo(n: u8, amount: u64, depth: u32) -> BackingUtxo {
-        BackingUtxo::new(utxo(n), amount, BlockDepth(depth))
-    }
-
-    #[test]
-    fn empty_backing_is_unbacked() {
-        let b = Backing::empty();
-        assert!(matches!(
-            b.exposure_for(1000, default_exposure_bps),
-            Exposure::Unbacked
-        ));
-    }
-
-    #[test]
-    fn settled_utxo_gives_full_coverage() {
-        // depth 100 >> finality threshold → Settled bucket
-        let b = Backing::from_utxo(backing_utxo(1, 1_000_000, 100));
-        assert!(matches!(
-            b.exposure_for(500_000, default_exposure_bps),
-            Exposure::FullyCovered
-        ));
-    }
-
-    #[test]
-    fn shallow_utxo_gives_partial_exposure() {
-        let b = Backing::from_utxo(backing_utxo(1, 1_000_000, 4)); // Shallow
-        let exp = b.exposure_for(500_000, default_exposure_bps);
-        assert!(matches!(exp, Exposure::PartiallyExposed(_)));
-    }
-
-    #[test]
-    fn exceeding_backing_is_unbacked() {
-        let b = Backing::from_utxo(backing_utxo(1, 1_000_000, 4));
-        assert!(matches!(
-            b.exposure_for(2_000_000, default_exposure_bps),
-            Exposure::Unbacked
-        ));
-    }
-
-    #[test]
-    fn lost_chain_does_not_contribute() {
-        let chain = Chain::new(backing_utxo(1, 1_000_000, 100)).lose();
-        let b = Backing::from_chains(vec![chain]);
-        assert!(matches!(
-            b.exposure_for(1, default_exposure_bps),
-            Exposure::Unbacked
-        ));
-    }
-
-    #[test]
-    fn mimic_does_not_aggregate() {
-        // Two identical live chains — effective amount is max, not sum.
-        let b = Backing::from_chains(vec![
-            Chain::new(backing_utxo(1, 1_000_000, 4)),
-            Chain::new(backing_utxo(2, 1_000_000, 4)),
-        ]);
-        assert_eq!(b.effective_amount(), (1_000_000));
-    }
-
-    #[test]
-    fn chain_extend_requires_witness() {
-        let tip = backing_utxo(1, 1_000_000, 4);
-        let successor = backing_utxo(2, 1_000_000, 1);
-        let chain = Chain::new(tip.clone());
-
-        let bad_witness = LineageWitness {
-            spent: utxo(99), // wrong
-            successor: utxo(2),
-        };
-        let result = chain.extend(successor, &bad_witness);
-        assert!(matches!(result, Err(ChainError::WitnessMismatch)));
-    }
-
-    #[test]
-    fn fee_is_zero_for_fully_covered() {
-        let b = Backing::from_utxo(backing_utxo(1, 1_000_000, 100));
-        assert_eq!(b.fee_for(500_000, default_exposure_bps), 0);
-    }
-}
+// // ---------------------------------------------------------------------------
+// // Default risk model (illustrative)
+// // ---------------------------------------------------------------------------
+// 
+// /// A simple default mapping from depth bucket to exposure basis points.
+// /// Replace with your actual risk model.
+// pub fn default_exposure_bps(bucket: DepthBucket) -> u32 {
+//     match bucket {
+//         DepthBucket::Settled => 0,
+//         DepthBucket::Deep => 10,         // 0.1%
+//         DepthBucket::Probable => 50,     // 0.5%
+//         DepthBucket::Shallow => 200,     // 2%
+//         DepthBucket::Unconfirmed => 800, // 8%
+//     }
+// }
+// 
+// // ---------------------------------------------------------------------------
+// // Tests
+// // ---------------------------------------------------------------------------
+// 
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+// 
+//     fn utxo(n: u8) -> OutputReference {
+//         OutputReference {
+//             transaction_id: [n; 32],
+//             output_index: 0,
+//         }
+//     }
+// 
+//     fn backing_utxo(n: u8, amount: u64, depth: u32) -> BackingUtxo {
+//         BackingUtxo::new(utxo(n), amount, BlockDepth(depth))
+//     }
+// 
+//     #[test]
+//     fn empty_backing_is_unbacked() {
+//         let b = Backing::empty();
+//         assert!(matches!(
+//             b.exposure_for(1000, default_exposure_bps),
+//             Exposure::Unbacked
+//         ));
+//     }
+// 
+//     #[test]
+//     fn settled_utxo_gives_full_coverage() {
+//         // depth 100 >> finality threshold → Settled bucket
+//         let b = Backing::new(backing_utxo(1, 1_000_000, 100));
+//         assert!(matches!(
+//             b.exposure_for(500_000, default_exposure_bps),
+//             Exposure::FullyCovered
+//         ));
+//     }
+// 
+//     #[test]
+//     fn shallow_utxo_gives_partial_exposure() {
+//         let b = Backing::new(backing_utxo(1, 1_000_000, 4)); // Shallow
+//         let exp = b.exposure_for(500_000, default_exposure_bps);
+//         assert!(matches!(exp, Exposure::PartiallyExposed(_)));
+//     }
+// 
+//     #[test]
+//     fn exceeding_backing_is_unbacked() {
+//         let b = Backing::new(backing_utxo(1, 1_000_000, 4));
+//         assert!(matches!(
+//             b.exposure_for(2_000_000, default_exposure_bps),
+//             Exposure::Unbacked
+//         ));
+//     }
+// 
+//     #[test]
+//     fn lost_chain_does_not_contribute() {
+//         let chain = Chain::new(backing_utxo(1, 1_000_000, 100)).lose();
+//         let b = Backing::from_chains(vec![chain]);
+//         assert!(matches!(
+//             b.exposure_for(1, default_exposure_bps),
+//             Exposure::Unbacked
+//         ));
+//     }
+// 
+//     #[test]
+//     fn mimic_does_not_aggregate() {
+//         // Two identical live chains — effective amount is max, not sum.
+//         let b = Backing::from_chains(vec![
+//             Chain::new(backing_utxo(1, 1_000_000, 4)),
+//             Chain::new(backing_utxo(2, 1_000_000, 4)),
+//         ]);
+//         assert_eq!(b.effective_amount(), (1_000_000));
+//     }
+// 
+//     #[test]
+//     fn chain_extend_requires_witness() {
+//         let tip = backing_utxo(1, 1_000_000, 4);
+//         let successor = backing_utxo(2, 1_000_000, 1);
+//         let chain = Chain::new(tip.clone());
+// 
+//         let bad_witness = LineageWitness {
+//             spent: utxo(99), // wrong
+//             successor: utxo(2),
+//         };
+//         let result = chain.extend(successor, &bad_witness);
+//         assert!(matches!(result, Err(ChainError::WitnessMismatch)));
+//     }
+// 
+//     #[test]
+//     fn fee_is_zero_for_fully_covered() {
+//         let b = Backing::new(backing_utxo(1, 1_000_000, 100));
+//         assert_eq!(b.fee_for(500_000, default_exposure_bps), 0);
+//     }
+// }
+// 
+// pub enum BackingError {
+//     NoParent,
+// }

@@ -1,3 +1,4 @@
+//! BOLT11 : Invoice
 use bln_sdk::types::Invoice;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};

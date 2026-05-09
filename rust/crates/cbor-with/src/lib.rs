@@ -1,12 +1,3 @@
-// pub mod display_from_str;
-// pub mod via_array;
-// pub mod option;
-//
-// pub use codec::{CborWith, AsOption, AsVec, DisplayFromStr};
-//
-// #[cfg(feature = "plutus-data")]
-// pub mod via_plutus_data;
-
 pub mod prelude;
 
 mod adapters;
@@ -28,7 +19,5 @@ pub trait CborWith<T, C = ()> {
     -> Result<T, minicbor::decode::Error>;
 }
 
-// Pre-built modules for common cases
-as_module!(pub mod display_from_str       = DisplayFromStr);
-as_module!(pub mod option_display_from_str   = AsOption<DisplayFromStr>);
-as_module!(pub mod vec_display_from_str   = AsVec<DisplayFromStr>);
+mod standard;
+pub use standard::*;
