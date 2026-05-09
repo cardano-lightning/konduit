@@ -1,19 +1,44 @@
-use crate::Duration;
 use cardano_sdk::VerificationKey;
+use cardano_sdk::{Address, Hash, address::kind::Shelley};
+use konduit_data::Duration;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::cbor_with;
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+pub struct Response {
+    /// Terms of service. Purely informational
+    #[n(0)]
+    pub tos: TosInfo,
+    /// Channel parameters
+    #[n(1)]
+    pub channel_parameters: ChannelParameters,
+    /// Tx building
+    #[n(2)]
+    pub tx_help: TxHelp,
+}
 
-/// These variables are either those used by more than one component,
-/// or are mandatory.
-/// These are not all variables required: component specific ones
-/// are colocated with the component.
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+pub struct TosInfo {
+    #[n(0)]
+    pub flat_fee: u64,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+pub struct TxHelp {
+    #[cbor(n(0), with = "cbor_with::display_from_str")]
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub host_address: Address<Shelley>,
+    #[n(1)]
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub validator: Hash<28>,
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct ChannelParameters {
-    #[cbor(n(0), with = "cbor_with::via_bytes_fixed")]
+    #[cbor(n(0), with = "cbor_with::via_array")]
     #[serde_as(as = "serde_with::hex::Hex")]
     pub adaptor_key: VerificationKey,
     #[cbor(n(1), with = "cbor_with::via_plutus_data")]
@@ -25,8 +50,6 @@ pub struct ChannelParameters {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Duration;
-    use cardano_sdk::VerificationKey;
 
     fn sample_vk() -> VerificationKey {
         VerificationKey::from([0u8; 32])
