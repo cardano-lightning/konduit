@@ -45,14 +45,12 @@ impl Chain {
         }
     }
 
-    /// A fresh chain from a single newly-observed UTXO. Always `Live`.
     pub fn links(&self) -> &NonEmpty<BackingUtxo> {
         match self {
             Chain::Live { links } | Chain::Lost { links, .. } => links,
         }
     }
 
-    /// A fresh chain from a single newly-observed UTXO. Always `Live`.
     pub fn links_mut(&mut self) -> &mut NonEmpty<BackingUtxo> {
         match self {
             Chain::Live { links } | Chain::Lost { links, .. } => links,
@@ -110,8 +108,7 @@ impl Chain {
     /// Parent must belong to chain, else Error.
     /// If parent is at tip, append child and return None,
     /// else split off existing decendents, and return Some(decendents)
-    pub fn succeed(s: Succession) -> Result<Option<Chain>, ChainError> {
-        // FIXME :: Use `insert_after_and_split_off`
+    pub fn succeed(_s: Succession) -> Result<Option<Chain>, ChainError> {
         todo!()
     }
 
@@ -132,40 +129,6 @@ impl Chain {
     pub fn head(&self) -> &BackingUtxo {
         self.links().head()
     }
-
-    // FIXME :: Chain no longer has current blockheight in context,
-    // nor the adaptor block depth config
-    // Thus it cannot determined status.
-    //
-    // /// The settled floor: the amount covered with zero rollback exposure.
-    // /// This is the amount of the deepest settled UTXO in the lineage,
-    // /// or zero if no UTXO has reached the finality window.
-    // pub fn settled_floor(&self) -> u64 {
-    //     if !self.is_live() {
-    //         return 0;
-    //     }
-    //     self.links()
-    //         .iter()
-    //         .filter(|u| u.is_settled())
-    //         .map(|u| u.amount)
-    //         // The most recent settled link is the tightest floor.
-    //         .last()
-    //         .unwrap_or(0)
-    // }
-
-    // /// The tip amount — what this chain can back at the tip's depth.
-    // pub fn tip_amount(&self) -> u64 {
-    //     if self.is_live() { self.tip().amount } else { 0 }
-    // }
-
-    // /// The depth bucket of the tip.
-    // pub fn tip_bucket(&self) -> Option<DepthBucket> {
-    //     if self.is_live() {
-    //         Some(self.tip().bucket())
-    //     } else {
-    //         None
-    //     }
-    // }
 }
 
 #[derive(Debug, PartialEq, Eq)]

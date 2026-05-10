@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 /// All other endpoints may be entirely different, but
 /// at least a client will be able to establish incompatibility from the version.
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "cddl", cddl(name = "version-response"))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Response {
     /// Support diversity in versioning.
     /// If you want to make a new version, make the flavour distinct and identifiable.
@@ -36,6 +39,7 @@ pub struct Response {
 
     /// What features are supported.
     #[n(4)]
+    #[cfg_attr(feature = "cddl", cddl(ty = "{ text => feature-info }"))]
     pub features: BTreeMap<String, FeatureInfo>,
 
     /// Base URL for hosted documentation for this exact release.
@@ -51,6 +55,9 @@ pub struct Response {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "cddl", cddl(name = "feature-info"))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct FeatureInfo {
     /// Bumped on any breaking change.
     /// At clients discression how to proceed.
@@ -63,7 +70,9 @@ pub struct FeatureInfo {
     /// Fast mismatch detection across independently-versioned features.
     /// Not collision-resistant — use `version` for authoritative compatibility checks.
     #[n(1)]
+    #[cfg_attr(feature = "cddl", cddl(bytes))]
     pub schema_hash: [u8; 8],
+
     /// Path to the human-readable spec, relative to VCS root.
     /// Always of the form "docs/spec/<feature>.md".
     ///
@@ -76,15 +85,18 @@ pub struct FeatureInfo {
     /// for all three to stay in correspondence.
     #[n(2)]
     pub doc_path: String,
+
     /// Path to the canonical type definition in the *protocol* crate, relative to VCS root.
     /// This is the wire contract — not the downstream implementation.
     /// `git show <vcs_hash>:source_path`
-    /// Example: "crates/protocol/src/features/auth.rs"
+    /// Example: "crates/konduit-api/src/endpoints/channel/sync.rs"
     #[n(3)]
     pub source_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum VcsHash {
     /// Standard & Prod builds _ought_ to advertise their VCS hash.
     #[n(0)]
@@ -102,6 +114,8 @@ pub enum VcsHash {
 }
 
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, PartialEq, Eq, Hash, Clone)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SemVer {
     /// Bumped on any breaking change
     #[n(0)]

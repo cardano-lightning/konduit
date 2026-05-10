@@ -12,6 +12,7 @@ members = [
   "crates/http-client-native",
   "crates/http-client-wasm",
   "crates/konduit-api",
+  "crates/konduit-channel",
   "crates/konduit-cddl",
   "crates/konduit-cddl-derive",
   "crates/konduit-cli",
@@ -116,6 +117,7 @@ http-client = { path = "crates/http-client" }
 http-client-native = { path = "crates/http-client-native" }
 http-client-wasm = { path = "crates/http-client-wasm" }
 konduit-api = { path = "crates/konduit-api" }
+konduit-channel = { path = "crates/konduit-channel" }
 konduit-cddl = { path = "crates/konduit-cddl" }
 konduit-cddl-derive = { path = "crates/konduit-cddl-derive" }
 konduit-client = { path = "crates/konduit-client" }

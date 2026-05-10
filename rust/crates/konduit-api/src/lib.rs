@@ -17,8 +17,8 @@ pub mod endpoints;
 /// Auth
 pub mod auth;
 
-// FIXME :: Move this to own crate.
-pub mod channel;
+/// Re-export depth bucket from konduit-channel — it's a client-facing wire type.
+pub use konduit_channel::DepthBucket;
 
 /// Format-negotiated handler return type and supporting utilities.
 /// Requires feature `actix`.

@@ -1,2 +1,2 @@
 pub mod channel;
-pub mod doc_path;
+pub mod source_ref;

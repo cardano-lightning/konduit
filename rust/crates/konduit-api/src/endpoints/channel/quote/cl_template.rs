@@ -1,24 +1,25 @@
-//! CL template : Allow the user to specify fields arbitrarily.
-//!  
-//! Quote without proof of invoice.
+//! CL template: quote without a BOLT-11 invoice (Core Lightning style).
 //!
-//! If final `final_cltv` is None, then a defualt value is used.
-//! The lock aka `r_hash` will be taken from the cheque.
-//! Using the template method, allows a new c;ass pf payment failuer:
-//! user error.
+//! The client specifies the payment parameters directly.
+//! The lock (`r_hash`) will be taken from the cheque.
+//! Using the template method allows a new class of payment failure:
+//! user error (lock mismatch).
 
-use bln_sdk::types::RouteHint;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "cddl", cddl(name = "quote-cl-template-request"))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Request {
     #[n(0)]
     pub amount: u64,
     #[n(1)]
     #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(feature = "cddl", cddl(bytes))]
     pub payee: [u8; 32],
 }
 

@@ -10,8 +10,8 @@
 //! The client must submit a null squash (amount=0) before any `pay` is accepted.
 
 use crate::auth;
-use crate::channel::DepthBucket;
-use konduit_data::SquashProposal;
+use crate::common::channel::SquashProposal;
+use konduit_channel::DepthBucket;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
@@ -44,8 +44,6 @@ pub struct Response {
     /// the in-flight cheques needed to reproduce it.
     /// `None` until the client has submitted their first (null) squash.
     #[cbor(n(1), with = "cbor_with::nullable_same")]
-    #[cfg_attr(feature = "cddl", cddl(ty = "squash-proposal / null"))]
-    #[cfg_attr(feature = "openapi", schema(value_type = Option<Object>))]
     pub squash_proposal: Option<SquashProposal>,
 }
 
@@ -74,5 +72,79 @@ impl crate::ApiError for Error {
             Self::Limit(_) => 429,
             Self::Backing => 404,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn roundtrip_response(val: &Response) -> Response {
+        let bytes = minicbor::to_vec(val).expect("encode failed");
+        minicbor::decode(&bytes).expect("decode failed")
+    }
+
+    fn roundtrip_error(val: &Error) -> Error {
+        let bytes = minicbor::to_vec(val).expect("encode failed");
+        minicbor::decode(&bytes).expect("decode failed")
+    }
+
+    #[test]
+    fn response_no_backing_no_proposal() {
+        let orig = Response {
+            backing: None,
+            squash_proposal: None,
+        };
+        let decoded = roundtrip_response(&orig);
+        assert!(decoded.backing.is_none());
+        assert!(decoded.squash_proposal.is_none());
+    }
+
+    #[test]
+    fn response_with_backing() {
+        let orig = Response {
+            backing: Some(BackingView {
+                amount: 5_000_000,
+                bucket: DepthBucket::Settled,
+            }),
+            squash_proposal: None,
+        };
+        let decoded = roundtrip_response(&orig);
+        let bv = decoded.backing.unwrap();
+        assert_eq!(bv.amount, 5_000_000);
+        assert_eq!(bv.bucket, DepthBucket::Settled);
+    }
+
+    #[test]
+    fn backing_view_all_buckets() {
+        use DepthBucket::*;
+        for bucket in [Unconfirmed, Shallow, Probable, Deep, Settled] {
+            let orig = BackingView { amount: 1, bucket };
+            let bytes = minicbor::to_vec(&orig).unwrap();
+            let decoded: BackingView = minicbor::decode(&bytes).unwrap();
+            assert_eq!(decoded.bucket, bucket);
+        }
+    }
+
+    #[test]
+    fn error_auth_roundtrip() {
+        use crate::auth::pop;
+        let orig = Error::Auth(pop::Error::BadSignature);
+        let decoded = roundtrip_error(&orig);
+        assert!(matches!(decoded, Error::Auth(pop::Error::BadSignature)));
+    }
+
+    #[test]
+    fn error_limit_roundtrip() {
+        let orig = Error::Limit("too fast".into());
+        let decoded = roundtrip_error(&orig);
+        assert!(matches!(decoded, Error::Limit(s) if s == "too fast"));
+    }
+
+    #[test]
+    fn error_backing_roundtrip() {
+        let orig = Error::Backing;
+        let decoded = roundtrip_error(&orig);
+        assert!(matches!(decoded, Error::Backing));
     }
 }

@@ -2035,6 +2035,7 @@ dependencies = [
  "cbor-with",
  "futures",
  "konduit-cddl",
+ "konduit-channel",
  "konduit-data",
  "minicbor",
  "serde",
@@ -2057,6 +2058,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.109",
+]
+
+[[package]]
+name = "konduit-channel"
+version = "0.0.0"
+dependencies = [
+ "cardano-sdk",
+ "cbor-with",
+ "konduit-cddl",
+ "konduit-data",
+ "minicbor",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

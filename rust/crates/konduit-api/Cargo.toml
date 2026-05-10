@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
+konduit-channel.workspace = true
 konduit-data.workspace = true
 minicbor.workspace = true
 serde.workspace = true
@@ -31,13 +32,18 @@ utoipa       = { workspace = true, optional = true }
 
 [features]
 actix   = ["dep:actix-web", "dep:futures"]
-cddl    = ["dep:konduit-cddl"]
+cddl    = ["dep:konduit-cddl", "konduit-channel/cddl"]
 openapi = ["dep:utoipa"]
 
 [[bin]]
 name = "generate_spec"
 path = "src/bin/generate_spec.rs"
 required-features = ["cddl"]
+
+[[bin]]
+name = "generate_openapi"
+path = "src/bin/generate_openapi.rs"
+required-features = ["openapi"]
 
 [package.metadata.docs.rs]
 all-features = true

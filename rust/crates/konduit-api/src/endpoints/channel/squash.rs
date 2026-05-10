@@ -53,7 +53,7 @@ pub enum Error {
     /// Squash body doesn't match the current proposal, or signature doesn't verify.
     #[n(3)]
     #[error("bad squash")]
-    Squash,
+    Invalid,
 
     /// The proposal has advanced (new cheques arrived) since the client last synced.
     /// The client must re-sync before retrying.
@@ -68,8 +68,44 @@ impl crate::ApiError for Error {
             Self::Auth(e) => e.status_code(),
             Self::Limit(_) => 429,
             Self::Backing => 404,
-            Self::Squash => 422,
+            Self::Invalid => 422,
             Self::Stale => 409,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn roundtrip(val: &Error) -> Error {
+        let bytes = minicbor::to_vec(val).expect("encode failed");
+        minicbor::decode(&bytes).expect("decode failed")
+    }
+
+    #[test]
+    fn error_invalid_roundtrip() {
+        let decoded = roundtrip(&Error::Invalid);
+        assert!(matches!(decoded, Error::Invalid));
+    }
+
+    #[test]
+    fn error_stale_roundtrip() {
+        let decoded = roundtrip(&Error::Stale);
+        assert!(matches!(decoded, Error::Stale));
+    }
+
+    #[test]
+    fn error_limit_roundtrip() {
+        let orig = Error::Limit("burst".into());
+        let decoded = roundtrip(&orig);
+        assert!(matches!(decoded, Error::Limit(s) if s == "burst"));
+    }
+
+    #[test]
+    fn response_ok_roundtrip() {
+        let bytes = minicbor::to_vec(&Response::Ok).unwrap();
+        let decoded: Response = minicbor::decode(&bytes).unwrap();
+        assert!(matches!(decoded, Response::Ok));
     }
 }

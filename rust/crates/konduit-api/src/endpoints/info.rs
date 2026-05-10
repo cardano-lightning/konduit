@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "cddl", cddl(name = "info-response"))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Response {
     /// Terms of service. Purely informational
     #[n(0)]
@@ -19,6 +22,8 @@ pub struct Response {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TosInfo {
     #[n(0)]
     pub flat_fee: u64,
@@ -26,24 +31,32 @@ pub struct TosInfo {
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TxHelp {
     #[cbor(n(0), with = "cbor_with::display_from_str")]
     #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[cfg_attr(feature = "cddl", cddl(ty = "text"))]
     pub host_address: Address<Shelley>,
     #[n(1)]
     #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(feature = "cddl", cddl(bytes))]
     pub validator: Hash<28>,
 }
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ChannelParameters {
     #[cbor(n(0), with = "cbor_with::fixed_bytes_32")]
     #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(feature = "cddl", cddl(bytes))]
     pub adaptor_key: VerificationKey,
     #[cbor(n(1), with = "konduit_data::cbor_with::plutus_data")]
+    #[cfg_attr(feature = "cddl", cddl(ty = "duration"))]
     pub close_period: Duration,
-    #[cbor(n(2))]
+    #[n(2)]
     pub tag_length: usize,
 }
 
