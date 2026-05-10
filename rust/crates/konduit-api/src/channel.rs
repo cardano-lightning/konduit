@@ -17,10 +17,8 @@ use serde_with::serde_as;
 mod backing;
 use backing::Backing;
 
-mod nota; 
+mod nota;
 use nota::Nota;
-
-
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
@@ -33,19 +31,19 @@ pub struct Channel {
     tag: Tag,
     #[n(2)]
     backing: Backing,
-    #[cbor(n(3), with = "crate::local_cbor_with::option_via_plutus_data")]
+    #[cbor(n(3), with = "cbor_with::nullable_same")]
     receipt: Option<Receipt>,
     #[n(4)]
     nota: Nota,
 }
 
 // use std::cmp;
-// 
+//
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // pub struct Aux {
 //     is_active: bool,
 // }
-// 
+//
 // #[derive(Debug, Clone, thiserror::Error)]
 // pub enum ChannelError {
 //     #[error("Backing required")]
@@ -61,8 +59,8 @@ pub struct Channel {
 //     #[error("Insufficient funds")]
 //     Funds,
 // }
-// 
-// 
+//
+//
 // impl Channel {
 //     pub fn new(keytag: Keytag) -> Self {
 //         let (key, tag) = keytag.split();
@@ -74,14 +72,14 @@ pub struct Channel {
 //             aux: Aux { is_active: true },
 //         }
 //     }
-// 
+//
 //     pub fn assert_active(&self) -> Result<(), ChannelError> {
 //         if !self.aux.is_active {
 //             return Err(ChannelError::NotActive);
 //         }
 //         Ok(())
 //     }
-// 
+//
 //     pub fn update_retainer(&mut self, l1s: Vec<Backing>) -> Result<(), ChannelError> {
 //         // FIXME :: Handle Useds better!
 //         self.retainer = match &self.receipt {
@@ -100,7 +98,7 @@ pub struct Channel {
 //         };
 //         Ok(())
 //     }
-// 
+//
 //     pub fn update_squash(&mut self, squash: Squash) -> Result<bool, ChannelError> {
 //         let _ = self.assert_active();
 //         if !squash.verify(&self.key, &self.tag) {
@@ -114,7 +112,7 @@ pub struct Channel {
 //             Some(receipt) => Ok(receipt.update_squash(squash)),
 //         }
 //     }
-// 
+//
 //     pub fn squash_proposal(&self) -> Result<SquashProposal, ChannelError> {
 //         match &self.receipt {
 //             None => Err(ChannelError::NoReceipt),
@@ -123,7 +121,7 @@ pub struct Channel {
 //                 .map_err(|_e| ChannelError::BadInput),
 //         }
 //     }
-// 
+//
 //     /// How much funds are currently unspent, uncommitted.
 //     /// Error if no funds can be spent because of other reasons.
 //     pub fn potentially_subable(&self) -> Result<u64, ChannelError> {
@@ -137,7 +135,7 @@ pub struct Channel {
 //         let rel = abs.saturating_sub(retainer.subbed);
 //         Ok(retainer.amount.saturating_sub(rel))
 //     }
-// 
+//
 //     pub fn next_index(&self) -> Result<u64, ChannelError> {
 //         self.assert_active()?;
 //         let retainer = self.retainer.as_ref().ok_or(ChannelError::NoBacking)?;
@@ -148,7 +146,7 @@ pub struct Channel {
 //         };
 //         Ok(index + 1)
 //     }
-// 
+//
 //     pub fn append_locked(&mut self, locked: Locked) -> Result<(), ChannelError> {
 //         if !locked.verify(&self.key, &self.tag) {
 //             Err(ChannelError::BadInput)
@@ -162,11 +160,11 @@ pub struct Channel {
 //                 .map_err(|_err| ChannelError::BadInput)
 //         }
 //     }
-// 
+//
 //     pub fn receipt(&self) -> Option<Receipt> {
 //         self.receipt.clone()
 //     }
-// 
+//
 //     pub fn unlock(&mut self, secret: Secret) -> Result<(), ChannelError> {
 //         self.receipt
 //             .as_mut()
@@ -174,7 +172,7 @@ pub struct Channel {
 //             .unlock(secret)
 //             .map_err(|_err| ChannelError::BadInput)
 //     }
-// 
+//
 //     /// We need to verify that if the channel is active, then there is
 //     /// still a potential retainer with at as much capacity.
 //     /// FIXME :: There is still a potential issue with useds here.
@@ -185,23 +183,23 @@ pub struct Channel {
 //         todo!()
 //     }
 // }
-// 
+//
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // pub struct Quote {
 //     index: u64,
 //     amount: u64,
 // }
-// 
+//
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // pub struct Backing {
 //     amount: u64,
 //     subbed: u64,
 //     useds: Vec<Used>,
 // }
-// 
+//
 // impl TryFrom<&L1Channel> for Backing {
 //     type Error = anyhow::Error;
-// 
+//
 //     fn try_from(value: &L1Channel) -> Result<Self, Self::Error> {
 //         let Stage::Opened(subbed, useds) = value.stage.clone() else {
 //             return Err(anyhow::anyhow!("Not openened"));
@@ -214,10 +212,10 @@ pub struct Channel {
 //         })
 //     }
 // }
-// 
+//
 // impl TryFrom<&konduit_tx::Channel> for Backing {
 //     type Error = anyhow::Error;
-// 
+//
 //     fn try_from(value: &konduit_tx::Channel) -> Result<Self, Self::Error> {
 //         let Stage::Opened(subbed, useds) = value.stage().clone() else {
 //             return Err(anyhow::anyhow!("Not openened"));

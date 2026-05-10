@@ -38,10 +38,10 @@ pub struct TxHelp {
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct ChannelParameters {
-    #[cbor(n(0), with = "cbor_with::via_array")]
+    #[cbor(n(0), with = "cbor_with::fixed_bytes_32")]
     #[serde_as(as = "serde_with::hex::Hex")]
     pub adaptor_key: VerificationKey,
-    #[cbor(n(1), with = "cbor_with::via_plutus_data")]
+    #[cbor(n(1), with = "konduit_data::cbor_with::plutus_data")]
     pub close_period: Duration,
     #[cbor(n(2))]
     pub tag_length: usize,

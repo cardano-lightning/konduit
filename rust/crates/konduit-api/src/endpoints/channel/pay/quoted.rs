@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 #[cbor(transparent)]
 pub struct Request {
-    #[cbor(n(0), with = "cbor_with::via_plutus_data")]
+    #[cbor(n(0), with = "konduit_data::cbor_with::plutus_data")]
     cheque: Cheque,
 }
 
@@ -16,6 +16,8 @@ pub enum Response {
     Inflight,
     #[n(1)]
     Ok,
+    #[n(2)]
+    Ko,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]

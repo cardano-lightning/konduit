@@ -18,19 +18,19 @@ bln-sdk.workspace = true
 cardano-sdk.workspace = true
 konduit-data.workspace = true
 minicbor.workspace = true
-rand_core.workspace = true
 serde.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
-web-time.workspace = true
+# web-time.workspace = true
 # Clients
-reqwest  = { version = "0.12", optional = true }
+# reqwest  = { version = "0.12", optional = true }
 # Server
 actix-web = { version = "4", optional = true }
 futures   = { version = "0.3", optional = true }
+cbor-with = { workspace = true, features = ["full"] }
 
 [features]
-client = ["dep:reqwest"]          # TODO: switch out for http-xxx
+# client = ["dep:reqwest"]          # TODO: switch out for http-xxx
 actix = ["dep:actix-web", "dep:futures"]
 
 [package.metadata.docs.rs]

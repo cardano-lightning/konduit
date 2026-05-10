@@ -2,7 +2,7 @@ pub mod cardano;
 
 mod succession;
 use minicbor::{Decode, Encode};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 pub use succession::Succession;
 
 mod chain;
@@ -96,8 +96,7 @@ pub enum Exposure {
 // Backing — the top-level type
 // ---------------------------------------------------------------------------
 
-pub enum BackingError {
-}
+pub enum BackingError {}
 
 /// The complete set of backing chains for an L2 commitment.
 /// Empty = no backing whatsoever.
@@ -337,7 +336,7 @@ impl Backing {
 // // ---------------------------------------------------------------------------
 // // Default risk model (illustrative)
 // // ---------------------------------------------------------------------------
-// 
+//
 // /// A simple default mapping from depth bucket to exposure basis points.
 // /// Replace with your actual risk model.
 // pub fn default_exposure_bps(bucket: DepthBucket) -> u32 {
@@ -349,26 +348,26 @@ impl Backing {
 //         DepthBucket::Unconfirmed => 800, // 8%
 //     }
 // }
-// 
+//
 // // ---------------------------------------------------------------------------
 // // Tests
 // // ---------------------------------------------------------------------------
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
-// 
+//
 //     fn utxo(n: u8) -> OutputReference {
 //         OutputReference {
 //             transaction_id: [n; 32],
 //             output_index: 0,
 //         }
 //     }
-// 
+//
 //     fn backing_utxo(n: u8, amount: u64, depth: u32) -> BackingUtxo {
 //         BackingUtxo::new(utxo(n), amount, BlockDepth(depth))
 //     }
-// 
+//
 //     #[test]
 //     fn empty_backing_is_unbacked() {
 //         let b = Backing::empty();
@@ -377,7 +376,7 @@ impl Backing {
 //             Exposure::Unbacked
 //         ));
 //     }
-// 
+//
 //     #[test]
 //     fn settled_utxo_gives_full_coverage() {
 //         // depth 100 >> finality threshold → Settled bucket
@@ -387,14 +386,14 @@ impl Backing {
 //             Exposure::FullyCovered
 //         ));
 //     }
-// 
+//
 //     #[test]
 //     fn shallow_utxo_gives_partial_exposure() {
 //         let b = Backing::new(backing_utxo(1, 1_000_000, 4)); // Shallow
 //         let exp = b.exposure_for(500_000, default_exposure_bps);
 //         assert!(matches!(exp, Exposure::PartiallyExposed(_)));
 //     }
-// 
+//
 //     #[test]
 //     fn exceeding_backing_is_unbacked() {
 //         let b = Backing::new(backing_utxo(1, 1_000_000, 4));
@@ -403,7 +402,7 @@ impl Backing {
 //             Exposure::Unbacked
 //         ));
 //     }
-// 
+//
 //     #[test]
 //     fn lost_chain_does_not_contribute() {
 //         let chain = Chain::new(backing_utxo(1, 1_000_000, 100)).lose();
@@ -413,7 +412,7 @@ impl Backing {
 //             Exposure::Unbacked
 //         ));
 //     }
-// 
+//
 //     #[test]
 //     fn mimic_does_not_aggregate() {
 //         // Two identical live chains — effective amount is max, not sum.
@@ -423,13 +422,13 @@ impl Backing {
 //         ]);
 //         assert_eq!(b.effective_amount(), (1_000_000));
 //     }
-// 
+//
 //     #[test]
 //     fn chain_extend_requires_witness() {
 //         let tip = backing_utxo(1, 1_000_000, 4);
 //         let successor = backing_utxo(2, 1_000_000, 1);
 //         let chain = Chain::new(tip.clone());
-// 
+//
 //         let bad_witness = LineageWitness {
 //             spent: utxo(99), // wrong
 //             successor: utxo(2),
@@ -437,14 +436,14 @@ impl Backing {
 //         let result = chain.extend(successor, &bad_witness);
 //         assert!(matches!(result, Err(ChainError::WitnessMismatch)));
 //     }
-// 
+//
 //     #[test]
 //     fn fee_is_zero_for_fully_covered() {
 //         let b = Backing::new(backing_utxo(1, 1_000_000, 100));
 //         assert_eq!(b.fee_for(500_000, default_exposure_bps), 0);
 //     }
 // }
-// 
+//
 // pub enum BackingError {
 //     NoParent,
 // }

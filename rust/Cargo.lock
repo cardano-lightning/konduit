@@ -2032,15 +2032,13 @@ dependencies = [
  "actix-web",
  "bln-sdk",
  "cardano-sdk",
+ "cbor-with",
  "futures",
  "konduit-data",
  "minicbor",
- "rand_core 0.6.4",
- "reqwest",
  "serde",
  "serde_with",
  "thiserror 2.0.17",
- "web-time",
 ]
 
 [[package]]
@@ -2090,6 +2088,7 @@ dependencies = [
  "anyhow",
  "bln-sdk",
  "cardano-sdk",
+ "cbor-with",
  "chrono",
  "cryptoxide 0.5.1",
  "hex",

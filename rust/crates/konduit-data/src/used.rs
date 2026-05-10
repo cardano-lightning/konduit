@@ -40,6 +40,15 @@ impl<'a> TryFrom<&PlutusData<'a>> for Used {
     }
 }
 
+impl<'a> TryFrom<PlutusData<'a>> for Used {
+    type Error = Error;
+
+    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+        let list = Vec::try_from(&data)?;
+        Self::try_from(list)
+    }
+}
+
 impl<'a> From<Used> for Vec<PlutusData<'a>> {
     fn from(used: Used) -> Self {
         vec![PlutusData::from(used.index), PlutusData::from(used.amount)]

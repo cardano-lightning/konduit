@@ -26,7 +26,7 @@ pub struct TosInfo {
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct TxHelp {
-    #[cbor(n(0), with = "crate::cbor_with::display_from_str")]
+    #[cbor(n(0), with = "cbor_with::display_from_str")]
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub host_address: Address<Shelley>,
     #[n(1)]

@@ -17,6 +17,7 @@ crate-type = ["cdylib", "rlib"]
 anyhow.workspace = true
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
+cbor-with = { workspace = true, features = ["full"] }
 chrono.workspace = true
 cryptoxide.workspace = true
 hex.workspace = true
