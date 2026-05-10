@@ -13,12 +13,10 @@
 
 pub const FEATURE: &str = "auth.pop";
 
-// TODO :: Make client version
-// #[cfg(feature = "client")]
-// mod client;
-
 #[cfg(feature = "actix")]
-pub mod with_actix;
-
+pub mod actix;
 mod common;
+pub mod error;
+
 pub use common::{DOMAIN, HEADER_KEYTAG, HEADER_SIGNATURE, Headers, to_bytes};
+pub use error::Error;

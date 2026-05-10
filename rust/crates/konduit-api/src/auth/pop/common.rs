@@ -7,10 +7,10 @@ use minicbor::Encoder;
 /// In other words, this should never look like a cheque or squash.
 pub const DOMAIN: &[u8] = b"KONDUIT_AUTH";
 
-///  Header name keytag
-pub const HEADER_KEYTAG: &str = "Konduit-Keytag";
-///  Header name signature
-pub const HEADER_SIGNATURE: &str = "Konduit-Signature";
+/// Header carrying the keytag. Lowercase per HTTP canonicalisation rules.
+pub const HEADER_KEYTAG: &str = "konduit-keytag";
+/// Header carrying the signature. Lowercase per HTTP canonicalisation rules.
+pub const HEADER_SIGNATURE: &str = "konduit-signature";
 
 pub struct Headers {
     /// Carried in [`HEADER_KEYTAG`](`"Konduit-Keytag"`)

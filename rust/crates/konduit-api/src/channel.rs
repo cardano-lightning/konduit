@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 mod backing;
-use backing::Backing;
+pub use backing::{Backing, DepthBucket};
 
 mod nota;
 use nota::Nota;

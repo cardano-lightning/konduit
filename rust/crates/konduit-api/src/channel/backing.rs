@@ -36,17 +36,26 @@ use crate::channel::backing::cardano::{BlockDepth, BlockHeight};
 
 /// Coarse confirmation depth buckets. Finer granularity is unnecessary:
 /// the meaningful risk distinctions are between these bands, not within them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Encode, Decode,
+)]
+#[cfg_attr(feature = "cddl", derive(konduit_cddl::ToCddl))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum DepthBucket {
     /// Seen on-chain but very shallow — adversarially exploitable.
+    #[n(0)]
     Unconfirmed,
     /// A few confirmations — rollback possible, elevated risk.
+    #[n(1)]
     Shallow,
     /// Moderate confirmations — rollback unlikely but not negligible.
+    #[n(2)]
     Probable,
     /// Deep enough to treat as practically final for fee purposes.
+    #[n(3)]
     Deep,
     /// Beyond the finality window — floor is settled, zero exposure.
+    #[n(4)]
     Settled,
 }
 

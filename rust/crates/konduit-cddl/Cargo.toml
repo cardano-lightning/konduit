@@ -1,0 +1,14 @@
+[package]
+name = "konduit-cddl"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+konduit-cddl-derive = { path = "../konduit-cddl-derive", optional = true }
+
+[features]
+default = []
+derive = ["dep:konduit-cddl-derive"]

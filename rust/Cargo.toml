@@ -11,9 +11,11 @@ members = [
   "crates/http-client",
   "crates/http-client-native",
   "crates/http-client-wasm",
+  "crates/konduit-api",
+  "crates/konduit-cddl",
+  "crates/konduit-cddl-derive",
   "crates/konduit-cli",
   "crates/konduit-client",
-  "crates/konduit-api",
   "crates/konduit-data",
   "crates/konduit-server",
   "crates/konduit-tx",
@@ -113,11 +115,14 @@ fx-client = { path = "crates/fx-client" }
 http-client = { path = "crates/http-client" }
 http-client-native = { path = "crates/http-client-native" }
 http-client-wasm = { path = "crates/http-client-wasm" }
+konduit-api = { path = "crates/konduit-api" }
+konduit-cddl = { path = "crates/konduit-cddl" }
+konduit-cddl-derive = { path = "crates/konduit-cddl-derive" }
 konduit-client = { path = "crates/konduit-client" }
 konduit-data = { path = "crates/konduit-data" }
-konduit-api = { path = "crates/konduit-api" }
 konduit-server = { path = "crates/konduit-server" }
 konduit-tx = { path = "crates/konduit-tx" }
+utoipa = { version = "4", features = ["actix_extras"] }
 
 [profile.wasm]
 inherits = "release"

@@ -21,17 +21,23 @@ minicbor.workspace = true
 serde.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
-# web-time.workspace = true
-# Clients
-# reqwest  = { version = "0.12", optional = true }
-# Server
-actix-web = { version = "4", optional = true }
-futures   = { version = "0.3", optional = true }
 cbor-with = { workspace = true, features = ["full"] }
+# Server
+actix-web    = { version = "4", optional = true }
+futures      = { version = "0.3", optional = true }
+# Spec generation
+konduit-cddl = { workspace = true, features = ["derive"], optional = true }
+utoipa       = { workspace = true, optional = true }
 
 [features]
-# client = ["dep:reqwest"]          # TODO: switch out for http-xxx
-actix = ["dep:actix-web", "dep:futures"]
+actix   = ["dep:actix-web", "dep:futures"]
+cddl    = ["dep:konduit-cddl"]
+openapi = ["dep:utoipa"]
+
+[[bin]]
+name = "generate_spec"
+path = "src/bin/generate_spec.rs"
+required-features = ["cddl"]
 
 [package.metadata.docs.rs]
 all-features = true
