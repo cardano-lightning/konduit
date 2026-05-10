@@ -2071,7 +2071,6 @@ dependencies = [
  "minicbor",
  "serde",
  "serde_with",
- "thiserror 2.0.17",
 ]
 
 [[package]]
