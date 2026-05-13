@@ -19,6 +19,3 @@ target/
 # Envs
 .env
 .env.*
-
-# Server db default
-db
