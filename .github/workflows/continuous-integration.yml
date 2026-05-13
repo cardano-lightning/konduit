@@ -37,7 +37,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.RUST_CACHE_PATH }}
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -48,15 +48,12 @@ jobs:
           binaries-location: cargo-machete-v0.7.0-x86_64-unknown-linux-musl
 
       - name: Clippy
-        working-directory: rust
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Fmt
-        working-directory: rust
         run: cargo fmt --all -- --check
 
       - name: Machete
-        working-directory: rust
         run: cargo-machete
 
   rust-build:
@@ -76,17 +73,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.RUST_CACHE_PATH }}
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Build & test everything in the workspace
-        working-directory: rust
         run: |
           cargo test
 
       - name: Build docs for workspace
-        working-directory: rust
         run: |
           cargo doc --workspace --no-deps
           rm -rf target/doc/konduit_wasm/*
@@ -131,7 +126,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.RUST_CACHE_PATH }}
-          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('rust/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-wasm-
             ${{ runner.os }}-cargo-
@@ -156,11 +151,11 @@ jobs:
         with:
           name: ${{ steps.build.outputs.name }}
           path: |
-            konduit/crates/konduit-wasm/package.json
-            konduit/crates/konduit-wasm/typedoc.json
-            konduit/crates/konduit-wasm/tsconfig.typedoc.json
-            konduit/crates/konduit-wasm/${{ steps.build.outputs.name }}-core
-            konduit/crates/konduit-wasm/${{ steps.build.outputs.name }}-black-box
+            konduit/wasm/package.json
+            konduit/wasm/typedoc.json
+            konduit/wasm/tsconfig.typedoc.json
+            konduit/wasm/${{ steps.build.outputs.name }}-core
+            konduit/wasm/${{ steps.build.outputs.name }}-black-box
 
   docs:
     runs-on: ubuntu-latest
