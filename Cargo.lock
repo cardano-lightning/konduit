@@ -754,6 +754,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cbor-with"
+version = "0.0.0"
+dependencies = [
+ "cbor-with",
+ "minicbor",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2183,16 +2191,15 @@ dependencies = [
  "anyhow",
  "bln-sdk",
  "cardano-sdk",
- "chrono",
+ "cbor-with",
  "cryptoxide 0.5.1",
  "hex",
+ "minicbor",
  "rand_core 0.6.4",
  "serde",
  "serde_json",
  "serde_with",
  "thiserror 2.0.17",
- "uplc",
- "web-time",
 ]
 
 [[package]]

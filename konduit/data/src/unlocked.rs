@@ -75,7 +75,16 @@ impl<'a> TryFrom<&PlutusData<'a>> for Unlocked {
 
     fn try_from(data: &PlutusData<'a>) -> Result<Self> {
         let fields: Vec<PlutusData<'_>> = Vec::try_from(data)?;
-        Unlocked::try_from(fields)
+        Self::try_from(fields)
+    }
+}
+
+impl<'a> TryFrom<PlutusData<'a>> for Unlocked {
+    type Error = Error;
+
+    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+        let fields: Vec<PlutusData<'_>> = Vec::try_from(&data)?;
+        Self::try_from(fields)
     }
 }
 

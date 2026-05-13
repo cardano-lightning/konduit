@@ -17,13 +17,12 @@ crate-type = ["cdylib", "rlib"]
 anyhow.workspace = true
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
-chrono.workspace = true
+cbor-with = { workspace = true, features = ["full"] }
 cryptoxide.workspace = true
 hex.workspace = true
+minicbor.workspace = true
 rand_core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
-uplc.workspace = true
-web-time.workspace = true

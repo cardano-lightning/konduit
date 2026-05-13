@@ -11,6 +11,7 @@ members = [
   "misc/http-client",
   "misc/http-client-native",
   "misc/http-client-wasm",
+  "misc/cbor-with",
   "konduit/cli",
   "konduit/client",
   "konduit/data",
@@ -112,6 +113,7 @@ fx-client = { path = "misc/fx-client" }
 http-client = { path = "misc/http-client" }
 http-client-native = { path = "misc/http-client-native" }
 http-client-wasm = { path = "misc/http-client-wasm" }
+cbor-with = { path = "misc/cbor-with" }
 konduit-client = { path = "konduit/client" }
 konduit-data = { path = "konduit/data" }
 konduit-server = { path = "konduit/server" }

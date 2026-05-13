@@ -27,6 +27,9 @@ mod unlocked;
 mod used;
 mod utils;
 
+/// Encode Decode;
+pub mod cbor_with;
+
 pub use adaptor_info::*;
 pub use base::*;
 pub use channel_parameters::*;

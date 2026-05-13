@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use cardano_sdk::VerificationKey;
+use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::{cmp, collections::BTreeMap};
 
@@ -23,9 +24,11 @@ pub enum ReceiptError {
     BadInput,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Receipt {
+    #[cbor(n(0), with = "crate::cbor_with::plutus_data")]
     pub squash: Squash,
+    #[cbor(n(1), with = "crate::cbor_with::vec_plutus_data")]
     pub cheques: Vec<Cheque>,
 }
 
