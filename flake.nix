@@ -118,8 +118,8 @@
         };
 
         pre-commit = let
-          nixPrekConfig = ".nix-prek-config.json";
-          precommitConfig = ".pre-commit-config.json";
+          nixPrekConfig = ".nix-prek-config.yaml";
+          precommitConfig = ".pre-commit-config.yaml";
         in {
           # clippy checks are failing `nix flake check`
           # However, they come from rust-flakes, and our implicit workspace

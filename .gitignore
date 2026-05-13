@@ -10,7 +10,7 @@
 .envrc
 
 # Nix dev shell 
-.nix-prek-config.json
+.nix-prek-config.yaml
 
 # Rust
 debug/

@@ -48,7 +48,7 @@ in {
       (name: konduit-server: let
         flakePkgs = konduit-server.flake.packages.x86_64-linux;
       in {
-        name = "konduit-adatpor-${name}";
+        name = "konduit-server-${name}";
         value = {
           inherit (konduit-server) domain;
           systemdConfig = port: {
