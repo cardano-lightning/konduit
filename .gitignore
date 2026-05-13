@@ -1,3 +1,21 @@
+# No idea :) 
 .idea
+
+# Cardano keys
 **/*.skey
 **/*.vkey
+
+# Direnv
+.direnv/
+.envrc
+
+# Nix dev shell 
+.nix-prek-config.yaml
+
+# Rust
+debug/
+target/
+
+# Envs
+.env
+.env.*
