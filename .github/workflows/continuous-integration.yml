@@ -11,7 +11,7 @@ env:
     ~/.cargo/registry/index/
     ~/.cargo/registry/cache/
     ~/.cargo/git/db/
-    rust/target/
+    target/
 
 permissions:
   contents: read
@@ -95,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cargo-doc
-          path: rust/target/doc
+          path: target/doc
 
       - name: Upload technical briefing
         uses: actions/upload-artifact@v4

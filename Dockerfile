@@ -9,6 +9,6 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates libssl3 curl \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /dist/rust/target/release/konduit-server /app/konduit-server
+COPY --from=build /dist/target/release/konduit-server /app/konduit-server
 EXPOSE 4444
 CMD ["/app/konduit-server"]
