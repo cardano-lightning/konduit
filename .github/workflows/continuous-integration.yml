@@ -144,7 +144,7 @@ jobs:
 
       - name: Build wasm
         id: build
-        working-directory: rust/crates/konduit-wasm
+        working-directory: konduit/wasm
         env:
           OUT: konduit-wasm-${{ steps.meta.outputs.version }}
         run: |
@@ -156,11 +156,11 @@ jobs:
         with:
           name: ${{ steps.build.outputs.name }}
           path: |
-            rust/crates/konduit-wasm/package.json
-            rust/crates/konduit-wasm/typedoc.json
-            rust/crates/konduit-wasm/tsconfig.typedoc.json
-            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-core
-            rust/crates/konduit-wasm/${{ steps.build.outputs.name }}-black-box
+            konduit/crates/konduit-wasm/package.json
+            konduit/crates/konduit-wasm/typedoc.json
+            konduit/crates/konduit-wasm/tsconfig.typedoc.json
+            konduit/crates/konduit-wasm/${{ steps.build.outputs.name }}-core
+            konduit/crates/konduit-wasm/${{ steps.build.outputs.name }}-black-box
 
   docs:
     runs-on: ubuntu-latest
