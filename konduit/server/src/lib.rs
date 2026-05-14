@@ -1,8 +1,10 @@
 mod error;
 pub use error::*;
 
-mod channel;
-pub use channel::{Channel, ChannelError, Quote};
+// Stale server channel types — kept for admin/retainer logic until indexer rewrite.
+// TODO: delete when admin service is rewritten against konduit-indexer.
+#[allow(dead_code)]
+pub mod channel;
 
 pub mod admin;
 

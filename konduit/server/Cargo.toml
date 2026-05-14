@@ -27,8 +27,11 @@ futures.workspace = true
 fx-client = { workspace = true, features = ["cli", "namespaced"] }
 hex = { workspace = true, features = ["serde"] }
 humantime.workspace = true
+konduit-api    = { workspace = true, features = ["actix"] }
+konduit-channel.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
+minicbor.workspace = true
 log.workspace = true
 postcard = { workspace = true, features = ["postcard-derive", "use-std"] }
 reqwest = { workspace = true, features = ["json"] }

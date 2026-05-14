@@ -1,0 +1,21 @@
+[package]
+name = "konduit-channel"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cardano-sdk.workspace = true
+konduit-data.workspace = true
+minicbor.workspace = true
+serde.workspace = true
+serde_with = { workspace = true, features = ["hex"] }
+cbor-with = { workspace = true, features = ["full"] }
+thiserror.workspace = true
+

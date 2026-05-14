@@ -19,7 +19,7 @@ impl Service {
     }
 
     pub async fn run(self) -> std::io::Result<()> {
-        // FIXME :: Handle error
+        let adapter_key = self.data.adapter_key();
         let data = web::Data::new(self.data);
         log::info!("Starting server on http://{}...", self.bind_address);
         HttpServer::new(move || {
@@ -32,20 +32,15 @@ impl Service {
                         .allow_any_header(),
                 )
                 .app_data(data.clone())
+                .route("/version", web::get().to(handlers::version))
                 .route("/info", web::get().to(handlers::info))
                 .service(
-                    // FIXME : Implement auth
-                    web::scope("/ch")
-                        .wrap(middleware::KeytagAuth::new("KONDUIT"))
-                        .route("/receipt", web::get().to(handlers::receipt))
+                    web::scope("/channel")
+                        .wrap(middleware::Pop::new(adapter_key))
+                        .route("/sync", web::get().to(handlers::sync))
                         .route("/squash", web::post().to(handlers::squash))
-                        .route("/quote", web::post().to(handlers::quote))
-                        .route("/pay", web::post().to(handlers::pay)),
-                )
-                .service(web::scope("/opt").route("/fx", web::get().to(handlers::fx)))
-                .service(
-                    // THIS SHOULD BE EXPOSED ONLY TO TRUSTED SOURCES.
-                    web::scope("/admin").route("/show", web::get().to(handlers::show)),
+                        .route("/pay/quoted", web::post().to(handlers::pay_quoted))
+                        .route("/quote/bolt11", web::post().to(handlers::quote_bolt11)),
                 )
         })
         .bind(self.bind_address)?

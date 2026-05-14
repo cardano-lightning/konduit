@@ -1,5 +1,5 @@
 use clap::Parser;
-use konduit_data::AdaptorInfo;
+use konduit_api::endpoints::info;
 use konduit_server::{admin, args, server};
 use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let info = Arc::new(AdaptorInfo::from(args.common));
+    let info = Arc::new(info::Response::from(args.common));
     let server_data = server::Data::new(bln, db, fx_state, info, admin);
     let server = server::Service::new(args.server, server_data);
 
