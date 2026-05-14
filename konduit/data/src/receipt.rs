@@ -1,7 +1,6 @@
 use crate::{
-    Cheque, ChequeBody, Cont, Duration, Indexes, L1Channel, Lock, Locked, MAX_UNSQUASHED, Pending,
-    Secret, Squash, SquashBody, SquashBodyError, SquashProposal, Stage, Tag, Unlocked, Unpend,
-    Used,
+    Cheque, ChequeBody, Cont, Duration, Indexes, Lock, Locked, MAX_UNSQUASHED, Pending, Secret,
+    Squash, SquashBody, SquashBodyError, Stage, Tag, Unlocked, Unpend, Used,
 };
 use anyhow::anyhow;
 use cardano_sdk::VerificationKey;
@@ -297,145 +296,145 @@ impl Receipt {
         }
     }
 
-    pub fn squash_proposal(&self) -> Result<SquashProposal, ReceiptError> {
-        let current = self.squash.clone();
-        let unlockeds = self.unlockeds();
-        let index = match unlockeds.last() {
-            Some(u) => cmp::max(self.squash.index(), u.index()),
-            None => self.squash.index(),
-        };
-        let exclude = Indexes::new(
-            self.lockeds()
-                .iter()
-                .map(|l| l.index())
-                .filter(|i| i < &index)
-                .collect(),
-        )
-        .map_err(|_e| ReceiptError::NotReproduced)?;
-        let proposal = SquashBody::new(self.owed(), index, exclude)
-            .map_err(|_e| ReceiptError::NotReproduced)?;
-        Ok(SquashProposal {
-            proposal,
-            current,
-            unlockeds,
-            lockeds: self.lockeds(),
-        })
-    }
+    // pub fn squash_proposal(&self) -> Result<SquashProposal, ReceiptError> {
+    //     let current = self.squash.clone();
+    //     let unlockeds = self.unlockeds();
+    //     let index = match unlockeds.last() {
+    //         Some(u) => cmp::max(self.squash.index(), u.index()),
+    //         None => self.squash.index(),
+    //     };
+    //     let exclude = Indexes::new(
+    //         self.lockeds()
+    //             .iter()
+    //             .map(|l| l.index())
+    //             .filter(|i| i < &index)
+    //             .collect(),
+    //     )
+    //     .map_err(|_e| ReceiptError::NotReproduced)?;
+    //     let proposal = SquashBody::new(self.owed(), index, exclude)
+    //         .map_err(|_e| ReceiptError::NotReproduced)?;
+    //     Ok(SquashProposal {
+    //         proposal,
+    //         current,
+    //         unlockeds,
+    //         lockeds: self.lockeds(),
+    //     })
+    // }
 
-    pub fn step(&self, upper_bound: &Duration, l1: &L1Channel) -> Option<(Cont, L1Channel)> {
-        match &l1.stage {
-            Stage::Opened(subbed, useds) => {
-                let squash = self.squash.clone();
-                let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
-                let unlockeds = self
-                    .unlockeds()
-                    .iter()
-                    .filter(|c| !used_indexes.contains(&c.index()))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let mut useds = useds
-                    .iter()
-                    .filter(|u| !squash.is_index_squashed(u.index))
-                    .cloned()
-                    .chain(unlockeds.iter().map(|u| Used::new(u.index(), u.amount())))
-                    .collect::<Vec<_>>();
-                useds.sort_by_key(|i| i.index);
-                let abs = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
-                let rel = abs.checked_sub(*subbed)?;
-                let actually_subable = cmp::min(rel, l1.amount);
-                let subbed = subbed + actually_subable;
-                let amount = l1.amount.saturating_sub(actually_subable);
-                Some((
-                    Cont::Sub(self.squash.clone(), unlockeds),
-                    L1Channel {
-                        amount,
-                        stage: Stage::Opened(subbed, useds),
-                    },
-                ))
-            }
-            Stage::Closed(subbed, useds, _) => {
-                let squash = self.squash.clone();
-                let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
+    // pub fn step(&self, upper_bound: &Duration, l1: &L1Channel) -> Option<(Cont, L1Channel)> {
+    //     match &l1.stage {
+    //         Stage::Opened(subbed, useds) => {
+    //             let squash = self.squash.clone();
+    //             let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
+    //             let unlockeds = self
+    //                 .unlockeds()
+    //                 .iter()
+    //                 .filter(|c| !used_indexes.contains(&c.index()))
+    //                 .cloned()
+    //                 .collect::<Vec<_>>();
+    //             let mut useds = useds
+    //                 .iter()
+    //                 .filter(|u| !squash.is_index_squashed(u.index))
+    //                 .cloned()
+    //                 .chain(unlockeds.iter().map(|u| Used::new(u.index(), u.amount())))
+    //                 .collect::<Vec<_>>();
+    //             useds.sort_by_key(|i| i.index);
+    //             let abs = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
+    //             let rel = abs.checked_sub(*subbed)?;
+    //             let actually_subable = cmp::min(rel, l1.amount);
+    //             let subbed = subbed + actually_subable;
+    //             let amount = l1.amount.saturating_sub(actually_subable);
+    //             Some((
+    //                 Cont::Sub(self.squash.clone(), unlockeds),
+    //                 L1Channel {
+    //                     amount,
+    //                     stage: Stage::Opened(subbed, useds),
+    //                 },
+    //             ))
+    //         }
+    //         Stage::Closed(subbed, useds, _) => {
+    //             let squash = self.squash.clone();
+    //             let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
 
-                let cheques = self
-                    .cheques
-                    .iter()
-                    .filter(|c| !used_indexes.contains(&c.index()))
-                    .cloned()
-                    .collect::<Vec<_>>();
+    //             let cheques = self
+    //                 .cheques
+    //                 .iter()
+    //                 .filter(|c| !used_indexes.contains(&c.index()))
+    //                 .cloned()
+    //                 .collect::<Vec<_>>();
 
-                let pendings = cheques
-                    .iter()
-                    .filter_map(|c| c.as_locked())
-                    .map(Pending::from)
-                    .collect::<Vec<_>>();
-                let pendings_amount = pendings.iter().map(|p| p.amount).sum::<u64>();
+    //             let pendings = cheques
+    //                 .iter()
+    //                 .filter_map(|c| c.as_locked())
+    //                 .map(Pending::from)
+    //                 .collect::<Vec<_>>();
+    //             let pendings_amount = pendings.iter().map(|p| p.amount).sum::<u64>();
 
-                let unused = cheques
-                    .iter()
-                    .filter_map(|c| c.as_unlocked())
-                    .map(|c| c.amount())
-                    .sum::<u64>();
+    //             let unused = cheques
+    //                 .iter()
+    //                 .filter_map(|c| c.as_unlocked())
+    //                 .map(|c| c.amount())
+    //                 .sum::<u64>();
 
-                let unsquashed = useds
-                    .iter()
-                    .filter(|u| !squash.is_index_squashed(u.index))
-                    .map(|u| u.amount)
-                    .sum::<u64>();
+    //             let unsquashed = useds
+    //                 .iter()
+    //                 .filter(|u| !squash.is_index_squashed(u.index))
+    //                 .map(|u| u.amount)
+    //                 .sum::<u64>();
 
-                let abs = squash.amount() + unsquashed + unused;
+    //             let abs = squash.amount() + unsquashed + unused;
 
-                if *subbed > abs && pendings_amount == 0 {
-                    return None;
-                }
+    //             if *subbed > abs && pendings_amount == 0 {
+    //                 return None;
+    //             }
 
-                let rel = abs.saturating_sub(*subbed);
+    //             let rel = abs.saturating_sub(*subbed);
 
-                let actually_subable = cmp::min(rel, l1.amount);
-                let amount = l1.amount.saturating_sub(actually_subable);
-                Some((
-                    Cont::Respond(self.squash.clone(), cheques),
-                    L1Channel {
-                        amount,
-                        stage: Stage::Responded(pendings_amount, pendings),
-                    },
-                ))
-            }
-            Stage::Responded(pendings_amount, pendings) => {
-                let known = self
-                    .unlockeds()
-                    .iter()
-                    .map(|c| (*c.lock(), c.secret.clone()))
-                    .collect::<BTreeMap<Lock, Secret>>();
-                let unpends: Vec<Unpend> = pendings
-                    .iter()
-                    .filter(|p| p.timeout > *upper_bound)
-                    .map(|u| known.get(&u.lock).map_or(Unpend::Continue, Unpend::from))
-                    .collect::<Vec<_>>();
-                let claim = pendings
-                    .iter()
-                    .zip(&unpends)
-                    .filter(|(_a, b)| b.is_continue())
-                    .map(|(a, _b)| a.amount)
-                    .sum::<u64>();
-                if claim == 0 {
-                    return None;
-                }
-                let pendings = pendings
-                    .iter()
-                    .zip(&unpends)
-                    .filter(|(_a, b)| !b.is_continue())
-                    .map(|(a, _b)| a.clone())
-                    .collect::<Vec<_>>();
-                let pendings_amount = pendings_amount - claim;
-                Some((
-                    Cont::Unlock(unpends),
-                    L1Channel {
-                        amount: l1.amount - claim,
-                        stage: Stage::Responded(pendings_amount, pendings),
-                    },
-                ))
-            }
-        }
-    }
+    //             let actually_subable = cmp::min(rel, l1.amount);
+    //             let amount = l1.amount.saturating_sub(actually_subable);
+    //             Some((
+    //                 Cont::Respond(self.squash.clone(), cheques),
+    //                 L1Channel {
+    //                     amount,
+    //                     stage: Stage::Responded(pendings_amount, pendings),
+    //                 },
+    //             ))
+    //         }
+    //         Stage::Responded(pendings_amount, pendings) => {
+    //             let known = self
+    //                 .unlockeds()
+    //                 .iter()
+    //                 .map(|c| (*c.lock(), c.secret.clone()))
+    //                 .collect::<BTreeMap<Lock, Secret>>();
+    //             let unpends: Vec<Unpend> = pendings
+    //                 .iter()
+    //                 .filter(|p| p.timeout > *upper_bound)
+    //                 .map(|u| known.get(&u.lock).map_or(Unpend::Continue, Unpend::from))
+    //                 .collect::<Vec<_>>();
+    //             let claim = pendings
+    //                 .iter()
+    //                 .zip(&unpends)
+    //                 .filter(|(_a, b)| b.is_continue())
+    //                 .map(|(a, _b)| a.amount)
+    //                 .sum::<u64>();
+    //             if claim == 0 {
+    //                 return None;
+    //             }
+    //             let pendings = pendings
+    //                 .iter()
+    //                 .zip(&unpends)
+    //                 .filter(|(_a, b)| !b.is_continue())
+    //                 .map(|(a, _b)| a.clone())
+    //                 .collect::<Vec<_>>();
+    //             let pendings_amount = pendings_amount - claim;
+    //             Some((
+    //                 Cont::Unlock(unpends),
+    //                 L1Channel {
+    //                     amount: l1.amount - claim,
+    //                     stage: Stage::Responded(pendings_amount, pendings),
+    //                 },
+    //             ))
+    //         }
+    //     }
+    // }
 }
