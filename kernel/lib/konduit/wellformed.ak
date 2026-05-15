@@ -12,7 +12,7 @@ pub fn wellsigned(
   body: Data,
   signature: Signature,
 ) {
-  verify_signature(key, append_bytearray(tag, cbor.serialise(body)), signature)
+  verify_signature(key, cbor.serialise((tag, body)), signature)
 }
 
 pub fn unlocked(
