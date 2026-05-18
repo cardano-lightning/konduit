@@ -1,4 +1,4 @@
-use crate::{Duration, Lock, Secret, Tag};
+use crate::{Duration, Lock, Secret};
 use anyhow::{Error, Result};
 use cardano_sdk::{
     PlutusData,
@@ -52,13 +52,6 @@ impl ChequeBody {
             timeout,
             lock,
         }
-    }
-
-    pub fn tagged_bytes(&self, tag: &Tag) -> Vec<u8> {
-        let mut data = PlutusData::from(self.clone()).to_cbor();
-        let mut x = tag.as_ref().to_vec();
-        x.append(&mut data);
-        x
     }
 
     pub fn is_secret(&self, secret: &Secret) -> bool {

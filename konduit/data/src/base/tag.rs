@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cardano_sdk::PlutusData;
+use cardano_sdk::{PlutusData, cbor::ToCbor};
 use rand_core::RngCore;
 use std::{fmt, ops::Deref, str::FromStr};
 
@@ -12,6 +12,19 @@ impl Tag {
         let mut bytes = vec![0; length];
         rand_core::OsRng.fill_bytes(&mut bytes);
         Self::from(bytes)
+    }
+
+    /// Tag data!
+    pub fn data<T>(&self, data: &T) -> Vec<u8>
+    where
+        for<'a> PlutusData<'a>: From<T>,
+        T: Clone,
+    {
+        PlutusData::list([
+            PlutusData::bytes(self.as_ref()),
+            PlutusData::from(data.clone()),
+        ])
+        .to_cbor()
     }
 }
 
