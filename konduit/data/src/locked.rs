@@ -38,12 +38,12 @@ impl Locked {
     }
 
     pub fn make(signing_key: &SigningKey, tag: &Tag, body: ChequeBody) -> Self {
-        let signature = signing_key.sign(body.tagged_bytes(tag));
+        let signature = signing_key.sign(tag.data(&body));
         Self::new(body, signature)
     }
 
     pub fn verify(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
-        verification_key.verify(self.body.tagged_bytes(tag), &self.signature)
+        verification_key.verify(tag.data(&self.body), &self.signature)
     }
 }
 

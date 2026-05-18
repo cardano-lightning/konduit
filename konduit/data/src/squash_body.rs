@@ -1,4 +1,4 @@
-use crate::{ChequeBody, Indexes, IndexesError, Tag};
+use crate::{ChequeBody, Indexes, IndexesError};
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, cbor, cbor::ToCbor};
 use serde::{Deserialize, Serialize};
@@ -71,13 +71,6 @@ impl SquashBody {
             index,
             exclude,
         }
-    }
-
-    pub fn tagged_bytes(&self, tag: &Tag) -> Vec<u8> {
-        let mut data = PlutusData::from(self).to_cbor();
-        let mut x = tag.as_ref().to_vec();
-        x.append(&mut data);
-        x
     }
 
     /// Only squash what has been verified.
