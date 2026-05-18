@@ -1,8 +1,12 @@
 use crate::{Constants, Stage};
 use cardano_sdk::{Hash, PlutusData};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
-#[derive(Debug, Clone)]
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Datum {
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub own_hash: Hash<28>,
     pub constants: Constants,
     pub stage: Stage,

@@ -4,9 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::Unlocked;
 
+#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Used {
+    #[cfg_attr(feature = "cddl", n(0))]
     pub index: u64,
+    #[cfg_attr(feature = "cddl", n(1))]
     pub amount: u64,
 }
 

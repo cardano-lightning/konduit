@@ -1,5 +1,5 @@
-use crate::Duration;
 use cardano_sdk::VerificationKey;
+use konduit_data::Duration;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -14,7 +14,7 @@ pub struct ChannelParameters {
     #[cbor(n(0), with = "cbor_with::fixed_bytes_32")]
     #[serde_as(as = "serde_with::hex::Hex")]
     pub adaptor_key: VerificationKey,
-    #[cbor(n(1), with = "crate::cbor_with::plutus_data")]
+    #[cbor(n(1), with = "konduit_data::cbor_with::plutus_data")]
     pub close_period: Duration,
     #[cbor(n(2))]
     pub tag_length: usize,
@@ -23,8 +23,8 @@ pub struct ChannelParameters {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Duration;
     use cardano_sdk::VerificationKey;
+    use konduit_data::Duration;
 
     fn sample_vk() -> VerificationKey {
         VerificationKey::from([0u8; 32])

@@ -7,6 +7,7 @@ use serde_with::serde_as;
 use std::fmt;
 
 #[serde_as]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
 #[serde(transparent)]
@@ -80,5 +81,15 @@ impl<'a> TryFrom<PlutusData<'a>> for Lock {
 impl<'a> From<Lock> for PlutusData<'a> {
     fn from(value: Lock) -> Self {
         Self::bytes(value.0)
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Lock {
+    fn cddl_ref() -> String {
+        "lock".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        Some("lock = bytes".to_string())
     }
 }

@@ -122,3 +122,23 @@ impl Add for Duration {
         Duration(self.0 + rhs.0)
     }
 }
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Duration {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        any::<u64>().prop_map(Duration::from_millis).boxed()
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Duration {
+    fn cddl_ref() -> String {
+        "duration".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        Some("duration = uint".to_string())
+    }
+}

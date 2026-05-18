@@ -1,8 +1,9 @@
 use crate::{Cheque, Squash, Unlocked, Unpend};
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, constr};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Redeemer {
     Defer,
     Main(Vec<Step>),
@@ -57,7 +58,7 @@ impl<'a> From<Redeemer> for PlutusData<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Step {
     Cont(Cont),
     Eol(Eol),
@@ -116,7 +117,7 @@ impl<'a> From<Step> for PlutusData<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Cont {
     Add,
     Sub(Squash, Vec<Unlocked>),
@@ -238,7 +239,7 @@ impl<'a> From<Cont> for PlutusData<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Eol {
     End,
     Elapse,

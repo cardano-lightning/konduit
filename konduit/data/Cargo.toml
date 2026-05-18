@@ -13,9 +13,13 @@ rust-version.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+cddl     = ["dep:cuddly"]
+proptest = ["dep:proptest", "dep:proptest-derive"]
+
 [dependencies]
 anyhow.workspace = true
-bln-sdk.workspace = true
 cardano-sdk.workspace = true
 cbor-with = { workspace = true, features = ["full"] }
 cryptoxide.workspace = true
@@ -26,3 +30,19 @@ serde.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
+cuddly          = { workspace = true, features = ["derive"], optional = true }
+proptest        = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
+
+[[bin]]
+name = "generate_cddl"
+path = "src/bin/generate_cddl.rs"
+required-features = ["cddl"]
+
+[dev-dependencies]
+cddl-cat.workspace = true
+proptest.workspace = true
+
+[[test]]
+name = "proptests"
+required-features = ["proptest", "cddl"]

@@ -10,11 +10,16 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
+#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Unlocked {
+    #[cfg_attr(feature = "cddl", n(0))]
     pub body: ChequeBody,
+    #[cfg_attr(feature = "cddl", n(1))]
     #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(feature = "cddl", cddl(bytes))]
     pub signature: Signature,
+    #[cfg_attr(feature = "cddl", n(2))]
     #[serde_as(as = "serde_with::hex::Hex")]
     pub secret: Secret,
 }
@@ -67,6 +72,22 @@ impl Unlocked {
     pub fn verify_no_time(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
         let locked = self.locked();
         locked.verify(verification_key, tag) && locked.body.is_secret(&self.secret)
+    }
+}
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Unlocked {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        (any::<ChequeBody>(), any::<[u8; 64]>(), any::<[u8; 32]>())
+            .prop_map(|(mut body, sig_bytes, secret_bytes)| {
+                let secret = Secret(secret_bytes);
+                body.lock = Lock::from(&secret);
+                Unlocked::new_no_verify(body, Signature::from(sig_bytes), secret)
+            })
+            .boxed()
     }
 }
 

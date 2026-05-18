@@ -9,10 +9,14 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
+#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Locked {
+    #[cfg_attr(feature = "cddl", n(0))]
     pub body: ChequeBody,
+    #[cfg_attr(feature = "cddl", n(1))]
     #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(feature = "cddl", cddl(bytes))]
     pub signature: Signature,
 }
 
@@ -44,6 +48,18 @@ impl Locked {
 
     pub fn verify(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
         verification_key.verify(tag.data(&self.body), &self.signature)
+    }
+}
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Locked {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        (any::<ChequeBody>(), any::<[u8; 64]>())
+            .prop_map(|(body, sig_bytes)| Locked::new(body, Signature::from(sig_bytes)))
+            .boxed()
     }
 }
 
