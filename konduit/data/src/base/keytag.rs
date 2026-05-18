@@ -88,3 +88,25 @@ impl<'a> From<Keytag> for PlutusData<'a> {
         Self::bytes(value.0)
     }
 }
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Keytag {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        proptest::collection::vec(any::<u8>(), 32..=64)
+            .prop_map(|v| Keytag::try_from(v).unwrap())
+            .boxed()
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Keytag {
+    fn cddl_ref() -> String {
+        "keytag".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        Some("keytag = bytes".to_string())
+    }
+}

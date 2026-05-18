@@ -1,11 +1,15 @@
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, cbor::ToCbor};
 use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::{fmt, ops::Deref, str::FromStr};
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[serde_as]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
-pub struct Tag(Vec<u8>);
+pub struct Tag(#[serde_as(as = "serde_with::hex::Hex")] Vec<u8>);
 
 impl Tag {
     pub fn generate(length: usize) -> Self {
@@ -101,5 +105,15 @@ impl From<Tag> for Vec<u8> {
 impl From<&Tag> for Vec<u8> {
     fn from(value: &Tag) -> Self {
         value.0.clone()
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Tag {
+    fn cddl_ref() -> String {
+        "tag".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        Some("tag = bytes".to_string())
     }
 }

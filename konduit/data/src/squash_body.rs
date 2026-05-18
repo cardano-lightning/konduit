@@ -1,6 +1,6 @@
 use crate::{ChequeBody, Indexes, IndexesError};
 use anyhow::anyhow;
-use cardano_sdk::{PlutusData, cbor, cbor::ToCbor};
+use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::cmp;
 
@@ -13,41 +13,15 @@ pub enum SquashBodyError {
     Exclude(IndexesError),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SquashBody {
+    #[cfg_attr(feature = "cddl", n(0))]
     pub amount: u64,
+    #[cfg_attr(feature = "cddl", n(1))]
     pub index: u64,
+    #[cfg_attr(feature = "cddl", n(2))]
     pub exclude: Indexes,
-}
-
-impl Serialize for SquashBody {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let bytes = PlutusData::from(self.clone()).to_cbor();
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(bytes))
-        } else {
-            serializer.serialize_bytes(&bytes)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for SquashBody {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes: Vec<u8> = if deserializer.is_human_readable() {
-            let str: String = serde::Deserialize::deserialize(deserializer)?;
-            hex::decode(str).map_err(serde::de::Error::custom)?
-        } else {
-            serde::Deserialize::deserialize(deserializer)?
-        };
-        let plutus_data: PlutusData = cbor::decode(&bytes).map_err(serde::de::Error::custom)?;
-        Self::try_from(plutus_data).map_err(serde::de::Error::custom)
-    }
 }
 
 impl SquashBody {
@@ -102,6 +76,26 @@ impl SquashBody {
             cmp::Ordering::Equal => true,
             cmp::Ordering::Greater => !self.exclude.has(index),
         }
+    }
+}
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for SquashBody {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        proptest::collection::btree_set(0u64..u64::MAX / 2, 0..=crate::MAX_EXCLUDE_LENGTH)
+            .prop_flat_map(|set| {
+                let exclude: Vec<u64> = set.into_iter().collect();
+                let lo = exclude.last().map(|x| x + 1).unwrap_or(0);
+                let hi = lo.saturating_add(1_000_000);
+                (Just(exclude), lo..=hi, any::<u64>())
+            })
+            .prop_map(|(exclude, index, amount)| {
+                SquashBody::new_no_verify(amount, index, Indexes(exclude))
+            })
+            .boxed()
     }
 }
 

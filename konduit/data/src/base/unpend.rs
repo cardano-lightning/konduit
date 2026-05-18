@@ -1,13 +1,17 @@
 use anyhow::anyhow;
 use cardano_sdk::PlutusData;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::{Secret, utils::try_into_array};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[serde_as]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Unpend {
     Continue,
     Expire,
-    Unlock([u8; 32]),
+    Unlock(#[serde_as(as = "serde_with::hex::Hex")] [u8; 32]),
 }
 
 impl Unpend {
@@ -67,5 +71,15 @@ impl<'a> From<Unpend> for PlutusData<'a> {
             Unpend::Expire => PlutusData::bytes([0]),
             Unpend::Unlock(arr) => PlutusData::bytes(arr),
         }
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Unpend {
+    fn cddl_ref() -> String {
+        "unpend".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        Some("unpend = bytes".to_string())
     }
 }

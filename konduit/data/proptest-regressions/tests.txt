@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8ae88b9811a69a6d2ae576a730eae2bc5d01a8a138aecf26fcbed40990e873bc # shrinks to val = Indexes([])
+cc afb726e7a1cd83254b632b4c94c3cae85948aa4742cbbf4817251f079a0b3926 # shrinks to val = Duration(0ns)
+cc ced5eabda1ce9d29a90aaa068e71684412da0763af160cea348c3ae100d9fdfc # shrinks to val = ChequeBody { index: 0, amount: 0, timeout: Duration(0ns), lock: Lock([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) }
+cc d91286e4f33e2adf740c569744b08848395a9e89e7a5271325ce83d9e86c3865 # shrinks to val = Unlocked(Unlocked { body: ChequeBody { index: 0, amount: 0, timeout: Duration(0ns), lock: Lock([195, 104, 209, 7, 187, 55, 44, 98, 148, 128, 203, 195, 63, 108, 197, 153, 20, 42, 171, 97, 210, 161, 48, 200, 121, 95, 49, 16, 232, 104, 125, 74]) }, signature: Signature(Signature<Ed25519>("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")), secret: Secret([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 144, 35, 10, 255, 32, 145, 69, 248, 236]) })

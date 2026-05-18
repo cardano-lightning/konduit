@@ -127,3 +127,32 @@ impl<'a> From<Cheque> for PlutusData<'a> {
         }
     }
 }
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Cheque {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        prop_oneof![
+            any::<crate::Unlocked>().prop_map(Cheque::Unlocked),
+            any::<crate::Locked>().prop_map(Cheque::Locked),
+        ]
+        .boxed()
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Cheque {
+    fn cddl_ref() -> String {
+        "cheque".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        // Plutus constructors are CBOR-tagged: alt 0 → tag 121, alt 1 → tag 122.
+        Some(format!(
+            "cheque = #6.121({}) / #6.122({})",
+            crate::Unlocked::cddl_ref(),
+            crate::Locked::cddl_ref(),
+        ))
+    }
+}

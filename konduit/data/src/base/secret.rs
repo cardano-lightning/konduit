@@ -3,6 +3,7 @@ use cardano_sdk::PlutusData;
 
 use crate::utils::try_into_array;
 
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Secret(pub [u8; 32]);
@@ -53,5 +54,15 @@ impl<'a> TryFrom<PlutusData<'a>> for Secret {
 impl<'a> From<Secret> for PlutusData<'a> {
     fn from(value: Secret) -> Self {
         Self::bytes(value.0)
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Secret {
+    fn cddl_ref() -> String {
+        "secret".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        Some("secret = bytes".to_string())
     }
 }

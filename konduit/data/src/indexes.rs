@@ -164,6 +164,28 @@ impl<'a> From<&Indexes> for PlutusData<'a> {
     }
 }
 
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Indexes {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        proptest::collection::btree_set(any::<u64>(), 0..=crate::MAX_EXCLUDE_LENGTH)
+            .prop_map(|set| Indexes(set.into_iter().collect()))
+            .boxed()
+    }
+}
+
+#[cfg(feature = "cddl")]
+impl cuddly::ToCddl for Indexes {
+    fn cddl_ref() -> String {
+        "indexes".to_string()
+    }
+    fn cddl_definition() -> Option<String> {
+        Some("indexes = [* uint]".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

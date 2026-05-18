@@ -3,10 +3,15 @@ use anyhow::{Error, Result, anyhow};
 use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Pending {
+    #[cfg_attr(feature = "cddl", n(0))]
     pub amount: u64,
+    #[cfg_attr(feature = "cddl", n(1))]
     pub timeout: Duration,
+    #[cfg_attr(feature = "cddl", n(2))]
     pub lock: Lock,
 }
 

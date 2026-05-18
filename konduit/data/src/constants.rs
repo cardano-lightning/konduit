@@ -1,11 +1,16 @@
 use crate::{Duration, Tag};
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, VerificationKey, constr};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Constants {
     pub tag: Tag,
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub add_vkey: VerificationKey,
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub sub_vkey: VerificationKey,
     pub close_period: Duration,
 }
