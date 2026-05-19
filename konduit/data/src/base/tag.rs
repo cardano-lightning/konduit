@@ -19,9 +19,9 @@ impl Tag {
     }
 
     /// Tag data!
-    pub fn data<T>(&self, data: &T) -> Vec<u8>
+    pub fn data<T: Clone>(&self, data: &T) -> Vec<u8>
     where
-        for<'a> PlutusData<'a>: From<T>,
+        PlutusData<'static>: From<T>,
         T: Clone,
     {
         PlutusData::list([

@@ -25,12 +25,12 @@ impl Pending {
     }
 }
 
-impl From<Locked> for Pending {
-    fn from(value: Locked) -> Self {
+impl<U> From<Locked<U>> for Pending {
+    fn from(value: Locked<U>) -> Self {
         Self {
             amount: value.amount(),
-            timeout: value.body.timeout,
-            lock: value.body.lock,
+            timeout: value.timeout(),
+            lock: *value.lock(),
         }
     }
 }

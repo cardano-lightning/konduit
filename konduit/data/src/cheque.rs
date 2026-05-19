@@ -1,21 +1,23 @@
-use crate::{ChequeBody, Duration, Lock, Tag, locked::Locked, unlocked::Unlocked};
+use crate::{
+    ChequeBody, Duration, Lock, Tag, Unverified, Verified, locked::Locked, unlocked::Unlocked,
+};
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, VerificationKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Cheque {
-    Unlocked(Unlocked),
-    Locked(Locked),
+pub enum Cheque<U = Unverified> {
+    Unlocked(Unlocked<U>),
+    Locked(Locked<U>),
 }
 
-impl PartialOrd for Cheque {
+impl<U: Ord + Clone> PartialOrd for Cheque<U> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Cheque {
+impl<U: Ord + Clone> Ord for Cheque<U> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match self.index().cmp(&other.index()) {
             ordering @ std::cmp::Ordering::Less | ordering @ std::cmp::Ordering::Greater => {
@@ -31,64 +33,77 @@ impl Ord for Cheque {
     }
 }
 
-impl Cheque {
+impl<U> Cheque<U> {
     pub fn is_cheque(&self) -> bool {
         !matches!(self, &Self::Unlocked(_))
     }
 
-    pub fn body(&self) -> &ChequeBody {
+    pub fn body(&self) -> ChequeBody {
         match self {
-            Self::Unlocked(unlocked) => &unlocked.body,
-            Self::Locked(locked) => &locked.body,
+            Self::Unlocked(unlocked) => unlocked.locked().body().clone(),
+            Self::Locked(locked) => locked.body().clone(),
         }
     }
 
     pub fn index(&self) -> u64 {
-        self.body().index
+        self.body().index()
     }
 
     pub fn amount(&self) -> u64 {
-        self.body().amount
+        self.body().amount()
     }
 
-    pub fn lock(&self) -> &Lock {
-        &self.body().lock
+    pub fn lock(&self) -> Lock {
+        self.body().lock().clone()
     }
 
-    pub fn timeout(&self) -> &Duration {
-        &self.body().timeout
+    pub fn timeout(&self) -> Duration {
+        self.body().timeout()
     }
+}
 
-    pub fn as_unlocked(&self) -> Option<Unlocked> {
+impl<U: Clone> Cheque<U> {
+    pub fn as_unlocked(&self) -> Option<Unlocked<U>> {
         match self {
             Cheque::Unlocked(unlocked) => Some(unlocked.clone()),
             Cheque::Locked(_) => None,
         }
     }
 
-    pub fn as_locked(&self) -> Option<Locked> {
+    pub fn as_locked(&self) -> Option<Locked<U>> {
         match self {
             Cheque::Unlocked(_) => None,
             Cheque::Locked(locked) => Some(locked.clone()),
         }
     }
+}
 
-    pub fn verify(&self, key: &VerificationKey, tag: &Tag) -> bool {
+// =========================================================================
+// Unverified State Methods
+// =========================================================================
+impl Cheque<Unverified> {
+    /// Verifies the cryptographic signature against the verifying key and tag.
+    /// On success, consumes the unverified cheque and transitions it to `Cheque<Verified>`.
+    pub fn try_verify(
+        self,
+        verification_key: &VerificationKey,
+        tag: &Tag,
+    ) -> anyhow::Result<Cheque<Verified>> {
         match self {
-            Cheque::Unlocked(unlocked) => unlocked.verify_no_time(key, tag),
-            Cheque::Locked(cheque) => cheque.verify(key, tag),
+            Cheque::Unlocked(x) => x.try_verify(verification_key, tag).map(Cheque::from),
+            Cheque::Locked(x) => x.try_verify(verification_key, tag).map(Cheque::from),
         }
     }
 }
 
-impl From<Unlocked> for Cheque {
-    fn from(value: Unlocked) -> Self {
+impl<U> From<Unlocked<U>> for Cheque<U> {
+    fn from(value: Unlocked<U>) -> Self {
         Cheque::Unlocked(value)
     }
 }
 
-impl From<Locked> for Cheque {
-    fn from(value: Locked) -> Self {
+impl<U> From<Locked<U>> for Cheque<U> {
+    fn from(value: Locked<U>) -> Self {
         Cheque::Locked(value)
     }
 }

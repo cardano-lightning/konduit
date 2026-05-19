@@ -20,7 +20,7 @@ pub enum IndexesError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct Indexes(pub Vec<u64>);
+pub struct Indexes(Vec<u64>);
 
 impl fmt::Display for Indexes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -54,6 +54,10 @@ impl str::FromStr for Indexes {
 impl Indexes {
     pub fn empty() -> Self {
         Self(vec![])
+    }
+
+    pub fn last(&self) -> Option<u64> {
+        self.0.last().copied()
     }
 
     pub fn new(items: Vec<u64>) -> Result<Self, IndexesError> {

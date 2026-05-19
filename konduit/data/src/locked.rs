@@ -1,58 +1,59 @@
 use crate::{
-    Duration, Lock, Tag,
+    ChequeSigned, Lock, Tag, Unverified, Verified,
     cheque_body::ChequeBody,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
-use anyhow::{Error, Result, anyhow};
-use cardano_sdk::{PlutusData, Signature, SigningKey, VerificationKey};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use cardano_sdk::{PlutusData, SigningKey, VerificationKey};
 
-#[serde_as]
-#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Locked {
-    #[cfg_attr(feature = "cddl", n(0))]
-    pub body: ChequeBody,
-    #[cfg_attr(feature = "cddl", n(1))]
-    #[serde_as(as = "serde_with::hex::Hex")]
-    #[cfg_attr(feature = "cddl", cddl(bytes))]
-    pub signature: Signature,
+pub type Locked<U = Unverified> = ChequeSigned<Lock, U>;
+
+// =========================================================================
+// Universal Methods (Available on both Verified and Unverified states)
+// =========================================================================
+impl<S> Locked<S> {
+    pub fn lock(&self) -> &Lock {
+        &self.latch()
+    }
 }
 
-impl Locked {
-    pub fn new(body: ChequeBody, signature: Signature) -> Self {
-        Self { body, signature }
+// =========================================================================
+// Unverified State Methods
+// =========================================================================
+impl Locked<Unverified> {
+    /// Verifies the cryptographic signature against the verifying key and tag.
+    /// On success, consumes the unverified cheque and transitions it to `Locked<Verified>`.
+    pub fn try_verify(
+        self,
+        verification_key: &VerificationKey,
+        tag: &Tag,
+    ) -> anyhow::Result<Locked<Verified>> {
+        if verification_key.verify(tag.data(self.body()), &self.signature) {
+            Ok(Locked::new_with_state(self.body, self.signature))
+        } else {
+            Err(anyhow::anyhow!(
+                "Invalid cryptographic signature on locked cheque"
+            ))
+        }
     }
+}
 
-    pub fn index(&self) -> u64 {
-        self.body.index
-    }
-
-    pub fn amount(&self) -> u64 {
-        self.body.amount
-    }
-
-    pub fn timeout(&self) -> Duration {
-        self.body.timeout
-    }
-
-    pub fn lock(&self) -> &Lock {
-        &self.body.lock
-    }
-
+// =========================================================================
+// Verified State Methods
+// =========================================================================
+impl Locked<Verified> {
+    /// Signing a new cheque inherently guarantees its authenticity,
+    /// so the constructor immediately returns a `Locked<Verified>` instance.
     pub fn make(signing_key: &SigningKey, tag: &Tag, body: ChequeBody) -> Self {
         let signature = signing_key.sign(tag.data(&body));
-        Self::new(body, signature)
-    }
-
-    pub fn verify(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
-        verification_key.verify(tag.data(&self.body), &self.signature)
+        Self::new_with_state(body, signature)
     }
 }
 
+// =========================================================================
+// Testing Utilities
+// =========================================================================
 #[cfg(feature = "proptest")]
-impl proptest::arbitrary::Arbitrary for Locked {
+impl proptest::arbitrary::Arbitrary for Locked<Unverified> {
     type Parameters = ();
     type Strategy = proptest::strategy::BoxedStrategy<Self>;
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
@@ -63,29 +64,35 @@ impl proptest::arbitrary::Arbitrary for Locked {
     }
 }
 
-impl<'a> TryFrom<&PlutusData<'a>> for Locked {
-    type Error = Error;
+// =========================================================================
+// Serialization & Deserialization (PlutusData Conversions)
+// Incoming deserializations strictly default to `Unverified`.
+// Outgoing serializations are supported for any state `S`.
+// =========================================================================
+impl<'a> TryFrom<&PlutusData<'a>> for Locked<Unverified> {
+    type Error = anyhow::Error;
 
-    fn try_from(data: &PlutusData<'a>) -> Result<Self> {
+    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let fields: Vec<PlutusData<'_>> = Vec::try_from(data)?;
         Self::try_from(fields)
     }
 }
 
-impl<'a> TryFrom<PlutusData<'a>> for Locked {
-    type Error = Error;
+impl<'a> TryFrom<PlutusData<'a>> for Locked<Unverified> {
+    type Error = anyhow::Error;
 
-    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         let fields: Vec<PlutusData<'_>> = Vec::try_from(&data)?;
         Self::try_from(fields)
     }
 }
 
-impl<'a> TryFrom<Vec<PlutusData<'a>>> for Locked {
-    type Error = Error;
+impl<'a> TryFrom<Vec<PlutusData<'a>>> for Locked<Unverified> {
+    type Error = anyhow::Error;
 
-    fn try_from(list: Vec<PlutusData<'a>>) -> Result<Self> {
-        let [a, b] = <[PlutusData; 2]>::try_from(list).map_err(|_| anyhow!("invalid 'Locked'"))?;
+    fn try_from(list: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
+        let [a, b] =
+            <[PlutusData; 2]>::try_from(list).map_err(|_| anyhow::anyhow!("invalid 'Locked'"))?;
         Ok(Self::new(
             ChequeBody::try_from(a)?,
             signature_from_plutus_data(&b)?,
@@ -93,14 +100,14 @@ impl<'a> TryFrom<Vec<PlutusData<'a>>> for Locked {
     }
 }
 
-impl<'a> From<Locked> for PlutusData<'a> {
-    fn from(locked: Locked) -> Self {
+impl<'a, S> From<Locked<S>> for PlutusData<'a> {
+    fn from(locked: Locked<S>) -> Self {
         PlutusData::list(Vec::from(locked))
     }
 }
 
-impl<'a> From<Locked> for Vec<PlutusData<'a>> {
-    fn from(locked: Locked) -> Self {
+impl<'a, S> From<Locked<S>> for Vec<PlutusData<'a>> {
+    fn from(locked: Locked<S>) -> Self {
         vec![
             PlutusData::from(locked.body),
             signature_to_plutus_data(locked.signature),

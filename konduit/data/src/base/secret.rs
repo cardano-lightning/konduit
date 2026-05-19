@@ -1,12 +1,16 @@
 use anyhow::anyhow;
 use cardano_sdk::PlutusData;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::utils::try_into_array;
 
+#[serde_as]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
-pub struct Secret(pub [u8; 32]);
+#[serde(transparent)]
+pub struct Secret(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
 
 impl std::str::FromStr for Secret {
     type Err = anyhow::Error;

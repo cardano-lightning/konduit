@@ -1,137 +1,120 @@
 use crate::{
-    Duration, Lock, Secret, Tag,
+    ChequeSigned, Locked, Secret, Tag, Unverified, Verified,
     cheque_body::ChequeBody,
-    locked::Locked,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
-use anyhow::{Error, Result, anyhow};
-use cardano_sdk::{PlutusData, Signature, VerificationKey};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use cardano_sdk::{PlutusData, SigningKey, VerificationKey};
 
-#[serde_as]
-#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Unlocked {
-    #[cfg_attr(feature = "cddl", n(0))]
-    pub body: ChequeBody,
-    #[cfg_attr(feature = "cddl", n(1))]
-    #[serde_as(as = "serde_with::hex::Hex")]
-    #[cfg_attr(feature = "cddl", cddl(bytes))]
-    pub signature: Signature,
-    #[cfg_attr(feature = "cddl", n(2))]
-    #[serde_as(as = "serde_with::hex::Hex")]
-    pub secret: Secret,
+pub type Unlocked<U = Unverified> = ChequeSigned<Secret, U>;
+
+// =========================================================================
+// Universal Methods (Available on both Verified and Unverified states)
+// =========================================================================
+impl<U> Unlocked<U> {
+    pub fn locked(&self) -> Locked<U> {
+        Locked::new_with_state(self.body().locked(), self.signature.clone())
+    }
+
+    pub fn secret(&self) -> &Secret {
+        &self.latch()
+    }
 }
 
-impl Unlocked {
-    pub fn new(locked: Locked, secret: Secret) -> anyhow::Result<Self> {
-        if !locked.body.is_secret(&secret) {
-            Err(anyhow!("Bad secret"))?;
-        }
-        Ok(Self::new_no_verify(locked.body, locked.signature, secret))
-    }
-
-    pub fn new_no_verify(body: ChequeBody, signature: Signature, secret: Secret) -> Self {
-        Self {
-            body,
-            signature,
-            secret,
-        }
-    }
-
-    pub fn index(&self) -> u64 {
-        self.body.index
-    }
-
-    pub fn amount(&self) -> u64 {
-        self.body.amount
-    }
-
-    pub fn timeout(&self) -> &Duration {
-        &self.body.timeout
-    }
-
-    pub fn lock(&self) -> &Lock {
-        &self.body.lock
-    }
-
-    pub fn locked(&self) -> Locked {
-        Locked::new(self.body.clone(), self.signature)
-    }
-
-    pub fn verify(
-        &self,
-        timeout: &Duration,
+// =========================================================================
+// Unverified State Methods
+// =========================================================================
+impl Unlocked<Unverified> {
+    /// Verifies the cryptographic signature against the verifying key and tag.
+    /// On success, consumes the unverified cheque and transitions it to `Unlocked<Verified>`.
+    pub fn try_verify(
+        self,
         verification_key: &VerificationKey,
         tag: &Tag,
-    ) -> bool {
-        &self.body.timeout < timeout && self.verify_no_time(verification_key, tag)
-    }
-
-    pub fn verify_no_time(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
-        let locked = self.locked();
-        locked.verify(verification_key, tag) && locked.body.is_secret(&self.secret)
+    ) -> anyhow::Result<Unlocked<Verified>> {
+        if verification_key.verify(tag.data(&self.body), &self.signature) {
+            Ok(Unlocked::new_with_state(self.body, self.signature))
+        } else {
+            Err(anyhow::anyhow!(
+                "Invalid cryptographic signature on locked cheque"
+            ))
+        }
     }
 }
 
+// =========================================================================
+// Verified State Methods
+// =========================================================================
+impl Unlocked<Verified> {
+    /// Signing a new cheque inherently guarantees its authenticity,
+    /// so the constructor immediately returns a `Unlocked<Verified>` instance.
+    pub fn make(signing_key: &SigningKey, tag: &Tag, body: ChequeBody<Secret>) -> Self {
+        let signature = signing_key.sign(tag.data(&body.locked()));
+        Self::new_with_state(body, signature)
+    }
+}
+
+// =========================================================================
+// Testing Utilities
+// =========================================================================
 #[cfg(feature = "proptest")]
-impl proptest::arbitrary::Arbitrary for Unlocked {
+impl proptest::arbitrary::Arbitrary for Unlocked<Unverified> {
     type Parameters = ();
     type Strategy = proptest::strategy::BoxedStrategy<Self>;
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
         use proptest::prelude::*;
-        (any::<ChequeBody>(), any::<[u8; 64]>(), any::<[u8; 32]>())
-            .prop_map(|(mut body, sig_bytes, secret_bytes)| {
-                let secret = Secret(secret_bytes);
-                body.lock = Lock::from(&secret);
-                Unlocked::new_no_verify(body, Signature::from(sig_bytes), secret)
-            })
+        (any::<ChequeBody>(), any::<[u8; 64]>())
+            .prop_map(|(body, sig_bytes)| Unlocked::new(body, Signature::from(sig_bytes)))
             .boxed()
     }
 }
 
-impl<'a> TryFrom<&PlutusData<'a>> for Unlocked {
-    type Error = Error;
+// =========================================================================
+// Serialization & Deserialization (PlutusData Conversions)
+// Incoming deserializations strictly default to `Unverified`.
+// Outgoing serializations are supported for any state `S`.
+// =========================================================================
+impl<'a> TryFrom<&PlutusData<'a>> for Unlocked<Unverified> {
+    type Error = anyhow::Error;
 
-    fn try_from(data: &PlutusData<'a>) -> Result<Self> {
+    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
         let fields: Vec<PlutusData<'_>> = Vec::try_from(data)?;
         Self::try_from(fields)
     }
 }
 
-impl<'a> TryFrom<PlutusData<'a>> for Unlocked {
-    type Error = Error;
+impl<'a> TryFrom<PlutusData<'a>> for Unlocked<Unverified> {
+    type Error = anyhow::Error;
 
-    fn try_from(data: PlutusData<'a>) -> Result<Self> {
+    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
         let fields: Vec<PlutusData<'_>> = Vec::try_from(&data)?;
         Self::try_from(fields)
     }
 }
 
-impl<'a> TryFrom<Vec<PlutusData<'a>>> for Unlocked {
-    type Error = Error;
+impl<'a> TryFrom<Vec<PlutusData<'a>>> for Unlocked<Unverified> {
+    type Error = anyhow::Error;
 
-    fn try_from(list: Vec<PlutusData<'a>>) -> Result<Self> {
-        let [a, b, c] =
-            <[PlutusData; 3]>::try_from(list).map_err(|_| anyhow!("invalid 'Unlocked'"))?;
-        let locked = Locked::new(ChequeBody::try_from(a)?, signature_from_plutus_data(&b)?);
-        Self::new(locked, Secret::try_from(&c)?)
+    fn try_from(list: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
+        let [a, b] =
+            <[PlutusData; 2]>::try_from(list).map_err(|_| anyhow::anyhow!("invalid 'Unlocked'"))?;
+        Ok(Self::new(
+            ChequeBody::try_from(a)?,
+            signature_from_plutus_data(&b)?,
+        ))
     }
 }
 
-impl<'a> From<Unlocked> for PlutusData<'a> {
-    fn from(unlocked: Unlocked) -> Self {
-        PlutusData::list(Vec::from(unlocked))
+impl<'a, S> From<Unlocked<S>> for PlutusData<'a> {
+    fn from(locked: Unlocked<S>) -> Self {
+        PlutusData::list(Vec::from(locked))
     }
 }
 
-impl<'a> From<Unlocked> for Vec<PlutusData<'a>> {
-    fn from(unlocked: Unlocked) -> Self {
+impl<'a, S> From<Unlocked<S>> for Vec<PlutusData<'a>> {
+    fn from(locked: Unlocked<S>) -> Self {
         vec![
-            PlutusData::from(unlocked.body),
-            signature_to_plutus_data(unlocked.signature),
-            PlutusData::from(unlocked.secret),
+            PlutusData::from(locked.body),
+            signature_to_plutus_data(locked.signature),
         ]
     }
 }

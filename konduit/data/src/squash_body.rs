@@ -26,14 +26,14 @@ pub struct SquashBody {
 
 impl SquashBody {
     pub fn new(amount: u64, index: u64, exclude: Indexes) -> anyhow::Result<Self> {
-        match SquashBody::verify_new(&index, &exclude) {
+        match SquashBody::verify_new(index, &exclude) {
             true => Ok(SquashBody::new_no_verify(amount, index, exclude)),
             false => Err(anyhow!("Index must be greater than excludes")),
         }
     }
 
-    pub fn verify_new(index: &u64, exclude: &Indexes) -> bool {
-        match exclude.0.last() {
+    pub fn verify_new(index: u64, exclude: &Indexes) -> bool {
+        match exclude.last() {
             Some(last) => last < index,
             None => true,
         }
@@ -51,19 +51,19 @@ impl SquashBody {
     /// Fails if the cheque is unable to be squashed due
     /// to: Already squashed or; exceed max exclude length.
     pub fn squash(&mut self, cheque_body: ChequeBody) -> Result<(), SquashBodyError> {
-        match self.exclude.remove(cheque_body.index) {
+        match self.exclude.remove(cheque_body.index()) {
             Ok(_) => {
-                self.amount += cheque_body.amount;
+                self.amount += cheque_body.amount();
                 Ok(())
             }
-            Err(_) => match self.index < cheque_body.index {
+            Err(_) => match self.index < cheque_body.index() {
                 false => Err(SquashBodyError::DuplicateIndex),
                 true => {
                     self.exclude
-                        .extend(self.index + 1, cheque_body.index - 1)
+                        .extend(self.index + 1, cheque_body.index() - 1)
                         .map_err(SquashBodyError::Exclude)?;
-                    self.amount += cheque_body.amount;
-                    self.index = cheque_body.index;
+                    self.amount += cheque_body.amount();
+                    self.index = cheque_body.index();
                     Ok(())
                 }
             },
