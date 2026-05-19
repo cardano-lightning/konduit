@@ -135,8 +135,8 @@ impl<'a> TryFrom<PlutusData<'a>> for Cheque {
     }
 }
 
-impl<'a> From<Cheque> for PlutusData<'a> {
-    fn from(value: Cheque) -> Self {
+impl<'a, V: VerifyState> From<Cheque<V>> for PlutusData<'a> {
+    fn from(value: Cheque<V>) -> Self {
         match value {
             Cheque::Unlocked(unlocked) => PlutusData::constr(0, Vec::from(unlocked)),
             Cheque::Locked(locked) => PlutusData::constr(1, Vec::from(locked)),

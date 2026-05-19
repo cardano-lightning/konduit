@@ -137,7 +137,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Cont {
             1 => {
                 let [a, b] = <[PlutusData; 2]>::try_from(fields.collect::<Vec<_>>())
                     .map_err(|_| anyhow!("invalid 'Cont::Sub'"))?;
-                let squash = Squash::try_from(&a)?;
+                let squash = Squash::try_from(a)?;
                 let unlocked = <Vec<PlutusData>>::try_from(&b)?
                     .into_iter()
                     .map(|x| Unlocked::try_from(&x))
@@ -148,7 +148,7 @@ impl<'a> TryFrom<&PlutusData<'a>> for Cont {
             3 => {
                 let [a, b] = <[PlutusData; 2]>::try_from(fields.collect::<Vec<_>>())
                     .map_err(|_| anyhow!("invalid 'Cont::Sub'"))?;
-                let squash = Squash::try_from(&a)?;
+                let squash = Squash::try_from(a)?;
                 let cheques = <Vec<PlutusData>>::try_from(&b)?
                     .into_iter()
                     .map(Cheque::try_from)

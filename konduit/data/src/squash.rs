@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    Indexes, SquashBody, Tag, Unverified, Verified,
+    Indexes, SquashBody, Tag, Unverified, Verified, VerifyState,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
 use anyhow::anyhow;
@@ -12,7 +12,7 @@ use serde_with::serde_as;
 #[serde_as]
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Squash<U = Unverified> {
+pub struct Squash<V = Unverified> {
     #[cfg_attr(feature = "cddl", n(0))]
     body: SquashBody,
     #[cfg_attr(feature = "cddl", n(1))]
@@ -21,13 +21,13 @@ pub struct Squash<U = Unverified> {
     signature: Signature,
     #[serde(skip)]
     #[cfg_attr(feature = "cddl", cddl(skip))]
-    _marker: PhantomData<U>,
+    _marker: PhantomData<V>,
 }
 
 // =========================================================================
 // Universal Methods (Available on both Verified and Unverified states)
 // =========================================================================
-impl<U> Squash<U> {
+impl<V> Squash<V> {
     /// Internal constructor to associate state markers.
     pub fn new_with_state(body: SquashBody, signature: Signature) -> Self {
         Self {
@@ -85,6 +85,16 @@ impl Squash<Unverified> {
             Err(anyhow::anyhow!("Invalid cryptographic signature on Squash"))
         }
     }
+
+    /// The unsafe version. Suitable when the data comes from a trusted source,
+    /// such as your own database.
+    pub fn skip_verify(self) -> Squash<Verified> {
+        Squash {
+            body: self.body,
+            signature: self.signature,
+            _marker: PhantomData,
+        }
+    }
 }
 
 // =========================================================================
@@ -139,16 +149,17 @@ impl<'a> TryFrom<PlutusData<'a>> for Squash {
     }
 }
 
-impl<'a> TryFrom<&PlutusData<'a>> for Squash {
+impl<'a> TryFrom<PlutusData<'a>> for Squash<Verified> {
     type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(<[PlutusData; 2]>::try_from(data)?)
+    fn try_from(_: PlutusData<'a>) -> anyhow::Result<Self> {
+        anyhow::bail!(
+            "Squash<Verified> cannot be decoded; decode as Squash<Unverified> and call try_verify"
+        )
     }
 }
 
-impl<'a> From<Squash> for [PlutusData<'a>; 2] {
-    fn from(value: Squash) -> Self {
+impl<'a, V: VerifyState> From<Squash<V>> for [PlutusData<'a>; 2] {
+    fn from(value: Squash<V>) -> Self {
         [
             PlutusData::from(&value.body),
             signature_to_plutus_data(value.signature),
@@ -156,24 +167,32 @@ impl<'a> From<Squash> for [PlutusData<'a>; 2] {
     }
 }
 
-impl<'a> From<Squash> for PlutusData<'a> {
-    fn from(value: Squash) -> Self {
+impl<'a, V: VerifyState> From<Squash<V>> for PlutusData<'a> {
+    fn from(value: Squash<V>) -> Self {
         Self::list(<[PlutusData; 2]>::from(value).to_vec())
     }
 }
 
-impl<'a> From<Squash<Verified>> for [PlutusData<'a>; 2] {
-    fn from(value: Squash<Verified>) -> Self {
-        [
-            PlutusData::from(&value.body),
-            signature_to_plutus_data(value.signature),
-        ]
+impl<C, V: VerifyState> minicbor::Encode<C> for Squash<V>
+where
+    PlutusData<'static>: minicbor::Encode<C>,
+{
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        PlutusData::from(self).encode(e, ctx) // using your existing &Squash<V> -> PlutusData impl
     }
 }
 
-impl<'a> From<Squash<Verified>> for PlutusData<'a> {
-    fn from(value: Squash<Verified>) -> Self {
-        Self::list(<[PlutusData; 2]>::from(value).to_vec())
+impl<'b, C, V: VerifyState> minicbor::Decode<'b, C> for Squash<V>
+where
+    PlutusData<'b>: minicbor::Decode<'b, C>,
+{
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        let pd = PlutusData::decode(d, ctx)?;
+        Squash::<V>::try_from(pd).map_err(|e| minicbor::decode::Error::message(e.to_string()))
     }
 }
 

@@ -2274,6 +2274,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "konduit-receipt"
+version = "0.0.0"
+dependencies = [
+ "cardano-sdk",
+ "cbor-with",
+ "konduit-data",
+ "minicbor",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "konduit-server"
 version = "0.0.0"
 dependencies = [
@@ -2299,7 +2312,6 @@ dependencies = [
  "minicbor",
  "proptest",
  "proptest-derive",
- "reqwest",
  "serde",
  "serde_json",
  "serde_with",

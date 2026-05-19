@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, cbor::ToCbor};
+use minicbor::{Decode, Encode};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -7,9 +8,14 @@ use std::{fmt, ops::Deref, str::FromStr};
 
 #[serde_as]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 #[repr(transparent)]
-pub struct Tag(#[serde_as(as = "serde_with::hex::Hex")] Vec<u8>);
+#[cbor(transparent)]
+pub struct Tag(
+    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cbor(with = "crate::cbor_with::plutus_bytes", n(0))]
+    Vec<u8>,
+);
 
 impl Tag {
     pub fn generate(length: usize) -> Self {
@@ -115,5 +121,50 @@ impl cuddly::ToCddl for Tag {
     }
     fn cddl_definition() -> Option<String> {
         Some("tag = bytes".to_string())
+    }
+}
+
+#[test]
+fn tag_encodes_as_plutus_bytes() {
+    let raw = vec![0xde, 0xad, 0xbe, 0xef];
+    let tag = Tag(raw.clone());
+
+    // What minicbor produces
+    let mini_bytes = minicbor::to_vec(&tag).unwrap();
+
+    // What PlutusData says the canonical encoding should be
+    let pd = PlutusData::bytes(raw); // or whatever the constructor is
+    let pd_bytes = pd.to_cbor();
+
+    assert_eq!(mini_bytes, pd_bytes);
+}
+
+#[cfg(feature = "proptest")]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn tag_cbor_roundtrip(tag: Tag) {
+            let bytes = minicbor::to_vec(&tag).unwrap();
+            let recovered: Tag = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(tag, recovered);
+        }
+
+        #[test]
+        fn tag_matches_plutus_encoding(raw: Vec<u8>) {
+            let tag = Tag(raw.clone());
+            let mini_bytes = minicbor::to_vec(&tag).unwrap();
+            let pd_bytes = PlutusData::bytes(raw).to_cbor();
+            prop_assert_eq!(mini_bytes, pd_bytes);
+        }
+
+        #[test]
+        fn tag_plutus_roundtrip(tag: Tag) {
+            let pd = PlutusData::bytes(tag.0.clone());
+            let recovered: Tag = minicbor::decode(&pd.to_cbor()).unwrap();
+            prop_assert_eq!(tag, recovered);
+        }
     }
 }

@@ -13,6 +13,7 @@ members = [
   "konduit/client",
   "konduit/data",
   "konduit/ex-data",
+  "konduit/receipt",
   "konduit/server",
   "konduit/tx",
   "konduit/wasm",

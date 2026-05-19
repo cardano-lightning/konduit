@@ -1,5 +1,4 @@
 use crate::{Duration, Lock, Secret};
-use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
@@ -77,46 +76,40 @@ impl ChequeBody<Secret> {
     }
 }
 
-// FIXME :: Spent about an hour trying to get the generic version
-// to encompass both Lock and Secret variants. Massive fail
-impl<'a> TryFrom<PlutusData<'a>> for ChequeBody<Lock> {
-    type Error = anyhow::Error;
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        let [a, b, c, d] = <[PlutusData; 4]>::try_from(&data)?;
-        Ok(Self::new(
-            <u64>::try_from(&a)?,
-            <u64>::try_from(&b)?,
-            Duration::try_from(&c)?,
-            Lock::try_from(&d)?,
-        ))
-    }
-}
-
-impl<'a> TryFrom<PlutusData<'a>> for ChequeBody<Secret> {
-    type Error = anyhow::Error;
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        let [a, b, c, d] = <[PlutusData; 4]>::try_from(&data)?;
-        Ok(Self::new(
-            <u64>::try_from(&a)?,
-            <u64>::try_from(&b)?,
-            Duration::try_from(&c)?,
-            Secret::try_from(&d)?,
-        ))
-    }
-}
-
-impl<T> From<ChequeBody<T>> for PlutusData<'static>
+impl<C, T> minicbor::Encode<C> for ChequeBody<T>
 where
-    T: Clone,
-    PlutusData<'static>: From<T> + From<u64> + From<Duration>,
+    T: minicbor::Encode<C>,
 {
-    fn from(value: ChequeBody<T>) -> Self {
-        Self::list([
-            PlutusData::from(value.index()),
-            PlutusData::from(value.amount()),
-            PlutusData::from(value.timeout()),
-            PlutusData::from(value.latch().clone()),
-        ])
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.begin_array()?;
+        e.encode_with(self.index(), ctx)?;
+        e.encode_with(self.amount(), ctx)?;
+        e.encode_with(self.timeout(), ctx)?;
+        e.encode_with(self.latch(), ctx)?;
+        e.end()?;
+        Ok(())
+    }
+}
+
+impl<'b, C, T> minicbor::Decode<'b, C> for ChequeBody<T>
+where
+    T: minicbor::Decode<'b, C>,
+{
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        d.array()?; // None = indef, Some(n) = definite — handle both or assert indef
+        let index = d.decode_with(ctx)?;
+        let amount = d.decode_with(ctx)?;
+        let timeout: Duration = d.decode_with(ctx)?;
+        let latch: T = d.decode_with(ctx)?;
+        if d.datatype()? != minicbor::data::Type::Break {
+            return Err(minicbor::decode::Error::message("expected end of array"));
+        }
+        d.skip()?;
+        Ok(Self::new(index, amount, timeout, latch))
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{Duration, Unverified, VerifyState, cheque_body::ChequeBody};
+use crate::{Duration, Unverified, Verified, VerifyState, cheque_body::ChequeBody};
 use cardano_sdk::Signature;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -61,6 +61,16 @@ impl<T: Clone> ChequeSigned<T, Unverified> {
     /// Creates a new, unverified cheque from a raw body and signature.
     pub fn new(body: ChequeBody<T>, signature: Signature) -> Self {
         Self::new_with_state(body, signature)
+    }
+
+    /// The unsafe version. Suitable when the data comes from a trusted source,
+    /// such as your own database.
+    pub fn skip_verify(self) -> ChequeSigned<T, Verified> {
+        ChequeSigned {
+            body: self.body,
+            signature: self.signature,
+            _marker: PhantomData,
+        }
     }
 }
 

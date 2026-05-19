@@ -7,7 +7,7 @@
 //! + state concerning the users off-chain usage such resource usage
 
 use cardano_sdk::VerificationKey;
-use konduit_data::{Keytag, Locked, Receipt, Secret, Squash, SquashProposal, Tag};
+use konduit_data::{Keytag, Locked, Receipt, Secret, Squash, Tag};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

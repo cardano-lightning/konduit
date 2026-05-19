@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -74,32 +73,6 @@ impl FromStr for Duration {
     }
 }
 
-/// Parsing from data, assuming milliseconds
-impl<'a> TryFrom<&PlutusData<'a>> for Duration {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let time = u64::try_from(data).map_err(|e| e.context("invalid duration"))?;
-        Ok(Self(time::Duration::from_millis(time)))
-    }
-}
-
-/// Parsing from data, assuming milliseconds
-impl<'a> TryFrom<PlutusData<'a>> for Duration {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(&data)
-    }
-}
-
-/// Converting to [`PlutusData`], assuming milliseconds.
-impl<'a> From<Duration> for PlutusData<'a> {
-    fn from(value: Duration) -> Self {
-        Self::integer(value.0.as_millis())
-    }
-}
-
 /// Converting to `u64`, assuming milliseconds.
 impl From<&Duration> for u64 {
     fn from(value: &Duration) -> Self {
@@ -120,6 +93,24 @@ impl Add for Duration {
     fn add(self, rhs: Self) -> Self::Output {
         // Accessing .0 directly or using deref
         Duration(self.0 + rhs.0)
+    }
+}
+
+impl<C> minicbor::Encode<C> for Duration {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.encode_with(self.0.as_millis() as u64, ctx)?;
+        Ok(())
+    }
+}
+
+impl<'b, C> minicbor::Decode<'b, C> for Duration {
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        let millis: u64 = d.decode_with(ctx)?;
+        Ok(Self(time::Duration::from_millis(millis)))
     }
 }
 
