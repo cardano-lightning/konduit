@@ -1,22 +1,29 @@
 use crate::{
-    ChequeSigned, Locked, Secret, Tag, Unverified, Verified,
+    ChequeSigned, Locked, Secret, Tag, Unverified, Verified, VerifyState,
     cheque_body::ChequeBody,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
 use cardano_sdk::{PlutusData, SigningKey, VerificationKey};
 
-pub type Unlocked<U = Unverified> = ChequeSigned<Secret, U>;
+pub type Unlocked<V = Unverified> = ChequeSigned<Secret, V>;
 
 // =========================================================================
 // Universal Methods (Available on both Verified and Unverified states)
 // =========================================================================
-impl<U> Unlocked<U> {
-    pub fn locked(&self) -> Locked<U> {
-        Locked::new_with_state(self.body().locked(), self.signature.clone())
+impl<V: VerifyState> Unlocked<V> {
+    pub fn try_from_locked(locked: &Locked<V>, secret: Secret) -> Result<Self, &str> {
+        locked
+            .body()
+            .try_unlocked(secret)
+            .map(|body| Self::new_with_state(body, locked.signature))
+    }
+
+    pub fn locked(&self) -> Locked<V> {
+        Locked::new_with_state(self.body().locked(), self.signature)
     }
 
     pub fn secret(&self) -> &Secret {
-        &self.latch()
+        self.latch()
     }
 }
 
@@ -104,14 +111,14 @@ impl<'a> TryFrom<Vec<PlutusData<'a>>> for Unlocked<Unverified> {
     }
 }
 
-impl<'a, S> From<Unlocked<S>> for PlutusData<'a> {
-    fn from(locked: Unlocked<S>) -> Self {
+impl<'a, V: VerifyState> From<Unlocked<V>> for PlutusData<'a> {
+    fn from(locked: Unlocked<V>) -> Self {
         PlutusData::list(Vec::from(locked))
     }
 }
 
-impl<'a, S> From<Unlocked<S>> for Vec<PlutusData<'a>> {
-    fn from(locked: Unlocked<S>) -> Self {
+impl<'a, V: VerifyState> From<Unlocked<V>> for Vec<PlutusData<'a>> {
+    fn from(locked: Unlocked<V>) -> Self {
         vec![
             PlutusData::from(locked.body),
             signature_to_plutus_data(locked.signature),

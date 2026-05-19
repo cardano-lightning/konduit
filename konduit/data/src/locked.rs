@@ -1,18 +1,18 @@
 use crate::{
-    ChequeSigned, Lock, Tag, Unverified, Verified,
+    ChequeSigned, Lock, Tag, Unverified, Verified, VerifyState,
     cheque_body::ChequeBody,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
 use cardano_sdk::{PlutusData, SigningKey, VerificationKey};
 
-pub type Locked<U = Unverified> = ChequeSigned<Lock, U>;
+pub type Locked<V = Unverified> = ChequeSigned<Lock, V>;
 
 // =========================================================================
 // Universal Methods (Available on both Verified and Unverified states)
 // =========================================================================
-impl<S> Locked<S> {
+impl<V: VerifyState> Locked<V> {
     pub fn lock(&self) -> &Lock {
-        &self.latch()
+        self.latch()
     }
 }
 
@@ -100,14 +100,14 @@ impl<'a> TryFrom<Vec<PlutusData<'a>>> for Locked<Unverified> {
     }
 }
 
-impl<'a, S> From<Locked<S>> for PlutusData<'a> {
-    fn from(locked: Locked<S>) -> Self {
+impl<'a, V: VerifyState> From<Locked<V>> for PlutusData<'a> {
+    fn from(locked: Locked<V>) -> Self {
         PlutusData::list(Vec::from(locked))
     }
 }
 
-impl<'a, S> From<Locked<S>> for Vec<PlutusData<'a>> {
-    fn from(locked: Locked<S>) -> Self {
+impl<'a, V: VerifyState> From<Locked<V>> for Vec<PlutusData<'a>> {
+    fn from(locked: Locked<V>) -> Self {
         vec![
             PlutusData::from(locked.body),
             signature_to_plutus_data(locked.signature),

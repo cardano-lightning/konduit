@@ -1,5 +1,7 @@
+use std::marker::PhantomData;
+
 use crate::{
-    SquashBody, Tag,
+    Indexes, SquashBody, Tag, Unverified, Verified,
     utils::{signature_from_plutus_data, signature_to_plutus_data},
 };
 use anyhow::anyhow;
@@ -10,39 +12,90 @@ use serde_with::serde_as;
 #[serde_as]
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Squash {
+pub struct Squash<U = Unverified> {
     #[cfg_attr(feature = "cddl", n(0))]
-    pub body: SquashBody,
+    body: SquashBody,
     #[cfg_attr(feature = "cddl", n(1))]
     #[serde_as(as = "serde_with::hex::Hex")]
     #[cfg_attr(feature = "cddl", cddl(bytes))]
-    pub signature: Signature,
+    signature: Signature,
+    #[serde(skip)]
+    #[cfg_attr(feature = "cddl", cddl(skip))]
+    _marker: PhantomData<U>,
 }
 
-impl Squash {
-    pub fn new(body: SquashBody, signature: Signature) -> Self {
-        Self { body, signature }
+// =========================================================================
+// Universal Methods (Available on both Verified and Unverified states)
+// =========================================================================
+impl<U> Squash<U> {
+    /// Internal constructor to associate state markers.
+    pub fn new_with_state(body: SquashBody, signature: Signature) -> Self {
+        Self {
+            body,
+            signature,
+            _marker: PhantomData,
+        }
     }
 
-    pub fn amount(&self) -> u64 {
-        self.body.amount
+    pub fn body(&self) -> &SquashBody {
+        &self.body
     }
 
     pub fn index(&self) -> u64 {
-        self.body.index
+        self.body.index()
+    }
+
+    pub fn amount(&self) -> u64 {
+        self.body.amount()
+    }
+
+    pub fn exclude(&self) -> &Indexes {
+        self.body.exclude()
     }
 
     pub fn is_index_squashed(&self, index: u64) -> bool {
         self.body.is_index_squashed(index)
     }
+}
 
+// =========================================================================
+// Unverified State Methods
+// =========================================================================
+impl Squash<Unverified> {
+    /// Creates a new, unverified cheque from a raw body and signature.
+    pub fn new(body: SquashBody, signature: Signature) -> Self {
+        Self::new_with_state(body, signature)
+    }
+}
+
+// =========================================================================
+// Unverified State Methods
+// =========================================================================
+impl Squash<Unverified> {
+    /// Verifies the cryptographic signature against the verifying key and tag.
+    /// On success, consumes the unverified cheque and transitions it to `Squash<Verified>`.
+    pub fn try_verify(
+        self,
+        verification_key: &VerificationKey,
+        tag: &Tag,
+    ) -> anyhow::Result<Squash<Verified>> {
+        if verification_key.verify(tag.data(self.body()), &self.signature) {
+            Ok(Squash::new_with_state(self.body, self.signature))
+        } else {
+            Err(anyhow::anyhow!("Invalid cryptographic signature on Squash"))
+        }
+    }
+}
+
+// =========================================================================
+// Verified State Methods
+// =========================================================================
+impl Squash<Verified> {
+    /// Signing a new cheque inherently guarantees its authenticity,
+    /// so the constructor immediately returns a `Squash<Verified>` instance.
     pub fn make(signing_key: &SigningKey, tag: &Tag, body: SquashBody) -> Self {
         let signature = signing_key.sign(tag.data(&body));
-        Self::new(body, signature)
-    }
-
-    pub fn verify(&self, verification_key: &VerificationKey, tag: &Tag) -> bool {
-        verification_key.verify(tag.data(&self.body), &self.signature)
+        Self::new_with_state(body, signature)
     }
 }
 
@@ -105,6 +158,21 @@ impl<'a> From<Squash> for [PlutusData<'a>; 2] {
 
 impl<'a> From<Squash> for PlutusData<'a> {
     fn from(value: Squash) -> Self {
+        Self::list(<[PlutusData; 2]>::from(value).to_vec())
+    }
+}
+
+impl<'a> From<Squash<Verified>> for [PlutusData<'a>; 2] {
+    fn from(value: Squash<Verified>) -> Self {
+        [
+            PlutusData::from(&value.body),
+            signature_to_plutus_data(value.signature),
+        ]
+    }
+}
+
+impl<'a> From<Squash<Verified>> for PlutusData<'a> {
+    fn from(value: Squash<Verified>) -> Self {
         Self::list(<[PlutusData; 2]>::from(value).to_vec())
     }
 }

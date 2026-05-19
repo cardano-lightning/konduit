@@ -17,14 +17,26 @@ pub enum SquashBodyError {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SquashBody {
     #[cfg_attr(feature = "cddl", n(0))]
-    pub amount: u64,
+    amount: u64,
     #[cfg_attr(feature = "cddl", n(1))]
-    pub index: u64,
+    index: u64,
     #[cfg_attr(feature = "cddl", n(2))]
-    pub exclude: Indexes,
+    exclude: Indexes,
 }
 
 impl SquashBody {
+    pub fn index(&self) -> u64 {
+        self.index
+    }
+
+    pub fn amount(&self) -> u64 {
+        self.amount
+    }
+
+    pub fn exclude(&self) -> &Indexes {
+        &self.exclude
+    }
+
     pub fn new(amount: u64, index: u64, exclude: Indexes) -> anyhow::Result<Self> {
         match SquashBody::verify_new(index, &exclude) {
             true => Ok(SquashBody::new_no_verify(amount, index, exclude)),

@@ -1,4 +1,4 @@
-use crate::{Duration, Unverified, cheque_body::ChequeBody};
+use crate::{Duration, Unverified, VerifyState, cheque_body::ChequeBody};
 use cardano_sdk::Signature;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(bound = "T: Serialize + for<'de2> Deserialize<'de2>")]
-pub struct ChequeSigned<T, U = Unverified> {
+pub struct ChequeSigned<T, V: VerifyState = Unverified> {
     #[cfg_attr(feature = "cddl", n(0))]
     pub body: ChequeBody<T>,
     #[cfg_attr(feature = "cddl", n(1))]
@@ -17,13 +17,13 @@ pub struct ChequeSigned<T, U = Unverified> {
     pub signature: Signature,
     #[serde(skip)]
     #[cfg_attr(feature = "cddl", cddl(skip))]
-    pub _marker: PhantomData<U>,
+    pub _marker: PhantomData<V>,
 }
 
 // =========================================================================
 // Universal Methods (Available on both Verified and Unverified states)
 // =========================================================================
-impl<S, U> ChequeSigned<S, U> {
+impl<S, V: VerifyState> ChequeSigned<S, V> {
     /// Internal constructor to associate state markers.
     pub fn new_with_state(body: ChequeBody<S>, signature: Signature) -> Self {
         Self {
@@ -50,7 +50,7 @@ impl<S, U> ChequeSigned<S, U> {
     }
 
     pub fn latch(&self) -> &S {
-        &self.body.latch()
+        self.body.latch()
     }
 }
 

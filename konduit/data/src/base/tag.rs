@@ -19,7 +19,7 @@ impl Tag {
     }
 
     /// Tag data!
-    pub fn data<T: Clone>(&self, data: &T) -> Vec<u8>
+    pub fn data<T>(&self, data: &T) -> Vec<u8>
     where
         PlutusData<'static>: From<T>,
         T: Clone,

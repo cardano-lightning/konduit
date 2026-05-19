@@ -2,7 +2,7 @@ use anyhow::{Error, Result, anyhow};
 use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 
-use crate::Unlocked;
+use crate::{Unlocked, VerifyState};
 
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -20,8 +20,8 @@ impl Used {
     }
 }
 
-impl From<&Unlocked> for Used {
-    fn from(value: &Unlocked) -> Self {
+impl<V: VerifyState> From<&Unlocked<V>> for Used {
+    fn from(value: &Unlocked<V>) -> Self {
         Self::new(value.index(), value.amount())
     }
 }

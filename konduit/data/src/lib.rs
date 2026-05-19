@@ -17,7 +17,7 @@ mod stage;
 mod unlocked;
 mod used;
 mod utils;
-mod verify;
+mod verify_state;
 
 /// Encode Decode;
 pub mod cbor_with;
@@ -37,4 +37,4 @@ pub use squash_body::{SquashBody, SquashBodyError};
 pub use stage::Stage;
 pub use unlocked::Unlocked;
 pub use used::Used;
-pub use verify::{Unverified, Verified};
+pub use verify_state::{Unverified, Verified, VerifyState};

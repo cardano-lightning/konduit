@@ -49,11 +49,23 @@ impl ChequeBody<Lock> {
     pub fn is_secret(&self, secret: &Secret) -> bool {
         self.lock() == &Lock::from(secret)
     }
+
+    pub fn try_unlocked(&self, secret: Secret) -> Result<ChequeBody<Secret>, &str> {
+        if Lock::from(&secret) != *self.lock() {
+            return Err("Bad secret");
+        }
+        Ok(ChequeBody::new(
+            self.index(),
+            self.amount(),
+            self.timeout(),
+            secret,
+        ))
+    }
 }
 
 impl ChequeBody<Secret> {
     pub fn secret(&self) -> Secret {
-        self.latch().clone()
+        *self.latch()
     }
 
     pub fn lock(&self) -> Lock {

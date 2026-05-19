@@ -1,4 +1,4 @@
-use crate::{Duration, Lock, Locked};
+use crate::{Duration, Lock, Locked, VerifyState};
 use anyhow::{Error, Result, anyhow};
 use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,8 @@ impl Pending {
     }
 }
 
-impl<U> From<Locked<U>> for Pending {
-    fn from(value: Locked<U>) -> Self {
+impl<V: VerifyState> From<Locked<V>> for Pending {
+    fn from(value: Locked<V>) -> Self {
         Self {
             amount: value.amount(),
             timeout: value.timeout(),
