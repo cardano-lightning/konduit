@@ -1,10 +1,10 @@
 use anyhow::anyhow;
 use cardano_sdk::{PlutusData, cbor::ToCbor};
-use minicbor::{Decode, Encode};
+use minicbor::{Decode, Encode, Encoder};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{fmt, ops::Deref, str::FromStr};
+use std::{convert::Infallible, fmt, ops::Deref, str::FromStr};
 
 #[serde_as]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -24,17 +24,19 @@ impl Tag {
         Self::from(bytes)
     }
 
+    pub fn data_result<T: Encode<()>>(
+        &self,
+        data: T,
+    ) -> Result<Vec<u8>, minicbor::encode::Error<Infallible>> {
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.begin_array()?.encode(self)?.encode(data)?.end()?;
+        Ok(encoder.into_writer())
+    }
+
     /// Tag data!
-    pub fn data<T>(&self, data: &T) -> Vec<u8>
-    where
-        PlutusData<'static>: From<T>,
-        T: Clone,
-    {
-        PlutusData::list([
-            PlutusData::bytes(self.as_ref()),
-            PlutusData::from(data.clone()),
-        ])
-        .to_cbor()
+    pub fn data<T: Encode<()>>(&self, data: T) -> Vec<u8> {
+        self.data_result(data)
+            .expect("Cbor encode should be infalliable")
     }
 }
 
