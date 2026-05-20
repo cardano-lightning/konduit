@@ -15,6 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default     = []
+aiken       = []
 cddl        = ["dep:cuddly"]
 cardano_sdk = ["dep:cardano-sdk", "dep:anyhow"]
 proptest    = ["dep:proptest", "dep:proptest-derive", "cardano_sdk"]
@@ -39,6 +40,11 @@ proptest-derive = { workspace = true, optional = true }
 name = "generate_cddl"
 path = "src/bin/generate_cddl.rs"
 required-features = ["cddl"]
+
+[[bin]]
+name = "generate_compat_tests"
+path = "src/bin/generate_compat_tests.rs"
+required-features = ["aiken"]
 
 [dev-dependencies]
 cddl-cat.workspace = true

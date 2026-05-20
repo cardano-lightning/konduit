@@ -1,6 +1,9 @@
 pub const MAX_UNSQUASHED: usize = 10;
 pub const MAX_EXCLUDE_LENGTH: usize = 10;
 
+#[cfg(feature = "aiken")]
+pub mod aiken;
+
 pub mod crypto;
 pub use crypto::{Signature, SigningKey, VerifyingKey};
 
