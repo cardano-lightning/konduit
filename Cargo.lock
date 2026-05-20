@@ -2274,6 +2274,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "konduit-receipt"
+version = "0.0.0"
+dependencies = [
+ "konduit-data",
+ "minicbor",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "konduit-server"
 version = "0.0.0"
 dependencies = [
