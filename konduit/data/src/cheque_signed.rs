@@ -75,16 +75,47 @@ impl<T: Clone> ChequeSigned<T, Unverified> {
 }
 
 // =========================================================================
-// Testing Utilities
+// minicbor Serialization
+//
+// Encoding: indefinite-length array of [body, signature_bytes].
+// The body is itself an indefinite-length array (from ChequeBody's impl).
 // =========================================================================
-#[cfg(feature = "proptest")]
-impl proptest::arbitrary::Arbitrary for ChequeSigned<Unverified> {
-    type Parameters = ();
-    type Strategy = proptest::strategy::BoxedStrategy<Self>;
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-        use proptest::prelude::*;
-        (any::<ChequeBody>(), any::<[u8; 64]>())
-            .prop_map(|(body, sig_bytes)| ChequeSigned::new(body, Signature::from(sig_bytes)))
-            .boxed()
+impl<C, T, V: VerifyState> minicbor::Encode<C> for ChequeSigned<T, V>
+where
+    T: minicbor::Encode<C>,
+{
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.begin_array()?;
+        e.encode_with(&self.body, ctx)?;
+        e.bytes(self.signature.as_ref())?;
+        e.end()?;
+        Ok(())
+    }
+}
+
+/// Decoding always produces `Unverified` — verification must be done explicitly.
+impl<'b, C, T> minicbor::Decode<'b, C> for ChequeSigned<T, Unverified>
+where
+    T: minicbor::Decode<'b, C>,
+{
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        d.array()?;
+        let body: ChequeBody<T> = d.decode_with(ctx)?;
+        let sig_raw = d.bytes()?;
+        let sig_array: [u8; 64] = sig_raw
+            .try_into()
+            .map_err(|_| minicbor::decode::Error::message("signature must be exactly 64 bytes"))?;
+        let signature = Signature::from(sig_array);
+        if d.datatype()? != minicbor::data::Type::Break {
+            return Err(minicbor::decode::Error::message(
+                "expected end of ChequeSigned array",
+            ));
+        }
+        d.skip()?;
+        Ok(Self::new_with_state(body, signature))
     }
 }

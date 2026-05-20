@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt, str};
 
@@ -19,8 +18,11 @@ pub enum IndexesError {
     NoIndex,
 }
 
+/// A sorted, deduplicated, bounded list of u64 indexes.
+///
+/// On-chain encoding: a CBOR indefinite-length array of uint items.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct Indexes(Vec<u64>);
+pub struct Indexes(pub(crate) Vec<u64>);
 
 impl fmt::Display for Indexes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -148,23 +150,20 @@ fn is_superset_of(a: &[u64], b: &[u64]) -> bool {
     b_iter.peek().is_none()
 }
 
-impl<'a> TryFrom<PlutusData<'a>> for Indexes {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        let l = data
-            .as_list()
-            .ok_or(anyhow!("Expected list"))?
-            .map(|x| x.as_integer().ok_or(anyhow!("Expected integer")))
-            .collect::<anyhow::Result<Vec<u64>>>()?;
-        let i = Self::new(l)?;
-        Ok(i)
+impl<C> minicbor::Encode<C> for Indexes {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        crate::cbor_with::plutus_list::encode(&self.0, e, ctx)
     }
 }
 
-impl<'a> From<&Indexes> for PlutusData<'a> {
-    fn from(value: &Indexes) -> Self {
-        Self::list(value.0.iter().map(|x| PlutusData::from(*x)))
+impl<'b, C> minicbor::Decode<'b, C> for Indexes {
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        let items: Vec<u64> = crate::cbor_with::plutus_list::decode(d, ctx)?;
+        Self::new(items).map_err(|e| minicbor::decode::Error::message(e.to_string()))
     }
 }
 
@@ -190,10 +189,82 @@ impl cuddly::ToCddl for Indexes {
     }
 }
 
+#[cfg(feature = "proptest")]
+mod via_plutus_data {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+
+    impl<'a> TryFrom<PlutusData<'a>> for Indexes {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            let l = data
+                .as_list()
+                .ok_or(anyhow!("Expected list"))?
+                .map(|x| x.as_integer().ok_or(anyhow!("Expected integer")))
+                .collect::<anyhow::Result<Vec<u64>>>()?;
+            Ok(Self::new(l)?)
+        }
+    }
+
+    impl<'a> From<&Indexes> for PlutusData<'a> {
+        fn from(value: &Indexes) -> Self {
+            Self::list(value.0.iter().map(|x| PlutusData::from(*x)))
+        }
+    }
+
+    mod roundtrip {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            /// minicbor encodes and decodes Indexes back to the same value.
+            #[test]
+            fn cbor(val: Indexes) {
+                let bytes = minicbor::to_vec(&val).unwrap();
+                let recovered: Indexes = minicbor::decode(&bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+            #[test]
+            fn encoding_matches(val: Indexes) {
+                let mini = minicbor::to_vec(&val).unwrap();
+                let pd = PlutusData::from(&val).to_cbor();
+                prop_assert_eq!(mini, pd);
+            }
+
+            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+            #[test]
+            fn from_plutus(val: Indexes) {
+                let pd_bytes = PlutusData::from(&val).to_cbor();
+                let recovered: Indexes = minicbor::decode(&pd_bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// From<&Indexes> for PlutusData and TryFrom<PlutusData> for Indexes are mutual inverses.
+            #[test]
+            fn tryfrom(val: Indexes) {
+                let pd = PlutusData::from(&val);
+                let recovered = Indexes::try_from(pd).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cmp::Ordering;
+
+    #[test]
+    fn indexes_cbor_roundtrip_deterministic() {
+        let idx = Indexes::new(vec![1, 5, 9]).unwrap();
+        let bytes = minicbor::to_vec(&idx).unwrap();
+        let recovered: Indexes = minicbor::decode(&bytes).unwrap();
+        assert_eq!(idx, recovered);
+    }
 
     #[test]
     fn test_partial_ord_less() {

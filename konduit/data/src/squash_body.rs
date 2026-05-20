@@ -1,8 +1,7 @@
-use crate::{ChequeBody, Indexes, IndexesError};
-use anyhow::anyhow;
-use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::cmp;
+
+use crate::{ChequeBody, Indexes, IndexesError};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum SquashBodyError {
@@ -13,6 +12,7 @@ pub enum SquashBodyError {
     Exclude(IndexesError),
 }
 
+/// On-chain encoding: an indefinite-length array of [amount, index, exclude].
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SquashBody {
@@ -40,7 +40,7 @@ impl SquashBody {
     pub fn new(amount: u64, index: u64, exclude: Indexes) -> anyhow::Result<Self> {
         match SquashBody::verify_new(index, &exclude) {
             true => Ok(SquashBody::new_no_verify(amount, index, exclude)),
-            false => Err(anyhow!("Index must be greater than excludes")),
+            false => Err(anyhow::anyhow!("Index must be greater than excludes")),
         }
     }
 
@@ -91,6 +91,38 @@ impl SquashBody {
     }
 }
 
+impl<C> minicbor::Encode<C> for SquashBody {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.begin_array()?;
+        e.encode_with(self.amount, ctx)?;
+        e.encode_with(self.index, ctx)?;
+        e.encode_with(&self.exclude, ctx)?;
+        e.end()?;
+        Ok(())
+    }
+}
+
+impl<'b, C> minicbor::Decode<'b, C> for SquashBody {
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        d.array()?;
+        let amount: u64 = d.decode_with(ctx)?;
+        let index: u64 = d.decode_with(ctx)?;
+        let exclude: Indexes = d.decode_with(ctx)?;
+        if d.datatype()? != minicbor::data::Type::Break {
+            return Err(minicbor::decode::Error::message(
+                "expected end of SquashBody array",
+            ));
+        }
+        d.skip()?;
+        Self::new(amount, index, exclude)
+            .map_err(|e| minicbor::decode::Error::message(e.to_string()))
+    }
+}
+
 #[cfg(feature = "proptest")]
 impl proptest::arbitrary::Arbitrary for SquashBody {
     type Parameters = ();
@@ -111,35 +143,78 @@ impl proptest::arbitrary::Arbitrary for SquashBody {
     }
 }
 
-impl<'a> TryFrom<PlutusData<'a>> for SquashBody {
-    type Error = anyhow::Error;
+#[cfg(feature = "proptest")]
+mod via_plutus_data {
+    use super::*;
+    use anyhow::anyhow;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        let [a, b, c] = <[PlutusData; 3]>::try_from(&data)?;
-        Self::new(
-            <u64>::try_from(&a)?,
-            <u64>::try_from(&b)?,
-            Indexes::try_from(c)?,
-        )
+    impl<'a> TryFrom<PlutusData<'a>> for SquashBody {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            let [a, b, c] = <[PlutusData; 3]>::try_from(&data)
+                .map_err(|_| anyhow!("invalid 'SquashBody': expected 3-element list"))?;
+            Self::new(
+                u64::try_from(&a)?,
+                u64::try_from(&b)?,
+                Indexes::try_from(c)?,
+            )
+        }
     }
-}
 
-impl<'a> From<&SquashBody> for PlutusData<'a> {
-    fn from(value: &SquashBody) -> Self {
-        Self::list(vec![
-            PlutusData::from(value.amount),
-            PlutusData::from(value.index),
-            PlutusData::from(&value.exclude),
-        ])
+    impl<'a> From<&SquashBody> for PlutusData<'a> {
+        fn from(value: &SquashBody) -> Self {
+            Self::list(vec![
+                PlutusData::from(value.amount),
+                PlutusData::from(value.index),
+                PlutusData::from(&value.exclude),
+            ])
+        }
     }
-}
 
-impl<'a> From<SquashBody> for PlutusData<'a> {
-    fn from(value: SquashBody) -> Self {
-        Self::list(vec![
-            PlutusData::from(value.amount),
-            PlutusData::from(value.index),
-            PlutusData::from(&value.exclude),
-        ])
+    impl<'a> From<SquashBody> for PlutusData<'a> {
+        fn from(value: SquashBody) -> Self {
+            PlutusData::from(&value)
+        }
+    }
+
+    mod roundtrip {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            /// minicbor encodes and decodes SquashBody back to the same value.
+            #[test]
+            fn cbor(val: SquashBody) {
+                let bytes = minicbor::to_vec(&val).unwrap();
+                let recovered: SquashBody = minicbor::decode(&bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+            #[test]
+            fn encoding_matches(val: SquashBody) {
+                let mini = minicbor::to_vec(&val).unwrap();
+                let pd = PlutusData::from(&val).to_cbor();
+                prop_assert_eq!(mini, pd);
+            }
+
+            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+            #[test]
+            fn from_plutus(val: SquashBody) {
+                let pd_bytes = PlutusData::from(&val).to_cbor();
+                let recovered: SquashBody = minicbor::decode(&pd_bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// From<&SquashBody> for PlutusData and TryFrom<PlutusData> for SquashBody are mutual inverses.
+            #[test]
+            fn tryfrom(val: SquashBody) {
+                let pd = PlutusData::from(&val);
+                let recovered = SquashBody::try_from(pd).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+        }
     }
 }

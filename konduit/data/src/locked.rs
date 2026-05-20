@@ -1,9 +1,5 @@
-use crate::{
-    ChequeSigned, Lock, Tag, Unverified, Verified, VerifyState,
-    cheque_body::ChequeBody,
-    utils::{signature_from_plutus_data, signature_to_plutus_data},
-};
-use cardano_sdk::{PlutusData, SigningKey, VerificationKey};
+use crate::{ChequeSigned, Lock, Tag, Unverified, Verified, VerifyState, cheque_body::ChequeBody};
+use cardano_sdk::{SigningKey, VerificationKey};
 
 pub type Locked<V = Unverified> = ChequeSigned<Lock, V>;
 
@@ -57,6 +53,7 @@ impl proptest::arbitrary::Arbitrary for Locked<Unverified> {
     type Parameters = ();
     type Strategy = proptest::strategy::BoxedStrategy<Self>;
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use cardano_sdk::Signature;
         use proptest::prelude::*;
         (any::<ChequeBody>(), any::<[u8; 64]>())
             .prop_map(|(body, sig_bytes)| Locked::new(body, Signature::from(sig_bytes)))
@@ -65,52 +62,89 @@ impl proptest::arbitrary::Arbitrary for Locked<Unverified> {
 }
 
 // =========================================================================
-// Serialization & Deserialization (PlutusData Conversions)
-// Incoming deserializations strictly default to `Unverified`.
-// Outgoing serializations are supported for any state `S`.
+// PlutusData Conversions (proptest-gated)
+//
+// Kept so that proptest roundtrip tests can compare minicbor output against
+// the canonical PlutusData CBOR encoding byte-for-byte.
 // =========================================================================
-impl<'a> TryFrom<&PlutusData<'a>> for Locked<Unverified> {
-    type Error = anyhow::Error;
+#[cfg(feature = "proptest")]
+mod via_plutus_data {
+    use super::*;
+    use cardano_sdk::{PlutusData, Signature, cbor::ToCbor};
 
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let fields: Vec<PlutusData<'_>> = Vec::try_from(data)?;
-        Self::try_from(fields)
+    impl<'a> TryFrom<&PlutusData<'a>> for Locked<Unverified> {
+        type Error = anyhow::Error;
+
+        fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+            let fields: Vec<PlutusData<'_>> = Vec::try_from(data)?;
+            Self::try_from(fields)
+        }
     }
-}
 
-impl<'a> TryFrom<PlutusData<'a>> for Locked<Unverified> {
-    type Error = anyhow::Error;
+    impl<'a> TryFrom<PlutusData<'a>> for Locked<Unverified> {
+        type Error = anyhow::Error;
 
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        let fields: Vec<PlutusData<'_>> = Vec::try_from(&data)?;
-        Self::try_from(fields)
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            let fields: Vec<PlutusData<'_>> = Vec::try_from(&data)?;
+            Self::try_from(fields)
+        }
     }
-}
 
-impl<'a> TryFrom<Vec<PlutusData<'a>>> for Locked<Unverified> {
-    type Error = anyhow::Error;
+    impl<'a> TryFrom<Vec<PlutusData<'a>>> for Locked<Unverified> {
+        type Error = anyhow::Error;
 
-    fn try_from(list: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
-        let [a, b] =
-            <[PlutusData; 2]>::try_from(list).map_err(|_| anyhow::anyhow!("invalid 'Locked'"))?;
-        Ok(Self::new(
-            ChequeBody::try_from(a)?,
-            signature_from_plutus_data(&b)?,
-        ))
+        fn try_from(list: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
+            let [a, b] = <[PlutusData; 2]>::try_from(list)
+                .map_err(|_| anyhow::anyhow!("invalid 'Locked': expected 2-element list"))?;
+            Ok(Self::new(ChequeBody::try_from(a)?, Signature::try_from(b)?))
+        }
     }
-}
 
-impl<'a, V: VerifyState> From<Locked<V>> for PlutusData<'a> {
-    fn from(locked: Locked<V>) -> Self {
-        PlutusData::list(Vec::from(locked))
+    impl<'a, V: VerifyState> From<Locked<V>> for PlutusData<'a> {
+        fn from(locked: Locked<V>) -> Self {
+            Self::list(vec![
+                PlutusData::from(locked.body),
+                PlutusData::from(locked.signature),
+            ])
+        }
     }
-}
 
-impl<'a, V: VerifyState> From<Locked<V>> for Vec<PlutusData<'a>> {
-    fn from(locked: Locked<V>) -> Self {
-        vec![
-            PlutusData::from(locked.body),
-            signature_to_plutus_data(locked.signature),
-        ]
+    mod roundtrip {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            /// minicbor encodes and decodes Locked back to the same value.
+            #[test]
+            fn cbor(val: Locked<Unverified>) {
+                let bytes = minicbor::to_vec(&val).unwrap();
+                let recovered: Locked<Unverified> = minicbor::decode(&bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+            #[test]
+            fn encoding_matches(val: Locked<Unverified>) {
+                let mini = minicbor::to_vec(&val).unwrap();
+                let pd = PlutusData::from(val).to_cbor();
+                prop_assert_eq!(mini, pd);
+            }
+
+            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+            #[test]
+            fn from_plutus(val: Locked<Unverified>) {
+                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+                let recovered: Locked<Unverified> = minicbor::decode(&pd_bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// From<Locked> for PlutusData and TryFrom<PlutusData> for Locked are mutual inverses.
+            #[test]
+            fn tryfrom(val: Locked<Unverified>) {
+                let pd = PlutusData::from(val.clone());
+                let recovered = Locked::try_from(pd).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+        }
     }
 }

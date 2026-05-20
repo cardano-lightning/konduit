@@ -124,6 +124,57 @@ impl proptest::arbitrary::Arbitrary for Duration {
     }
 }
 
+#[cfg(feature = "proptest")]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// minicbor encodes and decodes Duration back to the same value.
+        #[test]
+        fn duration_cbor_roundtrip(val: Duration) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Duration = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
+
+        /// Duration is encoded as its millisecond count — a plain u64.
+        #[test]
+        fn duration_encodes_as_millis(val: Duration) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let millis = val.as_millis() as u64;
+            let expected = minicbor::to_vec(&millis).unwrap();
+            prop_assert_eq!(mini, expected);
+        }
+    }
+}
+
+#[cfg(feature = "proptest")]
+mod via_plutus_data {
+    use super::*;
+    use cardano_sdk::PlutusData;
+
+    impl<'a> From<Duration> for PlutusData<'a> {
+        fn from(value: Duration) -> Self {
+            PlutusData::from(u64::from(value))
+        }
+    }
+
+    impl<'a> TryFrom<&PlutusData<'a>> for Duration {
+        type Error = anyhow::Error;
+        fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+            Ok(Self::from_millis(u64::try_from(data)?))
+        }
+    }
+
+    impl<'a> TryFrom<PlutusData<'a>> for Duration {
+        type Error = anyhow::Error;
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            Self::try_from(&data)
+        }
+    }
+}
+
 #[cfg(feature = "cddl")]
 impl cuddly::ToCddl for Duration {
     fn cddl_ref() -> String {

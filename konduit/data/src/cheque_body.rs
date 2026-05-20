@@ -100,7 +100,7 @@ where
     T: minicbor::Decode<'b, C>,
 {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        d.array()?; // None = indef, Some(n) = definite — handle both or assert indef
+        d.array()?;
         let index = d.decode_with(ctx)?;
         let amount = d.decode_with(ctx)?;
         let timeout: Duration = d.decode_with(ctx)?;
@@ -110,6 +110,100 @@ where
         }
         d.skip()?;
         Ok(Self::new(index, amount, timeout, latch))
+    }
+}
+
+#[cfg(feature = "proptest")]
+mod via_plutus_data {
+    use super::*;
+    use anyhow::anyhow;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+
+    impl<'a, T> From<ChequeBody<T>> for PlutusData<'a>
+    where
+        T: Into<PlutusData<'a>>,
+    {
+        fn from(body: ChequeBody<T>) -> Self {
+            let items: Vec<PlutusData<'a>> = vec![
+                PlutusData::from(body.index),
+                PlutusData::from(body.amount),
+                PlutusData::from(u64::from(body.timeout)),
+                body.latch.into(),
+            ];
+            Self::list(items)
+        }
+    }
+
+    impl<'a, T> TryFrom<PlutusData<'a>> for ChequeBody<T>
+    where
+        T: for<'b> TryFrom<PlutusData<'b>, Error = anyhow::Error>,
+    {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            let items: Vec<PlutusData<'_>> = data
+                .as_list()
+                .ok_or(anyhow!("expected list for ChequeBody"))?
+                .collect();
+            let [index_pd, amount_pd, timeout_pd, latch_pd]: [PlutusData<'_>; 4] = items
+                .try_into()
+                .map_err(|_| anyhow!("expected 4 fields in ChequeBody"))?;
+            let index: u64 = index_pd
+                .as_integer()
+                .ok_or(anyhow!("expected integer for index"))?;
+            let amount: u64 = amount_pd
+                .as_integer()
+                .ok_or(anyhow!("expected integer for amount"))?;
+            let timeout_ms: u64 = timeout_pd
+                .as_integer()
+                .ok_or(anyhow!("expected integer for timeout"))?;
+            let latch = T::try_from(latch_pd)?;
+            Ok(Self::new(
+                index,
+                amount,
+                Duration::from_millis(timeout_ms),
+                latch,
+            ))
+        }
+    }
+
+    mod roundtrip {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            /// minicbor encodes and decodes ChequeBody back to the same value.
+            #[test]
+            fn cbor(val: ChequeBody) {
+                let bytes = minicbor::to_vec(&val).unwrap();
+                let recovered: ChequeBody = minicbor::decode(&bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+            #[test]
+            fn encoding_matches(val: ChequeBody) {
+                let mini = minicbor::to_vec(&val).unwrap();
+                let pd = PlutusData::from(val).to_cbor();
+                prop_assert_eq!(mini, pd);
+            }
+
+            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+            #[test]
+            fn from_plutus(val: ChequeBody) {
+                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+                let recovered: ChequeBody = minicbor::decode(&pd_bytes).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+
+            /// From<ChequeBody> for PlutusData and TryFrom<PlutusData> for ChequeBody are mutual inverses.
+            #[test]
+            fn tryfrom(val: ChequeBody) {
+                let pd = PlutusData::from(val.clone());
+                let recovered: ChequeBody = ChequeBody::try_from(pd).unwrap();
+                prop_assert_eq!(val, recovered);
+            }
+        }
     }
 }
 
