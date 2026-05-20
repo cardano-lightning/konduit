@@ -1,4 +1,5 @@
 #![cfg(feature = "proptest")]
+#![allow(unused_imports, dead_code)]
 
 use cardano_sdk::{PlutusData, cbor::ToCbor};
 use proptest::prelude::*;

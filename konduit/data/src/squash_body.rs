@@ -10,6 +10,9 @@ pub enum SquashBodyError {
 
     #[error("Exclude error {0}")]
     Exclude(IndexesError),
+
+    #[error("Index must be greater than all excluded indexes")]
+    IndexNotGreaterThanExcludes,
 }
 
 /// On-chain encoding: an indefinite-length array of [amount, index, exclude].
@@ -37,10 +40,10 @@ impl SquashBody {
         &self.exclude
     }
 
-    pub fn new(amount: u64, index: u64, exclude: Indexes) -> anyhow::Result<Self> {
+    pub fn new(amount: u64, index: u64, exclude: Indexes) -> Result<Self, SquashBodyError> {
         match SquashBody::verify_new(index, &exclude) {
             true => Ok(SquashBody::new_no_verify(amount, index, exclude)),
-            false => Err(anyhow::anyhow!("Index must be greater than excludes")),
+            false => Err(SquashBodyError::IndexNotGreaterThanExcludes),
         }
     }
 
@@ -143,11 +146,11 @@ impl proptest::arbitrary::Arbitrary for SquashBody {
     }
 }
 
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::PlutusData;
 
     impl<'a> TryFrom<PlutusData<'a>> for SquashBody {
         type Error = anyhow::Error;
@@ -160,6 +163,7 @@ mod via_plutus_data {
                 u64::try_from(&b)?,
                 Indexes::try_from(c)?,
             )
+            .map_err(Into::into)
         }
     }
 
@@ -178,43 +182,46 @@ mod via_plutus_data {
             PlutusData::from(&value)
         }
     }
+}
 
-    mod roundtrip {
-        use super::*;
-        use proptest::prelude::*;
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
 
-        proptest! {
-            /// minicbor encodes and decodes SquashBody back to the same value.
-            #[test]
-            fn cbor(val: SquashBody) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: SquashBody = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+    proptest! {
+        /// minicbor encodes and decodes SquashBody back to the same value.
+        #[test]
+        fn cbor(val: SquashBody) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: SquashBody = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn encoding_matches(val: SquashBody) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(&val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn encoding_matches(val: SquashBody) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(&val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn from_plutus(val: SquashBody) {
-                let pd_bytes = PlutusData::from(&val).to_cbor();
-                let recovered: SquashBody = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn from_plutus(val: SquashBody) {
+            let pd_bytes = PlutusData::from(&val).to_cbor();
+            let recovered: SquashBody = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<&SquashBody> for PlutusData and TryFrom<PlutusData> for SquashBody are mutual inverses.
-            #[test]
-            fn tryfrom(val: SquashBody) {
-                let pd = PlutusData::from(&val);
-                let recovered = SquashBody::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<&SquashBody> for PlutusData and TryFrom<PlutusData> for SquashBody are mutual inverses.
+        #[test]
+        fn tryfrom(val: SquashBody) {
+            let pd = PlutusData::from(&val);
+            let recovered = SquashBody::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
         }
     }
 }

@@ -1,8 +1,7 @@
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt, str};
 
-use crate::MAX_EXCLUDE_LENGTH;
+use crate::{MAX_EXCLUDE_LENGTH, ParseError};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum IndexesError {
@@ -40,7 +39,7 @@ impl fmt::Display for Indexes {
 }
 
 impl str::FromStr for Indexes {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = s
@@ -49,7 +48,7 @@ impl str::FromStr for Indexes {
             .filter(|x| !x.is_empty())
             .map(|x| x.parse::<u64>())
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self::new(inner)?)
+        Self::new(inner).map_err(|e| ParseError::Constraint(e.to_string()))
     }
 }
 
@@ -189,10 +188,11 @@ impl cuddly::ToCddl for Indexes {
     }
 }
 
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use anyhow::anyhow;
+    use cardano_sdk::PlutusData;
 
     impl<'a> TryFrom<PlutusData<'a>> for Indexes {
         type Error = anyhow::Error;
@@ -212,43 +212,46 @@ mod via_plutus_data {
             Self::list(value.0.iter().map(|x| PlutusData::from(*x)))
         }
     }
+}
 
-    mod roundtrip {
-        use super::*;
-        use proptest::prelude::*;
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
 
-        proptest! {
-            /// minicbor encodes and decodes Indexes back to the same value.
-            #[test]
-            fn cbor(val: Indexes) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Indexes = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+    proptest! {
+        /// minicbor encodes and decodes Indexes back to the same value.
+        #[test]
+        fn cbor(val: Indexes) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Indexes = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn encoding_matches(val: Indexes) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(&val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn encoding_matches(val: Indexes) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(&val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn from_plutus(val: Indexes) {
-                let pd_bytes = PlutusData::from(&val).to_cbor();
-                let recovered: Indexes = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn from_plutus(val: Indexes) {
+            let pd_bytes = PlutusData::from(&val).to_cbor();
+            let recovered: Indexes = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<&Indexes> for PlutusData and TryFrom<PlutusData> for Indexes are mutual inverses.
-            #[test]
-            fn tryfrom(val: Indexes) {
-                let pd = PlutusData::from(&val);
-                let recovered = Indexes::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<&Indexes> for PlutusData and TryFrom<PlutusData> for Indexes are mutual inverses.
+        #[test]
+        fn tryfrom(val: Indexes) {
+            let pd = PlutusData::from(&val);
+            let recovered = Indexes::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
         }
     }
 }

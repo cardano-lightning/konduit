@@ -113,11 +113,11 @@ where
     }
 }
 
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::PlutusData;
 
     impl<'a, T> From<ChequeBody<T>> for PlutusData<'a>
     where
@@ -166,43 +166,46 @@ mod via_plutus_data {
             ))
         }
     }
+}
 
-    mod roundtrip {
-        use super::*;
-        use proptest::prelude::*;
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
 
-        proptest! {
-            /// minicbor encodes and decodes ChequeBody back to the same value.
-            #[test]
-            fn cbor(val: ChequeBody) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: ChequeBody = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+    proptest! {
+        /// minicbor encodes and decodes ChequeBody back to the same value.
+        #[test]
+        fn cbor(val: ChequeBody) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: ChequeBody = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn encoding_matches(val: ChequeBody) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn encoding_matches(val: ChequeBody) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn from_plutus(val: ChequeBody) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: ChequeBody = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn from_plutus(val: ChequeBody) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: ChequeBody = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<ChequeBody> for PlutusData and TryFrom<PlutusData> for ChequeBody are mutual inverses.
-            #[test]
-            fn tryfrom(val: ChequeBody) {
-                let pd = PlutusData::from(val.clone());
-                let recovered: ChequeBody = ChequeBody::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<ChequeBody> for PlutusData and TryFrom<PlutusData> for ChequeBody are mutual inverses.
+        #[test]
+        fn tryfrom(val: ChequeBody) {
+            let pd = PlutusData::from(val.clone());
+            let recovered: ChequeBody = ChequeBody::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
         }
     }
 }

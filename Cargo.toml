@@ -13,7 +13,6 @@ members = [
   "konduit/client",
   "konduit/data",
   "konduit/ex-data",
-  "konduit/receipt",
   "konduit/server",
   "konduit/tx",
   "konduit/wasm",
@@ -93,7 +92,7 @@ proptest-derive = "0.7.0"
 rand = "0.6.4"
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 reqwest = "0.12.23"
-serde = "1.0.228"
+serde = { version = "1.0.228", features = ["derive"] }
 serde-hex = "0.1.0"
 serde_json = { version = "1.0.145", features = ["std"] }
 serde-wasm-bindgen = "0.6.5"

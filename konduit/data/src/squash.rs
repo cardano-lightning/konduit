@@ -1,18 +1,17 @@
 use std::marker::PhantomData;
 
-use crate::{Indexes, SquashBody, Tag, Unverified, Verified, VerifyState};
-use cardano_sdk::{Signature, SigningKey, VerificationKey};
+use crate::{
+    Indexes, Signature, SigningKey, SquashBody, Tag, Unverified, Verified, VerifyError,
+    VerifyState, VerifyingKey,
+};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
-#[serde_as]
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Squash<V = Unverified> {
     #[cfg_attr(feature = "cddl", n(0))]
     body: SquashBody,
     #[cfg_attr(feature = "cddl", n(1))]
-    #[serde_as(as = "serde_with::hex::Hex")]
     #[cfg_attr(feature = "cddl", cddl(bytes))]
     signature: Signature,
     #[serde(skip)]
@@ -67,13 +66,13 @@ impl Squash<Unverified> {
     /// On success, consumes the unverified squash and transitions it to `Squash<Verified>`.
     pub fn try_verify(
         self,
-        verification_key: &VerificationKey,
+        verification_key: &VerifyingKey,
         tag: &Tag,
-    ) -> anyhow::Result<Squash<Verified>> {
-        if verification_key.verify(tag.data(self.body()), &self.signature) {
+    ) -> Result<Squash<Verified>, VerifyError> {
+        if verification_key.verify(&tag.data(self.body()), &self.signature) {
             Ok(Squash::new_with_state(self.body, self.signature))
         } else {
-            Err(anyhow::anyhow!("Invalid cryptographic signature on Squash"))
+            Err(VerifyError::InvalidSignature)
         }
     }
 
@@ -95,7 +94,7 @@ impl Squash<Verified> {
     /// Signing a new squash inherently guarantees its authenticity,
     /// so the constructor immediately returns a `Squash<Verified>` instance.
     pub fn make(signing_key: &SigningKey, tag: &Tag, body: SquashBody) -> Self {
-        let signature = signing_key.sign(tag.data(&body));
+        let signature: Signature = signing_key.sign(&tag.data(&body));
         Self::new_with_state(body, signature)
     }
 }
@@ -113,7 +112,7 @@ impl<C, V: VerifyState> minicbor::Encode<C> for Squash<V> {
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.begin_array()?;
         e.encode_with(&self.body, ctx)?;
-        e.bytes(self.signature.as_ref())?;
+        e.encode_with(self.signature, ctx)?;
         e.end()?;
         Ok(())
     }
@@ -124,11 +123,7 @@ impl<'b, C> minicbor::Decode<'b, C> for Squash<Unverified> {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         d.array()?;
         let body: SquashBody = d.decode_with(ctx)?;
-        let sig_raw = d.bytes()?;
-        let sig_array: [u8; 64] = sig_raw
-            .try_into()
-            .map_err(|_| minicbor::decode::Error::message("signature must be exactly 64 bytes"))?;
-        let signature = Signature::from(sig_array);
+        let signature: Signature = d.decode_with(ctx)?;
         if d.datatype()? != minicbor::data::Type::Break {
             return Err(minicbor::decode::Error::message(
                 "expected end of Squash array",
@@ -149,19 +144,19 @@ impl proptest::arbitrary::Arbitrary for Squash {
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
         use proptest::prelude::*;
         (any::<SquashBody>(), any::<[u8; 64]>())
-            .prop_map(|(body, sig_bytes)| Squash::new(body, Signature::from(sig_bytes)))
+            .prop_map(|(body, sig_bytes)| Squash::new(body, Signature::from_bytes(sig_bytes)))
             .boxed()
     }
 }
 
 // =========================================================================
-// PlutusData Conversions (proptest-gated)
+// PlutusData Conversions (cardano_sdk-gated)
 // =========================================================================
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::PlutusData;
 
     impl<'a> TryFrom<Vec<PlutusData<'a>>> for Squash {
         type Error = anyhow::Error;
@@ -169,7 +164,11 @@ mod via_plutus_data {
         fn try_from(value: Vec<PlutusData<'a>>) -> anyhow::Result<Self> {
             let [a, b] = <[PlutusData; 2]>::try_from(value)
                 .map_err(|_| anyhow!("invalid 'Squash': expected 2-element list"))?;
-            Ok(Self::new(SquashBody::try_from(a)?, Signature::try_from(b)?))
+            let sig_bytes: [u8; 64] = *<&[u8; 64]>::try_from(&b)?;
+            Ok(Self::new(
+                SquashBody::try_from(a)?,
+                Signature::from_bytes(sig_bytes),
+            ))
         }
     }
 
@@ -194,47 +193,50 @@ mod via_plutus_data {
         fn from(value: Squash<V>) -> Self {
             Self::list(vec![
                 PlutusData::from(&value.body),
-                PlutusData::from(value.signature),
+                PlutusData::bytes(value.signature.to_bytes()),
             ])
         }
     }
+}
 
-    mod roundtrip {
-        use super::*;
-        use proptest::prelude::*;
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
 
-        proptest! {
-            /// minicbor encodes and decodes Squash back to the same value.
-            #[test]
-            fn cbor(val: Squash) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Squash = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+    proptest! {
+        /// minicbor encodes and decodes Squash back to the same value.
+        #[test]
+        fn cbor(val: Squash) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Squash = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn encoding_matches(val: Squash) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn encoding_matches(val: Squash) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn from_plutus(val: Squash) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: Squash = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn from_plutus(val: Squash) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: Squash = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<Squash> for PlutusData and TryFrom<PlutusData> for Squash are mutual inverses.
-            #[test]
-            fn tryfrom(val: Squash) {
-                let pd = PlutusData::from(val.clone());
-                let recovered = Squash::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<Squash> for PlutusData and TryFrom<PlutusData> for Squash are mutual inverses.
+        #[test]
+        fn tryfrom(val: Squash) {
+            let pd = PlutusData::from(val.clone());
+            let recovered = Squash::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
         }
     }
 }

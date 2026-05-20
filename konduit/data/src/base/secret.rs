@@ -1,12 +1,6 @@
-use anyhow::anyhow;
-use cardano_sdk::PlutusData;
-// ToCbor is needed so that proptests inherits .to_cbor() via parent-module scope.
-#[allow(unused_imports)]
-use cardano_sdk::cbor::ToCbor;
+use crate::{ParseError, utils::try_into_array};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::utils::try_into_array;
 
 #[serde_as]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -16,12 +10,10 @@ use crate::utils::try_into_array;
 pub struct Secret(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
 
 impl std::str::FromStr for Secret {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        Ok(Secret(try_into_array(
-            &hex::decode(s).map_err(|e| anyhow!(e).context("invalid secret"))?,
-        )?))
+    fn from_str(s: &str) -> Result<Self, ParseError> {
+        Ok(Secret(try_into_array(&hex::decode(s)?)?))
     }
 }
 
@@ -32,12 +24,16 @@ impl AsRef<[u8]> for Secret {
 }
 
 impl TryFrom<Vec<u8>> for Secret {
-    type Error = anyhow::Error;
+    type Error = ParseError;
 
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        Ok(Self(
-            <[u8; 32]>::try_from(value).map_err(|_| anyhow!("secret must be exactly 32 bytes"))?,
-        ))
+    fn try_from(value: Vec<u8>) -> Result<Self, ParseError> {
+        let len = value.len();
+        Ok(Self(<[u8; 32]>::try_from(value).map_err(|_| {
+            ParseError::WrongLength {
+                expected: 32,
+                got: len,
+            }
+        })?))
     }
 }
 
@@ -64,32 +60,6 @@ impl<'b, C> minicbor::Decode<'b, C> for Secret {
     }
 }
 
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<&PlutusData<'a>> for Secret {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let v = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid secret"))?;
-        Ok(Self(try_into_array(v)?))
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<PlutusData<'a>> for Secret {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(&data)
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> From<Secret> for PlutusData<'a> {
-    fn from(value: Secret) -> Self {
-        Self::bytes(value.0)
-    }
-}
-
 #[cfg(feature = "cddl")]
 impl cuddly::ToCddl for Secret {
     fn cddl_ref() -> String {
@@ -101,18 +71,77 @@ impl cuddly::ToCddl for Secret {
 }
 
 #[test]
-fn secret_encodes_as_plutus_bytes() {
-    let raw = [0u8; 32];
-    let secret = Secret(raw);
-    let mini_bytes = minicbor::to_vec(&secret).unwrap();
-    let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
-    assert_eq!(mini_bytes, pd_bytes);
+fn verify_encoding_differs_from_default_array() {
+    let raw = [0xdeu8; 32];
+
+    // What our Encode impl produces (bytes encoding, matching PlutusData)
+    let our_encoding = minicbor::to_vec(&Secret(raw)).unwrap();
+
+    // What minicbor would produce if [u8;32] were encoded as a CBOR array of integers (the default for arrays)
+    let mut e = minicbor::Encoder::new(Vec::new());
+    e.array(32).unwrap();
+    for b in &raw {
+        e.u8(*b).unwrap();
+    }
+    let array_encoding = e.into_writer();
+
+    // They must differ — proving the manual impl is necessary
+    assert_ne!(
+        our_encoding, array_encoding,
+        "encoding should NOT match default array-of-ints"
+    );
+    // And our encoding is compact bytes: 0x58 0x20 <32 bytes>
+    assert_eq!(our_encoding[0], 0x58); // major type 2 (bytes), 1-byte length follows
+    assert_eq!(our_encoding[1], 0x20); // length = 32
+    // While array-of-ints starts with 0x98 0x20 (major type 4, 32 items)
+    assert_eq!(array_encoding[0], 0x98); // major type 4 (array)
+    assert_eq!(array_encoding[1], 0x20); // 32 items
+}
+
+#[cfg(feature = "cardano_sdk")]
+mod via_plutus_data {
+    use super::*;
+    use cardano_sdk::PlutusData;
+
+    impl<'a> TryFrom<&PlutusData<'a>> for Secret {
+        type Error = anyhow::Error;
+
+        fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+            let v = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid secret"))?;
+            Ok(Self(try_into_array(v)?))
+        }
+    }
+
+    impl<'a> TryFrom<PlutusData<'a>> for Secret {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            Self::try_from(&data)
+        }
+    }
+
+    impl<'a> From<Secret> for PlutusData<'a> {
+        fn from(value: Secret) -> Self {
+            Self::bytes(value.0)
+        }
+    }
 }
 
 #[cfg(feature = "proptest")]
-mod proptests {
+#[allow(unused_imports)]
+mod roundtrip {
     use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
+
+    #[test]
+    fn secret_encodes_as_plutus_bytes() {
+        let raw = [0u8; 32];
+        let secret = Secret(raw);
+        let mini_bytes = minicbor::to_vec(&secret).unwrap();
+        let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
+        assert_eq!(mini_bytes, pd_bytes);
+    }
 
     proptest! {
         /// minicbor encodes and decodes Secret back to the same value.
@@ -147,32 +176,4 @@ mod proptests {
             prop_assert_eq!(val, recovered);
         }
     }
-}
-
-#[test]
-fn verify_encoding_differs_from_default_array() {
-    let raw = [0xdeu8; 32];
-
-    // What our Encode impl produces (bytes encoding, matching PlutusData)
-    let our_encoding = minicbor::to_vec(&Secret(raw)).unwrap();
-
-    // What minicbor would produce if [u8;32] were encoded as a CBOR array of integers (the default for arrays)
-    let mut e = minicbor::Encoder::new(Vec::new());
-    e.array(32).unwrap();
-    for b in &raw {
-        e.u8(*b).unwrap();
-    }
-    let array_encoding = e.into_writer();
-
-    // They must differ — proving the manual impl is necessary
-    assert_ne!(
-        our_encoding, array_encoding,
-        "encoding should NOT match default array-of-ints"
-    );
-    // And our encoding is compact bytes: 0x58 0x20 <32 bytes>
-    assert_eq!(our_encoding[0], 0x58); // major type 2 (bytes), 1-byte length follows
-    assert_eq!(our_encoding[1], 0x20); // length = 32
-    // While array-of-ints starts with 0x98 0x20 (major type 4, 32 items)
-    assert_eq!(array_encoding[0], 0x98); // major type 4 (array)
-    assert_eq!(array_encoding[1], 0x20); // 32 items
 }

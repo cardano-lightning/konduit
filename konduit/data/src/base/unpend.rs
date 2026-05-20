@@ -1,9 +1,6 @@
-use anyhow::anyhow;
-use cardano_sdk::{PlutusData, cbor::ToCbor};
+use crate::{ParseError, Secret, utils::try_into_array};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::{Secret, utils::try_into_array};
 
 /// An unpending instruction — either continue holding, expire, or unlock with a secret.
 ///
@@ -32,15 +29,13 @@ impl From<&Secret> for Unpend {
 }
 
 impl std::str::FromStr for Unpend {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
+    fn from_str(s: &str) -> Result<Self, ParseError> {
         if s.is_empty() {
             return Ok(Unpend::Continue);
         }
-        Ok(Unpend::Unlock(try_into_array(
-            &hex::decode(s).map_err(|e| anyhow!(e).context("invalid unpend"))?,
-        )?))
+        Ok(Unpend::Unlock(try_into_array(&hex::decode(s)?)?))
     }
 }
 
@@ -76,40 +71,6 @@ impl<'b, C> minicbor::Decode<'b, C> for Unpend {
     }
 }
 
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<&PlutusData<'a>> for Unpend {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let bytes = <&[u8]>::try_from(data).map_err(|e| e.context("invalid unpend"))?;
-        Ok(match bytes.len() {
-            0 => Unpend::Continue,
-            32 => Unpend::Unlock(<[u8; 32]>::try_from(bytes)?),
-            _ => Unpend::Expire,
-        })
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<PlutusData<'a>> for Unpend {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(&data)
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> From<Unpend> for PlutusData<'a> {
-    fn from(value: Unpend) -> Self {
-        match value {
-            Unpend::Continue => PlutusData::bytes([]),
-            Unpend::Expire => PlutusData::bytes([0]),
-            Unpend::Unlock(arr) => PlutusData::bytes(arr),
-        }
-    }
-}
-
 #[cfg(feature = "cddl")]
 impl cuddly::ToCddl for Unpend {
     fn cddl_ref() -> String {
@@ -120,30 +81,69 @@ impl cuddly::ToCddl for Unpend {
     }
 }
 
-#[test]
-fn unpend_variants_encode_correctly() {
-    // Continue → empty bytes (CBOR: 0x40)
-    assert_eq!(
-        minicbor::to_vec(&Unpend::Continue).unwrap(),
-        ToCbor::to_cbor(&PlutusData::bytes([] as [u8; 0]))
-    );
-    // Expire → 1 byte (CBOR: 0x41 0x00)
-    assert_eq!(
-        minicbor::to_vec(&Unpend::Expire).unwrap(),
-        ToCbor::to_cbor(&PlutusData::bytes([0u8]))
-    );
-    // Unlock → 32 bytes
-    let key = [0xabu8; 32];
-    assert_eq!(
-        minicbor::to_vec(&Unpend::Unlock(key)).unwrap(),
-        ToCbor::to_cbor(&PlutusData::bytes(key))
-    );
+#[cfg(feature = "cardano_sdk")]
+mod via_plutus_data {
+    use super::*;
+    use cardano_sdk::PlutusData;
+
+    impl<'a> TryFrom<&PlutusData<'a>> for Unpend {
+        type Error = anyhow::Error;
+
+        fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+            let bytes = <&[u8]>::try_from(data).map_err(|e| e.context("invalid unpend"))?;
+            Ok(match bytes.len() {
+                0 => Unpend::Continue,
+                32 => Unpend::Unlock(<[u8; 32]>::try_from(bytes)?),
+                _ => Unpend::Expire,
+            })
+        }
+    }
+
+    impl<'a> TryFrom<PlutusData<'a>> for Unpend {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            Self::try_from(&data)
+        }
+    }
+
+    impl<'a> From<Unpend> for PlutusData<'a> {
+        fn from(value: Unpend) -> Self {
+            match value {
+                Unpend::Continue => PlutusData::bytes([]),
+                Unpend::Expire => PlutusData::bytes([0]),
+                Unpend::Unlock(arr) => PlutusData::bytes(arr),
+            }
+        }
+    }
 }
 
 #[cfg(feature = "proptest")]
-mod proptests {
+#[allow(unused_imports)]
+mod roundtrip {
     use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
+
+    #[test]
+    fn unpend_variants_encode_correctly() {
+        // Continue → empty bytes (CBOR: 0x40)
+        assert_eq!(
+            minicbor::to_vec(&Unpend::Continue).unwrap(),
+            ToCbor::to_cbor(&PlutusData::bytes([] as [u8; 0]))
+        );
+        // Expire → 1 byte (CBOR: 0x41 0x00)
+        assert_eq!(
+            minicbor::to_vec(&Unpend::Expire).unwrap(),
+            ToCbor::to_cbor(&PlutusData::bytes([0u8]))
+        );
+        // Unlock → 32 bytes
+        let key = [0xabu8; 32];
+        assert_eq!(
+            minicbor::to_vec(&Unpend::Unlock(key)).unwrap(),
+            ToCbor::to_cbor(&PlutusData::bytes(key))
+        );
+    }
 
     proptest! {
         /// minicbor encodes and decodes Unpend back to the same value.

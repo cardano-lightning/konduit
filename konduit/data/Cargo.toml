@@ -14,13 +14,14 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
-cddl     = ["dep:cuddly"]
-proptest = ["dep:proptest", "dep:proptest-derive"]
+default     = []
+cddl        = ["dep:cuddly"]
+cardano_sdk = ["dep:cardano-sdk", "dep:anyhow"]
+proptest    = ["dep:proptest", "dep:proptest-derive", "cardano_sdk"]
 
 [dependencies]
-anyhow.workspace = true
-cardano-sdk.workspace = true
+anyhow      = { workspace = true, optional = true }
+cardano-sdk = { workspace = true, optional = true }
 cbor-with = { workspace = true, features = ["full"] }
 cryptoxide.workspace = true
 hex.workspace = true

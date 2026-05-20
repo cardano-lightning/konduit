@@ -1,10 +1,8 @@
-use cardano_sdk::{PlutusData, cbor::ToCbor};
+use crate::{ParseError, Secret, utils::try_into_array};
 use cryptoxide::hashing::sha256;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt;
-
-use crate::{Secret, utils::try_into_array};
 
 #[serde_as]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -20,13 +18,10 @@ impl fmt::Display for Lock {
 }
 
 impl std::str::FromStr for Lock {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        use anyhow::anyhow;
-        Ok(Lock(try_into_array(
-            &hex::decode(s).map_err(|e| anyhow!(e).context("invalid lock"))?,
-        )?))
+    fn from_str(s: &str) -> Result<Self, ParseError> {
+        Ok(Lock(try_into_array(&hex::decode(s)?)?))
     }
 }
 
@@ -85,32 +80,6 @@ impl<'b, C> minicbor::Decode<'b, C> for Lock {
     }
 }
 
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<&PlutusData<'a>> for Lock {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let v = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid lock"))?;
-        Ok(Self(try_into_array(v)?))
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<PlutusData<'a>> for Lock {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(&data)
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> From<Lock> for PlutusData<'a> {
-    fn from(value: Lock) -> Self {
-        Self::bytes(value.0)
-    }
-}
-
 #[cfg(feature = "cddl")]
 impl cuddly::ToCddl for Lock {
     fn cddl_ref() -> String {
@@ -119,15 +88,6 @@ impl cuddly::ToCddl for Lock {
     fn cddl_definition() -> Option<String> {
         Some("lock = bytes".to_string())
     }
-}
-
-#[test]
-fn lock_encodes_as_plutus_bytes() {
-    let raw = [0xabu8; 32];
-    let lock = Lock(raw);
-    let mini_bytes = minicbor::to_vec(&lock).unwrap();
-    let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
-    assert_eq!(mini_bytes, pd_bytes);
 }
 
 #[test]
@@ -149,10 +109,50 @@ fn verify_encoding_differs_from_default_array() {
     assert_eq!(array_encoding[0], 0x98); // CBOR array
 }
 
-#[cfg(feature = "proptest")]
-mod proptests {
+#[cfg(feature = "cardano_sdk")]
+mod via_plutus_data {
     use super::*;
+    use cardano_sdk::PlutusData;
+
+    impl<'a> TryFrom<&PlutusData<'a>> for Lock {
+        type Error = anyhow::Error;
+
+        fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+            let v = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid lock"))?;
+            Ok(Self(try_into_array(v)?))
+        }
+    }
+
+    impl<'a> TryFrom<PlutusData<'a>> for Lock {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            Self::try_from(&data)
+        }
+    }
+
+    impl<'a> From<Lock> for PlutusData<'a> {
+        fn from(value: Lock) -> Self {
+            Self::bytes(value.0)
+        }
+    }
+}
+
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
+
+    #[test]
+    fn lock_encodes_as_plutus_bytes() {
+        let raw = [0xabu8; 32];
+        let lock = Lock(raw);
+        let mini_bytes = minicbor::to_vec(&lock).unwrap();
+        let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
+        assert_eq!(mini_bytes, pd_bytes);
+    }
 
     proptest! {
         /// minicbor encodes and decodes Lock back to the same value.

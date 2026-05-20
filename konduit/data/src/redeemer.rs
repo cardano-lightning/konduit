@@ -449,11 +449,11 @@ impl proptest::arbitrary::Arbitrary for Redeemer {
 // Kept so that proptest roundtrip tests can compare minicbor output against
 // the canonical PlutusData CBOR encoding byte-for-byte.
 // =========================================================================
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, cbor::ToCbor, constr};
+    use cardano_sdk::{PlutusData, constr};
 
     // --- Eol ---
 
@@ -678,147 +678,150 @@ mod via_plutus_data {
             }
         }
     }
+}
 
-    mod roundtrip {
-        use super::*;
-        use proptest::prelude::*;
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
 
-        proptest! {
-            // ---- Eol ----
+    proptest! {
+    // ---- Eol ----
 
-            /// minicbor encodes and decodes Eol back to the same value.
-            #[test]
-            fn eol_cbor(val: Eol) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Eol = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+    /// minicbor encodes and decodes Eol back to the same value.
+    #[test]
+    fn eol_cbor(val: Eol) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Eol = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn eol_encoding_matches(val: Eol) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn eol_encoding_matches(val: Eol) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn eol_from_plutus(val: Eol) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: Eol = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn eol_from_plutus(val: Eol) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: Eol = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<Eol> for PlutusData and TryFrom<PlutusData> for Eol are mutual inverses.
-            #[test]
-            fn eol_tryfrom(val: Eol) {
-                let pd = PlutusData::from(val.clone());
-                let recovered = Eol::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<Eol> for PlutusData and TryFrom<PlutusData> for Eol are mutual inverses.
+        #[test]
+        fn eol_tryfrom(val: Eol) {
+            let pd = PlutusData::from(val.clone());
+            let recovered = Eol::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            // ---- Cont ----
+        // ---- Cont ----
 
-            /// minicbor encodes and decodes Cont back to the same value.
-            #[test]
-            fn cont_cbor(val: Cont) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Cont = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// minicbor encodes and decodes Cont back to the same value.
+        #[test]
+        fn cont_cbor(val: Cont) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Cont = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn cont_encoding_matches(val: Cont) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn cont_encoding_matches(val: Cont) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn cont_from_plutus(val: Cont) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: Cont = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn cont_from_plutus(val: Cont) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: Cont = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<Cont> for PlutusData and TryFrom<PlutusData> for Cont are mutual inverses.
-            #[test]
-            fn cont_tryfrom(val: Cont) {
-                let pd = PlutusData::from(val.clone());
-                let recovered = Cont::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<Cont> for PlutusData and TryFrom<PlutusData> for Cont are mutual inverses.
+        #[test]
+        fn cont_tryfrom(val: Cont) {
+            let pd = PlutusData::from(val.clone());
+            let recovered = Cont::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            // ---- Step ----
+        // ---- Step ----
 
-            /// minicbor encodes and decodes Step back to the same value.
-            #[test]
-            fn step_cbor(val: Step) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Step = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// minicbor encodes and decodes Step back to the same value.
+        #[test]
+        fn step_cbor(val: Step) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Step = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn step_encoding_matches(val: Step) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn step_encoding_matches(val: Step) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn step_from_plutus(val: Step) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: Step = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn step_from_plutus(val: Step) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: Step = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<Step> for PlutusData and TryFrom<PlutusData> for Step are mutual inverses.
-            #[test]
-            fn step_tryfrom(val: Step) {
-                let pd = PlutusData::from(val.clone());
-                let recovered = Step::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<Step> for PlutusData and TryFrom<PlutusData> for Step are mutual inverses.
+        #[test]
+        fn step_tryfrom(val: Step) {
+            let pd = PlutusData::from(val.clone());
+            let recovered = Step::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            // ---- Redeemer ----
+        // ---- Redeemer ----
 
-            /// minicbor encodes and decodes Redeemer back to the same value.
-            #[test]
-            fn redeemer_cbor(val: Redeemer) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Redeemer = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// minicbor encodes and decodes Redeemer back to the same value.
+        #[test]
+        fn redeemer_cbor(val: Redeemer) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Redeemer = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn redeemer_encoding_matches(val: Redeemer) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn redeemer_encoding_matches(val: Redeemer) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn redeemer_from_plutus(val: Redeemer) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: Redeemer = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn redeemer_from_plutus(val: Redeemer) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: Redeemer = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<Redeemer> for PlutusData and TryFrom<PlutusData> for Redeemer are mutual inverses.
-            #[test]
-            fn redeemer_tryfrom(val: Redeemer) {
-                let pd = PlutusData::from(val.clone());
-                let recovered = Redeemer::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<Redeemer> for PlutusData and TryFrom<PlutusData> for Redeemer are mutual inverses.
+        #[test]
+        fn redeemer_tryfrom(val: Redeemer) {
+            let pd = PlutusData::from(val.clone());
+            let recovered = Redeemer::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
         }
     }
 }

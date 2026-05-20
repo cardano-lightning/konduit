@@ -1,16 +1,11 @@
-use crate::{Duration, Tag};
-use cardano_sdk::VerificationKey;
+use crate::{Duration, Tag, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
-#[serde_as]
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Constants {
     pub tag: Tag,
-    #[serde_as(as = "serde_with::hex::Hex")]
-    pub add_vkey: VerificationKey,
-    #[serde_as(as = "serde_with::hex::Hex")]
-    pub sub_vkey: VerificationKey,
+    pub add_vkey: VerifyingKey,
+    pub sub_vkey: VerifyingKey,
     pub close_period: Duration,
 }
 
@@ -36,8 +31,8 @@ impl<C> minicbor::Encode<C> for Constants {
         e.tag(minicbor::data::Tag::new(121))?;
         e.begin_array()?;
         e.encode_with(&self.tag, ctx)?;
-        e.bytes(self.add_vkey.as_ref())?;
-        e.bytes(self.sub_vkey.as_ref())?;
+        e.encode_with(self.add_vkey, ctx)?;
+        e.encode_with(self.sub_vkey, ctx)?;
         e.encode_with(self.close_period, ctx)?;
         e.end()?;
         Ok(())
@@ -54,14 +49,8 @@ impl<'b, C> minicbor::Decode<'b, C> for Constants {
         }
         d.array()?;
         let tag_val: Tag = d.decode_with(ctx)?;
-        let add_raw = d.bytes()?;
-        let add_arr: [u8; 32] = add_raw
-            .try_into()
-            .map_err(|_| minicbor::decode::Error::message("add_vkey must be 32 bytes"))?;
-        let sub_raw = d.bytes()?;
-        let sub_arr: [u8; 32] = sub_raw
-            .try_into()
-            .map_err(|_| minicbor::decode::Error::message("sub_vkey must be 32 bytes"))?;
+        let add_vkey: VerifyingKey = d.decode_with(ctx)?;
+        let sub_vkey: VerifyingKey = d.decode_with(ctx)?;
         let close_period: Duration = d.decode_with(ctx)?;
         if d.datatype()? != minicbor::data::Type::Break {
             return Err(minicbor::decode::Error::message(
@@ -71,8 +60,8 @@ impl<'b, C> minicbor::Decode<'b, C> for Constants {
         d.skip()?;
         Ok(Self {
             tag: tag_val,
-            add_vkey: VerificationKey::from(add_arr),
-            sub_vkey: VerificationKey::from(sub_arr),
+            add_vkey,
+            sub_vkey,
             close_period,
         })
     }
@@ -95,8 +84,8 @@ impl proptest::arbitrary::Arbitrary for Constants {
         )
             .prop_map(|(tag, add_bytes, sub_bytes, close_period)| Constants {
                 tag,
-                add_vkey: VerificationKey::from(add_bytes),
-                sub_vkey: VerificationKey::from(sub_bytes),
+                add_vkey: VerifyingKey::from_bytes(add_bytes),
+                sub_vkey: VerifyingKey::from_bytes(sub_bytes),
                 close_period,
             })
             .boxed()
@@ -104,16 +93,13 @@ impl proptest::arbitrary::Arbitrary for Constants {
 }
 
 // =========================================================================
-// PlutusData Conversions (proptest-gated)
-//
-// Kept so that proptest roundtrip tests can compare minicbor output against
-// the canonical PlutusData CBOR encoding byte-for-byte.
+// PlutusData Conversions (cardano_sdk-gated)
 // =========================================================================
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, cbor::ToCbor, constr};
+    use cardano_sdk::{PlutusData, constr};
 
     impl<'a> TryFrom<&PlutusData<'a>> for Constants {
         type Error = anyhow::Error;
@@ -127,8 +113,8 @@ mod via_plutus_data {
                 .map_err(|_| anyhow!("invalid 'Constants': expected 4 fields"))?;
             Ok(Self {
                 tag: Tag::try_from(&a)?,
-                add_vkey: VerificationKey::from(*<&[u8; 32]>::try_from(&b)?),
-                sub_vkey: VerificationKey::from(*<&[u8; 32]>::try_from(&c)?),
+                add_vkey: VerifyingKey::from_bytes(*<&[u8; 32]>::try_from(&b)?),
+                sub_vkey: VerifyingKey::from_bytes(*<&[u8; 32]>::try_from(&c)?),
                 close_period: Duration::try_from(&d)?,
             })
         }
@@ -139,49 +125,52 @@ mod via_plutus_data {
             constr!(
                 0,
                 PlutusData::from(value.tag),
-                PlutusData::from(<[u8; 32]>::from(value.add_vkey)),
-                PlutusData::from(<[u8; 32]>::from(value.sub_vkey)),
+                PlutusData::bytes(value.add_vkey.to_bytes()),
+                PlutusData::bytes(value.sub_vkey.to_bytes()),
                 PlutusData::from(value.close_period),
             )
         }
     }
+}
 
-    mod roundtrip {
-        use super::*;
-        use proptest::prelude::*;
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
 
-        proptest! {
-            /// minicbor encodes and decodes Constants back to the same value.
-            #[test]
-            fn cbor(val: Constants) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Constants = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+    proptest! {
+        /// minicbor encodes and decodes Constants back to the same value.
+        #[test]
+        fn cbor(val: Constants) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Constants = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn encoding_matches(val: Constants) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn encoding_matches(val: Constants) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn from_plutus(val: Constants) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: Constants = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn from_plutus(val: Constants) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: Constants = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<Constants> for PlutusData and TryFrom<&PlutusData> for Constants are mutual inverses.
-            #[test]
-            fn tryfrom(val: Constants) {
-                let pd = PlutusData::from(val.clone());
-                let recovered = Constants::try_from(&pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<Constants> for PlutusData and TryFrom<&PlutusData> for Constants are mutual inverses.
+        #[test]
+        fn tryfrom(val: Constants) {
+            let pd = PlutusData::from(val.clone());
+            let recovered = Constants::try_from(&pd).unwrap();
+            prop_assert_eq!(val, recovered);
         }
     }
 }

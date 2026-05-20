@@ -1,10 +1,8 @@
+use crate::VerifyingKey;
 use crate::{
     Cheque, ChequeBody, Duration, Lock, Locked, MAX_UNSQUASHED, Pending, Secret, Squash,
     SquashBodyError, Tag, Unlocked, Used,
 };
-use anyhow::anyhow;
-use cardano_sdk::VerificationKey;
-use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::cmp;
 
@@ -21,15 +19,31 @@ pub enum ReceiptError {
 
     #[error("Bad input")]
     BadInput,
+
+    #[error("Too many unsquashed cheques")]
+    TooManyUnsquashed,
+
+    #[error("Index {index} is already squashed")]
+    AlreadySquashed { index: u64 },
+
+    #[error("Duplicate index {index}")]
+    DuplicateIndex { index: u64 },
 }
 
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "cardano_sdk", derive(minicbor::Encode, minicbor::Decode))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Receipt {
-    #[cbor(n(0), with = "crate::cbor_with::plutus_data")]
+    #[cfg_attr(
+        feature = "cardano_sdk",
+        cbor(n(0), with = "crate::cbor_with::plutus_data")
+    )]
     #[cfg_attr(feature = "cddl", cddl(ty = "squash"))]
     pub squash: Squash,
-    #[cbor(n(1), with = "crate::cbor_with::vec_plutus_data")]
+    #[cfg_attr(
+        feature = "cardano_sdk",
+        cbor(n(1), with = "crate::cbor_with::vec_plutus_data")
+    )]
     #[cfg_attr(feature = "cddl", cddl(ty = "[* cheque]"))]
     pub cheques: Vec<Cheque>,
 }
@@ -57,18 +71,18 @@ impl Receipt {
         }
     }
 
-    pub fn new_with_cheques(squash: Squash, cheques: Vec<Cheque>) -> anyhow::Result<Self> {
+    pub fn new_with_cheques(squash: Squash, cheques: Vec<Cheque>) -> Result<Self, ReceiptError> {
         if cheques.len() > MAX_UNSQUASHED {
-            Err(anyhow!("Too many unsquashed"))?;
+            return Err(ReceiptError::TooManyUnsquashed);
         }
         let mut sorted: Vec<Cheque> = vec![];
         for cheque in cheques {
             let index = cheque.index();
             if squash.body.is_index_squashed(index) {
-                Err(anyhow!("Index {} is already squashed", index))?;
+                return Err(ReceiptError::AlreadySquashed { index });
             }
             match sorted.binary_search_by(|probe| probe.index().cmp(&index)) {
-                Ok(_) => Err(anyhow!("Duplicate index {}", index))?,
+                Ok(_) => return Err(ReceiptError::DuplicateIndex { index }),
                 Err(position) => sorted.insert(position, cheque),
             };
         }
@@ -87,7 +101,7 @@ impl Receipt {
         }
     }
 
-    pub fn verify_components(&self, key: &VerificationKey, tag: &Tag) -> bool {
+    pub fn verify_components(&self, key: &VerifyingKey, tag: &Tag) -> bool {
         self.squash.verify(key, tag)
             && self.cheques.iter().all(|m| m.verify(key, tag))
             && match Self::new_with_cheques(self.squash.clone(), self.cheques.clone()) {
@@ -209,7 +223,7 @@ impl Receipt {
         self.squash.amount() + self.unlockeds().iter().map(|x| x.body.amount).sum::<u64>()
     }
 
-    pub fn provably_owed(&self, vk: &VerificationKey, tag: &Tag) -> u64 {
+    pub fn provably_owed(&self, vk: &VerifyingKey, tag: &Tag) -> u64 {
         let squash_amount = if self.squash.verify(vk, tag) {
             self.squash.amount()
         } else {
@@ -265,17 +279,19 @@ impl Receipt {
     }
 
     /// Time and signature must already be verified
-    pub fn insert(&mut self, locked: Locked) -> anyhow::Result<()> {
+    pub fn insert(&mut self, locked: Locked) -> Result<(), ReceiptError> {
         let index = locked.body.index;
         let cheque = Cheque::from(locked);
         match self
             .cheques
             .binary_search_by(|probe| probe.index().cmp(&index))
         {
-            Ok(_) => Err(anyhow!("Duplicate index {}", &index))?,
-            Err(position) => self.cheques.insert(position, cheque),
-        };
-        Ok(())
+            Ok(_) => Err(ReceiptError::DuplicateIndex { index }),
+            Err(position) => {
+                self.cheques.insert(position, cheque);
+                Ok(())
+            }
+        }
     }
 
     pub fn append_locked(&mut self, locked: Locked) -> Result<(), ReceiptError> {

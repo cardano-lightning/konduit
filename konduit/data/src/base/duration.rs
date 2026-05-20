@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use crate::ParseError;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -45,10 +45,10 @@ impl DerefMut for Duration {
 
 /// Parsing a time duration from a string slice with a unit postfix.
 impl FromStr for Duration {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        let value = s
+    fn from_str(s: &str) -> Result<Self, ParseError> {
+        let value: u64 = s
             .chars()
             .take_while(|c| c.is_ascii_digit())
             .collect::<String>()
@@ -60,14 +60,16 @@ impl FromStr for Duration {
             .collect::<String>();
 
         let duration = match unit.as_str() {
-            "ms" => Ok(time::Duration::from_millis(value)),
-            "s" => Ok(time::Duration::from_secs(value)),
-            "min" => Ok(time::Duration::from_secs(value * 60)),
-            "h" => Ok(time::Duration::from_secs(value * 3660)),
-            _ => Err(anyhow!(
-                "unknown time unit '{unit}'; try one of: 'ms', 's', 'min' or 'h'"
-            )),
-        }?;
+            "ms" => time::Duration::from_millis(value),
+            "s" => time::Duration::from_secs(value),
+            "min" => time::Duration::from_secs(value * 60),
+            "h" => time::Duration::from_secs(value * 3660),
+            _ => {
+                return Err(ParseError::Constraint(format!(
+                    "unknown time unit '{unit}'; try one of: 'ms', 's', 'min' or 'h'"
+                )));
+            }
+        };
 
         Ok(Duration(duration))
     }
@@ -124,32 +126,7 @@ impl proptest::arbitrary::Arbitrary for Duration {
     }
 }
 
-#[cfg(feature = "proptest")]
-mod proptests {
-    use super::*;
-    use proptest::prelude::*;
-
-    proptest! {
-        /// minicbor encodes and decodes Duration back to the same value.
-        #[test]
-        fn duration_cbor_roundtrip(val: Duration) {
-            let bytes = minicbor::to_vec(&val).unwrap();
-            let recovered: Duration = minicbor::decode(&bytes).unwrap();
-            prop_assert_eq!(val, recovered);
-        }
-
-        /// Duration is encoded as its millisecond count — a plain u64.
-        #[test]
-        fn duration_encodes_as_millis(val: Duration) {
-            let mini = minicbor::to_vec(&val).unwrap();
-            let millis = val.as_millis() as u64;
-            let expected = minicbor::to_vec(&millis).unwrap();
-            prop_assert_eq!(mini, expected);
-        }
-    }
-}
-
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
     use cardano_sdk::PlutusData;
@@ -171,6 +148,32 @@ mod via_plutus_data {
         type Error = anyhow::Error;
         fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
             Self::try_from(&data)
+        }
+    }
+}
+
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// minicbor encodes and decodes Duration back to the same value.
+        #[test]
+        fn duration_cbor_roundtrip(val: Duration) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Duration = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
+
+        /// Duration is encoded as its millisecond count — a plain u64.
+        #[test]
+        fn duration_encodes_as_millis(val: Duration) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let millis = val.as_millis() as u64;
+            let expected = minicbor::to_vec(&millis).unwrap();
+            prop_assert_eq!(mini, expected);
         }
     }
 }

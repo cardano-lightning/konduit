@@ -1,8 +1,7 @@
 use crate::{
-    ChequeBody, Duration, Lock, Secret, Tag, Unverified, Verified, VerifyState, locked::Locked,
-    unlocked::Unlocked,
+    ChequeBody, Duration, Lock, Secret, Signature, Tag, Unverified, Verified, VerifyError,
+    VerifyState, VerifyingKey, locked::Locked, unlocked::Unlocked,
 };
-use cardano_sdk::{Signature, VerificationKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,9 +83,9 @@ impl Cheque<Unverified> {
     /// On success, consumes the unverified cheque and transitions it to `Cheque<Verified>`.
     pub fn try_verify(
         self,
-        verification_key: &VerificationKey,
+        verification_key: &VerifyingKey,
         tag: &Tag,
-    ) -> anyhow::Result<Cheque<Verified>> {
+    ) -> Result<Cheque<Verified>, VerifyError> {
         match self {
             Cheque::Unlocked(x) => x.try_verify(verification_key, tag).map(Cheque::from),
             Cheque::Locked(x) => x.try_verify(verification_key, tag).map(Cheque::from),
@@ -128,14 +127,14 @@ where
                 e.tag(minicbor::data::Tag::new(121))?;
                 e.begin_array()?;
                 e.encode_with(&u.body, ctx)?;
-                e.bytes(u.signature.as_ref())?;
+                e.encode_with(u.signature, ctx)?;
                 e.end()?;
             }
             Cheque::Locked(l) => {
                 e.tag(minicbor::data::Tag::new(122))?;
                 e.begin_array()?;
                 e.encode_with(&l.body, ctx)?;
-                e.bytes(l.signature.as_ref())?;
+                e.encode_with(l.signature, ctx)?;
                 e.end()?;
             }
         }
@@ -164,19 +163,13 @@ where
         let result = match variant {
             0 => {
                 let body: ChequeBody<Secret> = d.decode_with(ctx)?;
-                let sig_raw = d.bytes()?;
-                let sig_arr: [u8; 64] = sig_raw.try_into().map_err(|_| {
-                    minicbor::decode::Error::message("signature must be exactly 64 bytes")
-                })?;
-                Cheque::Unlocked(Unlocked::new_with_state(body, Signature::from(sig_arr)))
+                let signature: Signature = d.decode_with(ctx)?;
+                Cheque::Unlocked(Unlocked::new_with_state(body, signature))
             }
             1 => {
                 let body: ChequeBody<Lock> = d.decode_with(ctx)?;
-                let sig_raw = d.bytes()?;
-                let sig_arr: [u8; 64] = sig_raw.try_into().map_err(|_| {
-                    minicbor::decode::Error::message("signature must be exactly 64 bytes")
-                })?;
-                Cheque::Locked(Locked::new_with_state(body, Signature::from(sig_arr)))
+                let signature: Signature = d.decode_with(ctx)?;
+                Cheque::Locked(Locked::new_with_state(body, signature))
             }
             _ => unreachable!(),
         };
@@ -208,16 +201,13 @@ impl proptest::arbitrary::Arbitrary for Cheque {
 }
 
 // =========================================================================
-// PlutusData Conversions (proptest-gated)
-//
-// Kept so that proptest roundtrip tests can compare minicbor output against
-// the canonical PlutusData CBOR encoding byte-for-byte.
+// PlutusData Conversions (cardano_sdk-gated)
 // =========================================================================
-#[cfg(feature = "proptest")]
+#[cfg(feature = "cardano_sdk")]
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::PlutusData;
 
     impl<'a> TryFrom<PlutusData<'a>> for Cheque {
         type Error = anyhow::Error;
@@ -241,52 +231,61 @@ mod via_plutus_data {
             match value {
                 Cheque::Unlocked(u) => PlutusData::constr(
                     0,
-                    vec![PlutusData::from(u.body), PlutusData::from(u.signature)],
+                    vec![
+                        PlutusData::from(u.body),
+                        PlutusData::bytes(u.signature.to_bytes()),
+                    ],
                 ),
                 Cheque::Locked(l) => PlutusData::constr(
                     1,
-                    vec![PlutusData::from(l.body), PlutusData::from(l.signature)],
+                    vec![
+                        PlutusData::from(l.body),
+                        PlutusData::bytes(l.signature.to_bytes()),
+                    ],
                 ),
             }
         }
     }
+}
 
-    mod roundtrip {
-        use super::*;
-        use proptest::prelude::*;
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
 
-        proptest! {
-            /// minicbor encodes and decodes Cheque back to the same value.
-            #[test]
-            fn cbor(val: Cheque) {
-                let bytes = minicbor::to_vec(&val).unwrap();
-                let recovered: Cheque = minicbor::decode(&bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+    proptest! {
+        /// minicbor encodes and decodes Cheque back to the same value.
+        #[test]
+        fn cbor(val: Cheque) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Cheque = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
-            #[test]
-            fn encoding_matches(val: Cheque) {
-                let mini = minicbor::to_vec(&val).unwrap();
-                let pd = PlutusData::from(val).to_cbor();
-                prop_assert_eq!(mini, pd);
-            }
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn encoding_matches(val: Cheque) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
 
-            /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
-            #[test]
-            fn from_plutus(val: Cheque) {
-                let pd_bytes = PlutusData::from(val.clone()).to_cbor();
-                let recovered: Cheque = minicbor::decode(&pd_bytes).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn from_plutus(val: Cheque) {
+            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let recovered: Cheque = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
 
-            /// From<Cheque> for PlutusData and TryFrom<PlutusData> for Cheque are mutual inverses.
-            #[test]
-            fn tryfrom(val: Cheque) {
-                let pd = PlutusData::from(val.clone());
-                let recovered = Cheque::try_from(pd).unwrap();
-                prop_assert_eq!(val, recovered);
-            }
+        /// From<Cheque> for PlutusData and TryFrom<PlutusData> for Cheque are mutual inverses.
+        #[test]
+        fn tryfrom(val: Cheque) {
+            let pd = PlutusData::from(val.clone());
+            let recovered = Cheque::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
         }
     }
 }

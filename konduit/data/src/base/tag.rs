@@ -1,5 +1,4 @@
-use anyhow::anyhow;
-use cardano_sdk::{PlutusData, cbor::ToCbor};
+use crate::ParseError;
 use minicbor::{Decode, Encode, Encoder};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
@@ -41,12 +40,10 @@ impl Tag {
 }
 
 impl FromStr for Tag {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        Ok(Tag(
-            hex::decode(s).map_err(|e| anyhow!(e).context("invalid tag"))?
-        ))
+    fn from_str(s: &str) -> Result<Self, ParseError> {
+        Ok(Tag(hex::decode(s)?))
     }
 }
 
@@ -72,29 +69,6 @@ impl Deref for Tag {
 impl From<Vec<u8>> for Tag {
     fn from(value: Vec<u8>) -> Self {
         Self(value)
-    }
-}
-
-impl<'a> TryFrom<&PlutusData<'a>> for Tag {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let tag = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid tag"))?;
-        Ok(Self(Vec::from(tag)))
-    }
-}
-
-impl<'a> TryFrom<PlutusData<'a>> for Tag {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(&data)
-    }
-}
-
-impl<'a> From<Tag> for PlutusData<'a> {
-    fn from(value: Tag) -> Self {
-        Self::bytes(value.0)
     }
 }
 
@@ -126,25 +100,50 @@ impl cuddly::ToCddl for Tag {
     }
 }
 
-#[test]
-fn tag_encodes_as_plutus_bytes() {
-    let raw = vec![0xde, 0xad, 0xbe, 0xef];
-    let tag = Tag(raw.clone());
+#[cfg(feature = "cardano_sdk")]
+mod via_plutus_data {
+    use super::*;
+    use cardano_sdk::PlutusData;
 
-    // What minicbor produces
-    let mini_bytes = minicbor::to_vec(&tag).unwrap();
+    impl<'a> TryFrom<&PlutusData<'a>> for Tag {
+        type Error = anyhow::Error;
 
-    // What PlutusData says the canonical encoding should be
-    let pd = PlutusData::bytes(raw); // or whatever the constructor is
-    let pd_bytes = pd.to_cbor();
+        fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+            let tag = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid tag"))?;
+            Ok(Self(Vec::from(tag)))
+        }
+    }
 
-    assert_eq!(mini_bytes, pd_bytes);
+    impl<'a> TryFrom<PlutusData<'a>> for Tag {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            Self::try_from(&data)
+        }
+    }
+
+    impl<'a> From<Tag> for PlutusData<'a> {
+        fn from(value: Tag) -> Self {
+            Self::bytes(value.0)
+        }
+    }
 }
 
 #[cfg(feature = "proptest")]
-mod proptests {
+#[allow(unused_imports)]
+mod roundtrip {
     use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
+
+    #[test]
+    fn tag_encodes_as_plutus_bytes() {
+        let raw = vec![0xde, 0xad, 0xbe, 0xef];
+        let tag = Tag(raw.clone());
+        let mini_bytes = minicbor::to_vec(&tag).unwrap();
+        let pd_bytes = PlutusData::bytes(raw).to_cbor();
+        assert_eq!(mini_bytes, pd_bytes);
+    }
 
     proptest! {
         #[test]

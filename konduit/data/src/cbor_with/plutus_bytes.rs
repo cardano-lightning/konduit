@@ -3,7 +3,7 @@ use minicbor::{Decoder, Encoder};
 const CHUNK_SIZE: usize = 64;
 
 pub fn encode<C, W: minicbor::encode::Write>(
-    val: &Vec<u8>,
+    val: &[u8],
     e: &mut Encoder<W>,
     _ctx: &mut C,
 ) -> Result<(), minicbor::encode::Error<W::Error>> {

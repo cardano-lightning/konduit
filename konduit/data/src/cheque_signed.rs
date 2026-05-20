@@ -1,10 +1,7 @@
-use crate::{Duration, Unverified, Verified, VerifyState, cheque_body::ChequeBody};
-use cardano_sdk::Signature;
+use crate::{Duration, Signature, Unverified, Verified, VerifyState, cheque_body::ChequeBody};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::marker::PhantomData;
 
-#[serde_as]
 #[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(bound = "T: Serialize + for<'de2> Deserialize<'de2>")]
@@ -12,7 +9,6 @@ pub struct ChequeSigned<T, V: VerifyState = Unverified> {
     #[cfg_attr(feature = "cddl", n(0))]
     pub body: ChequeBody<T>,
     #[cfg_attr(feature = "cddl", n(1))]
-    #[serde_as(as = "serde_with::hex::Hex")]
     #[cfg_attr(feature = "cddl", cddl(bytes))]
     pub signature: Signature,
     #[serde(skip)]
@@ -91,7 +87,7 @@ where
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.begin_array()?;
         e.encode_with(&self.body, ctx)?;
-        e.bytes(self.signature.as_ref())?;
+        e.encode_with(self.signature, ctx)?;
         e.end()?;
         Ok(())
     }
@@ -105,11 +101,7 @@ where
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         d.array()?;
         let body: ChequeBody<T> = d.decode_with(ctx)?;
-        let sig_raw = d.bytes()?;
-        let sig_array: [u8; 64] = sig_raw
-            .try_into()
-            .map_err(|_| minicbor::decode::Error::message("signature must be exactly 64 bytes"))?;
-        let signature = Signature::from(sig_array);
+        let signature: Signature = d.decode_with(ctx)?;
         if d.datatype()? != minicbor::data::Type::Break {
             return Err(minicbor::decode::Error::message(
                 "expected end of ChequeSigned array",

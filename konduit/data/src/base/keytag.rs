@@ -1,11 +1,8 @@
-use anyhow::anyhow;
-use cardano_sdk::{PlutusData, VerificationKey, cbor::ToCbor};
+use crate::{ParseError, Tag, VerifyingKey};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt;
-
-use crate::Tag;
 
 #[serde_as]
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
@@ -30,12 +27,12 @@ impl fmt::Display for Keytag {
 }
 
 impl TryFrom<Vec<u8>> for Keytag {
-    type Error = anyhow::Error;
+    type Error = ParseError;
 
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+    fn try_from(value: Vec<u8>) -> Result<Self, ParseError> {
         if value.len() < 32 {
-            return Err(anyhow!(
-                "invalid length for keytag; must be at least 32 bytes"
+            return Err(ParseError::Constraint(
+                "invalid length for keytag; must be at least 32 bytes".to_string(),
             ));
         }
         Ok(Self(value))
@@ -43,53 +40,25 @@ impl TryFrom<Vec<u8>> for Keytag {
 }
 
 impl Keytag {
-    /// Construct a Keytag by concatenating a VerificationKey and a Tag.
-    pub fn new(key: VerificationKey, tag: Tag) -> Self {
+    /// Construct a Keytag by concatenating a VerifyingKey and a Tag.
+    pub fn new(key: VerifyingKey, tag: Tag) -> Self {
         Self(key.as_ref().iter().chain(tag.as_ref()).copied().collect())
     }
 
-    /// Split back into the constituent VerificationKey and Tag.
-    pub fn split(&self) -> (VerificationKey, Tag) {
+    /// Split back into the constituent VerifyingKey and Tag.
+    pub fn split(&self) -> (VerifyingKey, Tag) {
         (
-            VerificationKey::from(<[u8; 32]>::try_from(&self.0[..32]).unwrap()),
+            VerifyingKey::from_bytes(<[u8; 32]>::try_from(&self.0[..32]).unwrap()),
             Tag::from(self.0[32..].to_vec()),
         )
     }
 }
 
 impl std::str::FromStr for Keytag {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        Ok(Keytag(
-            hex::decode(s).map_err(|e| anyhow!(e).context("invalid keytag"))?,
-        ))
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<&PlutusData<'a>> for Keytag {
-    type Error = anyhow::Error;
-
-    fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-        let raw = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid keytag"))?;
-        Self::try_from(raw.to_vec())
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> TryFrom<PlutusData<'a>> for Keytag {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        Self::try_from(&data)
-    }
-}
-
-#[cfg(feature = "proptest")]
-impl<'a> From<Keytag> for PlutusData<'a> {
-    fn from(value: Keytag) -> Self {
-        Self::bytes(value.0)
+    fn from_str(s: &str) -> Result<Self, ParseError> {
+        Ok(Keytag(hex::decode(s)?))
     }
 }
 
@@ -115,19 +84,53 @@ impl cuddly::ToCddl for Keytag {
     }
 }
 
-#[test]
-fn keytag_encodes_as_plutus_bytes() {
-    let raw = vec![0xabu8; 36]; // 32-byte key + 4-byte tag
-    let keytag = Keytag::try_from(raw.clone()).unwrap();
-    let mini_bytes = minicbor::to_vec(&keytag).unwrap();
-    let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
-    assert_eq!(mini_bytes, pd_bytes);
+// =========================================================================
+// PlutusData Conversions (cardano_sdk-gated)
+// =========================================================================
+#[cfg(feature = "cardano_sdk")]
+mod via_plutus_data {
+    use super::*;
+    use cardano_sdk::PlutusData;
+
+    impl<'a> TryFrom<&PlutusData<'a>> for Keytag {
+        type Error = anyhow::Error;
+
+        fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+            let raw = <&'_ [u8]>::try_from(data).map_err(|e| e.context("invalid keytag"))?;
+            Self::try_from(raw.to_vec()).map_err(Into::into)
+        }
+    }
+
+    impl<'a> TryFrom<PlutusData<'a>> for Keytag {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            Self::try_from(&data)
+        }
+    }
+
+    impl<'a> From<Keytag> for PlutusData<'a> {
+        fn from(value: Keytag) -> Self {
+            Self::bytes(value.0)
+        }
+    }
 }
 
 #[cfg(feature = "proptest")]
-mod proptests {
+#[allow(unused_imports)]
+mod roundtrip {
     use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
+
+    #[test]
+    fn keytag_encodes_as_plutus_bytes() {
+        let raw = vec![0xabu8; 36]; // 32-byte key + 4-byte tag
+        let keytag = Keytag::try_from(raw.clone()).unwrap();
+        let mini_bytes = minicbor::to_vec(&keytag).unwrap();
+        let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
+        assert_eq!(mini_bytes, pd_bytes);
+    }
 
     proptest! {
         /// minicbor encodes and decodes Keytag back to the same value.
