@@ -51,6 +51,10 @@ impl<V> Squash<V> {
     pub fn is_index_squashed(&self, index: u64) -> bool {
         self.body.is_index_squashed(index)
     }
+
+    pub fn signature(&self) -> Signature {
+        self.signature
+    }
 }
 
 // =========================================================================
