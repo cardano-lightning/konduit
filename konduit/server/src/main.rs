@@ -83,7 +83,8 @@ async fn main() -> anyhow::Result<()> {
 
     // INFO
     let info = Arc::new(info::Response::from(args.common));
-    let server_data = server::Data::new(bln, db, fx_state, info, admin);
+    let hmac_key = args.server.hmac_key.0;
+    let server_data = server::Data::new(bln, db, fx_state, info, hmac_key);
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;

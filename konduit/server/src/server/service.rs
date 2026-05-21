@@ -20,6 +20,7 @@ impl Service {
 
     pub async fn run(self) -> std::io::Result<()> {
         let adapter_key = self.data.adapter_key();
+        let hmac_key = *self.data.hmac_key();
         let data = web::Data::new(self.data);
         log::info!("Starting server on http://{}...", self.bind_address);
         HttpServer::new(move || {
@@ -34,9 +35,11 @@ impl Service {
                 .app_data(data.clone())
                 .route("/version", web::get().to(handlers::version))
                 .route("/info", web::get().to(handlers::info))
+                // Token issuance: client exchanges a signed proof for a session token.
+                .route("/auth", web::post().to(handlers::issue_token))
                 .service(
                     web::scope("/channel")
-                        .wrap(middleware::Pop::new(adapter_key))
+                        .wrap(middleware::HmacToken::new(hmac_key, adapter_key))
                         .route("/sync", web::get().to(handlers::sync))
                         .route("/squash", web::post().to(handlers::squash))
                         .route("/pay/quoted", web::post().to(handlers::pay_quoted))

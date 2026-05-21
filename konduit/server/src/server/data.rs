@@ -10,6 +10,7 @@ pub struct Data {
     db: Arc<dyn db::Api + Send + Sync + 'static>,
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<info::Response>,
+    hmac_key: [u8; 32],
 }
 
 impl Data {
@@ -18,8 +19,15 @@ impl Data {
         db: Arc<dyn db::Api + Send + Sync + 'static>,
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<info::Response>,
+        hmac_key: [u8; 32],
     ) -> Self {
-        Self { bln, db, fx, info }
+        Self {
+            bln,
+            db,
+            fx,
+            info,
+            hmac_key,
+        }
     }
 
     pub fn fx(&self) -> Arc<tokio::sync::RwLock<fx_client::State>> {
@@ -38,8 +46,13 @@ impl Data {
         self.info.clone()
     }
 
-    /// The adaptor's Ed25519 verification key, used to verify PoP auth signatures.
+    /// The adaptor's Ed25519 verification key, used in TBS construction.
     pub fn adapter_key(&self) -> VerificationKey {
         self.info.channel_parameters.adaptor_key
+    }
+
+    /// The server's HMAC-BLAKE3 key for session token signing and verification.
+    pub fn hmac_key(&self) -> &[u8; 32] {
+        &self.hmac_key
     }
 }
