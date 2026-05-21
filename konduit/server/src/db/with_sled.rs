@@ -1,21 +1,13 @@
 use async_trait::async_trait;
+use konduit_channel::{Channel, Error as ChannelError};
+use konduit_data::Keytag;
 use sled::Db;
 use std::{collections::BTreeMap, sync::Arc};
-
-use konduit_data::{Keytag, Locked, Secret, Squash};
 
 mod args;
 pub use args::SledArgs as Args;
 
-use crate::{Channel, ChannelError, channel::Retainer};
-
-use super::{BackendError, Error, LogicError, api::Api, coiter_with_default::coiter_with_default};
-
-impl From<sled::Error> for BackendError {
-    fn from(e: sled::Error) -> Self {
-        Self::Other(e.to_string())
-    }
-}
+use super::{BackendError, Error, LogicError, api::Api};
 
 pub struct WithSled {
     db: Arc<Db>,
@@ -31,13 +23,11 @@ impl TryFrom<&Args> for WithSled {
 }
 
 pub fn into_vec(c: &Channel) -> Result<Vec<u8>, BackendError> {
-    let v = postcard::to_stdvec(c)?;
-    Ok(v)
+    minicbor::to_vec(c).map_err(|e| BackendError::Serde(e.to_string()))
 }
 
 pub fn from_vec(v: &[u8]) -> Result<Channel, BackendError> {
-    let c = postcard::from_bytes(v)?;
-    Ok(c)
+    minicbor::decode(v).map_err(|e| BackendError::Serde(e.to_string()))
 }
 
 impl WithSled {
@@ -70,7 +60,7 @@ impl WithSled {
         Ok(b.map(|v| v.to_vec()))
     }
 
-    fn get_channel(&self, keytag: Keytag) -> super::Result<Option<Channel>> {
+    fn get_channel_sync(&self, keytag: Keytag) -> super::Result<Option<Channel>> {
         match self.get_value(to_db_key(&keytag))? {
             Some(bytes) => {
                 let channel = from_vec(&bytes)?;
@@ -78,6 +68,16 @@ impl WithSled {
             }
             None => Ok(None),
         }
+    }
+
+    fn put_channel_sync(&self, keytag: &Keytag, channel: Channel) -> super::Result<()> {
+        let key = to_db_key(keytag);
+        let bytes = into_vec(&channel)?;
+        self.db
+            .as_ref()
+            .insert(key, bytes)
+            .map_err(|e| Error::Backend(BackendError::Other(e.to_string())))?;
+        Ok(())
     }
 
     pub fn update_option_channel<F>(&self, keytag: &Keytag, update_fn: F) -> super::Result<Channel>
@@ -113,26 +113,21 @@ impl WithSled {
         }
     }
 
-    pub fn update_channel<F, T>(&self, keytag: &Keytag, update_fn: F) -> super::Result<Channel>
-    where
-        F: Fn(&mut Channel) -> Result<T, ChannelError>,
-    {
-        let wrap = move |opt: Option<Channel>| {
-            let mut channel = opt.ok_or_else(|| LogicError::NoEntry(keytag.clone()))?;
-            update_fn(&mut channel)?;
-            Ok(channel)
-        };
-        self.update_option_channel(keytag, wrap)
-    }
-
-    fn one_update_retainers(
+    pub fn update_channel_sync(
         &self,
         keytag: &Keytag,
-        retainers: Vec<Retainer>,
+        update_fn: Box<dyn for<'a> FnOnce(&'a mut Channel) -> Result<(), ChannelError> + Send>,
     ) -> super::Result<Channel> {
+        use std::sync::Mutex;
+        let update_fn = Mutex::new(Some(update_fn));
         self.update_option_channel(keytag, move |opt| {
-            let mut channel = opt.unwrap_or_else(|| Channel::new(keytag.clone()));
-            channel.update_retainer(retainers.clone())?;
+            let mut channel = opt.ok_or_else(|| LogicError::NoEntry(keytag.clone()))?;
+            let f = update_fn
+                .lock()
+                .unwrap()
+                .take()
+                .expect("sled retried a FnOnce");
+            f(&mut channel)?;
             Ok(channel)
         })
     }
@@ -140,37 +135,8 @@ impl WithSled {
 
 #[async_trait]
 impl Api for WithSled {
-    async fn update_retainers(
-        &self,
-        retainers: BTreeMap<Keytag, Vec<Retainer>>,
-    ) -> super::Result<BTreeMap<Keytag, Result<Channel, ChannelError>>> {
-        let curr = self.channel_keys()?;
-        let mut futures = Vec::new();
-        coiter_with_default(retainers.into_iter(), curr.into_iter(), |k, v| {
-            futures.push(async move { (k.clone(), self.one_update_retainers(&k, v)) });
-        });
-        let results = futures::future::join_all(futures).await;
-        let mut res = BTreeMap::new();
-        for (key, update_result) in results {
-            match update_result {
-                Ok(channel) => {
-                    res.insert(key, Ok(channel));
-                }
-                Err(Error::Logic(LogicError::Channel(ce))) => {
-                    res.insert(key, Err(ce));
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-
-        Ok(res)
-    }
-
     async fn get_channel(&self, keytag: &Keytag) -> super::Result<Option<Channel>> {
-        let res = self.get_channel(keytag.clone())?;
-        Ok(res)
+        self.get_channel_sync(keytag.clone())
     }
 
     async fn get_all(&self) -> super::Result<BTreeMap<Keytag, Channel>> {
@@ -179,32 +145,23 @@ impl Api for WithSled {
             .into_iter()
             .map(|k| {
                 // Justify unwrap :: we've only just grabbed all keys. It _must_ be a Some channel.
-                self.get_channel(k.clone())
+                self.get_channel_sync(k.clone())
                     .map(|ch| (k.clone(), ch.unwrap()))
             })
             .collect::<super::Result<_>>()?;
         Ok(all)
     }
 
-    async fn update_squash(&self, keytag: &Keytag, squash: Squash) -> super::Result<Channel> {
-        self.update_channel(keytag, |c: &mut Channel| {
-            c.update_squash(squash.clone())?;
-            Ok(())
-        })
+    async fn put_channel(&self, keytag: &Keytag, channel: Channel) -> super::Result<()> {
+        self.put_channel_sync(keytag, channel)
     }
 
-    async fn append_locked(&self, keytag: &Keytag, locked: Locked) -> super::Result<Channel> {
-        self.update_channel(keytag, |c: &mut Channel| {
-            c.append_locked(locked.clone())?;
-            Ok(())
-        })
-    }
-
-    async fn unlock(&self, keytag: &Keytag, secret: Secret) -> super::Result<Channel> {
-        self.update_channel(keytag, |c: &mut Channel| {
-            c.unlock(secret.clone())?;
-            Ok(())
-        })
+    async fn update_channel(
+        &self,
+        keytag: &Keytag,
+        f: Box<dyn for<'a> FnOnce(&'a mut Channel) -> Result<(), ChannelError> + Send>,
+    ) -> super::Result<Channel> {
+        self.update_channel_sync(keytag, f)
     }
 }
 

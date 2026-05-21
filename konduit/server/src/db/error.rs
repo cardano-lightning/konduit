@@ -1,6 +1,5 @@
+use konduit_channel::Error as ChannelError;
 use konduit_data::Keytag;
-
-use crate::ChannelError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -27,16 +26,21 @@ impl From<BackendError> for Error {
     }
 }
 
-impl From<postcard::Error> for BackendError {
-    fn from(e: postcard::Error) -> Self {
-        Self::Serde(e.to_string())
+impl From<sled::Error> for BackendError {
+    fn from(e: sled::Error) -> Self {
+        Self::Other(e.to_string())
+    }
+}
+
+impl From<sled::Error> for Error {
+    fn from(e: sled::Error) -> Self {
+        Self::Backend(BackendError::Other(e.to_string()))
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum LogicError {
     // Expected an entry but none found.
-    // For example trying to update squash when channel exists.
     #[error("NoEntry : {0}")]
     NoEntry(Keytag),
     // Channel failure

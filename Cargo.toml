@@ -7,16 +7,23 @@ members = [
   "cardano/connector-direct",
   "cardano/connector-utxorpc",
   "cardano/sdk",
+  "konduit/api",
+  "konduit/channel",
+  "konduit/cli",
+  "konduit/client",
+  "konduit/data",
+  "konduit/ex-data",
+  "konduit/receipt",
+  "konduit/server",
+  "konduit/tx",
+  "konduit/wasm",
+  "misc/cbor-with",
+  "misc/cuddly",
+  "misc/cuddly-derive",
   "misc/fx-client",
   "misc/http-client",
   "misc/http-client-native",
   "misc/http-client-wasm",
-  "konduit/cli",
-  "konduit/client",
-  "konduit/data",
-  "konduit/server",
-  "konduit/tx",
-  "konduit/wasm",
 ]
 resolver = "2"
 
@@ -80,12 +87,13 @@ pallas-codec = "0.33.0"
 pallas-crypto = "0.33.0"
 pallas-primitives = "0.33.0"
 postcard = { version = "1.1.3", features = ["postcard-derive", "use-std"] }
+cddl-cat = "0.7.1"
 proptest = "1.8.0"
 proptest-derive = "0.7.0"
 rand = "0.6.4"
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 reqwest = "0.12.23"
-serde = "1.0.228"
+serde = { version = "1.0.228", features = ["derive"] }
 serde-hex = "0.1.0"
 serde_json = { version = "1.0.145", features = ["std"] }
 serde-wasm-bindgen = "0.6.5"
@@ -100,6 +108,7 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.55"
 web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
 web-time = "1.1.0"
+utoipa = "5.5.0"
 
 bln-client = { path = "bln/client" }
 bln-sdk = { path = "bln/sdk" }
@@ -108,12 +117,18 @@ cardano-connector-client = { path = "cardano/connector-client" }
 cardano-connector-direct = { path = "cardano/connector-direct" }
 cardano-connector-utxorpc = { path = "cardano/connector-utxorpc" }
 cardano-sdk = { path = "cardano/sdk" }
+cbor-with = { path = "misc/cbor-with" }
+cuddly = { path = "misc/cuddly" }
+cuddly-derive = { path = "misc/cuddly-derive" }
 fx-client = { path = "misc/fx-client" }
 http-client = { path = "misc/http-client" }
 http-client-native = { path = "misc/http-client-native" }
 http-client-wasm = { path = "misc/http-client-wasm" }
+konduit-api = { path = "konduit/api" }
+konduit-channel = { path = "konduit/channel" }
 konduit-client = { path = "konduit/client" }
 konduit-data = { path = "konduit/data" }
+konduit-ex-data = { path = "konduit/ex-data" }
 konduit-server = { path = "konduit/server" }
 konduit-tx = { path = "konduit/tx" }
 

@@ -1,28 +1,31 @@
 use actix_web::{
     Error, HttpMessage,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
+    http::header::HeaderName,
 };
+use cardano_sdk::VerificationKey;
+use konduit_api::auth::pop;
 use konduit_data::Keytag;
 use std::{
     future::{Future, Ready, ready},
     pin::Pin,
     rc::Rc,
-    str::FromStr,
 };
 
-pub struct KeytagAuth {
-    header_name: String,
+static HEADER_KEYTAG: HeaderName = HeaderName::from_static(pop::HEADER_KEYTAG);
+static HEADER_SIGNATURE: HeaderName = HeaderName::from_static(pop::HEADER_SIGNATURE);
+
+pub struct Pop {
+    server_key: VerificationKey,
 }
 
-impl KeytagAuth {
-    pub fn new(header_name: &str) -> Self {
-        Self {
-            header_name: header_name.to_lowercase(),
-        }
+impl Pop {
+    pub fn new(server_key: VerificationKey) -> Self {
+        Self { server_key }
     }
 }
 
-impl<S, B> Transform<S, ServiceRequest> for KeytagAuth
+impl<S, B> Transform<S, ServiceRequest> for Pop
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
@@ -31,23 +34,23 @@ where
     type Response = ServiceResponse<B>;
     type Error = Error;
     type InitError = ();
-    type Transform = KeytagMiddleware<S>;
+    type Transform = PopAuthMiddleware<S>;
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(KeytagMiddleware {
+        ready(Ok(PopAuthMiddleware {
             service: Rc::new(service),
-            header_name: self.header_name.clone(),
+            server_key: self.server_key,
         }))
     }
 }
 
-pub struct KeytagMiddleware<S> {
+pub struct PopAuthMiddleware<S> {
     service: Rc<S>,
-    header_name: String,
+    server_key: VerificationKey,
 }
 
-impl<S, B> Service<ServiceRequest> for KeytagMiddleware<S>
+impl<S, B> Service<ServiceRequest> for PopAuthMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
@@ -60,48 +63,45 @@ where
     actix_web::dev::forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let header_value = req
-            .headers()
-            .get(&self.header_name)
-            .and_then(|v| v.to_str().ok());
+        let server_key = self.server_key;
 
-        let mut keytag: Option<Keytag> = None;
-        let mut error: Option<Error> = None;
+        let result: Result<Keytag, Error> = (|| {
+            let keytag_str = req
+                .headers()
+                .get(&HEADER_KEYTAG)
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| actix_web::error::ErrorUnauthorized("missing konduit-keytag"))?;
 
-        match header_value {
-            Some(val) => {
-                match Keytag::from_str(val) {
-                    Ok(tag) => keytag = Some(tag),
-                    Err(_) => {
-                        // Invalid hex
-                        error = Some(actix_web::error::ErrorForbidden(format!(
-                            "invalid '{}' token format",
-                            self.header_name
-                        )));
-                    }
-                }
+            let signature_str = req
+                .headers()
+                .get(&HEADER_SIGNATURE)
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| actix_web::error::ErrorUnauthorized("missing konduit-signature"))?;
+
+            let keytag: Keytag = keytag_str
+                .parse()
+                .map_err(|_| actix_web::error::ErrorUnauthorized("malformed keytag"))?;
+
+            let signature: cardano_sdk::Signature = signature_str
+                .parse()
+                .map_err(|_| actix_web::error::ErrorUnauthorized("malformed signature"))?;
+
+            let payload = pop::to_bytes(&server_key, &keytag);
+            let (client_key, _tag) = keytag.split();
+            if !client_key.verify(&payload, &signature) {
+                return Err(actix_web::error::ErrorUnauthorized("invalid pop signature"));
             }
-            None => {
-                error = Some(actix_web::error::ErrorForbidden(format!(
-                    "missing '{}' header token",
-                    self.header_name
-                )));
+
+            Ok(keytag)
+        })();
+
+        match result {
+            Ok(keytag) => {
+                req.extensions_mut().insert(keytag);
+                let srv = self.service.clone();
+                Box::pin(async move { srv.call(req).await })
             }
+            Err(err) => Box::pin(async move { Err(err) }),
         }
-
-        if let Some(err) = error {
-            return Box::pin(async move { Err(err) });
-        }
-
-        if let Some(keytag) = keytag {
-            req.extensions_mut().insert(keytag);
-        }
-
-        let srv = self.service.clone();
-
-        Box::pin(async move {
-            let res = srv.call(req).await?;
-            Ok(res)
-        })
     }
 }

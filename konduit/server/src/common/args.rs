@@ -1,6 +1,7 @@
 use crate::{common::metavar, env};
 use cardano_sdk::{Address, SigningKey, VerificationKey, address::kind};
-use konduit_data::{AdaptorInfo, ChannelParameters, Duration, TosInfo, TxHelp};
+use konduit_api::endpoints::info;
+use konduit_data::Duration;
 use konduit_tx::KONDUIT_VALIDATOR;
 
 #[derive(Debug, Clone, clap::Args)]
@@ -24,7 +25,7 @@ pub struct CommonArgs {
     pub fee: u64,
 }
 
-impl From<CommonArgs> for ChannelParameters {
+impl From<CommonArgs> for konduit_data::ChannelParameters {
     fn from(args: CommonArgs) -> Self {
         let adaptor_key = VerificationKey::from(&args.signing_key);
         Self {
@@ -35,21 +36,23 @@ impl From<CommonArgs> for ChannelParameters {
     }
 }
 
-impl From<CommonArgs> for AdaptorInfo<TxHelp> {
+impl From<CommonArgs> for info::Response {
     fn from(args: CommonArgs) -> Self {
-        let tos = TosInfo { flat_fee: args.fee };
-
-        let tx_help = TxHelp {
+        let adaptor_key = VerificationKey::from(&args.signing_key);
+        let tos = info::TosInfo { flat_fee: args.fee };
+        let tx_help = info::TxHelp {
             host_address: args.host_address.clone(),
             validator: KONDUIT_VALIDATOR.hash,
         };
-
-        let channel_parameters = args.into();
-
+        let channel_parameters = info::ChannelParameters {
+            adaptor_key,
+            close_period: args.close_period,
+            tag_length: args.tag_length,
+        };
         Self {
             tos,
-            tx_help,
             channel_parameters,
+            tx_help,
         }
     }
 }

@@ -23,15 +23,14 @@ cardano-sdk = { workspace = true, features = ["clap"] }
 clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
 env_logger.workspace = true
-futures.workspace = true
 fx-client = { workspace = true, features = ["cli", "namespaced"] }
-hex = { workspace = true, features = ["serde"] }
 humantime.workspace = true
+konduit-api    = { workspace = true, features = ["actix"] }
+konduit-channel.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
+minicbor.workspace = true
 log.workspace = true
-postcard = { workspace = true, features = ["postcard-derive", "use-std"] }
-reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["base64", "hex", "json"] }

@@ -1,5 +1,5 @@
-use crate::ChequeBody;
 use cardano_sdk::Signature;
+use konduit_data::ChequeBody;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -10,10 +10,4 @@ pub struct PayBody {
     #[serde_as(as = "serde_with::hex::Hex")]
     pub signature: Signature,
     pub invoice: String,
-    // #[serde(with = "hex")]
-    // pub payee: [u8; 33],
-    // pub amount_msat: u64,
-    // #[serde(with = "hex")]
-    // pub payment_secret: [u8; 32],
-    // pub final_cltv_delta: u64,
 }

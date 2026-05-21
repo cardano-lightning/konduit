@@ -1,12 +1,10 @@
+use crate::VerifyingKey;
 use crate::{
-    Cheque, ChequeBody, Cont, Duration, Indexes, L1Channel, Lock, Locked, MAX_UNSQUASHED, Pending,
-    Secret, Squash, SquashBody, SquashBodyError, SquashProposal, Stage, Tag, Unlocked, Unpend,
-    Used,
+    Cheque, ChequeBody, Duration, Lock, Locked, MAX_UNSQUASHED, Pending, Secret, Squash,
+    SquashBodyError, Tag, Unlocked, Used,
 };
-use anyhow::anyhow;
-use cardano_sdk::VerificationKey;
 use serde::{Deserialize, Serialize};
-use std::{cmp, collections::BTreeMap};
+use std::cmp;
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ReceiptError {
@@ -21,12 +19,48 @@ pub enum ReceiptError {
 
     #[error("Bad input")]
     BadInput,
+
+    #[error("Too many unsquashed cheques")]
+    TooManyUnsquashed,
+
+    #[error("Index {index} is already squashed")]
+    AlreadySquashed { index: u64 },
+
+    #[error("Duplicate index {index}")]
+    DuplicateIndex { index: u64 },
 }
 
+#[cfg_attr(feature = "cddl", derive(cuddly::ToCddl))]
+#[cfg_attr(feature = "cardano_sdk", derive(minicbor::Encode, minicbor::Decode))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Receipt {
+    #[cfg_attr(
+        feature = "cardano_sdk",
+        cbor(n(0), with = "crate::cbor_with::plutus_data")
+    )]
+    #[cfg_attr(feature = "cddl", cddl(ty = "squash"))]
     pub squash: Squash,
+    #[cfg_attr(
+        feature = "cardano_sdk",
+        cbor(n(1), with = "crate::cbor_with::vec_plutus_data")
+    )]
+    #[cfg_attr(feature = "cddl", cddl(ty = "[* cheque]"))]
     pub cheques: Vec<Cheque>,
+}
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Receipt {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        (
+            any::<Squash>(),
+            proptest::collection::vec(any::<Cheque>(), 0..=crate::MAX_UNSQUASHED),
+        )
+            .prop_map(|(squash, cheques)| Receipt::new_no_verify(squash, cheques))
+            .boxed()
+    }
 }
 
 impl Receipt {
@@ -37,18 +71,18 @@ impl Receipt {
         }
     }
 
-    pub fn new_with_cheques(squash: Squash, cheques: Vec<Cheque>) -> anyhow::Result<Self> {
+    pub fn new_with_cheques(squash: Squash, cheques: Vec<Cheque>) -> Result<Self, ReceiptError> {
         if cheques.len() > MAX_UNSQUASHED {
-            Err(anyhow!("Too many unsquashed"))?;
+            return Err(ReceiptError::TooManyUnsquashed);
         }
         let mut sorted: Vec<Cheque> = vec![];
         for cheque in cheques {
             let index = cheque.index();
             if squash.body.is_index_squashed(index) {
-                Err(anyhow!("Index {} is already squashed", index))?;
+                return Err(ReceiptError::AlreadySquashed { index });
             }
             match sorted.binary_search_by(|probe| probe.index().cmp(&index)) {
-                Ok(_) => Err(anyhow!("Duplicate index {}", index))?,
+                Ok(_) => return Err(ReceiptError::DuplicateIndex { index }),
                 Err(position) => sorted.insert(position, cheque),
             };
         }
@@ -67,7 +101,7 @@ impl Receipt {
         }
     }
 
-    pub fn verify_components(&self, key: &VerificationKey, tag: &Tag) -> bool {
+    pub fn verify_components(&self, key: &VerifyingKey, tag: &Tag) -> bool {
         self.squash.verify(key, tag)
             && self.cheques.iter().all(|m| m.verify(key, tag))
             && match Self::new_with_cheques(self.squash.clone(), self.cheques.clone()) {
@@ -189,7 +223,7 @@ impl Receipt {
         self.squash.amount() + self.unlockeds().iter().map(|x| x.body.amount).sum::<u64>()
     }
 
-    pub fn provably_owed(&self, vk: &VerificationKey, tag: &Tag) -> u64 {
+    pub fn provably_owed(&self, vk: &VerifyingKey, tag: &Tag) -> u64 {
         let squash_amount = if self.squash.verify(vk, tag) {
             self.squash.amount()
         } else {
@@ -245,17 +279,19 @@ impl Receipt {
     }
 
     /// Time and signature must already be verified
-    pub fn insert(&mut self, locked: Locked) -> anyhow::Result<()> {
+    pub fn insert(&mut self, locked: Locked) -> Result<(), ReceiptError> {
         let index = locked.body.index;
         let cheque = Cheque::from(locked);
         match self
             .cheques
             .binary_search_by(|probe| probe.index().cmp(&index))
         {
-            Ok(_) => Err(anyhow!("Duplicate index {}", &index))?,
-            Err(position) => self.cheques.insert(position, cheque),
-        };
-        Ok(())
+            Ok(_) => Err(ReceiptError::DuplicateIndex { index }),
+            Err(position) => {
+                self.cheques.insert(position, cheque);
+                Ok(())
+            }
+        }
     }
 
     pub fn append_locked(&mut self, locked: Locked) -> Result<(), ReceiptError> {
@@ -291,148 +327,6 @@ impl Receipt {
             true
         } else {
             false
-        }
-    }
-
-    pub fn squash_proposal(&self) -> Result<SquashProposal, ReceiptError> {
-        let current = self.squash.clone();
-        let unlockeds = self.unlockeds();
-        let index = match unlockeds.last() {
-            Some(u) => cmp::max(self.squash.index(), u.index()),
-            None => self.squash.index(),
-        };
-        let exclude = Indexes::new(
-            self.lockeds()
-                .iter()
-                .map(|l| l.index())
-                .filter(|i| i < &index)
-                .collect(),
-        )
-        .map_err(|_e| ReceiptError::NotReproduced)?;
-        let proposal = SquashBody::new(self.owed(), index, exclude)
-            .map_err(|_e| ReceiptError::NotReproduced)?;
-        Ok(SquashProposal {
-            proposal,
-            current,
-            unlockeds,
-            lockeds: self.lockeds(),
-        })
-    }
-
-    pub fn step(&self, upper_bound: &Duration, l1: &L1Channel) -> Option<(Cont, L1Channel)> {
-        match &l1.stage {
-            Stage::Opened(subbed, useds) => {
-                let squash = self.squash.clone();
-                let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
-                let unlockeds = self
-                    .unlockeds()
-                    .iter()
-                    .filter(|c| !used_indexes.contains(&c.index()))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let mut useds = useds
-                    .iter()
-                    .filter(|u| !squash.is_index_squashed(u.index))
-                    .cloned()
-                    .chain(unlockeds.iter().map(|u| Used::new(u.index(), u.amount())))
-                    .collect::<Vec<_>>();
-                useds.sort_by_key(|i| i.index);
-                let abs = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
-                let rel = abs.checked_sub(*subbed)?;
-                let actually_subable = cmp::min(rel, l1.amount);
-                let subbed = subbed + actually_subable;
-                let amount = l1.amount.saturating_sub(actually_subable);
-                Some((
-                    Cont::Sub(self.squash.clone(), unlockeds),
-                    L1Channel {
-                        amount,
-                        stage: Stage::Opened(subbed, useds),
-                    },
-                ))
-            }
-            Stage::Closed(subbed, useds, _) => {
-                let squash = self.squash.clone();
-                let used_indexes: Vec<u64> = useds.iter().map(|u| u.index).collect();
-
-                let cheques = self
-                    .cheques
-                    .iter()
-                    .filter(|c| !used_indexes.contains(&c.index()))
-                    .cloned()
-                    .collect::<Vec<_>>();
-
-                let pendings = cheques
-                    .iter()
-                    .filter_map(|c| c.as_locked())
-                    .map(Pending::from)
-                    .collect::<Vec<_>>();
-                let pendings_amount = pendings.iter().map(|p| p.amount).sum::<u64>();
-
-                let unused = cheques
-                    .iter()
-                    .filter_map(|c| c.as_unlocked())
-                    .map(|c| c.amount())
-                    .sum::<u64>();
-
-                let unsquashed = useds
-                    .iter()
-                    .filter(|u| !squash.is_index_squashed(u.index))
-                    .map(|u| u.amount)
-                    .sum::<u64>();
-
-                let abs = squash.amount() + unsquashed + unused;
-
-                if *subbed > abs && pendings_amount == 0 {
-                    return None;
-                }
-
-                let rel = abs.saturating_sub(*subbed);
-
-                let actually_subable = cmp::min(rel, l1.amount);
-                let amount = l1.amount.saturating_sub(actually_subable);
-                Some((
-                    Cont::Respond(self.squash.clone(), cheques),
-                    L1Channel {
-                        amount,
-                        stage: Stage::Responded(pendings_amount, pendings),
-                    },
-                ))
-            }
-            Stage::Responded(pendings_amount, pendings) => {
-                let known = self
-                    .unlockeds()
-                    .iter()
-                    .map(|c| (*c.lock(), c.secret.clone()))
-                    .collect::<BTreeMap<Lock, Secret>>();
-                let unpends: Vec<Unpend> = pendings
-                    .iter()
-                    .filter(|p| p.timeout > *upper_bound)
-                    .map(|u| known.get(&u.lock).map_or(Unpend::Continue, Unpend::from))
-                    .collect::<Vec<_>>();
-                let claim = pendings
-                    .iter()
-                    .zip(&unpends)
-                    .filter(|(_a, b)| b.is_continue())
-                    .map(|(a, _b)| a.amount)
-                    .sum::<u64>();
-                if claim == 0 {
-                    return None;
-                }
-                let pendings = pendings
-                    .iter()
-                    .zip(&unpends)
-                    .filter(|(_a, b)| !b.is_continue())
-                    .map(|(a, _b)| a.clone())
-                    .collect::<Vec<_>>();
-                let pendings_amount = pendings_amount - claim;
-                Some((
-                    Cont::Unlock(unpends),
-                    L1Channel {
-                        amount: l1.amount - claim,
-                        stage: Stage::Responded(pendings_amount, pendings),
-                    },
-                ))
-            }
         }
     }
 }

@@ -1,5 +1,5 @@
-use crate::Channel;
 use cardano_sdk::Signature;
+use konduit_channel::Channel;
 use konduit_data::{Keytag, L1Channel, Receipt};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
