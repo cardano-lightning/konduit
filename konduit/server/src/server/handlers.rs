@@ -3,6 +3,7 @@ use actix_web::{HttpMessage, HttpRequest, web};
 use konduit_api::{
     DepthBucket,
     actix::ApiResult,
+    auth::hmac,
     endpoints::{
         channel::{pay::quoted, quote::bolt11, squash, sync},
         info, version,
@@ -87,6 +88,52 @@ fn db_err_to_quoted(e: db::Error) -> quoted::Error {
 fn db_err_to_bolt11(e: db::Error) -> bolt11::Error {
     log::error!("db error: {e}");
     bolt11::Error::Other("db error".into())
+}
+
+// ---------------------------------------------------------------------------
+// Auth endpoint — POST /auth
+// ---------------------------------------------------------------------------
+
+pub async fn issue_token(data: Data, body: web::Bytes) -> ApiResult<hmac::Token, hmac::Error> {
+    inner_issue_token(&data, body).await.into()
+}
+
+async fn inner_issue_token(data: &Data, body: web::Bytes) -> Result<hmac::Token, hmac::Error> {
+    let req: hmac::IssueRequest = minicbor::decode(&body).map_err(|_| hmac::Error::BadRequest)?;
+
+    // Reject tokens that are already expired.
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    if req.ttl_ms <= now_ms {
+        return Err(hmac::Error::Expired);
+    }
+
+    let server_pubkey = data.adapter_key();
+
+    if !hmac::verify_issue_signature(&server_pubkey, &req) {
+        return Err(hmac::Error::BadSignature);
+    }
+
+    // Patron check: the keytag must have a live channel.
+    data.db()
+        .get_channel(&req.keytag)
+        .await
+        .map_err(|e| {
+            log::error!("db error in issue_token: {e}");
+            hmac::Error::BadRequest
+        })?
+        .ok_or(hmac::Error::NotPatron)?;
+
+    let mac = hmac::compute_mac(data.hmac_key(), &server_pubkey, &req.keytag, req.ttl_ms);
+
+    Ok(hmac::Token {
+        keytag: req.keytag,
+        ttl_ms: req.ttl_ms,
+        mac,
+    })
 }
 
 // ---------------------------------------------------------------------------

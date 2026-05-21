@@ -15,6 +15,8 @@ pub const DB_PATH: &str = "KONDUIT_DB_PATH";
 /// # Server config
 pub const SERVER_HOST: &str = "KONDUIT_SERVER_HOST";
 pub const SERVER_PORT: &str = "KONDUIT_SERVER_PORT";
+/// 32-byte HMAC key, hex-encoded (64 chars).  Used to sign session tokens.
+pub const HMAC_KEY: &str = "KONDUIT_HMAC_KEY";
 
 /// # Channel params
 pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";

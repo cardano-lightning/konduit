@@ -14,6 +14,8 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+base64.workspace = true
+blake3.workspace = true
 bln-sdk.workspace = true
 cardano-sdk.workspace = true
 konduit-data.workspace = true

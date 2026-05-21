@@ -24,6 +24,7 @@ clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
 env_logger.workspace = true
 fx-client = { workspace = true, features = ["cli", "namespaced"] }
+hex.workspace = true
 humantime.workspace = true
 konduit-api    = { workspace = true, features = ["actix"] }
 konduit-channel.workspace = true
