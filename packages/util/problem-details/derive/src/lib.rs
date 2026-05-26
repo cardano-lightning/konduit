@@ -12,13 +12,13 @@ use syn::{
 /// inner type that itself implements `ProblemDetail`.
 ///
 /// **Leaf variant:**
-/// ```rust
+/// ```rust,ignore
 /// #[problem(slug = "unauthorized", title = "Unauthorized", http_status = 401)]
 /// Unauthorized,
 /// ```
 ///
 /// **Delegate variant** — must be a newtype (single unnamed field):
-/// ```rust
+/// ```rust,ignore
 /// #[problem(delegate)]
 /// Common(common::Error),
 /// ```
