@@ -1,0 +1,17 @@
+[package]
+name = "problem-details-server"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["actix"]
+actix = ["dep:actix-web"]
+
+[dependencies]
+problem-details-wire.workspace = true
+actix-web = { workspace = true, default-features = false, features = ["macros"], optional = true }
+
+[dev-dependencies]
+actix-web = { workspace = true, features = ["macros"] }
+minicbor = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

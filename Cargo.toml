@@ -11,6 +11,9 @@ members = [
   "packages/util/http-client",
   "packages/util/http-client-native",
   "packages/util/http-client-wasm",
+  "packages/util/problem-details/derive",
+  "packages/util/problem-details/wire",
+  "packages/util/problem-details/server",
   "packages/konduit/cli",
   "packages/konduit/client",
   "packages/konduit/data",
@@ -112,6 +115,9 @@ fx-client = { path = "packages/util/fx-client" }
 http-client = { path = "packages/util/http-client" }
 http-client-native = { path = "packages/util/http-client-native" }
 http-client-wasm = { path = "packages/util/http-client-wasm" }
+problem-details-derive = { path = "packages/util/problem-details/derive" }
+problem-details-wire = { path = "packages/util/problem-details/wire" }
+problem-details-server = { path = "packages/util/problem-details/server" }
 konduit-client = { path = "packages/konduit/client" }
 konduit-data = { path = "packages/konduit/data" }
 konduit-server = { path = "packages/konduit/server" }

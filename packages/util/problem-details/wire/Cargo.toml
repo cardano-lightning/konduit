@@ -1,0 +1,15 @@
+[package]
+name = "problem-details-wire"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+
+[dependencies]
+minicbor.workspace = true
+problem-details-derive.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
