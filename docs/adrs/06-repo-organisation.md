@@ -1,10 +1,9 @@
 ---
-title: "Restructuring and Namespacing Off-chain Rust Crates"
+title: "Repo organisation"
 author: "@waalge"
 date: 2026-04-13
 tags:
-  - architecture
-  - rust
+  - repo organisation
   - refactor
 ---
 
@@ -22,15 +21,13 @@ We will reorganize the directory structure into logical namespaces. To minimize
 breaking changes across the ecosystem, **crate names within Cargo.toml will
 remain unchanged**. Only the physical paths and directory names will change.
 
-1. **Namespacing**: Organize crates into the following top-level directories:
+1. All code lives under top-level `packages/`.
+2. **Namespacing**: Organize crates into the following top-level directories:
    - konduit/: Konduit-specific tooling, fx-client, and all konduit-\* crates.
    - bln/: bln-client, bln-sdk
    - cardano/: All Cardano-specific connectors and SDKs.
-   - shared/: Generic utilities such as http-client, generic codecs.
-2. **Directory Renaming & Path Refinement**:
-   - Move konduit-server to the directory konduit/adaptor/.
-   - Move konduit-client to the directory konduit/consumer/.
-   - Move konduit-cli to the directory konduit/cli/.
+   - misc/: Generic utilities such as http-client, generic codecs.
+3. **Directory Renaming & Path Refinement**:
    - Update the workspace Cargo.toml to rewire member paths to these new
      locations.
 
@@ -42,6 +39,17 @@ remain unchanged**. Only the physical paths and directory names will change.
 - **Comment**: This is a step in the direction of `cardano-sdk` and potentially
   other aspects (eg `cardano-connector`) existing in their own repos.
 
+A first iteration of this had no top-level `packages`. The intermingling of code
+with all the other files are dirs that have to be top-level was confusing.
+
+A first iteration included:
+
+> Directory names like adaptor and consumer provide better architectural context
+> than generic server/client labels.
+
+This conflicted with a desire to distinguish the user and the software the user
+runs. On further reflection, the suggested renaming was not adopted.
+
 ## **Status**
 
 Proposed.
@@ -50,8 +58,6 @@ Proposed.
 
 - **Positive**: Logical grouping of crates by domain (Konduit vs. Cardano vs.
   Shared).
-- **Positive**: Directory names like adaptor and consumer provide better
-  architectural context than generic server/client labels.
 - **Negative**: Requires a significant update to the workspace Cargo.toml and
   any relative path dependencies within member crates.
 - **Neutral**: No impact on external crate consumers since the package names are
