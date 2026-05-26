@@ -139,7 +139,7 @@ jobs:
 
       - name: Build wasm
         id: build
-        working-directory: konduit/wasm
+        working-directory: packages/konduit/wasm
         env:
           OUT: konduit-wasm-${{ steps.meta.outputs.version }}
         run: |
@@ -151,11 +151,11 @@ jobs:
         with:
           name: ${{ steps.build.outputs.name }}
           path: |
-            konduit/wasm/package.json
-            konduit/wasm/typedoc.json
-            konduit/wasm/tsconfig.typedoc.json
-            konduit/wasm/${{ steps.build.outputs.name }}-core
-            konduit/wasm/${{ steps.build.outputs.name }}-black-box
+            packages/konduit/wasm/package.json
+            packages/konduit/wasm/typedoc.json
+            packages/konduit/wasm/tsconfig.typedoc.json
+            packages/konduit/wasm/${{ steps.build.outputs.name }}-core
+            packages/konduit/wasm/${{ steps.build.outputs.name }}-black-box
 
   docs:
     runs-on: ubuntu-latest
@@ -195,6 +195,13 @@ jobs:
 
       - name: Prepare Pages artifact (nest under /rust)
         run: |
+          CRATES=$(ls site/rust/ | grep -Ev '^(technical-briefing|konduit_wasm|index\.html)$')
+          LINKS=""
+          LINKS+='<li><a href="./technical-briefing">Konduit Protocol: Technical Briefing</a></li>'
+          LINKS+='<li><a href="./konduit_wasm">konduit-wasm</a></li>'
+          for crate in $CRATES; do
+            LINKS+="<li><a href=\"./${crate}\">${crate//_/-}</a></li>"
+          done
           # Create main index.html
           cat > site/rust/index.html <<'EOF'
           <!DOCTYPE html>
@@ -250,11 +257,7 @@ jobs:
           </head>
           <body>
               <h1>📚 Workspace Documentation</h1>
-              <ul>
-                <li><a href="./technical-briefing">Konduit Protocol: Technical Briefing</a></li>
-                <li><a href="./cardano_sdk">cardano-sdk</a></li>
-                <li><a href="./konduit_wasm">konduit-wasm</a></li>
-              </ul>
+              <ul>${LINKS}</ul>
           </body>
           </html>
           EOF
