@@ -195,15 +195,14 @@ jobs:
 
       - name: Prepare Pages artifact (nest under /rust)
         run: |
-          CRATES=$(ls site/rust/ | grep -Ev '^(technical-briefing|konduit_wasm|index\.html)$')
           LINKS=""
           LINKS+='<li><a href="./technical-briefing">Konduit Protocol: Technical Briefing</a></li>'
           LINKS+='<li><a href="./konduit_wasm">konduit-wasm</a></li>'
-          for crate in $CRATES; do
+          for crate in $(ls site/rust/ | grep -Ev '^(technical-briefing|konduit_wasm|index\.html)$'); do
             LINKS+="<li><a href=\"./${crate}\">${crate//_/-}</a></li>"
           done
-          # Create main index.html
-          cat > site/rust/index.html <<'EOF'
+
+          cat > site/rust/index.html <<'HEADER'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -211,56 +210,26 @@ jobs:
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>Konduit - Rust Workspace Documentation</title>
               <style>
-                body {
-                  font-family: system-ui, sans-serif;
-                  max-width: 700px;
-                  margin: 4rem auto;
-                  padding: 0 1rem;
-                  color: #dddddd;
-                  line-height: 1.6;
-                  background: #353535;
-                }
-                h1 {
-                  text-align: center;
-                  font-weight: 600;
-                  margin-bottom: 2rem;
-                }
-                ul {
-                  list-style: none;
-                  padding: 0;
-                  display: flex;
-                  flex-wrap: wrap;
-                  justify-content: center;
-                }
-                li {
-                  margin: 1rem 0;
-                }
-                a {
-                  text-decoration: none;
-                  font-size: 1.2rem;
-                  color: #fdbf35;
-                  font-weight: 500;
-                  transition: background 0.2s ease;
-                  padding: 0.25rem 1rem;
-                  display: inline-block;
-                }
-                a:hover {
-                  background: #444444;
-                }
-                footer {
-                  margin-top: 3rem;
-                  text-align: center;
-                  font-size: 0.9rem;
-                  color: #777;
-                }
+                body { font-family: system-ui, sans-serif; max-width: 700px; margin: 4rem auto; padding: 0 1rem; color: #dddddd; line-height: 1.6; background: #353535; }
+                h1 { text-align: center; font-weight: 600; margin-bottom: 2rem; }
+                ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; }
+                li { margin: 1rem 0; }
+                a { text-decoration: none; font-size: 1.2rem; color: #fdbf35; font-weight: 500; transition: background 0.2s ease; padding: 0.25rem 1rem; display: inline-block; }
+                a:hover { background: #444444; }
               </style>
           </head>
           <body>
               <h1>📚 Workspace Documentation</h1>
-              <ul>${LINKS}</ul>
+              <ul>
+          HEADER
+
+          echo "$LINKS" >> site/rust/index.html
+
+          cat >> site/rust/index.html <<'FOOTER'
+              </ul>
           </body>
           </html>
-          EOF
+          FOOTER
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
