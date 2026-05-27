@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+pub use problem_details_derive::ProblemDetail;
+
 mod wire;
 pub use wire::*;
 
