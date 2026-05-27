@@ -51,7 +51,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Fmt
-        run: cargo fmt --all -- --check --edition 2024
+        run: cargo fmt --all -- --check
 
       - name: Machete
         run: cargo-machete
