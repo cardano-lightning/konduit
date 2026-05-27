@@ -1,5 +1,5 @@
 [package]
-name = "cobbl3-wire"
+name = "cobbl3"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
