@@ -852,7 +852,7 @@ dependencies = [
  "base64 0.22.1",
  "blake3",
  "minicbor",
- "problem-details-wire",
+ "problem-details",
  "subtle",
  "thiserror 2.0.17",
 ]

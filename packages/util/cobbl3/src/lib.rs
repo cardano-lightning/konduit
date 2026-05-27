@@ -44,6 +44,10 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use minicbor::{Decode, Encode};
 use subtle::ConstantTimeEq;
 
+#[cfg(feature = "problem-details")]
+#[allow(unused_imports)]
+use problem_details::ProblemDetail;
+
 // ---------------------------------------------------------------------------
 // Body trait
 // ---------------------------------------------------------------------------
@@ -269,10 +273,7 @@ impl HmacKey {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, thiserror::Error)]
-#[cfg_attr(
-    feature = "problem-details",
-    derive(problem_details_wire::ProblemDetail)
-)]
+#[cfg_attr(feature = "problem-details", derive(problem_details::ProblemDetail))]
 pub enum Error {
     /// Client signature could not be verified.
     #[error("client signature could not be verified")]
@@ -407,7 +408,6 @@ mod tests {
     #[cfg(feature = "problem-details")]
     mod problem_details {
         use super::*;
-        use problem_details_wire::ProblemDetail;
 
         #[test]
         fn slugs_and_statuses() {
