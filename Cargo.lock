@@ -2959,32 +2959,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "problem-details"
+version = "0.0.0"
+dependencies = [
+ "actix-web",
+ "minicbor",
+ "problem-details-derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "problem-details-derive"
 version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "problem-details-server"
-version = "0.0.0"
-dependencies = [
- "actix-web",
- "minicbor",
- "problem-details-wire",
- "serde_json",
-]
-
-[[package]]
-name = "problem-details-wire"
-version = "0.0.0"
-dependencies = [
- "minicbor",
- "problem-details-derive",
- "serde",
- "serde_json",
 ]
 
 [[package]]

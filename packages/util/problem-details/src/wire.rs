@@ -1,12 +1,9 @@
-#![doc = include_str!("../README.md")]
-
-pub use problem_details_derive::ProblemDetail;
+use minicbor::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 
 // ── Wire type ─────────────────────────────────────────────────────────────────
 
-#[derive(
-    Debug, Clone, serde::Serialize, serde::Deserialize, minicbor::Encode, minicbor::Decode,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct ProblemDetailBody {
     #[n(0)]
     pub r#type: String,
@@ -120,14 +117,10 @@ impl<E: ProblemDetail> ProblemDetailExt for E {}
 pub const CONTENT_TYPE_CBOR: &str = "application/problem+cbor";
 pub const CONTENT_TYPE_JSON: &str = "application/problem+json";
 
-// ── Re-export magic        ────────────────────────────────────────────────────
-
-#[doc(hidden)]
-pub extern crate self as problem_details_wire;
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use problem_details_derive::ProblemDetail;
 
     #[derive(Debug, ProblemDetail)]
     enum Error {
@@ -257,6 +250,7 @@ mod tests {
 mod tests_part_ii {
 
     use super::*;
+    use problem_details_derive::ProblemDetail;
 
     #[derive(Debug, ProblemDetail)]
     enum CommonError {

@@ -22,12 +22,6 @@ error contracts.
 We will adopt RFC 9457 as our standard error response format, implemented in a
 `problem-details` family of crates under `packages/util/problem-details/`.
 
-The crate family will be thinly sliced:
-
-- `wire`: types and encoding only — safe for wasm/client targets
-- `derive`: proc macros for implementing the wire traits
-- `server`: server-side integrations (actix, etc) behind feature flags
-
 ## Decent, counter, and comments
 
 - **Comment**: Thin slicing ensures client (wasm) code cannot accidentally pull
@@ -36,6 +30,15 @@ The crate family will be thinly sliced:
 - **Comment**: We hope this structure — a `wire` crate plus an optional `server`
   integration crate — serves as a blueprint for future feature crates that need
   to straddle client and server targets.
+
+An initial attempt experimented with tiny crates:
+
+- `wire`: types and encoding only — safe for wasm/client targets
+- `derive`: proc macros for implementing the wire traits
+- `server`: server-side integrations (actix, etc) behind feature flags
+
+This was primarily motivated on a misunderstanding regarding, wasm and feature
+flags.
 
 ## Status
 

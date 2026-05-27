@@ -105,7 +105,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let manifest = manifest_json(&leaf_metas);
 
     Ok(quote! {
-        impl #impl_generics ::problem_details_wire::ProblemDetail for #name #ty_generics #where_clause {
+        impl #impl_generics ::problem_details::ProblemDetail for #name #ty_generics #where_clause {
             fn slug(&self)         -> &'static str { match self { #(#slug_arms)*        } }
             fn problem_type(&self) -> &'static str { match self { #(#type_arms)*        } }
             fn title(&self)        -> &'static str { match self { #(#title_arms)*       } }

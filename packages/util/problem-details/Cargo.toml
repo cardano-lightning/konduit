@@ -1,5 +1,5 @@
 [package]
-name = "problem-details-server"
+name = "problem-details"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -10,15 +10,16 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[lib]
+
+[dependencies]
+actix-web = { workspace = true, features = ["macros"], optional = true }
+minicbor.workspace = true
+problem-details-derive.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+
 [features]
 default = ["actix"]
 actix = ["dep:actix-web"]
-
-[dependencies]
-problem-details-wire.workspace = true
-actix-web = { workspace = true, features = ["macros"], optional = true }
-
-[dev-dependencies]
-actix-web = { workspace = true, features = ["macros"] }
-minicbor = { workspace = true, features = ["derive"] }
-serde_json.workspace = true

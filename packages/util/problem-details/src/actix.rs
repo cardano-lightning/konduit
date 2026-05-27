@@ -1,11 +1,11 @@
-#![doc = include_str!("../README.md")]
-
-pub use problem_details_wire::{
-    CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, ProblemDetail, ProblemDetailBody, ProblemDetailExt,
-    WithDetail,
+use actix_web::{
+    HttpResponse, ResponseError,
+    body::BoxBody,
+    http::{StatusCode, header},
 };
+use std::fmt;
 
-// ── Transport-agnostic helpers ────────────────────────────────────────────────
+use crate::{CONTENT_TYPE_CBOR, ProblemDetail};
 
 /// Returns `(status_code, content_type, body)` for any [`ProblemDetail`].
 /// Use this when integrating with a framework not covered by a feature flag.
@@ -15,72 +15,58 @@ pub fn into_parts(p: &impl ProblemDetail) -> (u16, &'static str, Vec<u8>) {
 
 // ── Actix-web ─────────────────────────────────────────────────────────────────
 
-#[cfg(feature = "actix")]
-mod actix {
-    use super::*;
-    use actix_web::{
-        HttpResponse, ResponseError,
-        body::BoxBody,
-        http::{StatusCode, header},
-    };
-    use std::fmt;
+/// Wraps any [`ProblemDetail`] as an actix-web [`ResponseError`].
+///
+/// # Example
+/// ```rust,ignore
+/// async fn handler() -> Result<HttpResponse, Problem<Error>> {
+///     Err(Problem(Error::Unauthorized))
+/// }
+///
+/// // With runtime context:
+/// async fn handler() -> Result<HttpResponse, Problem<WithDetail<Error>>> {
+///     use problem_details_server::ProblemDetailExt;
+///     Err(Problem(Error::Unauthorized.with_detail(format!("clock skew: {skew}s"))))
+/// }
+/// ```
+pub struct Problem<E>(pub E);
 
-    /// Wraps any [`ProblemDetail`] as an actix-web [`ResponseError`].
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// async fn handler() -> Result<HttpResponse, Problem<Error>> {
-    ///     Err(Problem(Error::Unauthorized))
-    /// }
-    ///
-    /// // With runtime context:
-    /// async fn handler() -> Result<HttpResponse, Problem<WithDetail<Error>>> {
-    ///     use problem_details_server::ProblemDetailExt;
-    ///     Err(Problem(Error::Unauthorized.with_detail(format!("clock skew: {skew}s"))))
-    /// }
-    /// ```
-    pub struct Problem<E>(pub E);
-
-    impl<E: ProblemDetail + fmt::Debug> fmt::Debug for Problem<E> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            self.0.fmt(f)
-        }
+impl<E: ProblemDetail + fmt::Debug> fmt::Debug for Problem<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
-    impl<E: ProblemDetail + fmt::Debug> fmt::Display for Problem<E> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{} ({})", self.0.title(), self.0.http_status())
-        }
-    }
-
-    impl<E: ProblemDetail + fmt::Debug> ResponseError for Problem<E> {
-        fn status_code(&self) -> StatusCode {
-            StatusCode::from_u16(self.0.http_status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-        fn error_response(&self) -> HttpResponse<BoxBody> {
-            HttpResponse::build(self.status_code())
-                .insert_header((header::CONTENT_TYPE, CONTENT_TYPE_CBOR))
-                .body(self.0.to_cbor())
-        }
-    }
-
-    impl<E: ProblemDetail> From<E> for Problem<E> {
-        fn from(e: E) -> Self {
-            Problem(e)
-        }
+}
+impl<E: ProblemDetail + fmt::Debug> fmt::Display for Problem<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.0.title(), self.0.http_status())
     }
 }
 
-#[cfg(feature = "actix")]
-pub use actix::Problem;
+impl<E: ProblemDetail + fmt::Debug> ResponseError for Problem<E> {
+    fn status_code(&self) -> StatusCode {
+        StatusCode::from_u16(self.0.http_status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+    fn error_response(&self) -> HttpResponse<BoxBody> {
+        HttpResponse::build(self.status_code())
+            .insert_header((header::CONTENT_TYPE, CONTENT_TYPE_CBOR))
+            .body(self.0.to_cbor())
+    }
+}
+
+impl<E: ProblemDetail> From<E> for Problem<E> {
+    fn from(e: E) -> Self {
+        Problem(e)
+    }
+}
 
 #[cfg(test)]
-#[cfg(feature = "actix")]
-mod tests {
+mod test {
     use super::*;
-    use actix_web::body::to_bytes;
-    use actix_web::http::StatusCode;
-    use actix_web::{App, HttpResponse, ResponseError, test, web};
-    use problem_details_wire::ProblemDetailBody;
+    use crate::{ProblemDetailBody, ProblemDetailExt};
+    use actix_web::{
+        App, HttpResponse, ResponseError, body::to_bytes, http::StatusCode, test, web,
+    };
+    use problem_details_derive::ProblemDetail;
 
     #[derive(Debug, ProblemDetail)]
     enum Error {

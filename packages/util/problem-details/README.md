@@ -125,15 +125,11 @@ out the exact commit, without access to the production server.
 
 ## Crate structure
 
-```sample
-problem-details-wire    # trait, derive macro, wire type, CBOR + JSON encoding
-problem-details-server  # actix-web ResponseError integration
-problem-details-grpc   # (future) tonic / google.rpc.Status integration
-```
-
-Users only add `problem-details-wire` to `Cargo.toml`. The derive crate
+Users only add `problem-details` to `Cargo.toml`. The derive crate
 (`problem-details-derive`) is an implementation detail, re-exported
 transparently.
+
+For now, we use feature flags.
 
 ## Usage
 
@@ -225,7 +221,7 @@ fn run_git(args: &[&str]) -> Option<String> {
 disable the default feature:
 
 ```toml
-problem-details-wire = { workspace = true, default-features = false }
+problem-details = { workspace = true, default-features = false }
 ```
 
 ### 5. Serve with actix-web
@@ -246,7 +242,7 @@ async fn handler() -> Result<HttpResponse, Problem<WithDetail<Error>>> {
 ### 6. Decode on the client
 
 ```rust,ignore
-use problem_details_wire::ProblemDetailBody;
+use problem_details::ProblemDetailBody;
 
 let body: ProblemDetailBody = minicbor::decode(&bytes)?;
 // or
@@ -284,3 +280,9 @@ fn main() {
     println!("{}", serde_json::to_string_pretty(&entries).unwrap());
 }
 ```
+
+## Features
+
+| Feature | Enables                                                      |
+| ------- | ------------------------------------------------------------ |
+| `actix` | `Problem<E>` wrapper implementing `actix_web::ResponseError` |
