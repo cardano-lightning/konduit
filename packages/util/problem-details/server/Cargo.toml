@@ -1,7 +1,14 @@
 [package]
 name = "problem-details-server"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
 
 [features]
 default = ["actix"]
@@ -9,7 +16,7 @@ actix = ["dep:actix-web"]
 
 [dependencies]
 problem-details-wire.workspace = true
-actix-web = { workspace = true, default-features = false, features = ["macros"], optional = true }
+actix-web = { workspace = true, features = ["macros"], optional = true }
 
 [dev-dependencies]
 actix-web = { workspace = true, features = ["macros"] }
