@@ -51,6 +51,10 @@
 //! wire; [`HashHmac`] implementors will fail to compile until their match arms
 //! are updated.
 
+use core::fmt;
+use std::str::FromStr;
+
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -114,6 +118,25 @@ pub struct Challenge {
     #[n(3)]
     #[serde_as(as = "serde_with::hex::Hex")]
     pub mac: [u8; MAC_LEN],
+}
+
+impl fmt::Display for Challenge {
+    // Not human-readable — encodes as base64url(CBOR).
+    // Canonical wire form for HTTP headers (e.g. Pow-Challenge).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = minicbor::to_vec(self).expect("Challenge encoding is infallible");
+        f.write_str(&URL_SAFE_NO_PAD.encode(bytes))
+    }
+}
+
+impl FromStr for Challenge {
+    type Err = Error;
+
+    // Inverse of Display — decodes base64url(CBOR).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = URL_SAFE_NO_PAD.decode(s).map_err(|_| Error::Parse)?;
+        minicbor::decode(&bytes).map_err(|_| Error::Parse)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +279,24 @@ fn now() -> u64 {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[test]
+fn challenge_roundtrip_base64() {
+    let c = Challenge {
+        scheme: PowScheme::Sha256,
+        difficulty: 8,
+        expires_at: 1_748_000_000_000,
+        mac: [32u8; MAC_LEN],
+    };
+    let encoded = c.to_string();
+    println!("{}", encoded);
+    let decoded: Challenge = encoded.parse().unwrap();
+    assert_eq!(c.scheme, decoded.scheme);
+    assert_eq!(c.difficulty, decoded.difficulty);
+    assert_eq!(c.expires_at, decoded.expires_at);
+    assert_eq!(c.mac, decoded.mac);
+}
+
 #[cfg(all(
     test,
     feature = "server",

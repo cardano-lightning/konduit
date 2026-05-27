@@ -42,3 +42,4 @@ cryptoxide = { workspace = true, optional = true }
 
 problem-details-wire = { workspace = true, optional = true }
 minicbor.workspace = true
+base64.workspace = true

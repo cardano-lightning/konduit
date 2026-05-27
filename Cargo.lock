@@ -3016,6 +3016,7 @@ dependencies = [
 name = "powdos"
 version = "0.0.0"
 dependencies = [
+ "base64 0.22.1",
  "cryptoxide 0.5.1",
  "minicbor",
  "problem-details-wire",
