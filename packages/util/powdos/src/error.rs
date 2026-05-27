@@ -38,7 +38,7 @@ pub enum Error {
     )]
     Hash,
 
-    /// Enable `sha2` or `cryptoxide` (or both) in your `Cargo.toml`.
+    /// The scheme used is not supported
     #[error("unsupported proof-of-work scheme")]
     #[cfg_attr(
         feature = "problem-details",
@@ -49,4 +49,16 @@ pub enum Error {
         )
     )]
     Scheme,
+
+    /// Unable to parse
+    #[error("Unable to parse")]
+    #[cfg_attr(
+        feature = "problem-details",
+        problem(
+            slug = "parse-failed",
+            title = "Unable to parse (either base64 or cbor)",
+            http_status = 400
+        )
+    )]
+    Parse,
 }
