@@ -1,22 +1,22 @@
 [workspace]
 members = [
-  "bln/client",
-  "bln/sdk",
-  "cardano/connector",
-  "cardano/connector-client",
-  "cardano/connector-direct",
-  "cardano/connector-utxorpc",
-  "cardano/sdk",
-  "misc/fx-client",
-  "misc/http-client",
-  "misc/http-client-native",
-  "misc/http-client-wasm",
-  "konduit/cli",
-  "konduit/client",
-  "konduit/data",
-  "konduit/server",
-  "konduit/tx",
-  "konduit/wasm",
+  "packages/bln/client",
+  "packages/bln/sdk",
+  "packages/cardano/connector",
+  "packages/cardano/connector-client",
+  "packages/cardano/connector-direct",
+  "packages/cardano/connector-utxorpc",
+  "packages/cardano/sdk",
+  "packages/util/fx-client",
+  "packages/util/http-client",
+  "packages/util/http-client-native",
+  "packages/util/http-client-wasm",
+  "packages/konduit/cli",
+  "packages/konduit/client",
+  "packages/konduit/data",
+  "packages/konduit/server",
+  "packages/konduit/tx",
+  "packages/konduit/wasm",
 ]
 resolver = "2"
 
@@ -101,21 +101,21 @@ wasm-bindgen-futures = "0.4.55"
 web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
 web-time = "1.1.0"
 
-bln-client = { path = "bln/client" }
-bln-sdk = { path = "bln/sdk" }
-cardano-connector = { path = "cardano/connector" }
-cardano-connector-client = { path = "cardano/connector-client" }
-cardano-connector-direct = { path = "cardano/connector-direct" }
-cardano-connector-utxorpc = { path = "cardano/connector-utxorpc" }
-cardano-sdk = { path = "cardano/sdk" }
-fx-client = { path = "misc/fx-client" }
-http-client = { path = "misc/http-client" }
-http-client-native = { path = "misc/http-client-native" }
-http-client-wasm = { path = "misc/http-client-wasm" }
-konduit-client = { path = "konduit/client" }
-konduit-data = { path = "konduit/data" }
-konduit-server = { path = "konduit/server" }
-konduit-tx = { path = "konduit/tx" }
+bln-client = { path = "packages/bln/client" }
+bln-sdk = { path = "packages/bln/sdk" }
+cardano-connector = { path = "packages/cardano/connector" }
+cardano-connector-client = { path = "packages/cardano/connector-client" }
+cardano-connector-direct = { path = "packages/cardano/connector-direct" }
+cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
+cardano-sdk = { path = "packages/cardano/sdk" }
+fx-client = { path = "packages/util/fx-client" }
+http-client = { path = "packages/util/http-client" }
+http-client-native = { path = "packages/util/http-client-native" }
+http-client-wasm = { path = "packages/util/http-client-wasm" }
+konduit-client = { path = "packages/konduit/client" }
+konduit-data = { path = "packages/konduit/data" }
+konduit-server = { path = "packages/konduit/server" }
+konduit-tx = { path = "packages/konduit/tx" }
 
 [profile.wasm]
 inherits = "release"

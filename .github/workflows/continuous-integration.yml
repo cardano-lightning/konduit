@@ -139,7 +139,7 @@ jobs:
 
       - name: Build wasm
         id: build
-        working-directory: konduit/wasm
+        working-directory: packages/konduit/wasm
         env:
           OUT: konduit-wasm-${{ steps.meta.outputs.version }}
         run: |
@@ -151,11 +151,11 @@ jobs:
         with:
           name: ${{ steps.build.outputs.name }}
           path: |
-            konduit/wasm/package.json
-            konduit/wasm/typedoc.json
-            konduit/wasm/tsconfig.typedoc.json
-            konduit/wasm/${{ steps.build.outputs.name }}-core
-            konduit/wasm/${{ steps.build.outputs.name }}-black-box
+            packages/konduit/wasm/package.json
+            packages/konduit/wasm/typedoc.json
+            packages/konduit/wasm/tsconfig.typedoc.json
+            packages/konduit/wasm/${{ steps.build.outputs.name }}-core
+            packages/konduit/wasm/${{ steps.build.outputs.name }}-black-box
 
   docs:
     runs-on: ubuntu-latest
@@ -195,8 +195,14 @@ jobs:
 
       - name: Prepare Pages artifact (nest under /rust)
         run: |
-          # Create main index.html
-          cat > site/rust/index.html <<'EOF'
+          LINKS=""
+          LINKS+='<li><a href="./technical-briefing">Konduit Protocol: Technical Briefing</a></li>'
+          LINKS+='<li><a href="./konduit_wasm">konduit-wasm</a></li>'
+          for crate in $(ls site/rust/ | grep -Ev '^(technical-briefing|konduit_wasm|index\.html)$'); do
+            LINKS+="<li><a href=\"./${crate}\">${crate//_/-}</a></li>"
+          done
+
+          cat > site/rust/index.html <<'HEADER'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -204,60 +210,26 @@ jobs:
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>Konduit - Rust Workspace Documentation</title>
               <style>
-                body {
-                  font-family: system-ui, sans-serif;
-                  max-width: 700px;
-                  margin: 4rem auto;
-                  padding: 0 1rem;
-                  color: #dddddd;
-                  line-height: 1.6;
-                  background: #353535;
-                }
-                h1 {
-                  text-align: center;
-                  font-weight: 600;
-                  margin-bottom: 2rem;
-                }
-                ul {
-                  list-style: none;
-                  padding: 0;
-                  display: flex;
-                  flex-wrap: wrap;
-                  justify-content: center;
-                }
-                li {
-                  margin: 1rem 0;
-                }
-                a {
-                  text-decoration: none;
-                  font-size: 1.2rem;
-                  color: #fdbf35;
-                  font-weight: 500;
-                  transition: background 0.2s ease;
-                  padding: 0.25rem 1rem;
-                  display: inline-block;
-                }
-                a:hover {
-                  background: #444444;
-                }
-                footer {
-                  margin-top: 3rem;
-                  text-align: center;
-                  font-size: 0.9rem;
-                  color: #777;
-                }
+                body { font-family: system-ui, sans-serif; max-width: 700px; margin: 4rem auto; padding: 0 1rem; color: #dddddd; line-height: 1.6; background: #353535; }
+                h1 { text-align: center; font-weight: 600; margin-bottom: 2rem; }
+                ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; }
+                li { margin: 1rem 0; }
+                a { text-decoration: none; font-size: 1.2rem; color: #fdbf35; font-weight: 500; transition: background 0.2s ease; padding: 0.25rem 1rem; display: inline-block; }
+                a:hover { background: #444444; }
               </style>
           </head>
           <body>
               <h1>📚 Workspace Documentation</h1>
               <ul>
-                <li><a href="./technical-briefing">Konduit Protocol: Technical Briefing</a></li>
-                <li><a href="./cardano_sdk">cardano-sdk</a></li>
-                <li><a href="./konduit_wasm">konduit-wasm</a></li>
+          HEADER
+
+          echo "$LINKS" >> site/rust/index.html
+
+          cat >> site/rust/index.html <<'FOOTER'
               </ul>
           </body>
           </html>
-          EOF
+          FOOTER
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
