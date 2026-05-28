@@ -142,7 +142,7 @@ pub const MAC_LEN: usize = 20;
 /// `PartialEq` is constant-time - timing-safe by construction.
 #[derive(Debug, Clone, Encode, Decode)]
 #[cbor(transparent)]
-pub struct Mac<const N: usize>(#[n(0)] [u8; N]);
+pub struct Mac<const N: usize = MAC_LEN>(#[n(0)] [u8; N]);
 
 impl<const N: usize> Mac<N> {
     pub fn new(bytes: [u8; N]) -> Self {
@@ -191,7 +191,7 @@ pub struct Request<B> {
 
 /// Server response to a successful [`Request`]: the session MAC.
 /// The client wraps this in a [`Token`] for subsequent requests.
-pub type Response<const N: usize> = Mac<N>;
+pub type Response<const N: usize = MAC_LEN> = Mac<N>;
 
 // ---------------------------------------------------------------------------
 // Token - client → server, subsequent requests
@@ -202,7 +202,7 @@ pub type Response<const N: usize> = Mac<N>;
 ///
 /// Canonical string form is base64url (no padding) via `Display` / `FromStr`.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct Token<B, const N: usize> {
+pub struct Token<B, const N: usize = MAC_LEN> {
     #[n(0)]
     pub body: B,
     #[n(1)]
