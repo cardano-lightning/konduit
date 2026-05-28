@@ -54,10 +54,6 @@ use problem_details::ProblemDetail;
 
 /// Contract that any auth body must satisfy.
 ///
-/// Implement [`verify`] with your chosen crypto library.
-/// Override [`DOMAIN`] or [`tbs_bytes`] only if you need non-default behaviour.
-///
-/// [`verify`]: Body::verify
 /// [`DOMAIN`]: Body::DOMAIN
 /// [`tbs_bytes`]: Body::tbs_bytes
 pub trait Body: for<'b> Encode<()> + for<'b> Decode<'b, ()> {
@@ -73,7 +69,14 @@ pub trait Body: for<'b> Encode<()> + for<'b> Decode<'b, ()> {
     {
         Tbs::from_body(self).to_vec()
     }
+}
 
+/// The server requires the Verify extension.
+/// Implement [`verify`] with your chosen crypto library.
+/// Override [`DOMAIN`] or [`tbs_bytes`] only if you need non-default behaviour.
+///
+/// [`verify`]: Body::verify
+pub trait Verify: Body {
     /// Verify `signature` over [`tbs_bytes`].
     /// The implementation supplies the key and crypto library
     ///
@@ -241,7 +244,7 @@ impl From<[u8; 32]> for HmacKey {
 
 #[cfg(feature = "server")]
 impl HmacKey {
-    pub fn issue<B: Body, const N: usize>(
+    pub fn issue<B: Verify, const N: usize>(
         &self,
         body: &B,
         signature: &[u8; 64],
@@ -252,14 +255,14 @@ impl HmacKey {
         Ok(self.sign(body))
     }
 
-    pub fn sign<B: Body, const N: usize>(&self, body: &B) -> Mac<N> {
+    pub fn sign<B: Encode<()>, const N: usize>(&self, body: &B) -> Mac<N> {
         let hash = blake3::keyed_hash(&self.0, &minicbor::to_vec(body).expect("Infallible"));
         let mut mac = [0u8; N];
         mac.copy_from_slice(&hash.as_bytes()[..N]);
         mac.into()
     }
 
-    pub fn verify<B: Body, const N: usize>(&self, token: &Token<B, N>) -> Result<(), Error> {
+    pub fn verify<B: Encode<()>, const N: usize>(&self, token: &Token<B, N>) -> Result<(), Error> {
         let expected = self.sign(&token.body);
         if expected != token.mac {
             return Err(Error::HmacSignature);
@@ -321,7 +324,8 @@ mod tests {
     }
 
     // minimal Body impl — verify always passes so we can test HmacKey in isolation
-    impl Body for TestBody {
+    impl Body for TestBody {}
+    impl Verify for TestBody {
         fn verify(&self, _signature: &[u8; 64]) -> bool {
             true
         }
@@ -381,7 +385,8 @@ mod tests {
         #[derive(Encode, Decode)]
         struct RejectBody(#[n(0)] u64);
 
-        impl Body for RejectBody {
+        impl Body for RejectBody {}
+        impl Verify for RejectBody {
             fn verify(&self, _: &[u8; 64]) -> bool {
                 false
             }
