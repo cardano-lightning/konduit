@@ -59,6 +59,7 @@ bitcoin_hashes = "=0.14.0"
 blake3 = "1.8.5"
 blockfrost = "1.1.0"
 blockfrost-openapi = "0.1.75"
+cddl-cat = "0.7.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 clap = { version = "4.5.49", features = ["derive", "env"] }
 console_error_panic_hook = "0.1.7"

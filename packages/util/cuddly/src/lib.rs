@@ -157,4 +157,20 @@ mod tests {
         let out = Foo::<u64>::cddl_ref();
         assert!(!out.is_empty());
     }
+
+    #[derive(ToCddl)]
+    #[allow(dead_code)]
+    struct Tuple(u64);
+
+    #[test]
+    fn tuple_struct_derives_correctly() {
+        let out = Tuple::cddl_ref();
+        assert_eq!(out, "tuple");
+    }
+
+    #[test]
+    fn tuple_struct_definition_is_correct() {
+        let out = Tuple::cddl_definition().unwrap();
+        assert_eq!(out, "Tuple = (uint)"); // or whatever your format is
+    }
 }
