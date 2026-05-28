@@ -132,6 +132,10 @@ where
 // Mac
 // ---------------------------------------------------------------------------
 
+/// A suggested, overridable mac length.
+/// 20 bytes is plenty for many domains.
+pub const MAC_LEN: usize = 20;
+
 /// A truncated BLAKE3 keyed-hash MAC of `N` bytes.
 ///
 /// `N` is fixed by the downstream crate via a type alias.
