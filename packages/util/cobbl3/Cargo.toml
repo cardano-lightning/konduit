@@ -1,0 +1,27 @@
+[package]
+name = "cobbl3"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+base64.workspace = true
+minicbor.workspace = true
+subtle.workspace = true
+blake3 = { workspace = true, optional = true }
+problem-details = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[features]
+default = ["server", "problem-details"]
+server = ["dep:blake3"]
+problem-details = ["dep:problem-details"]
