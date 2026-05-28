@@ -141,3 +141,20 @@ fn is_boundary(b: u8) -> bool {
         b' ' | b'\n' | b'\t' | b',' | b'[' | b']' | b'/' | b'=' | b';' | b'('
     )
 }
+
+#[cfg(all(test, feature = "derive"))]
+mod tests {
+    use super::*;
+
+    #[derive(ToCddl)]
+    struct Foo<T> {
+        _index: u64,
+        _latch: T,
+    }
+
+    #[test]
+    fn generic_struct_derives_correctly() {
+        let out = Foo::<u64>::cddl_ref();
+        assert!(!out.is_empty());
+    }
+}

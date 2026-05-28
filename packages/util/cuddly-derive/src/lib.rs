@@ -74,6 +74,7 @@
 //! different specs without touching the type definition.
 
 use proc_macro::TokenStream;
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::TokenStream as Ts2;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, LitInt, Meta, parse_macro_input, punctuated::Punctuated};
@@ -307,6 +308,8 @@ fn expand_to_cddl(input: DeriveInput) -> syn::Result<Ts2> {
     let inner_override = cddl_str_attr(&input.attrs, "inner");
     let type_doc = extract_doc(&input.attrs);
 
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
     let (ref_impl, def_impl) = match &input.data {
         Data::Struct(s) => expand_struct(
             &cddl_name,
@@ -324,8 +327,16 @@ fn expand_to_cddl(input: DeriveInput) -> syn::Result<Ts2> {
         }
     };
 
+    let krate = match crate_name("cuddly").unwrap() {
+        FoundCrate::Itself => quote! { crate },
+        FoundCrate::Name(name) => {
+            let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+            quote! { #ident }
+        }
+    };
+
     Ok(quote! {
-        impl ::cuddly::ToCddl for #ident {
+        impl #impl_generics #krate::ToCddl for #ident #ty_generics #where_clause {
             fn cddl_ref() -> String { #ref_impl }
             fn cddl_definition() -> Option<String> { #def_impl }
         }
@@ -506,15 +517,14 @@ fn extract_doc(attrs: &[syn::Attribute]) -> Vec<String> {
             if !a.path().is_ident("doc") {
                 return None;
             }
-            if let Meta::NameValue(nv) = &a.meta {
-                if let syn::Expr::Lit(syn::ExprLit {
+            if let Meta::NameValue(nv) = &a.meta
+                && let syn::Expr::Lit(syn::ExprLit {
                     lit: syn::Lit::Str(s),
                     ..
                 }) = &nv.value
-                {
-                    let line = s.value();
-                    return Some(line.trim().to_string());
-                }
+            {
+                let line = s.value();
+                return Some(line.trim().to_string());
             }
             None
         })
