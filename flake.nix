@@ -110,7 +110,6 @@
                 proseWrap = "always";
               };
             };
-            # jq.enable = true;
             alejandra.enable = true;
             rustfmt.enable = true;
             aiken.enable = true;

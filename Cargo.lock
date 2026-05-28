@@ -2959,6 +2959,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "problem-details"
+version = "0.0.0"
+dependencies = [
+ "actix-web",
+ "minicbor",
+ "problem-details-derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "problem-details-derive"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
