@@ -14,6 +14,6 @@ default = []
 derive = ["dep:cuddly-derive"]
 
 [dev-dependencies]
-cddl-cat = "0.7.1"
+cddl-cat.workspace = true
 minicbor.workspace = true
-proptest = "1"
+proptest.workspace = true
