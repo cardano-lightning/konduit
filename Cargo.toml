@@ -8,6 +8,9 @@ members = [
   "packages/cardano/connector-utxorpc",
   "packages/cardano/sdk",
   "packages/util/cobbl3",
+  "packages/util/cbor-with",
+  "packages/util/cuddly",
+  "packages/util/cuddly-derive",
   "packages/util/fx-client",
   "packages/util/http-client",
   "packages/util/http-client-native",
@@ -115,6 +118,9 @@ cardano-connector-client = { path = "packages/cardano/connector-client" }
 cardano-connector-direct = { path = "packages/cardano/connector-direct" }
 cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
 cardano-sdk = { path = "packages/cardano/sdk" }
+cbor-with = { path = "packages/util/cbor-with" }
+cuddly = { path = "packages/util/cuddly" }
+cuddly-derive = { path = "packages/util/cuddly-derive" }
 fx-client = { path = "packages/util/fx-client" }
 http-client = { path = "packages/util/http-client" }
 http-client-native = { path = "packages/util/http-client-native" }
