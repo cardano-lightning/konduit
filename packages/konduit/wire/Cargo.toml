@@ -13,12 +13,19 @@ rust-version.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+# FIXME : Turn this back on once upstream crates have utoipa.
+# openapi = [ "dep:utoipa" ]
+
 [dependencies]
 base64.workspace = true
 cardano-sdk.workspace = true
 cbor-with.workspace = true
 cobbl3 = { version = "0.0.0", path = "../../util/cobbl3" }
-konduit-data.workspace = true
+konduit-data = { workspace = true, features = [] }
 minicbor.workspace = true
 serde.workspace = true
 serde_with.workspace = true
+# FIXME : Turn this back on once upstream crates have utoipa.
+# utoipa = { version = "5.5.0", optional = true }

@@ -1,5 +1,5 @@
 [package]
-name = "server"
+name = "konduit-server"
 description.workspace = true
 documentation.workspace = true
 version.workspace = true
@@ -21,4 +21,13 @@ actix = ["dep:actix-web"]
 
 [dependencies]
 actix-web = { workspace = true, optional = true }
-konduit-wire = { version = "0.0.0", path = "../wire" }
+cardano-sdk.workspace = true
+env_logger.workspace = true
+konduit-data.workspace = true
+konduit-wire.workspace = true
+log.workspace = true
+minicbor.workspace = true
+problem-details.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

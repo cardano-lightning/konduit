@@ -27,6 +27,22 @@ impl AsRef<[u8]> for VerifyingKey {
     }
 }
 
+impl TryFrom<&[u8]> for VerifyingKey {
+    type Error = std::array::TryFromSliceError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        <[u8; 32]>::try_from(value).map(Self::from)
+    }
+}
+
+impl TryFrom<Vec<u8>> for VerifyingKey {
+    type Error = Vec<u8>;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        <[u8; 32]>::try_from(value).map(Self::from)
+    }
+}
+
 impl From<[u8; 32]> for VerifyingKey {
     fn from(b: [u8; 32]) -> Self {
         Self(b)
