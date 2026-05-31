@@ -18,5 +18,5 @@ cardano-connector.workspace = true
 cardano-sdk.workspace = true
 futures.workspace = true
 hex.workspace = true
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["json", "query"] }
 serde.workspace = true
