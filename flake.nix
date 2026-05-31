@@ -46,7 +46,7 @@
               inputs'.aiken.packages.aiken
               # JS
               pkgs.yarn
-              pkgs.nodePackages_latest.nodejs
+              pkgs.nodejs
               pkgs.typescript-language-server
               # RUST
               pkgs.openssl
