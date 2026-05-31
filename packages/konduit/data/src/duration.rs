@@ -63,7 +63,7 @@ impl FromStr for Duration {
             "ms" => time::Duration::from_millis(value),
             "s" => time::Duration::from_secs(value),
             "min" => time::Duration::from_secs(value * 60),
-            "h" => time::Duration::from_secs(value * 3660),
+            "h" => time::Duration::from_secs(value * 3600),
             _ => {
                 return Err(ParseError::Constraint(format!(
                     "unknown time unit '{unit}'; try one of: 'ms', 's', 'min' or 'h'"
