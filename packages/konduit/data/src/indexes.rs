@@ -1,9 +1,7 @@
-use anyhow::anyhow;
-use cardano_sdk::PlutusData;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt, str};
 
-use crate::MAX_EXCLUDE_LENGTH;
+use crate::{MAX_EXCLUDE_LENGTH, ParseError};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum IndexesError {
@@ -19,8 +17,11 @@ pub enum IndexesError {
     NoIndex,
 }
 
+/// A sorted, deduplicated, bounded list of u64 indexes.
+///
+/// On-chain encoding: a CBOR indefinite-length array of uint items.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct Indexes(pub Vec<u64>);
+pub struct Indexes(pub(crate) Vec<u64>);
 
 impl fmt::Display for Indexes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -38,7 +39,7 @@ impl fmt::Display for Indexes {
 }
 
 impl str::FromStr for Indexes {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = s
@@ -47,13 +48,17 @@ impl str::FromStr for Indexes {
             .filter(|x| !x.is_empty())
             .map(|x| x.parse::<u64>())
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self::new(inner)?)
+        Self::new(inner).map_err(|e| ParseError::Constraint(e.to_string()))
     }
 }
 
 impl Indexes {
     pub fn empty() -> Self {
         Self(vec![])
+    }
+
+    pub fn last(&self) -> Option<u64> {
+        self.0.last().copied()
     }
 
     pub fn new(items: Vec<u64>) -> Result<Self, IndexesError> {
@@ -144,23 +149,100 @@ fn is_superset_of(a: &[u64], b: &[u64]) -> bool {
     b_iter.peek().is_none()
 }
 
-impl<'a> TryFrom<PlutusData<'a>> for Indexes {
-    type Error = anyhow::Error;
-
-    fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
-        let l = data
-            .as_list()
-            .ok_or(anyhow!("Expected list"))?
-            .map(|x| x.as_integer().ok_or(anyhow!("Expected integer")))
-            .collect::<anyhow::Result<Vec<u64>>>()?;
-        let i = Self::new(l)?;
-        Ok(i)
+impl<C> minicbor::Encode<C> for Indexes {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        crate::cbor_with::plutus_list::encode(&self.0, e, ctx)
     }
 }
 
-impl<'a> From<&Indexes> for PlutusData<'a> {
-    fn from(value: &Indexes) -> Self {
-        Self::list(value.0.iter().map(|x| PlutusData::from(*x)))
+impl<'b, C> minicbor::Decode<'b, C> for Indexes {
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        let items: Vec<u64> = crate::cbor_with::plutus_list::decode(d, ctx)?;
+        Self::new(items).map_err(|e| minicbor::decode::Error::message(e.to_string()))
+    }
+}
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Indexes {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        proptest::collection::btree_set(any::<u64>(), 0..=crate::MAX_EXCLUDE_LENGTH)
+            .prop_map(|set| Indexes(set.into_iter().collect()))
+            .boxed()
+    }
+}
+
+#[cfg(feature = "cardano_sdk")]
+mod via_plutus_data {
+    use super::*;
+    use anyhow::anyhow;
+    use cardano_sdk::PlutusData;
+
+    impl<'a> TryFrom<PlutusData<'a>> for Indexes {
+        type Error = anyhow::Error;
+
+        fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+            let l = data
+                .as_list()
+                .ok_or(anyhow!("Expected list"))?
+                .map(|x| x.as_integer().ok_or(anyhow!("Expected integer")))
+                .collect::<anyhow::Result<Vec<u64>>>()?;
+            Ok(Self::new(l)?)
+        }
+    }
+
+    impl<'a> From<&Indexes> for PlutusData<'a> {
+        fn from(value: &Indexes) -> Self {
+            Self::list(value.0.iter().map(|x| PlutusData::from(*x)))
+        }
+    }
+}
+
+#[cfg(feature = "proptest")]
+#[allow(unused_imports)]
+mod roundtrip {
+    use super::*;
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use proptest::prelude::*;
+
+    proptest! {
+        /// minicbor encodes and decodes Indexes back to the same value.
+        #[test]
+        fn cbor(val: Indexes) {
+            let bytes = minicbor::to_vec(&val).unwrap();
+            let recovered: Indexes = minicbor::decode(&bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
+
+        /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
+        #[test]
+        fn encoding_matches(val: Indexes) {
+            let mini = minicbor::to_vec(&val).unwrap();
+            let pd = PlutusData::from(&val).to_cbor();
+            prop_assert_eq!(mini, pd);
+        }
+
+        /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
+        #[test]
+        fn from_plutus(val: Indexes) {
+            let pd_bytes = PlutusData::from(&val).to_cbor();
+            let recovered: Indexes = minicbor::decode(&pd_bytes).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
+
+        /// From<&Indexes> for PlutusData and TryFrom<PlutusData> for Indexes are mutual inverses.
+        #[test]
+        fn tryfrom(val: Indexes) {
+            let pd = PlutusData::from(&val);
+            let recovered = Indexes::try_from(pd).unwrap();
+            prop_assert_eq!(val, recovered);
+        }
     }
 }
 
@@ -168,6 +250,14 @@ impl<'a> From<&Indexes> for PlutusData<'a> {
 mod tests {
     use super::*;
     use std::cmp::Ordering;
+
+    #[test]
+    fn indexes_cbor_roundtrip_deterministic() {
+        let idx = Indexes::new(vec![1, 5, 9]).unwrap();
+        let bytes = minicbor::to_vec(&idx).unwrap();
+        let recovered: Indexes = minicbor::decode(&bytes).unwrap();
+        assert_eq!(idx, recovered);
+    }
 
     #[test]
     fn test_partial_ord_less() {
