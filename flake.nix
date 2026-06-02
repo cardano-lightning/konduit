@@ -62,15 +62,13 @@
               pkgs.pandoc
               pkgs.d2
             ]
-            ++ lib.mapAttrsToList (_: crate: crate.crane.args.nativeBuildInputs) config.rust-project.crates;
+            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
+          nativeBuildInputs =
+            [config.treefmt.build.wrapper]
+            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
           buildInputs =
-            [
-              pkgs.libiconv
-            ]
-            ++ lib.mapAttrsToList (_: crate: crate.crane.args.buildInputs) config.rust-project.crates;
-          nativeBuildInputs = [
-            config.treefmt.build.wrapper
-          ];
+            [pkgs.libiconv]
+            ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates);
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
         devShellExtra =
@@ -85,9 +83,6 @@
           };
       in {
         rust-project = {
-          src = ./.;
-          cargoToml = fromTOML (builtins.readFile ./Cargo.toml);
-          toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           crates = {
             konduit-server = {
               crane = {
@@ -102,23 +97,21 @@
         treefmt = {
           projectRootFile = "flake.nix";
           flakeFormatter = true;
+          # Generated files. Formatting these breaks pre-commit hooks.
+          settings.excludes = ["treefmt.toml" ".pre-commit-config.yaml"];
           programs = {
-            prettier = {
-              enable = true;
-              settings = {
-                printWidth = 80;
-                proseWrap = "always";
-              };
-            };
-            alejandra.enable = true;
-            rustfmt.enable = true;
             aiken.enable = true;
+            alejandra.enable = true;
+            prettier.enable = true;
+            rustfmt.enable = true;
+            taplo.enable = true;
           };
         };
 
         pre-commit = let
           nixPrekConfig = ".nix-prek-config.yaml";
           precommitConfig = ".pre-commit-config.yaml";
+          treefmtConfig = "treefmt.toml";
         in {
           # clippy checks are failing `nix flake check`
           # However, they come from rust-flakes, and our implicit workspace
@@ -136,9 +129,12 @@
                 entry = ''
                   sh -c '
                     if [ -f ${nixPrekConfig} ]; then
+                      # PRE-COMMIT
                       grep -v "^#" ${nixPrekConfig} | jq ".repos[].hooks[].entry |= gsub(\"/nix/store/[^/]+/bin/\"; \"\")" > ${precommitConfig}
-                      treefmt ${precommitConfig}
                       git add ${precommitConfig}
+                      # TREEFMT
+                      sed "s|/nix/store/[^/]*/bin/||g" ${config.treefmt.build.configFile} > treefmt.toml
+                      git add ${treefmtConfig}
                     fi
                   '
                 '';

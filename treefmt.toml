@@ -10,6 +10,8 @@ excludes = [
     ".hgignore",
     ".svnignore",
     "LICENSE",
+    "treefmt.toml",
+    ".pre-commit-config.yaml",
 ]
 
 [formatter.aiken]
@@ -45,10 +47,16 @@ includes = [
     "*.yaml",
     "*.yml",
 ]
-options = ["--write", "--config", "/nix/store/ssgpdafnjz3vmjpfi7xa93h0b3p0y0ad-prettierrc.json"]
+options = ["--write"]
 
 [formatter.rustfmt]
 command = "rustfmt"
 excludes = []
 includes = ["*.rs"]
 options = ["--config", "skip_children=true", "--edition", "2024"]
+
+[formatter.taplo]
+command = "taplo"
+excludes = []
+includes = ["*.toml"]
+options = ["format"]

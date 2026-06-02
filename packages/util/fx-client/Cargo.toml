@@ -16,12 +16,7 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-cli = [
-  "dep:clap",
-  "dep:dotenvy",
-  "dep:humantime",
-  "dep:tokio",
-]
+cli = ["dep:clap", "dep:dotenvy", "dep:humantime", "dep:tokio"]
 namespaced = []
 
 [dependencies]
