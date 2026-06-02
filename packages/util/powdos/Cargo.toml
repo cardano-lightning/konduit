@@ -25,15 +25,15 @@ client = []
 # If both sha2 and cryptoxide are enabled, sha2 takes priority for puzzle
 # hashing and HMAC. Enabling neither compiles fine but all crypto calls
 # return Error::Scheme at runtime.
-sha2       = ["dep:sha2"]
+sha2 = ["dep:sha2"]
 cryptoxide = ["dep:cryptoxide"]
 
 # Optional integrations
 problem-details = ["dep:problem-details"]
 
 [dependencies]
-serde     = { workspace= true,    features = ["derive"] }
-serde_with = { workspace = true,   features = ["hex"] }
+serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true, features = ["hex"] }
 subtle.workspace = true
 thiserror.workspace = true
 

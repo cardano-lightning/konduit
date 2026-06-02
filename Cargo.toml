@@ -32,10 +32,7 @@ edition = "2024"
 repository = "https://github.com/cardano-lightning/konduit"
 homepage = "https://github.com/cardano-lightning/konduit"
 license = "MPL-2.0"
-authors = [
-    "waalge",
-    "KtorZ <matthias.benkort@gmail.com>",
-]
+authors = ["waalge", "KtorZ <matthias.benkort@gmail.com>"]
 rust-version = "1.95.0"
 
 [workspace.metadata.release]
