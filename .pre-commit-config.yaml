@@ -52,7 +52,7 @@
         {
           "always_run": true,
           "args": [],
-          "entry": "sh -c '\n  if [ -f .nix-prek-config.yaml ]; then\n    # PRE-COMMIT\n    grep -v \"^#\" .nix-prek-config.yaml | jq \".repos[].hooks[].entry |= gsub(\\\"/nix/store/[^/]+/bin/\\\"; \\\"\\\")\" > .pre-commit-config.yaml\n    git add .pre-commit-config.yaml\n    # TREEFMT\n    sed \"s|/nix/store/[^/]*/bin/||g\" /nix/store/9rg7w9izcmvfwyx2vzjspl6i83bvmizw-treefmt.toml > treefmt.toml\n    git add treefmt.toml\n  fi\n'\n",
+          "entry": "sh -c '\n  if [ -f .nix-prek-config.yaml ]; then\n    # PRE-COMMIT\n    grep -v \"^#\" .nix-prek-config.yaml | jq \".repos[].hooks[].entry |= gsub(\\\"/nix/store/[^/]+/bin/\\\"; \\\"\\\")\" > .pre-commit-config.yaml\n    git add .pre-commit-config.yaml\n    # TREEFMT\n    sed \"s|/nix/store/[^/]*/bin/||g\" /nix/store/1gn2hrc10wvh5plazrklnv7s9jsb8l15-treefmt.toml > treefmt.toml\n    git add treefmt.toml\n  fi\n'\n",
           "exclude": "^$",
           "exclude_types": [],
           "fail_fast": false,

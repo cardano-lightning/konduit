@@ -100,10 +100,11 @@
           # Generated files. Formatting these breaks pre-commit hooks.
           settings.excludes = ["treefmt.toml" ".pre-commit-config.yaml"];
           programs = {
-            prettier.enable = true;
-            alejandra.enable = true;
-            rustfmt.enable = true;
             aiken.enable = true;
+            alejandra.enable = true;
+            prettier.enable = true;
+            rustfmt.enable = true;
+            taplo.enable = true;
           };
         };
 

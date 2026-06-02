@@ -54,3 +54,9 @@ command = "rustfmt"
 excludes = []
 includes = ["*.rs"]
 options = ["--config", "skip_children=true", "--edition", "2024"]
+
+[formatter.taplo]
+command = "taplo"
+excludes = []
+includes = ["*.toml"]
+options = ["format"]
