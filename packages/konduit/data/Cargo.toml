@@ -14,21 +14,21 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default     = ["proptest"]
+default = ["proptest"]
 cardano_sdk = ["dep:cardano-sdk", "dep:anyhow"]
-proptest    = ["dep:proptest", "dep:proptest-derive", "cardano_sdk"]
+proptest = ["dep:proptest", "dep:proptest-derive", "cardano_sdk"]
 
 [dependencies]
-anyhow      = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
 cardano-sdk = { workspace = true, optional = true }
 cbor-with = { workspace = true, features = ["full"] }
 cryptoxide.workspace = true
 hex.workspace = true
 minicbor.workspace = true
-proptest        = { workspace = true, optional = true }
+proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 rand_core.workspace = true
-serde = { workspace = true, features = [ "derive" ] }
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex"] }
 thiserror.workspace = true
