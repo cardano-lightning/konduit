@@ -2381,6 +2381,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "konduit-receipt"
+version = "0.0.0"
+dependencies = [
+ "konduit-data",
+ "minicbor",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "konduit-server"
 version = "0.0.0"
 dependencies = [
@@ -2394,7 +2404,6 @@ dependencies = [
  "problem-details",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]

@@ -7,7 +7,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Squash<V = Unverified> {
+#[serde(bound(deserialize = "V: Default"))]
+pub struct Squash<V: VerifyState = Unverified> {
     body: SquashBody,
     signature: Signature,
     #[serde(skip)]
@@ -17,7 +18,7 @@ pub struct Squash<V = Unverified> {
 // =========================================================================
 // Universal Methods (Available on both Verified and Unverified states)
 // =========================================================================
-impl<V> Squash<V> {
+impl<V: VerifyState> Squash<V> {
     /// Internal constructor to associate state markers.
     pub fn new_with_state(body: SquashBody, signature: Signature) -> Self {
         Self {
@@ -254,5 +255,57 @@ mod tests {
         let de: Squash = serde_json::from_slice(&ser).expect("Failed to deserialize Squash");
 
         assert_eq!(original.body, de.body);
+    }
+
+    fn verified_squash() -> Squash<Verified> {
+        // construct however your API allows — likely via try_verify or skip_verify
+        let body = SquashBody::new(123456, 78, Indexes::new(vec![9]).unwrap()).unwrap();
+        let signature = Signature::from([1u8; 64]);
+        Squash::new_with_state(body, signature).skip_verify()
+    }
+
+    fn unverified_squash() -> Squash<Unverified> {
+        let body = SquashBody::new(123456, 78, Indexes::new(vec![9]).unwrap()).unwrap();
+        let signature = Signature::from([1u8; 64]);
+        Squash::new_with_state(body, signature)
+    }
+
+    #[test]
+    fn serialize_verified() {
+        let s = verified_squash();
+        let json = serde_json::to_string(&s).expect("serialization failed");
+        assert!(!json.is_empty());
+    }
+
+    #[test]
+    fn serialize_unverified() {
+        let s = unverified_squash();
+        let json = serde_json::to_string(&s).expect("serialization failed");
+        assert!(!json.is_empty());
+    }
+
+    #[test]
+    fn deserialize_unverified_roundtrip() {
+        let s = unverified_squash();
+        let json = serde_json::to_string(&s).expect("serialization failed");
+        let restored: Squash<Unverified> =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(s, restored);
+    }
+
+    #[test]
+    fn deserialize_verified_should_not_compile() {
+        // This should fail to compile — uncomment to verify:
+        // let json = "{}";
+        // let _: Squash<Verified> = serde_json::from_str(json).unwrap();
+    }
+
+    #[test]
+    fn verified_roundtrip_via_unverified() {
+        let original = unverified_squash();
+        let json = serde_json::to_string(&original).expect("serialization failed");
+        let restored: Squash<Unverified> =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(original, restored);
     }
 }

@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(bound = "T: Serialize + for<'de2> Deserialize<'de2>")]
+#[serde(bound(
+    serialize = "T: Serialize",
+    deserialize = "T: for<'de2> Deserialize<'de2>",
+))]
 pub struct ChequeBody<T = Lock> {
     index: u64,
     amount: u64,

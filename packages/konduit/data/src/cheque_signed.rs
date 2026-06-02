@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(bound = "T: Serialize + for<'de2> Deserialize<'de2>")]
+#[serde(bound(
+    serialize = "T: Serialize",
+    deserialize = "T: for<'de2> Deserialize<'de2>, V: Default",
+))]
 pub struct ChequeSigned<T, V: VerifyState = Unverified> {
     pub body: ChequeBody<T>,
     pub signature: Signature,

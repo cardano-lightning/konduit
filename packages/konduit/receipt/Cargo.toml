@@ -1,7 +1,5 @@
-# Serde-with but for minicbor
-
 [package]
-name = "cbor-with"
+name = "konduit-receipt"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -13,14 +11,7 @@ documentation.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+konduit-data.workspace = true
 minicbor.workspace = true
-
-# Cargo.toml
-[features]
-default = []
-std = []
-crypto = []
-full = ["std", "crypto"]
-
-[dev-dependencies]
-cbor-with = { path = ".", features = ["std", "crypto"] }
+serde.workspace = true
+thiserror.workspace = true

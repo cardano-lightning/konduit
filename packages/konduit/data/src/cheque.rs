@@ -5,6 +5,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "V: Default"))]
 pub enum Cheque<V: VerifyState = Unverified> {
     Unlocked(Unlocked<V>),
     Locked(Locked<V>),
@@ -89,6 +90,13 @@ impl Cheque<Unverified> {
         match self {
             Cheque::Unlocked(x) => x.try_verify(verification_key, tag).map(Cheque::from),
             Cheque::Locked(x) => x.try_verify(verification_key, tag).map(Cheque::from),
+        }
+    }
+
+    pub fn skip_verify(self) -> Cheque<Verified> {
+        match self {
+            Cheque::Unlocked(x) => Cheque::from(x.skip_verify()),
+            Cheque::Locked(x) => Cheque::from(x.skip_verify()),
         }
     }
 }
