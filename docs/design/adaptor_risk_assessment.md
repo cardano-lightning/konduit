@@ -33,8 +33,7 @@ section 6.4:
 - **Analyse:** The impacts of these events.
 - **Evaluate:** The prioritization of these risks against business thresholds.
 
-[iso-31000-preview]:
-  https://cdn.standards.iteh.ai/samples/65694/60673072317a4b96bd36efb910b68926/ISO-31000-2018.pdf
+[iso-31000-preview]: https://cdn.standards.iteh.ai/samples/65694/60673072317a4b96bd36efb910b68926/ISO-31000-2018.pdf
 
 # Context and Scope
 

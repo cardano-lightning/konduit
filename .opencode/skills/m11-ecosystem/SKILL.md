@@ -106,13 +106,13 @@ To implementation (Layer 1):
 
 ### Language Interop
 
-| Integration     | Crate/Tool     | Use Case               |
-| --------------- | -------------- | ---------------------- |
-| C/C++ → Rust    | `bindgen`      | Auto-generate bindings |
-| Rust → C        | `cbindgen`     | Export C headers       |
+| Integration    | Crate/Tool     | Use Case               |
+| -------------- | -------------- | ---------------------- |
+| C/C++ → Rust   | `bindgen`      | Auto-generate bindings |
+| Rust → C       | `cbindgen`     | Export C headers       |
 | Python ↔ Rust  | `pyo3`         | Python extensions      |
 | Node.js ↔ Rust | `napi-rs`      | Node addons            |
-| WebAssembly     | `wasm-bindgen` | Browser/WASI           |
+| WebAssembly    | `wasm-bindgen` | Browser/WASI           |
 
 ### Cargo Features
 

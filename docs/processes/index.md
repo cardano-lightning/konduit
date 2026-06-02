@@ -257,8 +257,7 @@ protocol.
 
 ## IV - Glossary
 
-[^def:cheque]:
-    **Cheque**: A signed off-chain payload containing HTLC commitment details.
+[^def:cheque]: **Cheque**: A signed off-chain payload containing HTLC commitment details.
 
 [^def:unlocked]:
     **Unlocked Cheque**: A cheque combined with its corresponding Secret,

@@ -33,8 +33,7 @@ paths:
       operationId: getNetwork
       responses:
         "200":
-          description:
-            Network inferred from the configured Blockfrost project id
+          description: Network inferred from the configured Blockfrost project id
           content:
             application/json:
               schema:
@@ -210,8 +209,7 @@ components:
         consumed_by:
           allOf:
             - $ref: "#/components/schemas/TxId"
-            - description:
-                Id of the transaction that consumed this output, if any.
+            - description: Id of the transaction that consumed this output, if any.
         value:
           type: array
           items:
