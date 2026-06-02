@@ -1,90 +1,100 @@
 {
-  "default_stages": ["pre-commit"],
-  "repos":
-    [
-      {
-        "hooks":
-          [
-            {
-              "always_run": false,
-              "args": [],
-              "entry": "cargo-machete ./",
-              "exclude": "^$",
-              "exclude_types": [],
-              "fail_fast": false,
-              "files": "\\.toml$",
-              "id": "cargo-machete",
-              "language": "system",
-              "name": "cargo-machete",
-              "pass_filenames": false,
-              "require_serial": false,
-              "stages": ["pre-commit"],
-              "types": ["file"],
-              "types_or": [],
-              "verbose": false,
-            },
-            {
-              "always_run": false,
-              "args": [],
-              "entry": "cargo-clippy -- --manifest-path Cargo.toml",
-              "exclude": "^$",
-              "exclude_types": [],
-              "fail_fast": false,
-              "files": "",
-              "id": "my-clippy",
-              "language": "system",
-              "name": "clippy",
-              "pass_filenames": false,
-              "require_serial": false,
-              "stages": ["pre-commit"],
-              "types": ["file"],
-              "types_or": [],
-              "verbose": false,
-            },
-            {
-              "always_run": true,
-              "args": [],
-              "entry":
-                "sh -c '\n  if [ -f .nix-prek-config.yaml ]; then\n    grep -v
-                \"^#\" .nix-prek-config.yaml | jq \".repos[].hooks[].entry |=
-                gsub(\\\"/nix/store/[^/]+/bin/\\\"; \\\"\\\")\" >
-                .pre-commit-config.yaml\n    treefmt
-                .pre-commit-config.yaml\n    git add
-                .pre-commit-config.yaml\n  fi\n'\n",
-              "exclude": "^$",
-              "exclude_types": [],
-              "fail_fast": false,
-              "files": "",
-              "id": "nix-sync",
-              "language": "system",
-              "name": "nix-sync",
-              "pass_filenames": false,
-              "require_serial": false,
-              "stages": ["pre-commit"],
-              "types": ["file"],
-              "types_or": [],
-              "verbose": false,
-            },
-            {
-              "always_run": false,
-              "args": [],
-              "entry": "treefmt --fail-on-change --no-cache",
-              "exclude": "^$",
-              "exclude_types": [],
-              "fail_fast": false,
-              "files": "",
-              "id": "treefmt",
-              "language": "system",
-              "name": "treefmt",
-              "pass_filenames": true,
-              "require_serial": false,
-              "stages": ["pre-commit"],
-              "types": ["file"],
-              "types_or": [],
-              "verbose": false,
-            },
+  "default_stages": [
+    "pre-commit"
+  ],
+  "repos": [
+    {
+      "hooks": [
+        {
+          "always_run": false,
+          "args": [],
+          "entry": "cargo-machete ./",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": "\\.toml$",
+          "id": "cargo-machete",
+          "language": "system",
+          "name": "cargo-machete",
+          "pass_filenames": false,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
           ],
-        "repo": "local",
-      },
-    ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        },
+        {
+          "always_run": false,
+          "args": [],
+          "entry": "cargo-clippy -- --manifest-path Cargo.toml",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": "",
+          "id": "my-clippy",
+          "language": "system",
+          "name": "clippy",
+          "pass_filenames": false,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
+          ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        },
+        {
+          "always_run": true,
+          "args": [],
+          "entry": "sh -c '\n  if [ -f .nix-prek-config.yaml ]; then\n    # PRE-COMMIT\n    grep -v \"^#\" .nix-prek-config.yaml | jq \".repos[].hooks[].entry |= gsub(\\\"/nix/store/[^/]+/bin/\\\"; \\\"\\\")\" > .pre-commit-config.yaml\n    git add .pre-commit-config.yaml\n    # TREEFMT\n    sed \"s|/nix/store/[^/]*/bin/||g\" /nix/store/9rg7w9izcmvfwyx2vzjspl6i83bvmizw-treefmt.toml > treefmt.toml\n    git add treefmt.toml\n  fi\n'\n",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": "",
+          "id": "nix-sync",
+          "language": "system",
+          "name": "nix-sync",
+          "pass_filenames": false,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
+          ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        },
+        {
+          "always_run": false,
+          "args": [],
+          "entry": "treefmt --fail-on-change --no-cache",
+          "exclude": "^$",
+          "exclude_types": [],
+          "fail_fast": false,
+          "files": "",
+          "id": "treefmt",
+          "language": "system",
+          "name": "treefmt",
+          "pass_filenames": true,
+          "require_serial": false,
+          "stages": [
+            "pre-commit"
+          ],
+          "types": [
+            "file"
+          ],
+          "types_or": [],
+          "verbose": false
+        }
+      ],
+      "repo": "local"
+    }
+  ]
 }

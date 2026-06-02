@@ -10,6 +10,8 @@ excludes = [
     ".hgignore",
     ".svnignore",
     "LICENSE",
+    "treefmt.toml",
+    ".pre-commit-config.yaml",
 ]
 
 [formatter.aiken]
@@ -45,7 +47,7 @@ includes = [
     "*.yaml",
     "*.yml",
 ]
-options = ["--write", "--config", "/nix/store/ssgpdafnjz3vmjpfi7xa93h0b3p0y0ad-prettierrc.json"]
+options = ["--write"]
 
 [formatter.rustfmt]
 command = "rustfmt"
