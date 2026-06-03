@@ -1,27 +1,26 @@
-use crate::core::{
-    AdaptorInfo, Invoice, Keytag, Locked, PayBody, PlutusData, Quote, QuoteBody, Receipt, Squash,
-    SquashStatus, Tag, TxHelp, cbor::ToCbor,
+use crate::{
+    HttpClient, Transport,
+    core::{
+        AdaptorInfo, Invoice, Keytag, Locked, PayBody, PlutusData, Quote, QuoteBody, Receipt,
+        Squash, SquashStatus, Tag, TxHelp, cbor::ToCbor,
+    },
 };
 use anyhow::anyhow;
-use http_client::HttpClient;
 
 const HEADER_CONTENT_TYPE_JSON: (&str, &str) = ("Content-Type", "application/json");
 const HEADER_CONTENT_TYPE_CBOR: (&str, &str) = ("Content-Type", "application/cbor");
 const HEADER_NAME_KEYTAG: &str = "KONDUIT";
 
-pub struct Adaptor<Http: HttpClient> {
-    http_client: Http,
+pub struct Adaptor<H: Transport> {
+    http_client: HttpClient<H>,
     info: AdaptorInfo<()>,
     keytag: Option<(Tag, String)>,
 }
 
 /// An isomorphic Adaptor (a.k.a konduit-server) client that selectively pick a platform-compatible
 /// http client internally. From the outside, it provides the exact same interface.
-impl<Http: HttpClient> Adaptor<Http>
-where
-    Http::Error: Into<anyhow::Error>,
-{
-    pub async fn new(http_client: Http, keytag: Option<&Keytag>) -> anyhow::Result<Self> {
+impl<H: Transport> Adaptor<H> {
+    pub async fn new(http_client: HttpClient<H>, keytag: Option<&Keytag>) -> anyhow::Result<Self> {
         let info = http_client
             .get::<AdaptorInfo<TxHelp>>("/info")
             .await
@@ -82,7 +81,7 @@ where
             .post_with_headers::<Quote>(
                 "/ch/quote",
                 &self.with_keytag_header(&[HEADER_CONTENT_TYPE_JSON]),
-                Http::to_json(&QuoteBody::Bolt11(invoice.clone())),
+                HttpClient::<H>::to_json(&QuoteBody::Bolt11(invoice.clone())),
             )
             .await
             .map_err(|e| anyhow!(e))
@@ -93,7 +92,7 @@ where
             .post_with_headers::<SquashStatus>(
                 "/ch/pay",
                 &self.with_keytag_header(&[HEADER_CONTENT_TYPE_JSON]),
-                Http::to_json(&PayBody {
+                HttpClient::<H>::to_json(&PayBody {
                     cheque_body: locked.body,
                     signature: locked.signature,
                     invoice: invoice.to_string(),
