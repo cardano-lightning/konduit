@@ -11,4 +11,5 @@ documentation.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+http.workspace = true
 serde.workspace = true

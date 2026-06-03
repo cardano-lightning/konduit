@@ -15,6 +15,7 @@ anyhow.workspace = true
 gloo-net.workspace = true
 gloo-timers.workspace = true
 http-client.workspace = true
+http.workspace = true
 js-sys.workspace = true
 log.workspace = true
 serde-wasm-bindgen.workspace = true
