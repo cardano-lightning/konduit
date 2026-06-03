@@ -802,6 +802,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cbor-with"
+version = "0.0.0"
+dependencies = [
+ "cbor-with",
+ "minicbor",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
