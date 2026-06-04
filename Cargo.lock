@@ -751,6 +751,7 @@ dependencies = [
  "cardano-connector",
  "cardano-sdk",
  "hex",
+ "http 1.4.1",
  "http-client",
  "serde",
  "serde_json",
