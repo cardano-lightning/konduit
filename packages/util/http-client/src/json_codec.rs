@@ -9,7 +9,7 @@ impl<T: serde::Serialize> Encoder<T> for JsonCodec {
         "application/json"
     }
     fn encode(&self, value: &T) -> Result<Vec<u8>, Self::Error> {
-        Ok(serde_json::to_vec(value)?.into())
+        serde_json::to_vec(value)
     }
 }
 
@@ -19,6 +19,6 @@ impl<T: serde::de::DeserializeOwned> Decoder<T> for JsonCodec {
         "application/json"
     }
     fn decode(&self, bytes: &[u8]) -> Result<T, Self::Error> {
-        Ok(serde_json::from_slice(&bytes)?)
+        serde_json::from_slice(bytes)
     }
 }

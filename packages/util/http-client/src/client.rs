@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{HeaderPolicy, prelude::*, url};
 use crate::{HttpTransport, RequestBuilder};
 
 use core::fmt::Debug;
@@ -7,6 +7,7 @@ pub struct Client<T, C> {
     pub(crate) transport: T,
     pub(crate) codec: C,
     pub(crate) base_url: String,
+    pub(crate) policies: Vec<Box<dyn HeaderPolicy>>,
 }
 
 impl<T: HttpTransport, C> Client<T, C> {
@@ -14,8 +15,14 @@ impl<T: HttpTransport, C> Client<T, C> {
         Self {
             transport,
             codec,
-            base_url: base_url.strip_suffix('/').unwrap_or(&base_url).to_string(),
+            base_url: url::clean_base(&base_url).to_string(),
+            policies: Vec::new(),
         }
+    }
+
+    pub fn with_policy(mut self, policy: impl HeaderPolicy + 'static) -> Self {
+        self.policies.push(Box::new(policy));
+        self
     }
 
     pub fn request(&self, method: http::Method, path: &str) -> RequestBuilder<'_, T, C> {

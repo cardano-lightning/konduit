@@ -9,9 +9,7 @@ members = [
   "packages/cardano/sdk",
   "packages/util/cobbl3",
   "packages/util/fx-client",
-  "packages/util/http-client/core",
-  "packages/util/http-client/native",
-  "packages/util/http-client/wasm",
+  "packages/util/http-client",
   "packages/util/powdos",
   "packages/util/problem-details-derive",
   "packages/util/problem-details",
@@ -20,7 +18,7 @@ members = [
   "packages/konduit/data",
   "packages/konduit/server",
   "packages/konduit/tx",
-  "packages/konduit/wasm",
+  # "packages/konduit/wasm",
 ]
 resolver = "2"
 
@@ -114,9 +112,7 @@ cardano-connector-direct = { path = "packages/cardano/connector-direct" }
 cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
 cardano-sdk = { path = "packages/cardano/sdk" }
 fx-client = { path = "packages/util/fx-client" }
-http-client = { path = "packages/util/http-client/core" }
-http-client-native = { path = "packages/util/http-client/native" }
-http-client-wasm = { path = "packages/util/http-client/wasm" }
+http-client = { path = "packages/util/http-client" }
 problem-details-derive = { path = "packages/util/problem-details-derive" }
 problem-details = { path = "packages/util/problem-details" }
 konduit-client = { path = "packages/konduit/client" }

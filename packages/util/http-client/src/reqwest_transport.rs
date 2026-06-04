@@ -5,7 +5,7 @@ use core::future::Future;
 use reqwest::Client;
 use web_time::Duration;
 
-pub struct NativeTransport {
+pub struct ReqwestTransport {
     client: Client,
 }
 
@@ -19,11 +19,11 @@ pub enum NativeTransportError {
     InvalidStatus(#[from] http::status::InvalidStatusCode),
 }
 
-impl NativeTransport {
+impl ReqwestTransport {
     pub fn new(timeout: Option<Duration>) -> Self {
         let mut builder = Client::builder();
         if let Some(dur) = timeout {
-            builder = builder.timeout(dur.try_into().unwrap_or(core::time::Duration::MAX));
+            builder = builder.timeout(dur);
         }
         Self {
             client: builder.build().unwrap(),
@@ -31,7 +31,7 @@ impl NativeTransport {
     }
 }
 
-impl HttpTransport for NativeTransport {
+impl HttpTransport for ReqwestTransport {
     type Error = NativeTransportError;
 
     fn transport(
