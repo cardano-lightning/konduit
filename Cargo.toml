@@ -65,7 +65,7 @@ getrandom = "0.2.16"
 gloo-net = "0.6.0"
 gloo-timers = { features = ["futures"], version = "0.3.0" }
 hex = "0.4.3"
-http = { version = "1.4.1", default-features = false, features = ['std'] }
+http = { version = "1.4.1", default-features = false }
 humantime = "2.3.0"
 indoc = "2.0.6"
 itertools = "0.14.0"

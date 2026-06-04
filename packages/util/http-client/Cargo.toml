@@ -42,7 +42,7 @@ reqwest = { workspace = true, optional = true }
 # Default enables all features for IDE/LSP support only.
 # Consumers should select features explicitly; do not rely on default.
 default = ["std", "json", "cbor", "gloo", "reqwest", "bindgen"]
-std = ["serde?/std", "serde_json?/std"]
+std = ["serde?/std", "serde_json?/std", "http/std"]
 json = ["dep:serde", "dep:serde_json", "serde/derive"]
 cbor = ["dep:minicbor"]
 time = ["dep:web-time"]
