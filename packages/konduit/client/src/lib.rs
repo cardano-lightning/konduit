@@ -1,6 +1,3 @@
-mod http_client;
-pub use http_client::{HttpClient, Transport};
-
 mod adaptor;
 pub use adaptor::Adaptor;
 

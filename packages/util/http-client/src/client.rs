@@ -82,8 +82,8 @@ impl<T: HttpTransport, C> Client<T, C> {
     pub async fn post_with_headers<Req, Res>(
         &self,
         path: &str,
-        body: &Req,
         headers: &[(&str, &str)],
+        body: &Req,
     ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
     where
         C: Encoder<Req> + Decoder<Res>,

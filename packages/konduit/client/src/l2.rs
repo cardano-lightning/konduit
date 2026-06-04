@@ -1,21 +1,22 @@
 use crate::{
-    Adaptor, Transport,
+    Adaptor,
     core::{
         AdaptorInfo, ChequeBody, Duration, Invoice, Lock, Locked, Quote, Receipt, SigningKey,
         Squash, SquashBody, SquashStatus,
     },
 };
 use anyhow::anyhow;
+use http_client::HttpTransport;
 use web_time::{SystemTime, UNIX_EPOCH};
 
-pub struct Client<'a, Http: Transport> {
+pub struct Client<'a, Http: HttpTransport> {
     adaptor: &'a Adaptor<Http>,
     signing_key: &'a SigningKey,
 }
 
 impl<'a, Http> Client<'a, Http>
 where
-    Http: Transport,
+    Http: HttpTransport,
     Http::Error: Into<anyhow::Error>,
 {
     pub fn new(adaptor: &'a Adaptor<Http>, signing_key: &'a SigningKey) -> Self {
