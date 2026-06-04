@@ -34,7 +34,7 @@ anyhow.workspace = true
 bln-sdk.workspace = true
 cardano-connector.workspace = true
 cardano-sdk.workspace = true
-http-client.workspace = true
+http-client = { workspace = true, features = ["json"] }
 konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
@@ -43,8 +43,6 @@ web-time.workspace = true
 clap = { workspace = true, features = ["env"], optional = true }
 dotenvy = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
-serde.workspace = true
-serde_json.workspace = true
 # FIXME :: Disabled to appease cargo machete, and while main is broken
 # serde_json = { workspace = true, optional = true }
 # http-client-native = { workspace = true, optional = true }

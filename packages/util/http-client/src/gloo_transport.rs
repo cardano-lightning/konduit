@@ -40,6 +40,12 @@ impl GlooTransport {
     }
 }
 
+impl Default for GlooTransport {
+    fn default() -> Self {
+        Self::new(Some(Duration::from_secs(15)))
+    }
+}
+
 impl HttpTransport for GlooTransport {
     type Error = GlooTransportError;
 
