@@ -1,0 +1,24 @@
+[package]
+name = "konduit-wire"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+base64.workspace = true
+cardano-sdk.workspace = true
+cbor-with.workspace = true
+cobbl3 = { version = "0.0.0", path = "../../util/cobbl3" }
+konduit-data.workspace = true
+minicbor.workspace = true
+serde.workspace = true
+serde_with.workspace = true
