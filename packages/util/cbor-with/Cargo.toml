@@ -1,0 +1,26 @@
+# Serde-with but for minicbor
+
+[package]
+name = "cbor-with"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+minicbor.workspace = true
+
+# Cargo.toml
+[features]
+default = []
+std = []
+crypto = []
+full = ["std", "crypto"]
+
+[dev-dependencies]
+cbor-with = { path = ".", features = ["std", "crypto"] }

@@ -1,45 +1,32 @@
 [package]
 name = "konduit-server"
+description.workspace = true
+documentation.workspace = true
 version.workspace = true
 edition.workspace = true
-description.workspace = true
-license.workspace = true
-authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation.workspace = true
+license.workspace = true
+authors.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "actix"
+path = "src/bin/actix.rs"
+required-features = ["actix"]
+
+[features]
+default = ["actix"]
+actix = ["dep:actix-web"]
+
 [dependencies]
-actix-cors.workspace = true
-actix-web.workspace = true
-anyhow.workspace = true
-async-trait.workspace = true
-bln-client = { workspace = true, features = ["cli", "namespaced"] }
-cardano-connector-direct.workspace = true
-cardano-connector.workspace = true
-cardano-connector-utxorpc.workspace = true
-cardano-sdk = { workspace = true, features = ["clap"] }
-clap = { workspace = true, features = ["env"] }
-dotenvy.workspace = true
+actix-web = { workspace = true, optional = true }
+cardano-sdk.workspace = true
 env_logger.workspace = true
-futures.workspace = true
-fx-client = { workspace = true, features = ["cli", "namespaced"] }
-hex = { workspace = true, features = ["serde"] }
-humantime.workspace = true
 konduit-data.workspace = true
-konduit-tx.workspace = true
+konduit-wire.workspace = true
 log.workspace = true
-postcard = { workspace = true, features = ["postcard-derive", "use-std"] }
-reqwest = { workspace = true, features = ["json"] }
+minicbor.workspace = true
+problem-details.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_with = { workspace = true, features = ["base64", "hex", "json"] }
-sled.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-
-[dev-dependencies]
-proptest.workspace = true
-proptest-derive.workspace = true
-tokio.workspace = true

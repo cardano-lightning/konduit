@@ -1,53 +1,81 @@
+// Protocol Constants
+
 pub const MAX_UNSQUASHED: usize = 10;
 pub const MAX_EXCLUDE_LENGTH: usize = 10;
 
-mod adaptor_info;
-mod base;
-mod channel_parameters;
-mod cheque;
-mod cheque_body;
-mod constants;
-mod datum;
-mod indexes;
-mod l1_channel;
-mod locked;
-mod pay_body;
-mod pending;
-mod possible_step;
-mod quote;
-mod quote_body;
-mod receipt;
-mod redeemer;
-mod squash;
-mod squash_body;
-mod squash_proposal;
-mod squash_status;
-mod stage;
-mod unlocked;
-mod used;
-mod utils;
+// On-chain datatypes
 
-pub use adaptor_info::*;
-pub use base::*;
-pub use channel_parameters::*;
-pub use cheque::*;
-pub use cheque_body::*;
-pub use constants::*;
-pub use datum::*;
-pub use indexes::*;
-pub use l1_channel::*;
-pub use locked::*;
-pub use pay_body::*;
-pub use pending::*;
-pub use possible_step::*;
-pub use quote::*;
-pub use quote_body::*;
-pub use receipt::*;
-pub use redeemer::*;
-pub use squash::*;
-pub use squash_body::*;
-pub use squash_proposal::*;
-pub use squash_status::*;
-pub use stage::*;
-pub use unlocked::*;
-pub use used::*;
+mod cheque;
+pub use cheque::Cheque;
+
+mod cheque_body;
+pub use cheque_body::ChequeBody;
+
+mod cheque_signed;
+pub use cheque_signed::ChequeSigned;
+
+mod constants;
+pub use constants::Constants;
+
+mod crypto;
+pub use crypto::{Signature, SigningKey, VerifyingKey};
+
+mod datum;
+pub use datum::Datum;
+
+mod duration;
+pub use duration::Duration;
+
+mod indexes;
+pub use indexes::{Indexes, IndexesError};
+
+mod lock;
+pub use lock::Lock;
+
+mod locked;
+pub use locked::Locked;
+
+mod pending;
+pub use pending::Pending;
+
+mod redeemer;
+pub use redeemer::{Cont, Eol, Redeemer, Step};
+
+mod secret;
+pub use secret::Secret;
+
+mod squash;
+pub use squash::Squash;
+
+mod squash_body;
+pub use squash_body::{SquashBody, SquashBodyError};
+
+mod stage;
+pub use stage::Stage;
+
+mod tag;
+pub use tag::Tag;
+
+mod unlocked;
+pub use unlocked::Unlocked;
+
+mod unpend;
+pub use unpend::Unpend;
+
+mod used;
+pub use used::Used;
+
+// Other
+
+mod verify_error;
+pub use verify_error::VerifyError;
+
+mod verify_state;
+pub use verify_state::{Unverified, Verified, VerifyState};
+
+pub(crate) mod utils;
+
+mod parse_error;
+pub use parse_error::ParseError;
+
+pub mod cbor_with;
