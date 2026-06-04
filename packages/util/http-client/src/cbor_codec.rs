@@ -26,6 +26,6 @@ impl<T: for<'b> minicbor::Decode<'b, ()>> Decoder<T> for CborCodec {
     }
 
     fn decode(&self, bytes: &[u8]) -> Result<T, Self::Error> {
-        Ok(minicbor::decode(&bytes)?)
+        minicbor::decode(bytes)
     }
 }

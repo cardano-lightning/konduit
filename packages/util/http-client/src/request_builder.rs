@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::{ClientError, Decoder, Encoder, HttpClient, HttpTransport};
+use crate::{HeaderPolicy, prelude::*, url};
 
 pub struct RequestBuilder<'a, T, C> {
     client: &'a HttpClient<T, C>,
@@ -7,21 +7,12 @@ pub struct RequestBuilder<'a, T, C> {
     builder: Option<http::request::Builder>,
 }
 
-pub fn url(base_url: &str, path: &str) -> String {
-    let clean_path = path.strip_prefix('/').unwrap_or(path);
-    let mut url = String::with_capacity(base_url.len() + 1 + clean_path.len());
-    url.push_str(base_url);
-    url.push('/');
-    url.push_str(clean_path);
-    url
-}
-
 impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
     pub fn new(client: &'a HttpClient<T, C>, method: http::Method, path: &str) -> Self {
         let builder = Some(
             http::Request::builder()
                 .method(method)
-                .uri(url(&client.base_url, path)),
+                .uri(url::clean_join(&client.base_url, path)),
         );
         Self { client, builder }
     }
@@ -39,8 +30,30 @@ impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
     }
 
     pub async fn send<Req, Res>(
+        self,
+        body: Option<&Req>,
+    ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
+    where
+        C: Encoder<Req> + Decoder<Res>,
+    {
+        let policies = &self.client.policies;
+        self.send_with_policies(body, policies).await
+    }
+
+    pub async fn send_no_policy<Req, Res>(
+        self,
+        body: Option<&Req>,
+    ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
+    where
+        C: Encoder<Req> + Decoder<Res>,
+    {
+        self.send_with_policies(body, &[]).await
+    }
+
+    async fn send_with_policies<Req, Res>(
         mut self,
         body: Option<&Req>,
+        policies: &[Box<dyn HeaderPolicy>],
     ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
     where
         C: Encoder<Req> + Decoder<Res>,
@@ -48,13 +61,19 @@ impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
         let mut native_builder = self.builder.take().ok_or(ClientError::BuilderCorrupted)?;
 
         let payload = match body {
-            Some(b) => {
-                native_builder = native_builder
-                    .header(http::header::CONTENT_TYPE, self.client.codec.content_type());
-                self.client.codec.encode(b).map_err(ClientError::Encode)?
-            }
+            Some(b) => self.client.codec.encode(b).map_err(ClientError::Encode)?,
             None => Vec::new(),
         };
+
+        let body_slice = if payload.is_empty() {
+            None
+        } else {
+            Some(payload.as_slice())
+        };
+
+        for policy in policies {
+            native_builder = policy.apply(native_builder, body_slice);
+        }
 
         let request = native_builder.body(payload)?;
         let response = self
@@ -67,11 +86,10 @@ impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
         if !response.status().is_success() {
             return Err(ClientError::Status(response.status()));
         }
-        let res_body = self
-            .client
+
+        self.client
             .codec
             .decode(response.body())
-            .map_err(ClientError::Decode)?;
-        Ok(res_body)
+            .map_err(ClientError::Decode)
     }
 }
