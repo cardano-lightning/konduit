@@ -32,7 +32,7 @@ cardano-sdk.workspace = true
 console_error_panic_hook.workspace = true
 console_log.workspace = true
 hex.workspace = true
-http-client-wasm.workspace = true
+http-client = { workspace = true, features = ["gloo", "json"] }
 js-sys.workspace = true
 konduit-client.workspace = true
 konduit-data.workspace = true

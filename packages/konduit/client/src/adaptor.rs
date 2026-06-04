@@ -1,6 +1,6 @@
 use crate::core::{
-    AdaptorInfo, Invoice, Keytag, Locked, PayBody, PlutusData, Quote, QuoteBody, Receipt, Squash,
-    SquashStatus, Tag, TxHelp, cbor::ToCbor,
+    AdaptorInfo, Invoice, Keytag, Locked, PayBody, Quote, QuoteBody, Receipt, Squash, SquashStatus,
+    Tag, TxHelp,
 };
 use anyhow::anyhow;
 use http_client::{HttpTransport, JsonCodec};
