@@ -11,7 +11,11 @@ pub(crate) use prelude::*;
 mod prelude {
     pub use cardano_connector::CardanoConnector;
     pub use cardano_connector_client::Connector;
-    pub use http_client_wasm::HttpClient;
+    pub use http_client::{GlooTransport, HttpTransport, JsonCodec};
+    pub type HttpClient = http_client::HttpClient<GlooTransport, JsonCodec>;
+    pub fn new_http_client(url: &str) -> HttpClient {
+        HttpClient::new(GlooTransport::default(), JsonCodec, url.to_string())
+    }
     pub use konduit_client::{Adaptor, l1, l2};
     pub mod core {
         pub use bln_sdk::types::Invoice;

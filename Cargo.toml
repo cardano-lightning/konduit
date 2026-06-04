@@ -10,8 +10,6 @@ members = [
   "packages/util/cobbl3",
   "packages/util/fx-client",
   "packages/util/http-client",
-  "packages/util/http-client-native",
-  "packages/util/http-client-wasm",
   "packages/util/powdos",
   "packages/util/problem-details-derive",
   "packages/util/problem-details",
@@ -67,6 +65,7 @@ getrandom = "0.2.16"
 gloo-net = "0.6.0"
 gloo-timers = { features = ["futures"], version = "0.3.0" }
 hex = "0.4.3"
+http = { version = "1.4.1", default-features = false }
 humantime = "2.3.0"
 indoc = "2.0.6"
 itertools = "0.14.0"
@@ -95,13 +94,13 @@ serde_with = { version = "3.16.1", features = ["hex", "base64"] }
 sha2 = "0.11.0"
 sled = "0.34.7"
 subtle = "2.6.1"
-thiserror = "2.0.17"
+thiserror = { version = "2", default-features = false }
 tokio = { version = "1.47.1", features = ["full"] }
 toml = "0.9.10"
 trait-variant = "0.1.2"
 uplc = "1.1.22"
 wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4.55"
+wasm-bindgen-futures = { version = "0.4.55", default-features = false }
 web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
 web-time = "1.1.0"
 
@@ -113,9 +112,9 @@ cardano-connector-direct = { path = "packages/cardano/connector-direct" }
 cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
 cardano-sdk = { path = "packages/cardano/sdk" }
 fx-client = { path = "packages/util/fx-client" }
-http-client = { path = "packages/util/http-client" }
-http-client-native = { path = "packages/util/http-client-native" }
-http-client-wasm = { path = "packages/util/http-client-wasm" }
+http-client = { path = "packages/util/http-client", default-features = false, features = [
+  "std",
+] }
 problem-details-derive = { path = "packages/util/problem-details-derive" }
 problem-details = { path = "packages/util/problem-details" }
 konduit-client = { path = "packages/konduit/client" }

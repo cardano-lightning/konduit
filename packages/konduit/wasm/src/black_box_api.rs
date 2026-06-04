@@ -1,5 +1,5 @@
 use crate::{
-    Adaptor, Connector, HttpClient, core, l1, l2,
+    Adaptor, Connector, GlooTransport, core, l1, l2,
     wasm::{
         self, AdaptorInfo, ChannelOutput, Hash32, Invoice, Lock, Lockeds, NetworkId, Quote,
         ShelleyAddress, SigningKey, Tag, Wallet,
@@ -31,30 +31,30 @@ pub struct Konduit {
     wallet: Wallet,
 
     // Connection to a connector, as a result since it could initially be missing.
-    connector: wasm::Result<Rc<Connector<HttpClient>>>,
+    connector: wasm::Result<Rc<Connector<GlooTransport>>>,
 
     // Connection to an adaptor, as a result since it could initially be missing.
-    adaptor: wasm::Result<Adaptor<HttpClient>>,
+    adaptor: wasm::Result<Adaptor<GlooTransport>>,
 }
 
 impl Konduit {
-    fn l1_client(&self) -> wasm::Result<l1::Client<'_, Connector<HttpClient>>> {
+    fn l1_client(&self) -> wasm::Result<l1::Client<'_, Connector<GlooTransport>>> {
         Ok(l1::Client::new(
             self.connector.as_ref()?,
-            &self.wallet.signing_key(),
+            self.wallet.signing_key(),
         ))
     }
 
-    fn l2_client(&self) -> wasm::Result<l2::Client<'_, HttpClient>> {
+    fn l2_client(&self) -> wasm::Result<l2::Client<'_, GlooTransport>> {
         Ok(l2::Client::new(
             self.adaptor.as_ref()?,
-            &self.wallet.signing_key(),
+            self.wallet.signing_key(),
         ))
     }
 
     async fn squash(
         &self,
-        client: l2::Client<'_, HttpClient>,
+        client: l2::Client<'_, GlooTransport>,
         tag: &core::Tag,
         squash_status: core::SquashStatus,
         lockeds: &mut Lockeds,
@@ -324,7 +324,7 @@ impl Konduit {
         let close_tx: Hash32 = self
             .l1_client()?
             .execute(
-                &self.wallet.signing_key(),
+                self.wallet.signing_key(),
                 self.wallet.stake_credential().as_ref(),
                 vec![],
                 From::from([(tag, core::consumer::Intent::Close)]),
