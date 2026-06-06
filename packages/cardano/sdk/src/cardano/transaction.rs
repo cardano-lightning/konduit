@@ -766,26 +766,26 @@ impl<State: IsTransactionBodyState> Transaction<State> {
     /// The redeemers attached to this transaction, each paired with the
     /// pointer identifying which script purpose they correspond to (e.g.
     /// Spend(1) for the second input in sorted order).
-    pub fn redeemers(&self) -> Vec<(RedeemerPointer, PlutusData<'static>)> {
+    pub fn redeemers(
+        &self,
+    ) -> Box<dyn Iterator<Item = (RedeemerPointer, PlutusData<'static>)> + '_> {
         self.inner
             .transaction_witness_set
             .redeemer
             .as_ref()
             .map(|redeemers| match redeemers {
-                pallas::Redeemers::Map(kv) => kv
-                    .iter()
-                    .map(|(k, v)| {
-                        (
-                            RedeemerPointer::from(k.clone()),
-                            PlutusData::from(v.data.clone()),
-                        )
-                    })
-                    .collect(),
+                pallas::Redeemers::Map(kv) => Box::new(kv.iter().map(|(k, v)| {
+                    (
+                        RedeemerPointer::from(k.clone()),
+                        PlutusData::from(v.data.clone()),
+                    )
+                }))
+                    as Box<dyn Iterator<Item = _> + '_>,
                 pallas::Redeemers::List(_) => {
                     unreachable!("found redeemers encoded as list: impossible with this library.")
                 }
             })
-            .unwrap_or_default()
+            .unwrap_or_else(|| Box::new(iter::empty()))
     }
 
     /// The inline datums provided in the witness set. These are used by scripts
