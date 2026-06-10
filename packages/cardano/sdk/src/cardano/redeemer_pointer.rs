@@ -28,6 +28,38 @@ impl fmt::Display for RedeemerPointer {
     }
 }
 
+// ------------------------------------------------------------------ Inspecting
+
+impl RedeemerPointer {
+    pub fn as_index(&self) -> u64 {
+        self.0.index as u64
+    }
+
+    pub fn is_mint(&self) -> bool {
+        matches!(self.0.tag, pallas::RedeemerTag::Mint)
+    }
+
+    pub fn is_spend(&self) -> bool {
+        matches!(self.0.tag, pallas::RedeemerTag::Spend)
+    }
+
+    pub fn is_withdraw(&self) -> bool {
+        matches!(self.0.tag, pallas::RedeemerTag::Reward)
+    }
+
+    pub fn is_publish(&self) -> bool {
+        matches!(self.0.tag, pallas::RedeemerTag::Cert)
+    }
+
+    pub fn is_vote(&self) -> bool {
+        matches!(self.0.tag, pallas::RedeemerTag::Vote)
+    }
+
+    pub fn is_propose(&self) -> bool {
+        matches!(self.0.tag, pallas::RedeemerTag::Propose)
+    }
+}
+
 // --------------------------------------------------------------------- Building
 
 impl RedeemerPointer {
