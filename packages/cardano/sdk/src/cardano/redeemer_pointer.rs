@@ -31,7 +31,7 @@ impl fmt::Display for RedeemerPointer {
 // ------------------------------------------------------------------ Inspecting
 
 impl RedeemerPointer {
-    pub fn index(&self) -> u64 {
+    pub fn as_index(&self) -> u64 {
         self.0.index as u64
     }
 

@@ -766,9 +766,9 @@ impl<State: IsTransactionBodyState> Transaction<State> {
     /// The redeemers attached to this transaction, each paired with the
     /// pointer identifying which script purpose they correspond to (e.g.
     /// Spend(1) for the second input in sorted order).
-    pub fn redeemers(
-        &self,
-    ) -> Box<dyn Iterator<Item = (RedeemerPointer, PlutusData<'static>)> + '_> {
+    pub fn redeemers<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (RedeemerPointer, PlutusData<'a>)> + 'a> {
         self.inner
             .transaction_witness_set
             .redeemer
@@ -780,26 +780,26 @@ impl<State: IsTransactionBodyState> Transaction<State> {
                         PlutusData::from(v.data.clone()),
                     )
                 }))
-                    as Box<dyn Iterator<Item = _> + '_>,
+                    as Box<dyn Iterator<Item = _> + 'a>,
                 pallas::Redeemers::List(_) => {
                     unreachable!("found redeemers encoded as list: impossible with this library.")
                 }
             })
-            .unwrap_or_else(|| Box::new(iter::empty()))
+            .unwrap_or_else(move || Box::new(iter::empty()))
     }
 
     /// The inline datums provided in the witness set. These are used by scripts
     /// that require datums not already present on-chain in the UTxO set.
-    pub fn datums(&self) -> Box<dyn Iterator<Item = PlutusData<'static>> + '_> {
+    pub fn datums(&self) -> Box<dyn Iterator<Item = PlutusData<'_>> + '_> {
         self.inner
             .transaction_witness_set
             .plutus_data
             .as_ref()
             .map(|xs| {
                 Box::new(xs.iter().cloned().map(PlutusData::from))
-                    as BoxedIterator<'_, PlutusData<'static>>
+                    as BoxedIterator<'_, PlutusData<'_>>
             })
-            .unwrap_or_else(|| Box::new(iter::empty()))
+            .unwrap_or_else(move || Box::new(iter::empty()))
     }
 
     /// All Plutus scripts (V1, V2, V3) attached to the witness set of this
