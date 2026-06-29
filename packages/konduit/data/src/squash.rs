@@ -87,6 +87,16 @@ impl Squash<Unverified> {
 // Verified State Methods
 // =========================================================================
 impl Squash<Verified> {
+    /// Forgets the verified state, returning an unverified squash.
+    /// Useful when re-serializing or passing to an untrusted context.
+    pub fn into_unverified(self) -> Squash<Unverified> {
+        Squash {
+            body: self.body,
+            signature: self.signature,
+            _marker: PhantomData,
+        }
+    }
+
     /// Signing a new squash inherently guarantees its authenticity,
     /// so the constructor immediately returns a `Squash<Verified>` instance.
     pub fn make(signing_key: &SigningKey, tag: &Tag, body: SquashBody) -> Self {

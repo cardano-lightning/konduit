@@ -2,6 +2,7 @@ use minicbor::Encode;
 use problem_details::ProblemDetail;
 use serde::Serialize;
 
+#[derive(Debug, Clone)]
 pub struct Never(std::convert::Infallible);
 
 impl ProblemDetail for Never {

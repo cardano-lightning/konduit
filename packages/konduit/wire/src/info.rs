@@ -4,6 +4,9 @@ use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+const ENDPOINT: &str = "/info";
+pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
+
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct Response {
     /// Terms of service. Purely informational

@@ -10,8 +10,9 @@ members = [
   "packages/konduit/cli",
   "packages/konduit/client",
   "packages/konduit/data",
-  "packages/konduit/server",
+  "packages/konduit/integration",
   "packages/konduit/receipt",
+  "packages/konduit/server",
   "packages/konduit/tx",
   "packages/konduit/wasm",
   "packages/konduit/wire",
@@ -120,8 +121,8 @@ http-client = { path = "packages/util/http-client", default-features = false, fe
 ] }
 konduit-client = { path = "packages/konduit/client" }
 konduit-data = { path = "packages/konduit/data" }
-konduit-server = { path = "packages/konduit/tx" }
 konduit-receipt = { path = "packages/konduit/receipt" }
+konduit-server = { path = "packages/konduit/server" }
 konduit-tx = { path = "packages/konduit/tx" }
 konduit-wire = { path = "packages/konduit/wire" }
 problem-details = { path = "packages/util/problem-details" }

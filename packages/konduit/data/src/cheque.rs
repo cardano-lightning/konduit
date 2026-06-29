@@ -114,6 +114,18 @@ impl<V: VerifyState> From<Locked<V>> for Cheque<V> {
 }
 
 // =========================================================================
+// Verified State Methods
+// =========================================================================
+impl Cheque<Verified> {
+    pub fn into_unverified(self) -> Cheque<Unverified> {
+        match self {
+            Cheque::Unlocked(x) => Cheque::from(x.into_unverified()),
+            Cheque::Locked(x) => Cheque::from(x.into_unverified()),
+        }
+    }
+}
+
+// =========================================================================
 // minicbor Serialization
 //
 // Encoding:

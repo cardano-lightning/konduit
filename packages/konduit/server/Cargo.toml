@@ -22,11 +22,16 @@ actix = ["dep:actix-web"]
 [dependencies]
 actix-web = { workspace = true, optional = true }
 cardano-sdk.workspace = true
+cobbl3 = { version = "0.0.0", path = "../../util/cobbl3" }
+cryptoxide.workspace = true
 env_logger.workspace = true
 konduit-data.workspace = true
 konduit-wire.workspace = true
 log.workspace = true
 minicbor.workspace = true
 problem-details.workspace = true
+redb = "4.1.0"
 serde.workspace = true
 serde_json.workspace = true
+serde_with.workspace = true
+thiserror.workspace = true

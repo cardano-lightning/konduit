@@ -42,6 +42,8 @@
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use minicbor::{Decode, Encode};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use subtle::ConstantTimeEq;
 
 #[cfg(feature = "problem-details")]
@@ -140,9 +142,15 @@ pub const MAC_LEN: usize = 20;
 ///
 /// `N` is fixed by the downstream crate via a type alias.
 /// `PartialEq` is constant-time - timing-safe by construction.
-#[derive(Debug, Clone, Encode, Decode)]
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[serde(transparent)]
 #[cbor(transparent)]
-pub struct Mac<const N: usize = MAC_LEN>(#[n(0)] [u8; N]);
+pub struct Mac<const N: usize = MAC_LEN>(
+    #[n(0)]
+    #[serde_as(as = "serde_with::hex::Hex")]
+    [u8; N],
+);
 
 impl<const N: usize> Mac<N> {
     pub fn new(bytes: [u8; N]) -> Self {
@@ -176,12 +184,14 @@ impl<const N: usize> Eq for Mac<N> {}
 ///
 /// The client signs `body.tbs_bytes()` with their Ed25519 key and attaches
 /// the 64-byte raw signature. The server calls `body.verify(&signature)`.
-#[derive(Debug, Clone, Encode, Decode)]
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct Request<B> {
     #[n(0)]
     pub body: B,
     /// Raw 64-byte Ed25519 signature over `body.tbs_bytes()`.
     #[n(1)]
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub signature: [u8; 64],
 }
 
@@ -279,7 +289,7 @@ impl HmacKey {
 // Error
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 #[cfg_attr(feature = "problem-details", derive(problem_details::ProblemDetail))]
 pub enum Error {
     /// Client signature could not be verified.

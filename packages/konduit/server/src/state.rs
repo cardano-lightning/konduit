@@ -1,10 +1,14 @@
+use cobbl3::HmacKey;
 use konduit_wire::info;
 use std::sync::Arc;
+
+use crate::Db;
 // use tokio::sync::RwLock;
 
 pub struct State {
+    cobbl3_key: Arc<HmacKey>,
     // bln: Arc<dyn bln_client::Api + Send + Sync>,
-    // db: Arc<dyn db::Api + Send + Sync + 'static>,
+    db: Arc<Db>,
     // fx: Arc<RwLock<fx_client::State>>,
     info: Arc<info::Response>,
     // admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
@@ -12,26 +16,35 @@ pub struct State {
 
 impl State {
     pub fn new(
+        cobbl3_key: Arc<HmacKey>,
         // bln: Arc<dyn bln_client::Api + Send + Sync>,
-        // db: Arc<dyn db::Api + Send + Sync + 'static>,
+        db: Arc<Db>,
         // fx: Arc<RwLock<fx_client::State>>,
         info: Arc<info::Response>,
         // admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
     ) -> Self {
-        Self { info }
+        Self {
+            cobbl3_key,
+            db,
+            info,
+        }
     }
 
     // pub fn fx(&self) -> Arc<tokio::sync::RwLock<fx_client::State>> {
     //     self.fx.clone()
     // }
 
-    // pub fn db(&self) -> Arc<dyn db::Api + Send + Sync + 'static> {
-    //     self.db.clone()
-    // }
+    pub fn db(&self) -> Arc<Db> {
+        self.db.clone()
+    }
 
     // pub fn bln(&self) -> Arc<dyn bln_client::Api + Send + Sync + 'static> {
     //     self.bln.clone()
     // }
+
+    pub fn cobbl3_key(&self) -> Arc<HmacKey> {
+        self.cobbl3_key.clone()
+    }
 
     pub fn info(&self) -> Arc<info::Response> {
         self.info.clone()

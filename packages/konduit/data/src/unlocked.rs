@@ -48,6 +48,10 @@ impl Unlocked<Unverified> {
 // Verified State Methods
 // =========================================================================
 impl Unlocked<Verified> {
+    pub fn into_unverified(self) -> Unlocked<Unverified> {
+        Unlocked::new_with_state(self.body, self.signature)
+    }
+
     /// Signing a new cheque inherently guarantees its authenticity,
     /// so the constructor immediately returns a `Unlocked<Verified>` instance.
     pub fn make(signing_key: &SigningKey, tag: &Tag, body: ChequeBody<Secret>) -> Self {

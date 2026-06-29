@@ -20,11 +20,14 @@ default = []
 
 [dependencies]
 base64.workspace = true
+bln-sdk.workspace = true
 cardano-sdk.workspace = true
 cbor-with.workspace = true
 cobbl3 = { version = "0.0.0", path = "../../util/cobbl3" }
+const_format = "0.2.36"
 konduit-data = { workspace = true, features = [] }
 minicbor.workspace = true
+problem-details.workspace = true
 serde.workspace = true
 serde_with.workspace = true
 # FIXME : Turn this back on once upstream crates have utoipa.
