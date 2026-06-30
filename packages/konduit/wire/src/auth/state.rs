@@ -1,21 +1,33 @@
-use konduit_data::{Cheque, Squash};
+use konduit_data::{Cheque, Squash, Used};
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
 use serde::{Deserialize, Serialize};
 
+use serde_with::serde_as;
+
 pub const ENDPOINT: &str = "/state";
 pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
-/// TODO:: Do we want query params?
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-pub struct Params {}
+pub struct Params {
+    /// A utxo a user specifies to indicate which thread to follow.
+    /// A server may use this to select a lineage or thread,
+    /// although they are not obliged to do so.
+    /// In normal contexts (ie no mimics), this can be ommitted without consequence
+    ///
+    /// NOTE: this does offend  HTTP verb purists.
+    /// Subsequent GET are impacted by this.
+    #[n(0)]
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub focus: Option<Input>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct Response {
-    /// This may be the case for numerous reasons.
-    /// For example, the channel was closed or server no longer recognizes it.
+    /// L1 data
     #[n(0)]
     pub backing: Backing,
+    /// L2 data
     #[n(1)]
     pub receipt: Receipt,
 }
@@ -29,39 +41,72 @@ pub enum DomainError {
     Other,
 }
 
-/// Backing is treated as purely informational.
-/// This value may be cached; it may be stale at the
-/// point at which the user requests a quote
+/// The backing consists of the thread of Utxos representing the L1 state of the channel
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Backing {
-    /// Amount that server deems confirmed on-chain,
-    /// and is backing the channel.
-    /// None indicates channel is not available.
+    /// If current is set to `[Option::None]`, then there are no recognized channel Utxos.
     #[n(0)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub settled: Option<Amounts>,
-    /// Amount that is seen on-chain but not yet settled.
-    /// This can alleviate some UX issues
+    pub current: Option<BackingUtxo>,
     #[n(1)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending: Option<Amounts>,
+    /// History is purely informational.
+    /// The client can use this to support a richer UX with less state.
+    /// The client may independently verify the data, which is easier reconstructing it from scratch.
+    ///
+    /// The server may truncate or prune history at anytime.
+    /// The history does not indicate what is deemed settled or pending,
+    /// however this may also dependent on the amount being commited.
+    pub past: Vec<BackingUtxo>,
+    /// A utxo has been seen on-chain, but is not deemed settled.
+    /// Funds here cannot be used to back pay commitments.
+    #[n(2)]
+    pub pending: Vec<BackingUtxo>,
 }
 
-/// TODO:: More explicit term desired, but this is literally "amounts".
+/// Date
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-pub struct Amounts {
-    /// (Total) subbed according to the datum
+pub struct BackingUtxo {
     #[n(0)]
-    pub subbed: u64,
-    /// Amount of asset in utxo
+    pub input: Input,
     #[n(1)]
-    pub balance: u64,
+    pub created_at: Point,
+    /// In the case of Ada this is ALWAYS with MIN_ADA_BUFFER deducted
+    /// from the actual amount of lovelace in the utxo value.
+    #[n(2)]
+    pub amount: u64,
+    #[n(3)]
+    pub subbed: u64,
+    #[n(4)]
+    pub useds: Vec<Used>,
 }
 
+/// A time indicator.
+/// Posix time may refer to the block time slot.
+/// It allows for a proxy on block depth without knowledge of current chain state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct Point {
+    #[n(0)]
+    pub posix: u64,
+    #[n(1)]
+    pub block: u64,
+}
+
+/// As the user must register before accessing this endpoint,
+/// a squash must be in posession of the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Receipt {
     #[n(0)]
     pub squash: Squash,
     #[n(1)]
     pub cheques: Vec<Cheque>,
+}
+
+/// Input (aka OutputReference) to identify a UTXO
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct Input {
+    #[n(0)]
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub output_reference: [u8; 32],
+    #[n(1)]
+    pub index: u64,
 }

@@ -21,17 +21,6 @@ pub struct Receipt {
     cheques: Vec<Cheque<Verified>>,
 }
 
-/// For deserializaiton and decoding, go via WireReceipt.
-/// Note! that this should only be used from trusted sources.
-impl From<WireReceipt> for Receipt {
-    fn from(value: WireReceipt) -> Self {
-        Self {
-            squash: value.squash.skip_verify(),
-            cheques: value.cheques.into_iter().map(|x| x.skip_verify()).collect(),
-        }
-    }
-}
-
 impl From<Receipt> for WireReceipt {
     fn from(value: Receipt) -> Self {
         Self {
@@ -41,6 +30,17 @@ impl From<Receipt> for WireReceipt {
                 .into_iter()
                 .map(|x| x.into_unverified())
                 .collect(),
+        }
+    }
+}
+
+/// For deserializaiton and decoding, go via WireReceipt.
+/// Note! that this should only be used from trusted sources.
+impl From<WireReceipt> for Receipt {
+    fn from(value: WireReceipt) -> Self {
+        Self {
+            squash: value.squash.skip_verify(),
+            cheques: value.cheques.into_iter().map(|x| x.skip_verify()).collect(),
         }
     }
 }

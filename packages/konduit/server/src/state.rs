@@ -6,6 +6,7 @@ use crate::Db;
 // use tokio::sync::RwLock;
 
 pub struct State {
+    /// Cobbl3/HMAC key for signing tokens.
     cobbl3_key: Arc<HmacKey>,
     // bln: Arc<dyn bln_client::Api + Send + Sync>,
     db: Arc<Db>,
@@ -30,6 +31,10 @@ impl State {
         }
     }
 
+    pub fn cobbl3_key(&self) -> Arc<HmacKey> {
+        self.cobbl3_key.clone()
+    }
+
     // pub fn fx(&self) -> Arc<tokio::sync::RwLock<fx_client::State>> {
     //     self.fx.clone()
     // }
@@ -41,10 +46,6 @@ impl State {
     // pub fn bln(&self) -> Arc<dyn bln_client::Api + Send + Sync + 'static> {
     //     self.bln.clone()
     // }
-
-    pub fn cobbl3_key(&self) -> Arc<HmacKey> {
-        self.cobbl3_key.clone()
-    }
 
     pub fn info(&self) -> Arc<info::Response> {
         self.info.clone()

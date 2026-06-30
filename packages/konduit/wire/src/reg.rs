@@ -33,6 +33,7 @@ pub struct Body<T> {
     pub token: T,
     /// The initial handshake must include a squash
     #[n(1)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub squash: Option<Squash>,
 }
 

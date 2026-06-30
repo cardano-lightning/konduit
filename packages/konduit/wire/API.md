@@ -377,36 +377,63 @@ _(unit type — no fields)_
 
 ### Response
 
-| Field     | Type      | CBOR | Description                                                                                                       |
-| --------- | --------- | ---- | ----------------------------------------------------------------------------------------------------------------- |
-| `backing` | `Backing` | 0    | This may be the case for numerous reasons. For example, the channel was closed or server no longer recognizes it. |
-| `receipt` | `Receipt` | 1    |                                                                                                                   |
-
-### Amounts
-
-TODO:: More explicit term desired, but this is literally "amounts".
-
-| Field     | Type  | CBOR | Description                           |
-| --------- | ----- | ---- | ------------------------------------- |
-| `subbed`  | `u64` | 0    | (Total) subbed according to the datum |
-| `balance` | `u64` | 1    | Amount of asset in utxo               |
+| Field     | Type      | CBOR | Description |
+| --------- | --------- | ---- | ----------- |
+| `backing` | `Backing` | 0    | L1 data     |
+| `receipt` | `Receipt` | 1    | L2 data     |
 
 ### Backing
 
-Backing is treated as purely informational.
-This value may be cached; it may be stale at the
-point at which the user requests a quote
+The backing consists of the thread of Utxos representing the L1 state of the channel
 
-| Field     | Type              | CBOR | Description                                                                                                       |
-| --------- | ----------------- | ---- | ----------------------------------------------------------------------------------------------------------------- |
-| `settled` | `Option<Amounts>` | 0    | Amount that server deems confirmed on-chain, and is backing the channel. None indicates channel is not available. |
-| `pending` | `Option<Amounts>` | 1    | Amount that is seen on-chain but not yet settled. This can alleviate some UX issues                               |
+| Field     | Type                  | CBOR | Description                                                                                                                                                                                                                                                                                                                                                                        |
+| --------- | --------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `current` | `Option<BackingUtxo>` | 0    | If current is set to `[Option::None]`, then there are no recognized channel Utxos.                                                                                                                                                                                                                                                                                                 |
+| `past`    | `Vec<BackingUtxo>`    | 1    | History is purely informational. The client can use this to support a richer UX with less state. The client may independently verify the data, which is easier reconstructing it from scratch. The server may truncate or prune history at anytime. The history does not indicate what is deemed settled or pending, however this may also dependent on the amount being commited. |
+| `pending` | `Vec<BackingUtxo>`    | 2    | A utxo has been seen on-chain, but is not deemed settled. Funds here cannot be used to back pay commitments.                                                                                                                                                                                                                                                                       |
+
+### BackingUtxo
+
+Date
+
+| Field        | Type        | CBOR | Description                                                                                                          |
+| ------------ | ----------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
+| `input`      | `Input`     | 0    |                                                                                                                      |
+| `created_at` | `Point`     | 1    |                                                                                                                      |
+| `amount`     | `u64`       | 2    | In the case of Ada this is ALWAYS with MIN_ADA_BUFFER deducted from the actual amount of lovelace in the utxo value. |
+| `subbed`     | `u64`       | 3    |                                                                                                                      |
+| `useds`      | `Vec<Used>` | 4    |                                                                                                                      |
+
+### Input
+
+Input (aka OutputReference) to identify a UTXO
+
+| Field              | Type        | CBOR | JSON encoding        | Description |
+| ------------------ | ----------- | ---- | -------------------- | ----------- |
+| `output_reference` | `[u8 ; 32]` | 0    | serde_with::hex::Hex |             |
+| `index`            | `u64`       | 1    | —                    |             |
 
 ### Params
 
-TODO:: Do we want query params?
+| Field   | Type            | CBOR | Description                                                                                                                                                                                                                                                                                                         |
+| ------- | --------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `focus` | `Option<Input>` | 0    | A utxo a user specifies to indicate which thread to follow. A server may use this to select a lineage or thread, although they are not obliged to do so. In normal contexts (ie no mimics), this can be ommitted without consequence NOTE: this does offend HTTP verb purists. Subsequent GET are impacted by this. |
+
+### Point
+
+A time indicator.
+Posix time may refer to the block time slot.
+It allows for a proxy on block depth without knowledge of current chain state.
+
+| Field   | Type  | CBOR | Description |
+| ------- | ----- | ---- | ----------- |
+| `posix` | `u64` | 0    |             |
+| `block` | `u64` | 1    |             |
 
 ### Receipt
+
+As the user must register before accessing this endpoint,
+a squash must be in posession of the server.
 
 | Field     | Type          | CBOR | Description |
 | --------- | ------------- | ---- | ----------- |

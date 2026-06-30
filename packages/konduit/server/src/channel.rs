@@ -25,10 +25,7 @@ use bucket::Bucket;
 mod backing;
 use backing::Backing;
 
-use crate::{
-    channel::backing::Opened,
-    time::{self, now},
-};
+use crate::time::{self, now};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Channel {
@@ -160,18 +157,18 @@ impl Channel {
     }
 
     /// Apply backing. Replace what is there
-    pub fn apply_backing(&mut self, backing: Backing) {
-        self.backing = backing;
+    pub fn apply_backing(&mut self, _backing: Backing) {
+        todo!()
     }
 
     /// Apply Opened.
-    pub fn apply_opened(&mut self, amount: u64, subbed: u64, created_at: u64) {
-        self.backing.push(amount, subbed, created_at);
+    pub fn apply_opened(&mut self, _amount: u64, _subbed: u64, _created_at: u64) {
+        todo!()
     }
 
     /// Apply closed. Effectivly drop backing.
     pub fn apply_closed(&mut self) {
-        self.backing = Backing::default()
+        todo!()
     }
 
     /// Apply quote caches the quote in the cache
