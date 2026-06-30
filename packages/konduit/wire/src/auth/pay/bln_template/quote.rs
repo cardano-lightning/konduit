@@ -26,6 +26,7 @@ pub struct Body {
     #[n(1)]
     pub amount_msat: u64,
     #[n(2)]
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub r_hash: [u8; 32],
     #[n(3)]
     /// If not included, assume default

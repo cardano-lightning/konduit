@@ -8,9 +8,10 @@
 //! The DB can then be dumb ie agnostic to the domain.
 
 use konduit_data::{Locked, Secret, Squash, Tag, VerifyingKey};
-use konduit_wire::auth::{squash::SquashProposal, state::Backing};
+use konduit_wire::auth::squash::SquashProposal;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 pub mod receipt;
 pub use receipt::Receipt;
@@ -20,9 +21,14 @@ pub use error::Error;
 
 mod bucket;
 use bucket::Bucket;
-use serde_with::serde_as;
 
-use crate::time::{self, now};
+mod backing;
+use backing::Backing;
+
+use crate::{
+    channel::backing::Opened,
+    time::{self, now},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Channel {
@@ -36,7 +42,7 @@ pub struct Channel {
     /// Use external service prior to quote.
     /// FIXME :: Does this even make sense?
     #[n(2)]
-    backing: Option<Backing>,
+    backing: Backing,
     /// L2 state
     #[n(3)]
     receipt: Option<Receipt>,
@@ -73,7 +79,7 @@ impl Channel {
         Self {
             key,
             tag,
-            backing: None,
+            backing: Backing::default(),
             receipt: None,
             bucket: Bucket::new(
                 config.bucket_capacity,
@@ -98,7 +104,7 @@ impl Channel {
         self.receipt.as_ref()
     }
 
-    pub fn backing(&self) -> &Option<Backing> {
+    pub fn backing(&self) -> &Backing {
         &self.backing
     }
 
@@ -153,11 +159,19 @@ impl Channel {
         Ok(())
     }
 
-    /// Apply backing.
-    /// FIXME :: Perhaps its more helpful to have a more honest representation?
-    /// Or no representation at all.
+    /// Apply backing. Replace what is there
     pub fn apply_backing(&mut self, backing: Backing) {
-        self.backing = Some(backing);
+        self.backing = backing;
+    }
+
+    /// Apply Opened.
+    pub fn apply_opened(&mut self, amount: u64, subbed: u64, created_at: u64) {
+        self.backing.push(amount, subbed, created_at);
+    }
+
+    /// Apply closed. Effectivly drop backing.
+    pub fn apply_closed(&mut self) {
+        self.backing = Backing::default()
     }
 
     /// Apply quote caches the quote in the cache

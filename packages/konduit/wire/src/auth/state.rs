@@ -12,12 +12,10 @@ pub struct Params {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct Response {
-    /// Returns None if channel is no longer available.
     /// This may be the case for numerous reasons.
     /// For example, the channel was closed or server no longer recognizes it.
     #[n(0)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub backing: Option<Backing>,
+    pub backing: Backing,
     #[n(1)]
     pub receipt: Receipt,
 }
@@ -38,12 +36,15 @@ pub enum DomainError {
 pub struct Backing {
     /// Amount that server deems confirmed on-chain,
     /// and is backing the channel.
+    /// None indicates channel is not available.
     #[n(0)]
-    pub settled: Amounts,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settled: Option<Amounts>,
     /// Amount that is seen on-chain but not yet settled.
     /// This can alleviate some UX issues
     #[n(1)]
-    pub pending: Amounts,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending: Option<Amounts>,
 }
 
 /// TODO:: More explicit term desired, but this is literally "amounts".

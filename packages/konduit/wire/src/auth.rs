@@ -1,12 +1,12 @@
-//! Authorized endpoint.
-//!
+//! Channel partners, ie users, require auth.
 //! User must have registered `./reg`.
 //! They then use the (auth) scheme credential.
 //!
-//! ## Header
+//! For HTTP, auth uses standard conveciton of `Authorization` Header,
+//! albeit with a non-standarda scheme.
 //!
-//! Header is of the form `Authorization: <scheme> <credential>`.
-//! Credentials are base64 encoded.
+//! Header must be of the of the form `Authorization: <scheme> <credential>`.
+//! Credentials are base64 encoded. See `./reg` for details.
 
 use problem_details::ProblemDetail;
 
