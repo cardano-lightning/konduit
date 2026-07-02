@@ -708,6 +708,43 @@ impl<State: IsTransactionBodyState> Transaction<State> {
             })
     }
 
+    /// The hash of the script data (redeemers + datums + cost models), committing the
+    /// transaction body to a particular set of witnesses without including them directly.
+    /// FIXME :: this is already computed elsewhere, but this only looks up whats there,
+    /// which is probably not what we want!
+    pub fn script_integrity_hash_(&self) -> Option<Hash<32>> {
+        self.inner.transaction_body.script_data_hash.map(Hash::from)
+    }
+
+    /// The first slot (inclusive) at which this transaction is valid.
+    /// None means no lower bound.
+    pub fn validity_start(&self) -> Option<u64> {
+        self.inner.transaction_body.validity_interval_start
+    }
+
+    /// The last slot (exclusive) at which this transaction is valid.
+    /// None means no upper bound.
+    pub fn validity_end(&self) -> Option<u64> {
+        self.inner.transaction_body.ttl
+    }
+
+    /// The output returned to the user from collateral inputs, if any, after
+    /// subtracting the required collateral amount. Only present when collateral
+    /// inputs are provided.
+    pub fn collateral_return(&self) -> Option<Output> {
+        self.inner
+            .transaction_body
+            .collateral_return
+            .as_ref()
+            .and_then(|o| Output::try_from(o.clone()).ok())
+    }
+
+    /// The network this transaction is intended for, if explicitly specified.
+    /// In practice this field is optional and often omitted.
+    pub fn network_id(&self) -> Option<NetworkId> {
+        self.inner.transaction_body.network_id.map(NetworkId::from)
+    }
+
     /// The list of signatories explicitly listed in the transaction body, and visible to any
     /// underlying validator script. This is necessary a subset of the all signatories but the
     /// total set of inferred signatories may be larger due do transaction inputs.
@@ -717,7 +754,7 @@ impl<State: IsTransactionBodyState> Transaction<State> {
     /// - 'required_signers' (e.g. in the 'official' CDDL: <https://github.com/IntersectMBO/cardano-ledger/blob/232511b0fa01cd848cd7a569d1acc322124cf9b8/eras/conway/impl/cddl-files/conway.cddl#L142>)
     /// - 'extra_signatories' (e.g. in Aiken's stdlib: https://aiken-lang.github.io/stdlib/cardano/transaction.html#Transaction
     ///
-    fn specified_signatories(&self) -> Box<dyn Iterator<Item = Hash<28>> + '_> {
+    pub fn specified_signatories(&self) -> Box<dyn Iterator<Item = Hash<28>> + '_> {
         self.inner
             .transaction_body
             .required_signers
@@ -725,6 +762,85 @@ impl<State: IsTransactionBodyState> Transaction<State> {
             .map(|xs| Box::new(xs.deref().iter().map(<Hash<_>>::from)) as BoxedIterator<'_, _>)
             .unwrap_or_else(|| Box::new(iter::empty()) as BoxedIterator<'_, _>)
     }
+
+    /// The redeemers attached to this transaction, each paired with the
+    /// pointer identifying which script purpose they correspond to (e.g.
+    /// Spend(1) for the second input in sorted order).
+    pub fn redeemers<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (RedeemerPointer, PlutusData<'a>)> + 'a> {
+        self.inner
+            .transaction_witness_set
+            .redeemer
+            .as_ref()
+            .map(|redeemers| match redeemers {
+                pallas::Redeemers::Map(kv) => Box::new(kv.iter().map(|(k, v)| {
+                    (
+                        RedeemerPointer::from(k.clone()),
+                        PlutusData::from(v.data.clone()),
+                    )
+                }))
+                    as Box<dyn Iterator<Item = _> + 'a>,
+                pallas::Redeemers::List(_) => {
+                    unreachable!("found redeemers encoded as list: impossible with this library.")
+                }
+            })
+            .unwrap_or_else(move || Box::new(iter::empty()))
+    }
+
+    /// The inline datums provided in the witness set. These are used by scripts
+    /// that require datums not already present on-chain in the UTxO set.
+    pub fn datums(&self) -> Box<dyn Iterator<Item = PlutusData<'_>> + '_> {
+        self.inner
+            .transaction_witness_set
+            .plutus_data
+            .as_ref()
+            .map(|xs| {
+                Box::new(xs.iter().cloned().map(PlutusData::from))
+                    as BoxedIterator<'_, PlutusData<'_>>
+            })
+            .unwrap_or_else(move || Box::new(iter::empty()))
+    }
+
+    /// All Plutus scripts (V1, V2, V3) attached to the witness set of this
+    /// transaction. Note that scripts may also be provided via reference inputs
+    /// and need not be present here to be executed.
+    pub fn plutus_scripts(&self) -> Box<dyn Iterator<Item = PlutusScript> + '_> {
+        let witness_set = &self.inner.transaction_witness_set;
+
+        let v1 = witness_set
+            .plutus_v1_script
+            .as_ref()
+            .map(|xs| {
+                Box::new(xs.iter().cloned().map(PlutusScript::from))
+                    as BoxedIterator<'_, PlutusScript>
+            })
+            .unwrap_or_else(|| Box::new(iter::empty()));
+
+        let v2 = witness_set
+            .plutus_v2_script
+            .as_ref()
+            .map(|xs| {
+                Box::new(xs.iter().cloned().map(PlutusScript::from))
+                    as BoxedIterator<'_, PlutusScript>
+            })
+            .unwrap_or_else(|| Box::new(iter::empty()));
+
+        let v3 = witness_set
+            .plutus_v3_script
+            .as_ref()
+            .map(|xs| {
+                Box::new(xs.iter().cloned().map(PlutusScript::from))
+                    as BoxedIterator<'_, PlutusScript>
+            })
+            .unwrap_or_else(|| Box::new(iter::empty()));
+
+        Box::new(v1.chain(v2).chain(v3))
+    }
+
+    // /// The verification key witnesses attached to this transaction. Each entry
+    // /// is a (verification_key, signature) pair. Not yet implemented
+    // TODO: pub fn vkey_witnesses(&self) -> Box<dyn Iterator<Item = (VerificationKey, Signature)> + '_>
 }
 
 // -------------------------------------------------------------------- Internal
