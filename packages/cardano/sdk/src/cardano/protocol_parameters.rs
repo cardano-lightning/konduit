@@ -286,10 +286,10 @@ impl From<&ProtocolParameters> for uplc::tx::SlotConfig {
 /// - In v11 (upcoming "Van Rossem"), we use D for V1 and V2, and E for V4.
 /// - The order in which one interprets the array of integers that's usually circulated as cost models depends on both the Semantics and Plutus Version. They are NOT aligned. So the parameter at position N does not necessarily have the same meaning and may (are in practice) related to totally different builtins.
 /// - The protocol version also determines which builtins are recognized when parsing scripts; and so they give a meaning to some of the cost model elements.
-
+///
 /// Genesis of PlutusV3, introduced at the Chang hard fork.
-/// // pub const PLUTUS_V3_00_CHANG: &[i64] = &[ NOT KNOWN ];
-
+/// `pub const PLUTUS_V3_00_CHANG: &[i64] = &[ NOT KNOWN ];`
+///
 /// GA04 parameter change, enacted before Chang#2. Same protocol version
 /// as _00_CHANG — a different cost model under an unchanged PV.
 pub const PLUTUS_V3_01_CHANG_PRE2: &[i64] = &[
