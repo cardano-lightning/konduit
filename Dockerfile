@@ -1,4 +1,4 @@
-FROM rust:1.90-bookworm AS build
+FROM rust:1.95-bookworm AS build
 WORKDIR /dist
 COPY . .
 WORKDIR rust
