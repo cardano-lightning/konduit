@@ -72,7 +72,7 @@ impl Transaction<state::InConstruction> {
     /// // Send a minimum lovelace value to an arbitrary address, and the change back to the
     /// // sender.
     /// assert_eq!(
-    ///   Transaction::build(&ProtocolParameters::mainnet(), &resolved_inputs, |tx| tx
+    ///   Transaction::build(&ProtocolParameters::preview(), &resolved_inputs, |tx| tx
     ///     .with_inputs(vec![
     ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1, _),
     ///     ])
@@ -130,7 +130,7 @@ impl Transaction<state::InConstruction> {
     ///
     /// // Notice the absence of outputs and of collateral return. We let the builder handler those for us.
     /// assert_eq!(
-    ///   Transaction::build(&ProtocolParameters::mainnet(), &resolved_inputs, |tx| tx
+    ///   Transaction::build(&ProtocolParameters::preprod(), &resolved_inputs, |tx| tx
     ///     .with_inputs(vec![
     ///       input!("32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c", 1, _),
     ///     ])
@@ -155,7 +155,7 @@ impl Transaction<state::InConstruction> {
     ///     .ok()
     ///   ).unwrap().to_string(),
     ///   indoc!{"
-    ///     Transaction (id = 07fbde0af6eaceb28a59f764e442002382181af756707e0ce0325354d2b26fac) {
+    ///     Transaction (id = 745824863a49b5a6fff19e7cdc14ad0bfdf0e07b31932c12f5672c16a63a97dd) {
     ///         inputs: [
     ///             Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1),
     ///         ],
@@ -182,7 +182,7 @@ impl Transaction<state::InConstruction> {
     ///                 },
     ///             },
     ///         },
-    ///         script_integrity_hash: b5a66ea46c7628f9b151d6e029f322058d9dff3793a98f3cfed6e21ed7064c4f,
+    ///         script_integrity_hash: 3d11e460a8cacc11253563633e07f3f34a03ca78055d697862c2dece29b1a22b,
     ///         collaterals: [
     ///             Input(32b5e793d26af181cb837ab7470ba6e10e15ff638088bc6b099bb22b54b4796c#1),
     ///         ],
@@ -586,7 +586,7 @@ mod tests {
         assert_eq!(
             result.to_string(),
             indoc! {
-                "Transaction (id = 454f5ca4f75209540851329deb6d08cb759836f5bbec0b11d3de38b4030aaf76) {
+                "Transaction (id = b09eb90c30953e902aa1bfd949e67227a7089c301071b52a48d8d370618b6ec0) {
                      inputs: [
                          Input(0000000000000000000000000000000000000000000000000000000000000000#0),
                      ],
@@ -600,7 +600,7 @@ mod tests {
                      ],
                      fee: 167965,
                      validity: [14; 43[,
-                     script_integrity_hash: 6bdd58f9ba5f3134e0c9509063c3292110582042096294d394c9913301b2dc5e,
+                     script_integrity_hash: 54d3213206b3a5d02100f11e4a21de1974ef90a767cd0c3c533ba18cfdd28eef,
                      redeemers: {
                          Spend(0): Redeemer(
                              CBOR(80),
@@ -707,7 +707,7 @@ mod tests {
                 .map(|tx| tx.to_string())
                 .unwrap_or_else(|e| e.to_string()),
             indoc! {"
-                Transaction (id = 3bd44ee7393607ab23ac97bc0928cce42edf7316195d301308fc346877d8a55d) {
+                Transaction (id = 373ba22efd4ad93326db320a296f974a0ca14500c4e66ce7876060c165d83830) {
                     inputs: [
                         Input(d62db0b98b6df96645eec19d4728b385592fc531736abd987eb6490510c5ba50#0),
                     ],
@@ -721,7 +721,7 @@ mod tests {
                     ],
                     fee: 178509,
                     validity: ]-∞; +∞[,
-                    script_integrity_hash: 3b2ff5d0ea6d2fa720d12f01d71e015306d77524c750df84b2106bbe0919a4e2,
+                    script_integrity_hash: af0f6ba0e1ba89021137e3e87d292be4d68b1ee8061669d8051dedfcb1db0d44,
                     collaterals: [
                         Input(0000000000000000000000000000000000000000000000000000000000000000#1),
                     ],
@@ -893,15 +893,7 @@ mod tests {
 
         assert_eq!(
             hex::encode(spend_from_script.to_cbor()),
-            "84a800d90102818258208d56891b4638203175c488e19d630bfbc8af285353aeeb1\
-             053d54a3c371b7a40000181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2\
-             f872f57f6d3a1ffa0eb777011a0049a375021a0002a7cb0b5820d545623b07e425a\
-             55262585d2b5e8aaee16230fd1434e790fa4511da4bf8a4550dd90102818258208d\
-             56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a400110a\
-             20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4a\
-             f57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f33911\
-             11a0003fbb112d9010281825820036fd8d808d4a87737cbb0ed1e61b08ce753323e\
-             94fc118c5eefabee6a8e04a500a105a18200008280821906411a0004d2f5f5f6",
+            "84a800d90102818258208d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a40000181a200581d70bd3ae991b5aafccafe5ca70758bd36a9b2f872f57f6d3a1ffa0eb777011a0049a375021a0002a7cb0b5820d33f63fe6183a2960766a014189e91df083a063796b1090b462dc39d0c732f3c0dd90102818258208d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a400110a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f3391111a0003fbb112d9010281825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a500a105a18200008280821906411a0004d2f5f5f6",
             "spend_from_script no longer matches expected bytes."
         );
 
@@ -926,17 +918,7 @@ mod tests {
 
         assert_eq!(
             hex::encode(unpublish_script.to_cbor()),
-            "84a700d9010283825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118\
-             c5eefabee6a8e04a5008258203522a630e91e631f56897be2898e059478c300f4bb\
-             8dd7891549a191b4bf1090008258208d56891b4638203175c488e19d630bfbc8af2\
-             85353aeeb1053d54a3c371b7a40010181a20058390082c1729d5fd44124a6ae72bc\
-             db86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd\
-             277d73468d3b2fca56572011a00aab370021a0002b1ef0b5820d37acc9c984616d9\
-             d15825afeaf7d266e5bde38fdd4df4f8b2312703022d474d0dd90102818258208d5\
-             6891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a400110a2\
-             0058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af\
-             57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f245b11\
-             1a00040ae7a105a18200018280821906411a0004d2f5f5f6",
+            "84a700d9010283825820036fd8d808d4a87737cbb0ed1e61b08ce753323e94fc118c5eefabee6a8e04a5008258208d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a4001825820daf0cc4081f33acb6b8c9c9d3926301e78f5877ed122cd79e190b59281993e15000181a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a00aab370021a0002b1ef0b582086726de405d16f8291c4a2f9de590a392e06ec1f81e140e3a3fcd9c8dccb445f0dd90102818258208d56891b4638203175c488e19d630bfbc8af285353aeeb1053d54a3c371b7a400110a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a004f245b111a00040ae7a105a18200028280821906411a0004d2f5f5f6",
             "unpublish_script no longer matches expected bytes."
         );
     }
