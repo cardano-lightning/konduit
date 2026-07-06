@@ -25,6 +25,9 @@ use bucket::Bucket;
 mod backing;
 use backing::Backing;
 
+mod thread;
+use thread::Thread;
+
 use crate::time::{self, now};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
@@ -35,7 +38,7 @@ pub struct Channel {
     /// Channel id
     #[n(1)]
     tag: Tag,
-    /// L1 state. Cached for serving `./state.
+    /// L1 state. Cached for serving `./auth/state`.
     /// Use external service prior to quote.
     /// FIXME :: Does this even make sense?
     #[n(2)]

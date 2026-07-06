@@ -151,9 +151,9 @@ impl Db {
     }
 
     /// Modify an existing entry. Fails if absent.
-    pub fn update<F, T>(&self, key: &[u8], f: F) -> Result<Option<T>, Error>
+    pub fn update<F, T>(&self, key: &[u8], f: F) -> Result<T, Error>
     where
-        F: FnOnce(Channel) -> Result<(Channel, Option<T>), channel::Error>,
+        F: FnOnce(Channel) -> Result<(Channel, T), channel::Error>,
     {
         Self::validate_key(key)?;
         let tx = self.0.begin_write()?;

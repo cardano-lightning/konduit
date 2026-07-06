@@ -1,4 +1,4 @@
-use konduit_data::{Cheque, Squash, Used};
+use konduit_data::{Cheque, Squash, Stage, Used};
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
 use serde::{Deserialize, Serialize};
@@ -46,7 +46,7 @@ pub enum DomainError {
 pub struct Backing {
     /// If current is set to `[Option::None]`, then there are no recognized channel Utxos.
     #[n(0)]
-    pub current: Option<BackingUtxo>,
+    pub current: Option<ChannelUtxo>,
     #[n(1)]
     /// History is purely informational.
     /// The client can use this to support a richer UX with less state.
@@ -54,17 +54,17 @@ pub struct Backing {
     ///
     /// The server may truncate or prune history at anytime.
     /// The history does not indicate what is deemed settled or pending,
-    /// however this may also dependent on the amount being commited.
-    pub past: Vec<BackingUtxo>,
+    /// however this may also dependent on the amount being committed.
+    pub past: Vec<ChannelUtxo>,
     /// A utxo has been seen on-chain, but is not deemed settled.
     /// Funds here cannot be used to back pay commitments.
     #[n(2)]
-    pub pending: Vec<BackingUtxo>,
+    pub pending: Vec<ChannelUtxo>,
 }
 
 /// Date
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-pub struct BackingUtxo {
+pub struct ChannelUtxo {
     #[n(0)]
     pub input: Input,
     #[n(1)]
@@ -74,9 +74,7 @@ pub struct BackingUtxo {
     #[n(2)]
     pub amount: u64,
     #[n(3)]
-    pub subbed: u64,
-    #[n(4)]
-    pub useds: Vec<Used>,
+    pub stage: Stage,
 }
 
 /// A time indicator.
@@ -86,6 +84,7 @@ pub struct BackingUtxo {
 pub struct Point {
     #[n(0)]
     pub posix: u64,
+    /// Block height
     #[n(1)]
     pub block: u64,
 }

@@ -20,10 +20,16 @@ pub struct Response {
     pub tx_help: TxHelp,
 }
 
+/// Terms of service:
+/// Purely informational. Advertised fee and service parameters
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct TosInfo {
     #[n(0)]
     pub flat_fee: u64,
+    /// maybe?!
+    ///
+    #[n(1)]
+    pub time_to_settled: u64,
 }
 
 #[serde_as]
