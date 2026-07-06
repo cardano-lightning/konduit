@@ -11,6 +11,8 @@
     aiken.url = "github:aiken-lang/aiken";
     rust-flake.url = "github:juspay/rust-flake/";
     capkgs.url = "github:input-output-hk/capkgs";
+    jailed-agents.url = "github:andersonjoseph/jailed-agents";
+    cardano-kupo.url = "github:paluh/cardano-kupo";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -33,6 +35,31 @@
       }: let
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
         wasm-pack = pkgs.callPackage ./flake/wasm-pack.nix {};
+        packages =
+          [
+            # aiken
+            inputs'.aiken.packages.aiken
+            # kupo
+            inputs'.cardano-kupo.packages.kupo
+            # JS
+            pkgs.yarn
+            pkgs.nodejs
+            pkgs.typescript-language-server
+            # RUST
+            pkgs.openssl
+            config.rust-project.toolchain
+            wasm-pack
+            clang-unwrapped
+            pkgs.cargo-machete
+            # PRE-COMMIT
+            pkgs.prek
+            # UTILS
+            pkgs.just
+            # DOC BUILING
+            pkgs.pandoc
+            pkgs.d2
+          ]
+          ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
         devShell = {
           name = "konduit-shell";
           shellHook = ''
@@ -40,36 +67,40 @@
             echo 1>&2 "Welcome to the development shell!"
               export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
           '';
-          packages =
-            [
-              # aiken
-              inputs'.aiken.packages.aiken
-              # JS
-              pkgs.yarn
-              pkgs.nodejs
-              pkgs.typescript-language-server
-              # RUST
-              pkgs.openssl
-              config.rust-project.toolchain
-              wasm-pack
-              clang-unwrapped
-              pkgs.cargo-machete
-              # PRE-COMMIT
-              pkgs.prek
-              # UTILS
-              pkgs.just
-              # DOC BUILING
-              pkgs.pandoc
-              pkgs.d2
-            ]
-            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
+          inherit packages;
+
           nativeBuildInputs =
             [config.treefmt.build.wrapper]
             ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
+
           buildInputs =
             [pkgs.libiconv]
             ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates);
+
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
+        };
+
+        # Jail which is shared between a real opencode
+        # agent and a bash jail sandbox used for testing the jailed env itself.
+        commonJail = {
+          baseJailOptions = let
+            jail = inputs.jailed-agents.lib.${pkgs.system}.internals.jail;
+          in [
+            jail.combinators.network
+            jail.combinators.time-zone
+            jail.combinators.no-new-session
+            jail.combinators.mount-cwd
+            (jail.combinators.try-fwd-env "PKG_CONFIG_PATH")
+            (jail.combinators.try-fwd-env "LD_LIBRARY_PATH")
+          ];
+
+          extraReadwriteDirs = [
+            "~/projects/cardano-lightning/konduit"
+            "~/.config/opencode"
+            "~/.local/share/opencode"
+            "~/.cache/opencode"
+          ];
+          extraPkgs = packages;
         };
         devShellExtra =
           devShell
@@ -79,6 +110,16 @@
               devShell.packages
               ++ [
                 inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f
+
+                (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
+                  inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
+                })
+
+                (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
+                  name = "jailed-bash";
+                  pkg = pkgs.bashInteractive;
+                  inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
+                })
               ];
           };
       in {

@@ -1,0 +1,30 @@
+[package]
+name = "kupo-client"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "kupo-print"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["dep:clap", "dep:dotenvy", "dep:tokio"]
+
+[dependencies]
+anyhow.workspace = true
+reqwest = { workspace = true, features = ["json", "query"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+# -F cli
+clap = { workspace = true, features = ["derive", "env"], optional = true }
+dotenvy = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }

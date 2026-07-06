@@ -86,9 +86,9 @@ can be invoked.
 Set some aliases:
 
 ```bash
-alias admin="cargo run -- admin"
-alias adaptor="cargo run -- adaptor"
-alias conusmer="cargo run -- consumer"
+alias admin="cargo run --bin konduit-cli -- admin"
+alias adaptor="cargo run --bin konduit-cli -- adaptor"
+alias consumer="cargo run --bin konduit-cli -- consumer"
 ```
 
 #### Admin deploy:
@@ -97,7 +97,7 @@ Create a local-dev admin dotenv file. For the current UTxO RPC path, set the
 backend explicitly and keep the generated output out of version control.
 
 ```sh
-konduit admin --backend utxorpc --network preview --utxorpc http://127.0.0.1:1337 setup >> .env.admin
+admin --backend utxorpc --network preview --utxorpc http://127.0.0.1:1337 setup >> .env.admin
 ```
 
 For Blockfrost-based local testing, use

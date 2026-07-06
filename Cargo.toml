@@ -12,12 +12,14 @@ members = [
   "packages/util/http-client",
   "packages/util/http-client-native",
   "packages/util/http-client-wasm",
+  "packages/util/kupo-client",
   "packages/util/powdos",
   "packages/util/problem-details-derive",
   "packages/util/problem-details",
   "packages/konduit/cli",
   "packages/konduit/client",
   "packages/konduit/data",
+  "packages/konduit/indexer",
   "packages/konduit/server",
   "packages/konduit/tx",
   "packages/konduit/wasm",
@@ -119,6 +121,8 @@ http-client-wasm = { path = "packages/util/http-client-wasm" }
 problem-details-derive = { path = "packages/util/problem-details-derive" }
 problem-details = { path = "packages/util/problem-details" }
 konduit-client = { path = "packages/konduit/client" }
+konduit-indexer = { path = "packages/konduit/indexer" }
+kupo-client = { path = "packages/util/kupo-client" }
 konduit-data = { path = "packages/konduit/data" }
 konduit-server = { path = "packages/konduit/server" }
 konduit-tx = { path = "packages/konduit/tx" }

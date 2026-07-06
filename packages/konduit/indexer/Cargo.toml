@@ -1,0 +1,15 @@
+[package]
+name = "konduit-indexer"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror.workspace = true
