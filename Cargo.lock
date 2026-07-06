@@ -2450,7 +2450,10 @@ dependencies = [
  "cardano-sdk",
  "hex",
  "konduit-data",
+ "minicbor",
+ "serde",
  "serde_json",
+ "serde_with",
  "thiserror 2.0.18",
  "web-time",
 ]

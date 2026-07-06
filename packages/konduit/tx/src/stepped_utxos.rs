@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use cardano_sdk::{Hash, Input, Output, VerificationKey};
-use konduit_data::{Redeemer, Step};
+use cardano_sdk::{Hash, Input, Output};
+use konduit_data::{Redeemer, Step, VerifyingKey};
 
 use crate::{Bounds, SteppedUtxo};
 
@@ -56,7 +56,7 @@ impl SteppedUtxos {
             .collect::<Vec<_>>()
     }
 
-    pub fn signers(&self) -> Vec<VerificationKey> {
+    pub fn signers(&self) -> Vec<&VerifyingKey> {
         let mut signers = self.0.iter().map(|x| x.signer()).collect::<Vec<_>>();
         signers.sort();
         signers.dedup();

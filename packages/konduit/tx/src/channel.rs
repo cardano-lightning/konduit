@@ -2,12 +2,12 @@ use std::{cmp, collections::BTreeMap};
 
 use cardano_sdk::{Output, Value};
 use konduit_data::{
-    Constants, Cont, Datum, Duration, Eol, Keytag, Lock, Pending, Receipt, Secret, Stage, Tag,
-    Unpend,
+    Constants, Cont, Datum, Duration, Eol, Lock, Pending, Secret, Stage, Tag, Unpend,
 };
 
 use crate::{
-    Bounds, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, StepError, StepTo, Stepped, variables::Variables,
+    Bounds, KONDUIT_VALIDATOR, Keytag, MIN_ADA_BUFFER, Receipt, StepError, StepTo, Stepped,
+    variables::Variables,
 };
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -52,7 +52,7 @@ impl TryFrom<&Output> for Channel {
             constants,
             stage,
         } = Datum::try_from(data).map_err(|_| Error::ParseDatum)?;
-        if own_hash != KONDUIT_VALIDATOR.hash {
+        if own_hash != <[u8; 28]>::from(KONDUIT_VALIDATOR.hash) {
             return Err(Error::OwnHash);
         }
         let amount = debuffer_amount(output.value());
@@ -122,7 +122,7 @@ impl Channel {
     /// As datum
     pub fn datum(&self) -> Datum {
         Datum {
-            own_hash: KONDUIT_VALIDATOR.hash,
+            own_hash: KONDUIT_VALIDATOR.hash.into(),
             constants: self.constants.clone(),
             stage: self.stage().clone(),
         }
@@ -143,8 +143,8 @@ impl Channel {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Sub")));
         };
-        let (unlockeds, useds) = receipt.next_unlockeds_useds(useds, upper);
-        let squash = receipt.squash.clone();
+        let (unlockeds, useds) = receipt.prep_sub(useds, upper);
+        let squash = receipt.squash().clone();
         let absolute_owed = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
         let relative_owed = absolute_owed.saturating_sub(*subbed);
         let gain = cmp::min(relative_owed, self.amount());
@@ -156,7 +156,13 @@ impl Channel {
             Ok(variables) => variables,
             Err(err) => return Err((Box::new(self), err)),
         };
-        let step_to = StepTo::cont(Cont::Sub(squash, unlockeds), variables);
+        let step_to = StepTo::cont(
+            Cont::Sub(
+                squash.into_unverified(),
+                unlockeds.into_iter().map(|x| x.into_unverified()).collect(),
+            ),
+            variables,
+        );
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
@@ -185,9 +191,8 @@ impl Channel {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Respond")));
         };
-        let (cheques, pendings, useds_amount) =
-            receipt.next_cheques_pendings_useds_amount(useds, upper);
-        let squash = receipt.squash.clone();
+        let (cheques, pendings, useds_amount) = receipt.prep_respond(useds, upper);
+        let squash = receipt.squash().clone();
         let absolute_owed = squash.amount() + useds_amount;
         let relative_owed = absolute_owed.saturating_sub(*subbed);
         let gain = cmp::min(relative_owed, self.amount());
@@ -196,15 +201,20 @@ impl Channel {
             Ok(variables) => variables,
             Err(err) => return Err((Box::new(self), err)),
         };
-        let step_to = StepTo::cont(Cont::Respond(squash, cheques), variables);
+        let step_to = StepTo::cont(
+            Cont::Respond(
+                squash.into_unverified(),
+                cheques.into_iter().map(|x| x.into_unverified()).collect(),
+            ),
+            variables,
+        );
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
     pub fn unlock(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
         let secrets = receipt
             .unlockeds()
-            .into_iter()
-            .map(|u| u.secret)
+            .map(|u| u.secret().clone())
             .collect::<Vec<_>>();
         self.unlock_with_secrets(secrets, upper)
     }

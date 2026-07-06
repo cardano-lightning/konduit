@@ -1,19 +1,20 @@
 use crate::{Bounds, ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script};
 use cardano_sdk::{
-    Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
+    Address, NetworkId, Transaction, VerificationKey, address::kind,
+    transaction::state::ReadyForSigning,
 };
-use konduit_data::{Constants, Duration, Stage, Tag};
+use konduit_data::{Constants, Duration, Stage, Tag, VerifyingKey};
 use std::collections::BTreeMap;
 
 pub struct OpenIntent {
     pub tag: Tag,
-    pub sub_vkey: VerificationKey,
+    pub sub_vkey: VerifyingKey,
     pub close_period: Duration,
     pub amount: u64,
 }
 
 impl OpenIntent {
-    fn constant(self, add_vkey: VerificationKey) -> Constants {
+    fn constant(self, add_vkey: VerifyingKey) -> Constants {
         Constants {
             tag: self.tag,
             add_vkey,
@@ -28,9 +29,13 @@ pub enum Intent {
     Close,
 }
 
+fn verifying_key_address(network_id: NetworkId, vk: VerifyingKey) -> Address<kind::Shelley> {
+    VerificationKey::from(<[u8; 32]>::from(vk)).to_address(network_id)
+}
+
 pub fn tx(
     network_parameters: &NetworkParameters,
-    wallet: &VerificationKey,
+    wallet: &VerifyingKey,
     opens: Vec<OpenIntent>,
     intents: BTreeMap<Tag, Intent>,
     utxos: &Utxos,
@@ -38,7 +43,7 @@ pub fn tx(
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let reference_utxo = find_reference_script(utxos);
 
-    let change_address = wallet.to_address(network_parameters.network_id);
+    let change_address = verifying_key_address(network_parameters.network_id, wallet.clone());
 
     let consumer_channels = utxos
         .iter()
@@ -71,7 +76,7 @@ pub fn tx(
         .collect::<Vec<_>>();
 
     let wallet_address: Address<kind::Any> =
-        wallet.to_address(network_parameters.network_id).into();
+        verifying_key_address(network_parameters.network_id, wallet.clone()).into();
 
     let fuel = utxos
         .iter()

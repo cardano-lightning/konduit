@@ -1,8 +1,8 @@
 use cardano_sdk::{Input, Output};
-use konduit_data::{Duration, PossibleStep, Receipt, Secret};
+use konduit_data::{Duration, Secret};
 
 use crate::{
-    StepError, SteppedUtxo, Utxo,
+    Receipt, StepError, SteppedUtxo, Utxo,
     channel::{self, Channel, SteppedElseChannel},
     utxo_and::UtxoAnd,
 };
@@ -37,9 +37,9 @@ impl TryFrom<Utxo> for ChannelUtxo {
 type SteppedElseChannelUtxo = Result<SteppedUtxo, (Box<ChannelUtxo>, StepError)>;
 
 impl ChannelUtxo {
-    pub fn possible_steps(&self) -> Vec<PossibleStep> {
-        self.data().stage().possible_steps()
-    }
+    // pub fn possible_steps(&self) -> Vec<PossibleStep> {
+    //     self.data().stage().possible_steps()
+    // }
 
     fn rewrap(utxo: Utxo, result: SteppedElseChannel) -> SteppedElseChannelUtxo {
         match result {

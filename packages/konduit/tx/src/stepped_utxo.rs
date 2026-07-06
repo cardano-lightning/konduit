@@ -1,5 +1,5 @@
-use cardano_sdk::{Output, PlutusData, VerificationKey};
-use konduit_data::Step;
+use cardano_sdk::{Output, PlutusData};
+use konduit_data::{Step, VerifyingKey};
 
 use crate::{Bounds, ChannelUtxo, Stepped, utxo_and::UtxoAnd};
 
@@ -31,15 +31,15 @@ impl SteppedUtxo {
         self.data().bounds()
     }
 
-    fn consumer_key(&self) -> VerificationKey {
-        self.data().channel().constants().add_vkey
+    fn consumer_key(&self) -> &VerifyingKey {
+        &self.data().channel().constants().add_vkey
     }
 
-    fn adaptor_key(&self) -> VerificationKey {
-        self.data().channel().constants().sub_vkey
+    fn adaptor_key(&self) -> &VerifyingKey {
+        &self.data().channel().constants().sub_vkey
     }
 
-    pub fn signer(&self) -> VerificationKey {
+    pub fn signer(&self) -> &VerifyingKey {
         if self.step().is_consumer() {
             self.consumer_key()
         } else {

@@ -3,9 +3,11 @@ use std::collections::BTreeMap;
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
-use konduit_data::{Duration, Keytag, Receipt};
+use konduit_data::Duration;
 
-use crate::{ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script};
+use crate::{
+    ChannelUtxo, Keytag, NetworkParameters, Receipt, SteppedUtxos, Utxos, find_reference_script,
+};
 
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("insufficient total gain: preferences.min_total = {min_total}, gain = {gain}")]
@@ -42,7 +44,7 @@ pub fn tx(
     let steppeds = utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
-        .filter(|u| u.data().constants().sub_vkey == *wallet)
+        .filter(|u| u.data().constants().sub_vkey.as_ref() == wallet.as_ref())
         .filter_map(|u| {
             receipts
                 .get(&u.data().keytag())
