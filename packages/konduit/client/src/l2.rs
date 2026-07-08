@@ -3,6 +3,7 @@ use crate::{
     core::{Squash, SquashBody, wire},
     server, time,
 };
+use bln_sdk::types::Invoice;
 use cardano_sdk::cbor::ToCbor;
 use cobbl3::Mac;
 use http_client::Transport;
@@ -21,6 +22,10 @@ pub enum Error {
     CredentialExpired,
     #[error("automatic re-registration failed: {0}")]
     AutoRegFailed(Box<Error>),
+    #[error("Expected populated cache, got empty. Must quote before commit")]
+    CacheEmpty,
+    #[error("Failed to parse Cache.")]
+    CacheCorrupt,
     #[error(transparent)]
     Squash(#[from] SquashError),
     #[error(transparent)]
@@ -47,6 +52,8 @@ pub enum SquashError {
     Calculated,
     #[error("exhausted retry policy without reaching a complete squash")]
     RetriesExhausted,
+    #[error("resolved squash proposal did not include the secret for this payment")]
+    MissingPaymentSecret,
 }
 
 #[derive(Debug, Clone, Copy, minicbor::Encode, minicbor::Decode)]
@@ -65,8 +72,11 @@ impl Default for RegPolicy {
 
 #[derive(Debug, Clone, Copy, minicbor::Encode, minicbor::Decode)]
 pub enum SquashPolicy {
+    /// No automatic squash handling. `sync`/`commit` verify at most one
+    /// proposal and return without resubmitting — resolving further is
+    /// left to the caller.
     #[n(0)]
-    None,
+    Manual,
     #[n(1)]
     Lenient {
         #[n(0)]
@@ -122,6 +132,22 @@ impl Default for SquashPolicy {
     }
 }
 
+/// Outcome of verifying a single squash proposal: secrets recovered from
+/// newly-verified unlockeds, and the body to resubmit if the caller
+/// chooses to retry.
+struct VerifiedProposal {
+    secrets: Vec<Secret>,
+    resubmit: SquashBody,
+}
+
+/// What `commit` resolves to: the server may report the payment as still
+/// in flight, or as resolved — carrying whatever secrets the resulting
+/// squash proposal yielded, always including this payment's own secret.
+pub enum CommitOutcome {
+    Pending,
+    Resolved(Vec<Secret>),
+}
+
 #[derive(Debug, Clone, minicbor::Encode, minicbor::Decode)]
 pub struct L2Data {
     #[n(0)]
@@ -132,6 +158,10 @@ pub struct L2Data {
     reg_policy: RegPolicy,
     #[n(3)]
     squash_policy: SquashPolicy,
+    // Type erased bytes representing chached data.
+    // Specifically, last quoted invoice.
+    #[n(4)]
+    cache: Option<Vec<u8>>,
 }
 
 impl L2Data {
@@ -141,6 +171,7 @@ impl L2Data {
             credential: None,
             reg_policy: RegPolicy::default(),
             squash_policy: SquashPolicy::default(),
+            cache: None,
         }
     }
 
@@ -167,6 +198,12 @@ impl L2Data {
     }
     pub fn set_squash_policy(&mut self, policy: SquashPolicy) {
         self.squash_policy = policy;
+    }
+    pub fn cache(&self) -> &Option<Vec<u8>> {
+        &self.cache
+    }
+    pub fn set_cache(&mut self, cache: Vec<u8>) {
+        self.cache = Some(cache);
     }
 }
 
@@ -244,6 +281,7 @@ where
         self.signer.verification_key().into_bytes().into()
     }
 
+    /// Async because it may trigger a registration with the server.
     async fn get_credential(&self) -> std::result::Result<String, Error> {
         let snapshot = self.read_data();
         let needs_reg = match snapshot.credential() {
@@ -348,17 +386,33 @@ where
 
     pub async fn quote(
         &self,
-        body: &wire::auth::pay::bolt11::quote::Body,
+        invoice: &Invoice,
     ) -> std::result::Result<wire::auth::pay::bolt11::quote::Response, Error> {
         let cred = self.get_credential().await?;
-        Ok(self.server.pay_bolt11_quote(&cred, body).await?)
+        let quote = self
+            .server
+            .pay_bolt11_quote(&cred, &invoice.to_string())
+            .await?;
+        self.write_data(|data| data.set_cache(invoice.to_string().to_cbor()));
+        Ok(quote)
     }
 
+    /// Confirm a bolt11 payment. Delegates any resulting squash proposal
+    /// to `handle_squash_proposal`, then checks THIS payment's own
+    /// secret is actually among what came back — that check belongs
+    /// here, not in the shared squash-handling path, since it's specific
+    /// to what `commit` itself is trying to confirm.
     pub async fn commit(
         &self,
-        lock: Lock,
         cheque_proposal: ChequeProposal,
-    ) -> std::result::Result<wire::auth::pay::bolt11::commit::Response, Error> {
+    ) -> std::result::Result<CommitOutcome, Error> {
+        let cache = self.read_data().cache().clone().ok_or(Error::CacheEmpty)?;
+        let invoice_str: String = minicbor::decode(&cache).map_err(|_| Error::CacheCorrupt)?;
+        let invoice = invoice_str
+            .parse::<Invoice>()
+            .map_err(|_| Error::CacheCorrupt)?;
+        let lock = Lock::from(invoice.payment_hash);
+
         let ChequeProposal {
             index,
             amount,
@@ -372,9 +426,26 @@ where
             lock,
         );
         let signature = self.tag_and_sign(&cheque_body).await?;
+        // FIXME :: We should record the the the cheque somewhere persistent.
+        // We know we can override this provided conditions are met.
+        // We know we cannot (safely) sign a cheque with same lock and different index.
         let locked = Locked::new(cheque_body, signature);
         let cred = self.get_credential().await?;
-        Ok(self.server.pay_bolt11_commit(&cred, &locked).await?)
+
+        match self.server.pay_bolt11_commit(&cred, &locked).await? {
+            konduit_wire::auth::pay::common::commit::Status::Pending => Ok(CommitOutcome::Pending),
+            konduit_wire::auth::pay::common::commit::Status::Resolved(squash_proposal) => {
+                // commit's own responsibility: confirm THIS payment's
+                // secret is actually among what came back, not just that
+                // something did. ASSUMED conversion — confirm the real
+                // Secret -> Lock relationship/method.
+                if !secrets.iter().any(|secret| Lock::from(secret) == lock) {
+                    return Err(SquashError::MissingPaymentSecret.into());
+                }
+                let secrets = self.handle_squash_proposal(squash_proposal).await?;
+                Ok(CommitOutcome::Resolved(secrets))
+            }
+        }
     }
 
     pub async fn state(&self) -> std::result::Result<wire::auth::state::Response, Error> {
@@ -382,8 +453,76 @@ where
         Ok(self.server.state(&cred).await?)
     }
 
+    /// Verify one squash proposal (`current` + `unlockeds` + `proposal`)
+    /// against our own signing key: checks `current` is ours, verifies
+    /// each unlocked (rejecting anything older than the currently
+    /// configured `last_received` cutoff, if any), and enforces the
+    /// partial-order invariant (proposed must be comparable to, and no
+    /// greater than, calculated). Reads key/tag/cutoff from `self` —
+    /// callers only ever supply the proposal. Does not retry or
+    /// resubmit — that's `handle_squash_proposal`'s job.
+    fn verify_squash_proposal(
+        &self,
+        proposal: wire::auth::squash::SquashProposal,
+    ) -> std::result::Result<VerifiedProposal, Error> {
+        let verification_key = self.verifying_key();
+        let tag = self.tag();
+        let reject_before = match self.squash_policy() {
+            SquashPolicy::RejectOld { last_received, .. } => Some(last_received),
+            _ => None,
+        };
+
+        let Ok(current) = proposal.current.clone().try_verify(&verification_key, &tag) else {
+            return Err(SquashError::CurrentInvalid.into());
+        };
+        log::info!("currently squashed = {}", proposal.current.amount());
+
+        let mut calculated = current.body().clone();
+        let mut secrets = vec![];
+
+        for unlocked in proposal.unlockeds {
+            if let Some(cutoff) = reject_before {
+                if unlocked.timeout() < cutoff {
+                    log::warn!("rejecting unlocked older than last_received cutoff");
+                    return Err(SquashError::UnlockedOld.into());
+                }
+            }
+            let Ok(unlocked) = unlocked.try_verify(&verification_key, &tag) else {
+                return Err(SquashError::UnlockedInvalid.into());
+            };
+            calculated
+                .squash_unlocked(&unlocked)
+                .map_err(|e| SquashError::Unlocked(e.to_string()))?;
+            secrets.push(unlocked.secret().clone());
+        }
+
+        // Proposed must be comparable, and no greater than calculated.
+        match proposal.proposal.partial_cmp(&calculated) {
+            Some(std::cmp::Ordering::Less) => {
+                // Occurs when lockeds timeout rather than unlock, or the
+                // server simply doesn't claim all owed funds — not unsafe
+                // for the client either way.
+                log::info!("proposed < calculated;");
+            }
+            Some(std::cmp::Ordering::Equal) => {
+                log::info!("proposed == calculated;");
+            }
+            Some(std::cmp::Ordering::Greater) => {
+                return Err(SquashError::OverProposed.into());
+            }
+            None => {
+                return Err(SquashError::Calculated.into());
+            }
+        }
+
+        Ok(VerifiedProposal {
+            secrets,
+            resubmit: proposal.proposal,
+        })
+    }
+
     /// Sign and submit a single squash request — no retry, no
-    /// verification. Building block for `squash` below.
+    /// verification. Building block for `sync` below.
     async fn squash_once(
         &self,
         squash_body: SquashBody,
@@ -395,102 +534,62 @@ where
         Ok(self.server.squash(&cred, &body).await?)
     }
 
-    /// Submit a squash, verifying/retrying per `SquashPolicy`. Returns the
-    /// secrets that appeared in unlockeds.
-    /// These are the proofs that payments were routed.
-    pub async fn squash(&self, squash_body: SquashBody) -> std::result::Result<Vec<Secret>, Error> {
+    /// Single point of entry for handling a squash proposal already in
+    /// hand — from `sync`'s initial submission, or from `commit`'s
+    /// `Resolved` response. Verifies it, and per `SquashPolicy`, retries
+    /// (by resubmitting) until fully resolved. Under
+    /// `SquashPolicy::Manual`, verifies once and returns — resolving
+    /// further is left to the caller.
+    async fn handle_squash_proposal(
+        &self,
+        mut proposal: wire::auth::squash::SquashProposal,
+    ) -> std::result::Result<Vec<Secret>, Error> {
         let policy = self.squash_policy();
-        let verification_key = self.verifying_key();
-        let tag = self.tag();
-
-        let mut retries_left: Option<u8> = match policy {
-            SquashPolicy::None => None,
+        let mut retries_left = match policy {
+            SquashPolicy::Manual => None,
             SquashPolicy::Lenient { retry } => Some(retry),
             SquashPolicy::RejectOld { retry, .. } => Some(retry),
         };
-        let reject_before: Option<Duration> = match policy {
-            SquashPolicy::RejectOld { last_received, .. } => Some(last_received),
-            _ => None,
-        };
 
-        let mut current_body = squash_body;
         let mut secrets = vec![];
 
         loop {
-            match self.squash_once(current_body.clone()).await? {
-                wire::auth::squash::Response::Ok => {
-                    log::info!("nothing left to squash");
-                    return Ok(secrets);
-                }
-                wire::auth::squash::Response::Stale(proposal) => {
-                    if matches!(policy, SquashPolicy::None) {
-                        // No auto-retry configured: hand back what we
-                        // have without attempting verification/resubmit.
-                        return Ok(secrets);
-                    }
+            let verified = self.verify_squash_proposal(proposal)?;
+            secrets.extend(verified.secrets);
 
-                    // 1. Verify the current squash was actually signed by us.
-                    let Ok(current) = proposal.current.clone().try_verify(&verification_key, &tag)
-                    else {
-                        return Err(SquashError::CurrentInvalid.into());
-                    };
-                    log::info!("currently squashed = {}", proposal.current.amount());
+            if matches!(policy, SquashPolicy::Manual) {
+                return Ok(secrets);
+            }
 
-                    let mut calculated = current.body().clone();
+            if matches!(policy, SquashPolicy::RejectOld { .. }) {
+                self.write_data(|data| {
+                    data.set_squash_policy(data.squash_policy().now_received());
+                });
+            }
 
-                    for unlocked in proposal.unlockeds {
-                        if let Some(cutoff) = reject_before {
-                            if unlocked.timeout() < cutoff {
-                                log::warn!("rejecting unlocked older than last_received cutoff");
-                                return Err(SquashError::UnlockedOld.into());
-                            }
-                        }
-                        let Ok(unlocked) = unlocked.try_verify(&verification_key, &tag) else {
-                            return Err(SquashError::UnlockedInvalid.into());
-                        };
-                        calculated
-                            .squash_unlocked(&unlocked)
-                            .map_err(|e| SquashError::Unlocked(e.to_string()))?;
-                        secrets.push(unlocked.secret().clone());
-                    }
+            match &mut retries_left {
+                Some(0) => return Err(SquashError::RetriesExhausted.into()),
+                Some(n) => *n -= 1,
+                None => {}
+            }
 
-                    // The prposed must be comparable, and no greater than calculated.
-                    match proposal.proposal.partial_cmp(&calculated) {
-                        Some(std::cmp::Ordering::Less) => {
-                            // Occurs when lockeds timeout rather than unlock.
-                            // Also if server doesn't use all owed funds,
-                            // which is possible, and for client, not unsafe.
-                            log::info!("proposed < calculated;");
-                        }
-                        Some(std::cmp::Ordering::Equal) => {
-                            // No cheques timeout.
-                            log::info!("proposed == calculated;");
-                        }
-                        Some(std::cmp::Ordering::Greater) => {
-                            // Client and server disagree in an unsafe way
-                            // wrt client.
-                            return Err(SquashError::OverProposed.into());
-                        }
-                        None => {
-                            // Client and server disagree in unresolvable way.
-                            return Err(SquashError::Calculated.into());
-                        }
-                    }
+            match self.squash_once(verified.resubmit).await? {
+                wire::auth::squash::Response::Ok => return Ok(secrets),
+                wire::auth::squash::Response::Stale(next) => proposal = next,
+            }
+        }
+    }
 
-                    if matches!(policy, SquashPolicy::RejectOld { .. }) {
-                        self.write_data(|data| {
-                            data.set_squash_policy(data.squash_policy().now_received());
-                        });
-                    }
-                    match &mut retries_left {
-                        Some(0) => return Err(SquashError::RetriesExhausted.into()),
-                        Some(n) => *n -= 1,
-                        None => {}
-                    }
-
-                    // Resubmit the server's proposal on the next iteration.
-                    current_body = proposal.proposal;
-                }
+    /// Submit a squash starting from `body` (defaults to
+    /// `SquashBody::zero()` if not given), then resolve per
+    /// `SquashPolicy` via `handle_squash_proposal`. Returns the secrets
+    /// recovered from unlockeds — proofs that payments were routed.
+    pub async fn sync(&self, body: Option<SquashBody>) -> std::result::Result<Vec<Secret>, Error> {
+        let body = body.unwrap_or_else(SquashBody::zero);
+        match self.squash_once(body).await? {
+            wire::auth::squash::Response::Ok => Ok(vec![]),
+            wire::auth::squash::Response::Stale(proposal) => {
+                self.handle_squash_proposal(proposal).await
             }
         }
     }
