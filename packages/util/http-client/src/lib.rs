@@ -11,13 +11,13 @@ pub mod header_policy;
 pub use header_policy::HeaderPolicy;
 
 mod transport;
-pub use transport::Transport as HttpTransport;
+pub use transport::Transport;
+
+pub mod client;
+pub use client::Client;
 
 mod request_builder;
 pub use request_builder::RequestBuilder;
-
-mod client;
-pub use client::{Client as HttpClient, ClientError};
 
 mod codec;
 pub use codec::{Decoder, Encoder};

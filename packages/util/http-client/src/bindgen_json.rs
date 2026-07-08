@@ -1,12 +1,12 @@
 use crate::JsonCodec;
 use crate::bindgen::{js_err, make_get_request};
 use crate::prelude::*;
-use crate::{GlooTransport, HttpClient, HttpTransport};
+use crate::{Client, GlooTransport, Transport};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct JsonClient {
-    inner: HttpClient<GlooTransport, JsonCodec>,
+    inner: Client<GlooTransport, JsonCodec>,
 }
 
 #[wasm_bindgen]
@@ -15,7 +15,7 @@ impl JsonClient {
     pub fn new(base_url: String, timeout_ms: Option<u32>) -> Self {
         let timeout = timeout_ms.map(|ms| web_time::Duration::from_millis(ms as u64));
         Self {
-            inner: HttpClient::new(GlooTransport::new(timeout), JsonCodec, base_url),
+            inner: Client::new(GlooTransport::new(timeout), JsonCodec, base_url),
         }
     }
 

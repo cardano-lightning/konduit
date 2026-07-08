@@ -1,7 +1,9 @@
+use core::cmp::Ordering;
+
 use serde::{Deserialize, Serialize};
 use std::cmp;
 
-use crate::{ChequeBody, Indexes, IndexesError};
+use crate::{ChequeBody, Indexes, IndexesError, Unlocked, Verified};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum SquashBodyError {
@@ -23,7 +25,46 @@ pub struct SquashBody {
     exclude: Indexes,
 }
 
+impl PartialOrd for SquashBody {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        // `a` is "no riskier than" `b` iff:
+        //   - a claims no more value than b (amount)
+        //   - a's index has advanced at least as far as b's (dropping/
+        //     excluding expired cheques implicitly is the safe direction)
+        //   - every exclusion `a` makes *within b's known range* (indices
+        //     <= b.index) is also an exclusion `b` already made — a can't
+        //     retroactively exclude something b already counted as
+        //     included. Exclusions past b's range are unconstrained,
+        //     since b never had an opinion about indices it hadn't
+        //     reached yet.
+        fn no_riskier_than(a: &SquashBody, b: &SquashBody) -> bool {
+            a.amount <= b.amount
+                && a.index >= b.index
+                && a.exclude
+                    .0
+                    .iter()
+                    .filter(|&&idx| idx <= b.index)
+                    .all(|idx| b.exclude.0.contains(idx))
+        }
+
+        match (no_riskier_than(self, other), no_riskier_than(other, self)) {
+            (true, true) => Some(Ordering::Equal),
+            (true, false) => Some(Ordering::Less),
+            (false, true) => Some(Ordering::Greater),
+            (false, false) => None,
+        }
+    }
+}
+
 impl SquashBody {
+    pub fn zero() -> Self {
+        Self {
+            amount: 0,
+            index: 0,
+            exclude: Indexes::empty(),
+        }
+    }
+
     pub fn index(&self) -> u64 {
         self.index
     }
@@ -56,6 +97,13 @@ impl SquashBody {
             index,
             exclude,
         }
+    }
+
+    pub fn squash_unlocked(
+        &mut self,
+        unlocked: &Unlocked<Verified>,
+    ) -> Result<(), SquashBodyError> {
+        self.squash(unlocked.index(), unlocked.amount())
     }
 
     /// Only squash what has been verified.

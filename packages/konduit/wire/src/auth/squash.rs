@@ -9,7 +9,7 @@ pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 #[serde(transparent)]
 #[cbor(transparent)]
-pub struct Body(#[n(0)] Squash);
+pub struct Body(#[n(0)] pub Squash);
 
 // Into
 impl From<Body> for Squash {

@@ -5,18 +5,18 @@ use cardano_sdk::{
     Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, Transaction,
     VerificationKey, cbor::ToCbor, transaction::state,
 };
-use http_client::{HttpTransport, JsonCodec};
+use http_client::{JsonCodec, Transport};
 use std::collections::BTreeMap;
 
-pub type HttpClient<T> = http_client::HttpClient<T, JsonCodec>;
+pub type HttpClient<T> = http_client::Client<T, JsonCodec>;
 
-/// A facade to a remote Cardano connector, abstracted over an HttpClient.
-pub struct Connector<Http: HttpTransport> {
+/// A facade to a remote Cardano connector, abstracted over an http_client::Client.
+pub struct Connector<Http: Transport> {
     http_client: HttpClient<Http>,
     network: Network,
 }
 
-impl<Http: HttpTransport> Connector<Http>
+impl<Http: Transport> Connector<Http>
 where
     Http::Error: Into<anyhow::Error>,
 {
@@ -68,7 +68,7 @@ where
 
 // -------------------------------------------------------- CardanoConnector Trait
 
-impl<Http: HttpTransport> CardanoConnector for Connector<Http>
+impl<Http: Transport> CardanoConnector for Connector<Http>
 where
     Http::Error: Into<anyhow::Error>,
 {

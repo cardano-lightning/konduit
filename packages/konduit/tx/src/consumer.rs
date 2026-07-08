@@ -1,7 +1,6 @@
 use crate::{Bounds, ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script};
 use cardano_sdk::{
-    Address, NetworkId, Transaction, VerificationKey, address::kind,
-    transaction::state::ReadyForSigning,
+    Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
 use konduit_data::{Constants, Duration, Stage, Tag, VerifyingKey};
 use std::collections::BTreeMap;
@@ -29,13 +28,17 @@ pub enum Intent {
     Close,
 }
 
-fn verifying_key_address(network_id: NetworkId, vk: VerifyingKey) -> Address<kind::Shelley> {
-    VerificationKey::from(<[u8; 32]>::from(vk)).to_address(network_id)
+pub fn verifying_key_eq(verifying: &VerifyingKey, verification: &VerificationKey) -> bool {
+    verifying.as_ref() == verification.as_ref()
+}
+
+pub fn to_verifying_key(verification: &VerificationKey) -> VerifyingKey {
+    <[u8; 32]>::from(verification.clone()).into()
 }
 
 pub fn tx(
     network_parameters: &NetworkParameters,
-    wallet: &VerifyingKey,
+    wallet: &VerificationKey,
     opens: Vec<OpenIntent>,
     intents: BTreeMap<Tag, Intent>,
     utxos: &Utxos,
@@ -43,12 +46,13 @@ pub fn tx(
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let reference_utxo = find_reference_script(utxos);
 
-    let change_address = verifying_key_address(network_parameters.network_id, wallet.clone());
+    let change_address = wallet.to_address(network_parameters.network_id);
+    let my_key = |vk: &VerifyingKey| verifying_key_eq(vk, &wallet);
 
     let consumer_channels = utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
-        .filter(|u| u.data().constants().add_vkey == *wallet);
+        .filter(|u| my_key(&u.data().constants().add_vkey));
 
     let steppeds = consumer_channels
         .filter_map(|u| match u.data().stage() {
@@ -72,11 +76,11 @@ pub fn tx(
 
     let opens = opens
         .into_iter()
-        .map(|o| crate::Open::new(o.amount, o.constant(*wallet), None))
+        .map(|o| crate::Open::new(o.amount, o.constant(to_verifying_key(wallet)), None))
         .collect::<Vec<_>>();
 
     let wallet_address: Address<kind::Any> =
-        verifying_key_address(network_parameters.network_id, wallet.clone()).into();
+        wallet.to_address(network_parameters.network_id).into();
 
     let fuel = utxos
         .iter()

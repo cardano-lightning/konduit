@@ -1,12 +1,12 @@
 use crate::CborCodec;
 use crate::bindgen::{js_err, make_get_request};
 use crate::prelude::*;
-use crate::{GlooTransport, HttpClient, HttpTransport};
+use crate::{Client, GlooTransport, Transport};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct CborClient {
-    inner: HttpClient<GlooTransport, CborCodec>,
+    inner: Client<GlooTransport, CborCodec>,
 }
 
 #[wasm_bindgen]
@@ -15,7 +15,7 @@ impl CborClient {
     pub fn new(base_url: String, timeout_ms: Option<u32>) -> Self {
         let timeout = timeout_ms.map(|ms| web_time::Duration::from_millis(ms as u64));
         Self {
-            inner: HttpClient::new(GlooTransport::new(timeout), CborCodec, base_url),
+            inner: Client::new(GlooTransport::new(timeout), CborCodec, base_url),
         }
     }
 

@@ -1,6 +1,10 @@
 // Protocol Constants
 
 pub const MAX_UNSQUASHED: usize = 10;
+
+/// FIXME :: This should not be enforced here.
+/// Consumer can safely construct "unsafe" squashes under sensible conditions.
+/// Only Adaptor needs to enforce this. They should do so downstream.
 pub const MAX_EXCLUDE_LENGTH: usize = 10;
 
 // On-chain datatypes

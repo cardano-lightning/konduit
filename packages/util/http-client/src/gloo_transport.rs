@@ -1,4 +1,4 @@
-use crate::HttpTransport;
+use crate::Transport;
 use crate::prelude::*;
 use core::future::Future;
 
@@ -46,7 +46,7 @@ impl Default for GlooTransport {
     }
 }
 
-impl HttpTransport for GlooTransport {
+impl Transport for GlooTransport {
     type Error = GlooTransportError;
 
     fn transport(

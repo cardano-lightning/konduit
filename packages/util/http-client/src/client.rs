@@ -1,5 +1,4 @@
-use crate::{Decoder, Encoder, HeaderPolicy, prelude::*, url};
-use crate::{HttpTransport, RequestBuilder};
+use crate::{Decoder, Encoder, HeaderPolicy, RequestBuilder, Transport, prelude::*, url};
 
 use core::fmt::Debug;
 
@@ -10,7 +9,7 @@ pub struct Client<T, C> {
     pub(crate) policies: Vec<Box<dyn HeaderPolicy>>,
 }
 
-impl<T: HttpTransport, C> Client<T, C> {
+impl<T: Transport, C> Client<T, C> {
     pub fn new(transport: T, codec: C, base_url: String) -> Self {
         Self {
             transport,
@@ -33,12 +32,19 @@ impl<T: HttpTransport, C> Client<T, C> {
         RequestBuilder::new(self, method, path)
     }
 
+    pub fn decode<Res>(&self, bytes: &[u8]) -> std::result::Result<Res, C::Error>
+    where
+        C: Decoder<Res>,
+    {
+        self.codec.decode(bytes)
+    }
+
     // ---- CONVENIENCE METHODS ----------------------------------------
 
     pub async fn get<Res>(
         &self,
         path: &str,
-    ) -> Result<Res, ClientError<T::Error, <C as Encoder<()>>::Error, <C as Decoder<Res>>::Error>>
+    ) -> Result<Res, Error<T::Error, <C as Encoder<()>>::Error, <C as Decoder<Res>>::Error>>
     where
         C: Encoder<()> + Decoder<Res>,
     {
@@ -51,7 +57,7 @@ impl<T: HttpTransport, C> Client<T, C> {
         &self,
         path: &str,
         headers: &[(&str, &str)],
-    ) -> Result<Res, ClientError<T::Error, <C as Encoder<()>>::Error, <C as Decoder<Res>>::Error>>
+    ) -> Result<Res, Error<T::Error, <C as Encoder<()>>::Error, <C as Decoder<Res>>::Error>>
     where
         C: Encoder<()> + Decoder<Res>,
     {
@@ -70,7 +76,7 @@ impl<T: HttpTransport, C> Client<T, C> {
         &self,
         path: &str,
         body: &Req,
-    ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
+    ) -> Result<Res, Error<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
     where
         C: Encoder<Req> + Decoder<Res>,
     {
@@ -84,7 +90,7 @@ impl<T: HttpTransport, C> Client<T, C> {
         path: &str,
         headers: &[(&str, &str)],
         body: &Req,
-    ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
+    ) -> Result<Res, Error<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
     where
         C: Encoder<Req> + Decoder<Res>,
     {
@@ -101,7 +107,7 @@ impl<T: HttpTransport, C> Client<T, C> {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ClientError<TErr: Debug, EncErr: Debug, DecErr: Debug> {
+pub enum Error<TErr: Debug, EncErr: Debug, DecErr: Debug> {
     #[error("Transport error: {0:?}")]
     Transport(TErr),
     #[error("Encode error: {0:?}")]
@@ -110,8 +116,9 @@ pub enum ClientError<TErr: Debug, EncErr: Debug, DecErr: Debug> {
     Decode(DecErr),
     #[error("HTTP construction error: {0}")]
     Http(#[from] http::Error),
-    #[error("Server returned status error: {0}")]
-    Status(http::StatusCode),
-    #[error("Builder was corrupted or already consumed")]
-    BuilderCorrupted,
+    #[error("Server returned status error: {status}")]
+    Response {
+        status: http::StatusCode,
+        body: Vec<u8>,
+    },
 }

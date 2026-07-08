@@ -1,19 +1,23 @@
-use crate::{ClientError, Decoder, Encoder, HttpClient, HttpTransport};
+use crate::{Client, Decoder, Encoder, Transport, client};
 use crate::{HeaderPolicy, prelude::*, url};
 
+/// Collapses the three-way `client::Error` generic so call sites don't have
+/// to spell out `T::Error` / `Encoder`/`Decoder` associated errors each time.
+pub type SendResult<T, C, Req, Res> = Result<
+    Res,
+    client::Error<<T as Transport>::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>,
+>;
+
 pub struct RequestBuilder<'a, T, C> {
-    client: &'a HttpClient<T, C>,
-    // Option allows us to `take` in `map_builder` without offending the type or borrow checker.
-    builder: Option<http::request::Builder>,
+    client: &'a Client<T, C>,
+    builder: http::request::Builder,
 }
 
-impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
-    pub fn new(client: &'a HttpClient<T, C>, method: http::Method, path: &str) -> Self {
-        let builder = Some(
-            http::Request::builder()
-                .method(method)
-                .uri(url::clean_join(&client.base_url, path)),
-        );
+impl<'a, T: Transport, C> RequestBuilder<'a, T, C> {
+    pub fn new(client: &'a Client<T, C>, method: http::Method, path: &str) -> Self {
+        let builder = http::Request::builder()
+            .method(method)
+            .uri(url::clean_join(&client.base_url, path));
         Self { client, builder }
     }
 
@@ -23,16 +27,11 @@ impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
     where
         F: FnOnce(http::request::Builder) -> http::request::Builder,
     {
-        if let Some(b) = self.builder.take() {
-            self.builder = Some(f(b));
-        }
+        self.builder = f(self.builder);
         self
     }
 
-    pub async fn send<Req, Res>(
-        self,
-        body: Option<&Req>,
-    ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
+    pub async fn send<Req, Res>(self, body: Option<&Req>) -> SendResult<T, C, Req, Res>
     where
         C: Encoder<Req> + Decoder<Res>,
     {
@@ -40,10 +39,7 @@ impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
         self.send_with_policies(body, policies).await
     }
 
-    pub async fn send_no_policy<Req, Res>(
-        self,
-        body: Option<&Req>,
-    ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
+    pub async fn send_no_policy<Req, Res>(self, body: Option<&Req>) -> SendResult<T, C, Req, Res>
     where
         C: Encoder<Req> + Decoder<Res>,
     {
@@ -51,45 +47,42 @@ impl<'a, T: HttpTransport, C> RequestBuilder<'a, T, C> {
     }
 
     async fn send_with_policies<Req, Res>(
-        mut self,
+        self,
         body: Option<&Req>,
         policies: &[Box<dyn HeaderPolicy>],
-    ) -> Result<Res, ClientError<T::Error, <C as Encoder<Req>>::Error, <C as Decoder<Res>>::Error>>
+    ) -> SendResult<T, C, Req, Res>
     where
         C: Encoder<Req> + Decoder<Res>,
     {
-        let mut native_builder = self.builder.take().ok_or(ClientError::BuilderCorrupted)?;
-
+        let mut builder = self.builder;
         let payload = match body {
-            Some(b) => self.client.codec.encode(b).map_err(ClientError::Encode)?,
+            Some(b) => self.client.codec.encode(b).map_err(client::Error::Encode)?,
             None => Vec::new(),
         };
-
-        let body_slice = if payload.is_empty() {
-            None
-        } else {
-            Some(payload.as_slice())
-        };
+        let body_slice = (!payload.is_empty()).then(|| payload.as_slice());
 
         for policy in policies {
-            native_builder = policy.apply(native_builder, body_slice);
+            builder = policy.apply(builder, body_slice);
         }
 
-        let request = native_builder.body(payload)?;
+        let request = builder.body(payload)?;
         let response = self
             .client
             .transport
             .transport(request)
             .await
-            .map_err(ClientError::Transport)?;
+            .map_err(client::Error::Transport)?;
 
         if !response.status().is_success() {
-            return Err(ClientError::Status(response.status()));
+            return Err(client::Error::Response {
+                status: response.status(),
+                body: response.body().clone(),
+            });
         }
 
         self.client
             .codec
             .decode(response.body())
-            .map_err(ClientError::Decode)
+            .map_err(client::Error::Decode)
     }
 }

@@ -20,7 +20,7 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = []
+default = ["json", "cbor"]
 cli = [
   "dep:clap",
   "dep:dotenvy",
@@ -28,21 +28,29 @@ cli = [
   # "dep:serde_json",
   "dep:tokio",
 ]
+json = ["dep:serde_json", "http-client/json"]
+cbor = ["dep:minicbor", "http-client/cbor"]
 
 [dependencies]
 anyhow.workspace = true
 bln-sdk.workspace = true
 cardano-connector.workspace = true
 cardano-sdk.workspace = true
-http-client = { workspace = true, features = ["json"] }
+clap = { workspace = true, features = ["env"], optional = true }
+cobbl3 = { workspace = true }
+dotenvy = { workspace = true, optional = true }
+http-client = { workspace = true }
+http.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
+konduit-wire.workspace = true
 log.workspace = true
-web-time.workspace = true
-# -F cli
-clap = { workspace = true, features = ["env"], optional = true }
-dotenvy = { workspace = true, optional = true }
+minicbor = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror.workspace = true
 tokio = { workspace = true, optional = true }
+web-time.workspace = true
+problem-details.workspace = true
 # FIXME :: Disabled to appease cargo machete, and while main is broken
 # serde_json = { workspace = true, optional = true }
 # http-client-native = { workspace = true, optional = true }

@@ -36,7 +36,7 @@ impl Unlocked<Unverified> {
         verification_key: &VerifyingKey,
         tag: &Tag,
     ) -> Result<Unlocked<Verified>, VerifyError> {
-        if verification_key.verify(&tag.data(&self.body), &self.signature) {
+        if verification_key.verify(&tag.data(self.body().locked()), &self.signature) {
             Ok(Unlocked::new_with_state(self.body, self.signature))
         } else {
             Err(VerifyError::InvalidSignature)

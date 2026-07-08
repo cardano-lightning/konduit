@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
-use crate::HttpTransport;
+use crate::Transport;
+
 use core::future::Future;
 use reqwest::Client;
 use web_time::Duration;
@@ -31,7 +32,7 @@ impl ReqwestTransport {
     }
 }
 
-impl HttpTransport for ReqwestTransport {
+impl Transport for ReqwestTransport {
     type Error = NativeTransportError;
 
     fn transport(
