@@ -1,11 +1,15 @@
 use std::cmp;
 
 use konduit_data::Duration;
+use minicbor::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 use web_time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
 pub struct Bounds {
+    #[n(0)]
     pub lower: Option<Duration>,
+    #[n(1)]
     pub upper: Option<Duration>,
 }
 

@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 clap = ["dep:clap"]
-serde = ["dep:serde"]
+serde = ["dep:serde", "dep:serde_with"]
 test-utils = ["dep:proptest"]
 
 [dependencies]
@@ -38,6 +38,7 @@ uplc.workspace = true
 clap = { workspace = true, optional = true }
 # -F serde
 serde = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
 # -F test-utils
 proptest = { workspace = true, optional = true }
 

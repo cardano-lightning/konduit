@@ -1,8 +1,8 @@
 use cardano_sdk::{Input, Output};
-use konduit_data::{Duration, Secret};
+use konduit_data::{Cheque, Duration, Secret, Squash, Unlocked, Verified};
 
 use crate::{
-    Receipt, StepError, SteppedUtxo, Utxo,
+    StepError, SteppedUtxo, Utxo,
     channel::{self, Channel, SteppedElseChannel},
     utxo_and::UtxoAnd,
 };
@@ -37,10 +37,6 @@ impl TryFrom<Utxo> for ChannelUtxo {
 type SteppedElseChannelUtxo = Result<SteppedUtxo, (Box<ChannelUtxo>, StepError)>;
 
 impl ChannelUtxo {
-    // pub fn possible_steps(&self) -> Vec<PossibleStep> {
-    //     self.data().stage().possible_steps()
-    // }
-
     fn rewrap(utxo: Utxo, result: SteppedElseChannel) -> SteppedElseChannelUtxo {
         match result {
             Ok(data) => Ok(UtxoAnd::new(utxo, data)),
@@ -53,10 +49,15 @@ impl ChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().add(amount))
     }
 
-    pub fn sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
+    pub fn sub(
+        self,
+        squash: Squash<Verified>,
+        unlockeds: Vec<Unlocked<Verified>>,
+        upper: &Duration,
+    ) -> SteppedElseChannelUtxo {
         Self::rewrap(
             self.utxo().to_owned(),
-            self.data().to_owned().sub(receipt, upper),
+            self.data().to_owned().sub(squash, unlockeds, upper),
         )
     }
 
@@ -68,28 +69,22 @@ impl ChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().elapse(lower))
     }
 
-    pub fn respond(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
-        Self::rewrap(
-            self.utxo().to_owned(),
-            self.data().to_owned().respond(receipt, upper),
-        )
-    }
-
-    pub fn unlock(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
-        Self::rewrap(
-            self.utxo().to_owned(),
-            self.data().to_owned().unlock(receipt, upper),
-        )
-    }
-
-    pub fn unlock_with_secrets(
+    pub fn respond(
         self,
-        secrets: Vec<Secret>,
+        squash: Squash<Verified>,
+        cheques: Vec<Cheque<Verified>>,
         upper: &Duration,
     ) -> SteppedElseChannelUtxo {
         Self::rewrap(
             self.utxo().to_owned(),
-            self.data().to_owned().unlock_with_secrets(secrets, upper),
+            self.data().to_owned().respond(squash, cheques, upper),
+        )
+    }
+
+    pub fn unlock(self, secrets: Vec<Secret>, upper: &Duration) -> SteppedElseChannelUtxo {
+        Self::rewrap(
+            self.utxo().to_owned(),
+            self.data().to_owned().unlock(secrets, upper),
         )
     }
 
@@ -99,12 +94,5 @@ impl ChannelUtxo {
 
     pub fn end(self, lower: Option<&Duration>) -> SteppedElseChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().end(lower))
-    }
-
-    pub fn any_sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
-        Self::rewrap(
-            self.utxo().to_owned(),
-            self.data().to_owned().any_sub(receipt, upper),
-        )
     }
 }

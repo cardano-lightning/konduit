@@ -5,7 +5,7 @@ pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
 pub type Body = Locked;
 
-pub type Response = crate::auth::pay::common::commit::ChequeProposal;
+pub type Response = crate::auth::pay::common::commit::Status;
 
 pub type Error = crate::auth::Error<DomainError>;
 

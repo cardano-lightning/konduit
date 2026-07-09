@@ -294,16 +294,31 @@ impl Transaction<state::ReadyForSigning> {
         sign: impl FnOnce(Hash<32>) -> (VerificationKeyLike, SignatureLike),
     ) -> &mut Self {
         let (verification_key, signature) = sign(self.id());
+        self.add_witness(verification_key, signature)
+    }
 
+    /// Attach a single witness directly, given an already-computed
+    /// verification key and signature — no callback involved. This is
+    /// the primitive `sign_with` itself is built on; it also covers
+    /// cases where the signature was obtained elsewhere ahead of time
+    /// (e.g. an async signer awaited before this call, or a signature
+    /// relayed from an external source), where a synchronous callback
+    /// isn't the right shape.
+    pub fn add_witness<
+        VerificationKeyLike: Borrow<VerificationKey>,
+        SignatureLike: Borrow<Signature>,
+    >(
+        &mut self,
+        verification_key: VerificationKeyLike,
+        signature: SignatureLike,
+    ) -> &mut Self {
         let public_key = pallas::Bytes::from(Vec::from(<[u8; VerificationKey::SIZE]>::from(
             *(verification_key.borrow()),
         )));
-
         let witness = pallas::VKeyWitness {
             vkey: public_key.clone(),
             signature: pallas::Bytes::from(Vec::from(signature.borrow().as_ref())),
         };
-
         if let Some(signatures) = mem::take(&mut self.inner.transaction_witness_set.vkeywitness) {
             // Unfortunately, we don't have a proper set at the Pallas level. We also don't want to
             // use an intermediate BTreeSet here because it would arbitrarily change the order of
@@ -324,7 +339,6 @@ impl Transaction<state::ReadyForSigning> {
             self.inner.transaction_witness_set.vkeywitness =
                 pallas::NonEmptySet::from_vec(vec![witness]);
         }
-
         self
     }
 }

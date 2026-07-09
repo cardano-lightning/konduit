@@ -12,7 +12,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-cardano-sdk.workspace = true
+cardano-sdk = { workspace = true, features = ["serde"] }
 hex.workspace = true
 konduit-data.workspace = true
 minicbor.workspace = true

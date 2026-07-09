@@ -209,7 +209,7 @@ impl L2Data {
 
 pub struct L2<Http: Transport, C, S: Signer> {
     server: Arc<server::Client<Http, C>>,
-    signer: S,
+    signer: Arc<S>,
     data: RwLock<L2Data>,
 }
 
@@ -218,7 +218,7 @@ where
     Http: Transport,
     S: Signer,
 {
-    pub fn new(server: Arc<server::Client<Http, C>>, signer: S, tag: Tag) -> Self {
+    pub fn new(server: Arc<server::Client<Http, C>>, signer: Arc<S>, tag: Tag) -> Self {
         Self {
             server,
             signer,
@@ -226,7 +226,7 @@ where
         }
     }
 
-    pub fn from_data(server: Arc<server::Client<Http, C>>, signer: S, data: L2Data) -> Self {
+    pub fn from_data(server: Arc<server::Client<Http, C>>, signer: Arc<S>, data: L2Data) -> Self {
         Self {
             server,
             signer,
@@ -435,6 +435,7 @@ where
         match self.server.pay_bolt11_commit(&cred, &locked).await? {
             konduit_wire::auth::pay::common::commit::Status::Pending => Ok(CommitOutcome::Pending),
             konduit_wire::auth::pay::common::commit::Status::Resolved(squash_proposal) => {
+                let secrets = self.handle_squash_proposal(squash_proposal).await?;
                 // commit's own responsibility: confirm THIS payment's
                 // secret is actually among what came back, not just that
                 // something did. ASSUMED conversion — confirm the real
@@ -442,7 +443,6 @@ where
                 if !secrets.iter().any(|secret| Lock::from(secret) == lock) {
                     return Err(SquashError::MissingPaymentSecret.into());
                 }
-                let secrets = self.handle_squash_proposal(squash_proposal).await?;
                 Ok(CommitOutcome::Resolved(secrets))
             }
         }

@@ -7,6 +7,8 @@ use crate::{
     pallas, pretty,
 };
 use anyhow::anyhow;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::{fmt, sync::Arc};
 
 pub mod change_strategy;
@@ -29,11 +31,21 @@ const MIN_LOVELACE_VALUE_CBOR_OVERHEAD: u64 = 160;
 ///
 /// <div class="warning">Native scripts as reference scripts aren't yet supported. Only Plutus
 /// scripts are.</div>
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Output {
     address: Address<Any>,
     value: DeferredValue,
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing_if = "Option::is_none", default)
+    )]
     datum: Option<Arc<Datum>>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing_if = "Option::is_none", default)
+    )]
     script: Option<Arc<PlutusScript>>,
 }
 

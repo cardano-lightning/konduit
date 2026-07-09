@@ -51,6 +51,7 @@ thiserror.workspace = true
 tokio = { workspace = true, optional = true }
 web-time.workspace = true
 problem-details.workspace = true
+serde.workspace = true
 # FIXME :: Disabled to appease cargo machete, and while main is broken
 # serde_json = { workspace = true, optional = true }
 # http-client-native = { workspace = true, optional = true }
