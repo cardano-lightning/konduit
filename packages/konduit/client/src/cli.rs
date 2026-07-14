@@ -1,5 +1,5 @@
-use crate::core::{SigningKey, SquashStatus, Tag};
 use clap::Parser;
+use konduit_data::{SigningKey, Tag};
 use std::{io, io::Write};
 
 #[derive(Debug, Parser)]

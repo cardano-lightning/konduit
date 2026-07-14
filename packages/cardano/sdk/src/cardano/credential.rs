@@ -2,9 +2,13 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Hash, VerificationKey, WithNetworkId, cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+use crate::{Hash, VerificationKey, WithNetworkId, cbor, pallas};
 
 /// A wrapper around the _blake2b-224_ hash digest of a key or script.
 ///
@@ -21,6 +25,7 @@ use std::{fmt, str::FromStr};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Credential(#[n(0)] pallas::StakeCredential);
 
 impl fmt::Display for Credential {

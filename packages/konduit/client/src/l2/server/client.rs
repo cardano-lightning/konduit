@@ -10,20 +10,16 @@ use problem_details::ProblemDetailBody;
 
 use konduit_wire as wire;
 
-mod codec;
-pub use codec::Codec;
-
-mod error;
-pub use error::Error;
+use super::{Codec, Config, Error, codec};
 
 pub struct Client<T, C> {
     inner: http_client::Client<T, C>,
 }
 
 impl<T: Transport, C> Client<T, C> {
-    pub fn new(transport: T, codec: C, base_url: String) -> Self {
+    pub fn new(transport: T, codec: C, base_url: &str) -> Self {
         Self {
-            inner: http_client::Client::new(transport, codec, base_url),
+            inner: http_client::Client::new(transport, codec, base_url.to_owned()),
         }
     }
 
@@ -160,5 +156,12 @@ impl<T: Transport, C: Codec> Client<T, C> {
     ) -> Result<wire::auth::pay::bolt11::commit::Response, Error> {
         self.post_auth(credential, wire::auth::pay::bolt11::commit::PATH, body)
             .await
+    }
+}
+
+impl<T: Transport> Client<T, codec::Any> {
+    pub fn from_config(transport: T, config: &Config) -> Self {
+        let codec = codec::Any::from(config.codec());
+        Self::new(transport, codec, config.base_url())
     }
 }

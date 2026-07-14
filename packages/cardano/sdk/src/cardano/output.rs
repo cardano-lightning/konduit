@@ -2,14 +2,16 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use anyhow::anyhow;
+use std::{fmt, sync::Arc};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use crate::{
     Address, Datum, Hash, PlutusData, PlutusScript, Value, address::kind::*, cbor, cbor::ToCbor,
     pallas, pretty,
 };
-use anyhow::anyhow;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-use std::{fmt, sync::Arc};
 
 pub mod change_strategy;
 
@@ -76,6 +78,7 @@ impl fmt::Display for Output {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 enum DeferredValue {
     Minimum(Arc<Value<u64>>),
     Explicit(Arc<Value<u64>>),

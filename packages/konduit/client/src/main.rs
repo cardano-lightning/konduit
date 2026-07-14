@@ -1,5 +1,5 @@
 use clap::Parser;
-use konduit_client::cli::Cli;
+// use konduit_client::cli::Cli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -11,8 +11,8 @@ async fn main() -> anyhow::Result<()> {
         })?;
     }
 
-    let cli = Cli::parse();
-    println!("{:?}", cli);
+    // let cli = Cli::parse();
+    // println!("{:?}", cli);
 
     // let client = Adaptor::new(&cli.server_url, cli.signing_key, cli.tag).await?;
 

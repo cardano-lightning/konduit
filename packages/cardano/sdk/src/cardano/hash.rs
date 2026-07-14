@@ -6,6 +6,8 @@ use crate::{cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 /// A _blake2b_ hash digest; typically 28 or 32 bytes long.
 ///
 /// There are several ways to construct [`Self`], but fundamentally:
@@ -200,6 +202,99 @@ impl std::ops::Deref for Hash32 {
     type Target = Hash<32>;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+// ------------------------------------------------------------ serde
+#[cfg(feature = "serde")]
+impl<const SIZE: usize> Serialize for Hash<SIZE> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let bytes: &[u8] = self.0.as_ref(); // adjust if pallas::Hash exposes bytes differently
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(bytes))
+        } else {
+            serializer.serialize_bytes(bytes)
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, const SIZE: usize> Deserialize<'de> for Hash<SIZE> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct HashVisitor<const SIZE: usize>;
+
+        impl<'de, const SIZE: usize> serde::de::Visitor<'de> for HashVisitor<SIZE> {
+            type Value = Hash<SIZE>;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "a {SIZE}-byte hash, as hex string or raw bytes")
+            }
+
+            // human-readable path (JSON, etc.)
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let bytes = hex::decode(v).map_err(E::custom)?;
+                bytes_to_hash::<SIZE, E>(&bytes)
+            }
+
+            // binary path (CBOR, bincode, etc.)
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                bytes_to_hash::<SIZE, E>(v)
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut bytes = Vec::with_capacity(SIZE);
+                while let Some(b) = seq.next_element()? {
+                    bytes.push(b);
+                }
+                bytes_to_hash::<SIZE, A::Error>(&bytes)
+            }
+        }
+
+        fn bytes_to_hash<const SIZE: usize, E: serde::de::Error>(
+            bytes: &[u8],
+        ) -> Result<Hash<SIZE>, E> {
+            let arr: [u8; SIZE] = bytes
+                .try_into()
+                .map_err(|_| E::invalid_length(bytes.len(), &format!("{SIZE} bytes").as_str()))?;
+            Ok(Hash(pallas::Hash::from(arr))) // adjust constructor to match pallas::Hash's actual API
+        }
+
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(HashVisitor::<SIZE>)
+        } else {
+            deserializer.deserialize_bytes(HashVisitor::<SIZE>)
+        }
+    }
+}
+
+// ------------------------------------------------------------ tests
+
+#[cfg(all(test, feature = "serde"))]
+mod tests_serde {
+    use super::*;
+
+    #[test]
+    fn json_roundtrip_hex() {
+        let h: Hash<4> = Hash(pallas::Hash::from([0xde, 0xad, 0xbe, 0xef]));
+        let json = serde_json::to_string(&h).unwrap();
+        assert_eq!(json, r#""deadbeef""#);
+        let back: Hash<4> = serde_json::from_str(&json).unwrap();
+        assert_eq!(h, back);
     }
 }
 

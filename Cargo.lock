@@ -773,6 +773,7 @@ dependencies = [
  "proptest",
  "rand_core 0.6.4",
  "serde",
+ "serde_json",
  "serde_with",
  "uplc",
 ]
@@ -2388,6 +2389,7 @@ dependencies = [
  "proptest-derive",
  "serde",
  "serde_json",
+ "serde_with",
  "thiserror 2.0.18",
  "tokio",
  "web-time",

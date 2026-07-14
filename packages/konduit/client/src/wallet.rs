@@ -15,34 +15,24 @@ pub trait Wallet {
 
     fn network_id(&self) -> impl Future<Output = Result<NetworkId, Self::Error>>;
 
-    /// `api.getChangeAddress()`. The wallet's preferred address for
-    /// receiving change — callers should not derive this themselves from
-    /// a signing key, since a wallet's actual change address may differ
-    /// (script-based, different index, etc.).
+    /// `api.getChangeAddress()`. The wallet's preferred address for receiving change
     fn change_address(&self) -> impl Future<Output = Result<Address<kind::Any>, Self::Error>>;
 
-    /// `api.getUtxos(amount, paginate)`. Pagination is not honored.
-    /// `amount`, when given, IS honored via `Value::cover` — utxos are
-    /// selected to cover the requested value (lovelace and every native
-    /// asset), returning `None` if the wallet cannot satisfy it.
+    /// `api.getUtxos(value, paginate)`. Pagination is not honored.
+    /// `value`, when given, IS honored and returns `None` if the wallet cannot satisfy value
     fn utxos(
         &self,
-        amount: Option<Value<u64>>,
+        value: Option<Value<u64>>,
     ) -> impl Future<Output = Result<Option<BTreeMap<Input, Output>>, Self::Error>>;
 
     /// `api.signTx(tx, partialSign: true)`. Always requests a partial
-    /// signature — this crate has no scenario where the wallet is
-    /// expected to be a transaction's only signer, so the flag isn't
-    /// exposed as a parameter.
+    /// signature
     fn sign_tx(
         &self,
         tx: &Transaction<state::ReadyForSigning>,
     ) -> impl Future<Output = Result<(VerificationKey, Signature), Self::Error>>;
 
-    /// `api.submitTx(tx: cbor<transaction>): Promise<hash32>`. Named
-    /// `submit` rather than `submit_tx` — this trait has already
-    /// diverged from CIP-30 naming elsewhere, so there's no reason to
-    /// keep the redundant `_tx` here.
+    /// Analogue to `api.submitTx(tx: cbor<transaction>): Promise<hash32>`.
     fn submit(
         &self,
         tx: &Transaction<state::ReadyForSigning>,
@@ -100,7 +90,7 @@ impl<Connector: CardanoConnector, S: Signer> Wallet for Embedded<Connector, S> {
 
     async fn utxos(
         &self,
-        amount: Option<Value<u64>>,
+        value: Option<Value<u64>>,
     ) -> Result<Option<BTreeMap<Input, Output>>, Self::Error> {
         let vk = self.signer.verification_key();
         let payment_credential = Credential::from(&vk);
@@ -112,7 +102,7 @@ impl<Connector: CardanoConnector, S: Signer> Wallet for Embedded<Connector, S> {
 
         let all_utxos = utxo_batch::utxo_batch(&*self.connector, &pairs).await?;
 
-        let Some(amount) = amount else {
+        let Some(value) = value else {
             return Ok(if all_utxos.is_empty() {
                 None
             } else {
@@ -122,7 +112,7 @@ impl<Connector: CardanoConnector, S: Signer> Wallet for Embedded<Connector, S> {
 
         let utxos: Vec<(Input, Output)> = all_utxos.into_iter().collect();
 
-        let Some(selection) = Value::cover(&amount, &utxos, |(_, output)| output.value()) else {
+        let Some(selection) = Value::cover(&value, &utxos, |(_, output)| output.value()) else {
             return Ok(None);
         };
 

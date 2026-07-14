@@ -19,6 +19,14 @@ impl Duration {
     pub fn from_millis(millis: u64) -> Self {
         Self(time::Duration::from_millis(millis))
     }
+
+    pub fn saturating_add(self, rhs: Self) -> Self {
+        Duration(self.0.saturating_add(rhs.0))
+    }
+
+    pub fn saturating_sub(self, rhs: Self) -> Self {
+        Duration(self.0.saturating_sub(rhs.0))
+    }
 }
 
 impl fmt::Display for Duration {

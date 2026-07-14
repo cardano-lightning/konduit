@@ -6,9 +6,13 @@ use crate::cbor;
 use anyhow::anyhow;
 use std::fmt;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// The version of a Plutus program, defining available semantic and builtins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[cbor(index_only)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PlutusVersion {
     #[n(0)]
     V1,

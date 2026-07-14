@@ -2,21 +2,34 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Hash, cbor, pallas, pretty};
 use anyhow::anyhow;
 use num::{CheckedSub, Num, Zero};
 use std::{
     collections::{BTreeMap, btree_map},
-    fmt,
-    fmt::Display,
+    fmt::{self, Display},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "serde")]
+use serde_with::serde_as;
+
+use crate::{Hash, cbor, pallas, pretty};
+
 /// A multi-asset value, generic in its asset quantities.
 ///
 /// `Quantity` will typically be instantiated to either `u64` or `i64` depending on whether it is
 /// represent an output value, or a mint value respectively.
-pub struct Value<Quantity>(u64, BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>>);
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde_as, derive(Serialize, Deserialize))]
+pub struct Value<Quantity>(
+    u64,
+    #[cfg_attr(
+        feature = "serde",
+        serde_as(as = "BTreeMap<_, BTreeMap<serde_with::hex::Hex, _>>")
+    )]
+    BTreeMap<Hash<28>, BTreeMap<Vec<u8>, Quantity>>,
+);
 
 impl<Quantity: fmt::Debug + Copy> fmt::Display for Value<Quantity> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

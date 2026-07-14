@@ -18,6 +18,9 @@ use std::{
     ops::Deref,
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 mod builder;
 pub mod state;
 pub use state::IsTransactionBodyState;
@@ -34,6 +37,8 @@ pub use state::IsTransactionBodyState;
 ///
 /// Note that [`Self::build`] is currently the only way by which one can get a transaction in the
 /// [`state::ReadyForSigning`].
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Transaction<State: IsTransactionBodyState> {
     inner: pallas::Tx,
     change_strategy: State::ChangeStrategy,

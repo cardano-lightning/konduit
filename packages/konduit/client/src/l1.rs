@@ -1,25 +1,38 @@
+use cardano_connector::CardanoConnector;
+use cardano_sdk::{
+    Address, Hash, NetworkId, Output, Transaction, address::kind,
+    transaction::state::ReadyForSigning,
+};
+use konduit_data::{Stage, Tag, VerifyingKey};
+use konduit_tx::{
+    Channel, ChannelUtxo, NetworkParameters, Open, SteppedUtxos, find_reference_script,
+};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Arc, RwLock};
+
 use crate::{
     Signer, Wallet,
     core::{Credential, Input, KONDUIT_VALIDATOR},
+    time, utxo_batch,
 };
-use cardano_connector::CardanoConnector;
-use cardano_sdk::{
-    Address, Hash, NetworkId, Transaction, address::kind, transaction::state::ReadyForSigning,
-};
-use konduit_data::{Constants, Duration, Stage, Tag, VerifyingKey};
-use konduit_tx::{
-    Bounds, ChannelUtxo, NetworkParameters, Open, SteppedUtxos, Utxo, Utxos, find_reference_script,
-};
-use minicbor::{Decode, Encode};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::{Arc, RwLock},
-};
+
+mod config;
+pub use config::{BoundsPolicy, Config, SubmitPolicy};
+
+mod directives;
+pub use directives::{Directives, Intent, OpenIntent};
+
+mod cache;
+pub use cache::Cache;
+
+mod state;
+pub use state::State;
 
 /// FIXME :: Use #[from].
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("time: {0}")]
+    Time(#[from] time::Error),
     #[error("nothing to do: no channels to open and no konduit utxos found")]
     NothingToDo,
     #[error("no reference script utxo cached: call pull_reference_script first")]
@@ -29,7 +42,7 @@ pub enum Error {
     #[error("no change address cached: call pull_change_address first")]
     NoChangeAddress,
     #[error("no tx cached: call build first")]
-    NoCachedTx,
+    NoStatedTx,
     #[error("connector error: {0}")]
     Connector(String),
     #[error("wallet error: {0}")]
@@ -40,140 +53,11 @@ pub enum Error {
     Signing(String),
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
-pub enum SubmitPolicy {
-    #[n(0)]
-    ViaConnector,
-    #[n(1)]
-    ViaWallet,
-}
-
-impl Default for SubmitPolicy {
-    fn default() -> Self {
-        SubmitPolicy::ViaConnector
-    }
-}
-
-/// How far into the future the transaction's upper validity bound is set,
-/// anchored to the moment `build` runs. Defaults to 20 minutes.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
-pub struct BoundsPolicy {
-    #[n(0)]
-    window: Duration,
-}
-
-impl BoundsPolicy {
-    pub fn new(window: Duration) -> Self {
-        Self { window }
-    }
-    pub fn window(&self) -> Duration {
-        self.window
-    }
-    pub fn set_window(&mut self, window: Duration) {
-        self.window = window;
-    }
-
-    // ASSUMPTION: `Bounds` exposes a general "upper bound `window` from
-    // now, no lower bound" constructor under some name — this mirrors
-    // whatever `Bounds::twenty_mins()` did internally. Swap for the real
-    // API name.
-    fn to_bounds(self) -> Bounds {
-        Bounds::upper_in(self.window)
-    }
-}
-
-impl Default for BoundsPolicy {
-    fn default() -> Self {
-        Self {
-            window: Duration::from_secs(20 * 60),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Encode, Decode)]
-struct Policies {
-    #[n(0)]
-    submit: SubmitPolicy,
-    #[n(1)]
-    bounds: BoundsPolicy,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-pub struct OpenIntent {
-    #[n(0)]
-    pub tag: Tag,
-    #[n(1)]
-    pub sub_vkey: VerifyingKey,
-    #[n(2)]
-    pub close_period: Duration,
-    #[n(3)]
-    pub amount: u64,
-}
-
-impl OpenIntent {
-    fn constants(self, add_vkey: VerifyingKey) -> Constants {
-        Constants {
-            tag: self.tag,
-            add_vkey,
-            sub_vkey: self.sub_vkey,
-            close_period: self.close_period,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-pub enum Intent {
-    #[n(0)]
-    Add(#[n(0)] u64),
-    #[n(1)]
-    Close,
-}
-
-/// Data pulled from chain/wallet, plus pending intent. Read together as
-/// one snapshot in `build`. Staleness is the caller's responsibility:
-/// call the `pull_*` methods (or `pull`) as often as your staleness
-/// tolerance requires.
-///
-/// NOTE: most fields are runtime cache, re-populated by `pull_*` — confirm
-/// every field type actually supports encode/decode before relying on
-/// (de)serializing this whole struct (`Transaction<ReadyForSigning>` in
-/// particular may not implement these derives; if not, store its raw CBOR
-/// bytes instead and reconstruct on read).
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
-struct Cache {
-    #[n(0)]
-    network_parameters: Option<NetworkParameters>,
-    #[n(1)]
-    utxo_script_ref: Option<Utxo>,
-    #[n(2)]
-    delegations: Vec<Credential>,
-    #[n(3)]
-    channels: Vec<ChannelUtxo>,
-    #[n(4)]
-    utxos_wallet: Utxos,
-    #[n(5)]
-    opens: Vec<OpenIntent>,
-    #[n(6)]
-    intents: BTreeMap<Input, Intent>,
-    #[n(7)]
-    change_address: Option<Address<kind::Any>>,
-    #[n(8)]
-    tx: Option<Transaction<ReadyForSigning>>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
-pub struct L1State {
-    #[n(0)]
-    cache: Cache,
-    #[n(1)]
-    policies: Policies,
-}
-
 pub struct L1<Connector: CardanoConnector, S: Signer, W: Wallet> {
     connector: Arc<Connector>,
     signer: Arc<S>,
     wallet: Arc<W>,
-    state: RwLock<L1State>,
+    state: RwLock<State>,
 }
 
 impl<Connector, S, W> L1<Connector, S, W>
@@ -187,7 +71,7 @@ where
             connector,
             signer,
             wallet,
-            state: RwLock::new(L1State::default()),
+            state: RwLock::new(State::default()),
         }
     }
 
@@ -195,7 +79,7 @@ where
         connector: Arc<Connector>,
         signer: Arc<S>,
         wallet: Arc<W>,
-        state: L1State,
+        state: State,
     ) -> Self {
         L1 {
             connector,
@@ -205,15 +89,15 @@ where
         }
     }
 
-    fn read_state<T>(&self, f: impl FnOnce(&L1State) -> T) -> T {
+    fn read_state<T>(&self, f: impl FnOnce(&State) -> T) -> T {
         f(&self.state.read().unwrap_or_else(|p| p.into_inner()))
     }
 
-    fn write_state(&self, f: impl FnOnce(&mut L1State)) {
-        f(&mut self.state.write().unwrap_or_else(|p| p.into_inner()));
+    fn write_state<T>(&self, f: impl FnOnce(&mut State) -> T) -> T {
+        f(&mut self.state.write().unwrap_or_else(|p| p.into_inner()))
     }
 
-    pub fn state(&self) -> L1State {
+    pub fn state(&self) -> State {
         self.read_state(Clone::clone)
     }
 
@@ -225,36 +109,40 @@ where
     // -- Policies --
 
     pub fn submit_policy(&self) -> SubmitPolicy {
-        self.read_state(|s| s.policies.submit)
+        self.read_state(State::submit_policy)
     }
     pub fn set_submit_policy(&self, policy: SubmitPolicy) {
-        self.write_state(|s| s.policies.submit = policy);
+        self.write_state(|c| c.set_submit_policy(policy));
     }
     pub fn bounds_policy(&self) -> BoundsPolicy {
-        self.read_state(|s| s.policies.bounds)
+        self.read_state(State::bounds_policy)
     }
     pub fn set_bounds_policy(&self, policy: BoundsPolicy) {
-        self.write_state(|s| s.policies.bounds = policy);
+        self.write_state(|c| c.set_bounds_policy(policy));
+    }
+    pub fn autocomplete(&self) -> bool {
+        self.read_state(State::autocomplete)
+    }
+    pub fn set_autocomplete(&self, autocomplete: bool) {
+        self.write_state(|c| c.set_autocomplete(autocomplete));
     }
 
     // -- Delegations, mutated piecewise --
 
     pub fn add_delegation(&self, credential: Credential) {
-        self.write_state(|s| s.cache.delegations.push(credential));
+        self.write_state(|c| c.add_delegation(credential));
     }
     pub fn remove_delegation(&self, credential: &Credential) {
-        self.write_state(|s| s.cache.delegations.retain(|c| c != credential));
+        self.write_state(|c| c.remove_delegation(credential));
     }
     pub fn delegations(&self) -> Vec<Credential> {
-        self.read_state(|s| s.cache.delegations.clone())
+        self.read_state(State::delegations)
     }
 
     // -- Intent, mutated piecewise --
 
     pub fn add_intent(&self, input: Input, intent: Intent) {
-        self.write_state(|s| {
-            s.cache.intents.insert(input, intent);
-        });
+        self.write_state(|c| c.add_intent(input, intent));
     }
 
     /// Resolve `tag` against currently cached channels and set `intent`
@@ -262,55 +150,64 @@ where
     /// is strongly discouraged but not an error: if more than one channel
     /// matches, `intent` is applied to all of them and a warning is logged.
     pub fn add_intent_by_tag(&self, tag: &Tag, intent: Intent) {
-        let inputs: Vec<Input> = self.read_state(|s| {
-            s.cache
-                .channels
-                .iter()
-                .filter(|u| u.data().constants().tag == *tag)
-                .map(|u| u.utxo().0.clone())
-                .collect()
-        });
-
-        if inputs.len() > 1 {
+        let matched = self.write_state(|c| c.add_intent_by_tag(tag, intent));
+        if matched > 1 {
             log::warn!(
-                "tag {tag:?} matches {} channels; applying intent to all of them — \
+                "tag {tag:?} matches {matched} channels; applying intent to all of them — \
                  reusing a tag across channels is strongly discouraged",
-                inputs.len()
             );
         }
-
-        self.write_state(|s| {
-            for input in &inputs {
-                s.cache.intents.insert(input.clone(), intent.clone());
-            }
-        });
     }
 
     pub fn remove_intent(&self, input: &Input) {
-        self.write_state(|s| {
-            s.cache.intents.remove(input);
-        });
+        self.write_state(|c| c.remove_intent(input));
     }
     pub fn clear_intents(&self) {
-        self.write_state(|s| s.cache.intents.clear());
+        self.write_state(State::clear_intents);
     }
+
+    // -- Force: manual expire/elapse/end overrides. Only consulted when
+    // `autocomplete` is `false` — ignored entirely when it's `true`.
+    // FIXME: not yet consulted in `build` at all — see `State::autocomplete`.
+
+    pub fn force(&self) -> BTreeSet<Input> {
+        self.read_state(State::force)
+    }
+    pub fn add_force(&self, input: Input) {
+        self.write_state(|c| c.add_force(input));
+    }
+    pub fn remove_force(&self, input: &Input) {
+        self.write_state(|c| c.remove_force(input));
+    }
+    pub fn clear_force(&self) {
+        self.write_state(State::clear_force);
+    }
+
+    // -- Opens, keyed by tag, mutated piecewise --
+
     pub fn add_open(&self, open: OpenIntent) {
-        self.write_state(|s| s.cache.opens.push(open));
+        self.write_state(|c| c.add_open(open));
+    }
+    pub fn remove_open(&self, tag: &Tag) {
+        self.write_state(|c| c.remove_open(tag));
     }
     pub fn clear_opens(&self) {
-        self.write_state(|s| s.cache.opens.clear());
+        self.write_state(State::clear_opens);
+    }
+    pub fn opens(&self) -> BTreeMap<Tag, OpenIntent> {
+        self.read_state(State::opens)
     }
 
     // -- Change address: cached, settable directly or pulled from the wallet --
 
     pub fn change_address(&self) -> Option<Address<kind::Any>> {
-        self.read_state(|s| s.cache.change_address.clone())
+        self.read_state(State::change_address)
     }
 
     /// Set the change address directly, bypassing the wallet. Overwritten
-    /// the next time `pull_change_address` or `pull` runs.
+    /// the next time `pull_change_address` or `pull_all` runs.
     pub fn set_change_address(&self, address: Address<kind::Any>) {
-        self.write_state(|s| s.cache.change_address = Some(address));
+        self.write_state(|c| c.set_change_address(address));
     }
 
     /// Pull the wallet's preferred change address (CIP-30
@@ -321,14 +218,13 @@ where
             .change_address()
             .await
             .map_err(|e| Error::Wallet(e.to_string()))?;
-        self.write_state(|s| s.cache.change_address = Some(change_address));
+        self.write_state(|c| c.set_change_address(change_address));
         Ok(())
     }
 
     // -- Chain state, pulled explicitly, each on its own cadence --
 
-    /// Pull the (singular) konduit reference script utxo. Changes only
-    /// when the script deployment moves.
+    /// Pull the (singular) konduit reference script utxo. Changes rarely.
     pub async fn pull_reference_script(
         &self,
         reference_script_address: &Address<kind::Shelley>,
@@ -341,8 +237,9 @@ where
             )
             .await
             .map_err(|e| Error::Connector(e.to_string()))?;
-        let utxo_script_ref = find_reference_script(&utxos_at_script).cloned();
-        self.write_state(|s| s.cache.utxo_script_ref = utxo_script_ref);
+        let reference_script =
+            find_reference_script(&utxos_at_script).ok_or(Error::NoReferenceScript)?;
+        self.write_state(|c| c.set_reference_script(reference_script));
         Ok(())
     }
 
@@ -357,13 +254,8 @@ where
                 .await
                 .map_err(|e| Error::Connector(e.to_string()))?,
         };
-        self.write_state(|s| s.cache.network_parameters = Some(network_parameters));
+        self.write_state(|c| c.set_network_parameters(network_parameters));
         Ok(())
-    }
-
-    fn network_parameters(&self) -> Result<NetworkParameters, Error> {
-        self.read_state(|s| s.cache.network_parameters.clone())
-            .ok_or(Error::NoNetworkParameters)
     }
 
     /// Pull konduit channel utxos across the base credential and every
@@ -371,9 +263,9 @@ where
     /// and keeping only those matching this consumer's `add_vkey`. Also
     /// pulls wallet fuel utxos, since both feed the same tx-building step
     /// and share this cadence. Any pending intent whose channel no
-    /// longer exists is dropped; the rest are kept.
+    /// longer exists is dropped by `State::set_tip`; the rest are kept.
     pub async fn pull_channels(&self) -> Result<(), Error> {
-        let delegations = self.read_state(|s| s.cache.delegations.clone());
+        let delegations = self.read_state(State::delegations);
         let add_vkey = self.verifying_key();
 
         let payment_credential = KONDUIT_VALIDATOR.to_credential();
@@ -384,32 +276,35 @@ where
                 .map(|d| (payment_credential.clone(), Some(d))),
         );
 
-        let utxos_konduit = utxo_batch(&*self.connector, &pairs)
+        let utxos_konduit = utxo_batch::utxo_batch(&*self.connector, &pairs)
             .await
             .map_err(|e| Error::Connector(e.to_string()))?;
 
-        let channels: Vec<ChannelUtxo> = utxos_konduit
+        // NOTE: assumes `ChannelUtxo::utxo()` returns a `(Input, Output)`
+        // pair by value/clone and `ChannelUtxo::data()` returns `&Channel`
+        // — verify against `konduit_tx`.
+        let channels: BTreeMap<Input, (Output, Channel)> = utxos_konduit
             .into_iter()
             .filter_map(|u| ChannelUtxo::try_from(u).ok())
             .filter(|u| u.data().constants().add_vkey == add_vkey)
+            .map(|u| {
+                let (input, output) = u.utxo().clone();
+                let channel = u.data().clone();
+                (input, (output, channel))
+            })
             .collect();
 
-        let live_inputs: BTreeSet<Input> = channels.iter().map(|u| u.utxo().0.clone()).collect();
-
-        let utxos_wallet = self
+        // NOTE: assumes `Utxos: Into<BTreeMap<Input, Output>>` — verify
+        // against `konduit_tx`.
+        let wallet_utxos: BTreeMap<Input, Output> = self
             .wallet
             .utxos(None)
             .await
             .map_err(|e| Error::Wallet(e.to_string()))?
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into();
 
-        self.write_state(|s| {
-            s.cache.channels = channels;
-            s.cache.utxos_wallet = utxos_wallet;
-            s.cache
-                .intents
-                .retain(|input, _| live_inputs.contains(input));
-        });
+        self.write_state(|c| c.set_tip(wallet_utxos, channels));
         Ok(())
     }
 
@@ -429,43 +324,47 @@ where
     }
 
     /// Currently cached channels belonging to this consumer.
-    pub fn channels(&self) -> Vec<ChannelUtxo> {
-        self.read_state(|s| s.cache.channels.clone())
+    pub fn channels(&self) -> BTreeMap<Input, (Output, Channel)> {
+        self.read_state(State::channels)
     }
 
     /// Currently cached, most recently built tx, if any.
     pub fn cached_tx(&self) -> Option<Transaction<ReadyForSigning>> {
-        self.read_state(|s| s.cache.tx.clone())
+        self.read_state(State::built_tx)
     }
 
     /// Purely functional assembly from cached state — no I/O, no signing.
     fn build(&self) -> Result<Transaction<ReadyForSigning>, Error> {
-        let network_parameters = self.network_parameters()?;
+        let bounds = self.bounds_policy().to_bounds(&time::now()?);
         let add_vkey = self.verifying_key();
-        let bounds = self.bounds_policy().to_bounds();
 
-        let (utxo_script_ref, change_address, channels, utxos_wallet, opens, intents) = self
-            .read_state(|s| {
-                (
-                    s.cache.utxo_script_ref.clone(),
-                    s.cache.change_address.clone(),
-                    s.cache.channels.clone(),
-                    s.cache.utxos_wallet.clone(),
-                    s.cache.opens.clone(),
-                    s.cache.intents.clone(),
-                )
-            });
-        let utxo_script_ref = utxo_script_ref.ok_or(Error::NoReferenceScript)?;
+        let state::BuildInputs {
+            network_parameters,
+            reference_script,
+            change_address,
+            wallet_utxos,
+            channels,
+            opens,
+            intents,
+        } = self.read_state(State::build_inputs);
+
+        let network_parameters = network_parameters.ok_or(Error::NoNetworkParameters)?;
+        let reference_script = reference_script.ok_or(Error::NoReferenceScript)?;
         let change_address = change_address.ok_or(Error::NoChangeAddress)?;
 
         if opens.is_empty() && channels.is_empty() {
             return Err(Error::NothingToDo);
         }
 
+        // NOTE: assumes `ChannelUtxo: From<(Utxo, Channel)>` (or an
+        // equivalent constructor) to rebuild a steppable `ChannelUtxo`
+        // from its cached parts — verify against `konduit_tx`, the exact
+        // constructor name may differ.
         let steppeds = channels
             .into_iter()
-            .filter_map(|u| {
-                let input = u.utxo().0.clone();
+            .filter_map(|(input, (output, channel))| {
+                // FIXME :: this use of ChannelUtxo is misguided.
+                let u = ChannelUtxo::try_from((input.clone(), output)).unwrap();
                 match u.data().stage() {
                     Stage::Opened(..) => match intents.get(&input)? {
                         Intent::Add(amount) => u.add(*amount).ok(),
@@ -487,26 +386,30 @@ where
         let steppeds = SteppedUtxos::from(steppeds);
 
         let opens = opens
-            .into_iter()
+            .into_values()
             .map(|o| Open::new(o.amount, o.constants(add_vkey), None))
             .collect::<Vec<_>>();
 
+        // NOTE: assumes `BTreeMap<Input, Output>: Into<Utxos>` for the
+        // reverse conversion expected by `konduit_tx::tx::tx` — verify.
+        let wallet_utxos: konduit_tx::Utxos = wallet_utxos.into();
+
         konduit_tx::tx::tx(
             &network_parameters,
-            Some(&utxo_script_ref),
+            Some(&reference_script),
             change_address,
             steppeds,
             opens,
-            &utxos_wallet,
+            &wallet_utxos,
         )
         .map_err(|e| Error::Tx(e.to_string()))
     }
 
     /// Sign a freshly `build`-ed tx: wallet always signs, plus the
     /// consumer key when distinct from the wallet and channels are being
-    /// spent. Caches the result.
+    /// spent. States the result.
     pub async fn sign(&self) -> Result<Transaction<ReadyForSigning>, Error> {
-        let channels_spent = !self.read_state(|s| s.cache.channels.is_empty());
+        let channels_spent = !self.read_state(State::channels).is_empty();
         let mut tx = self.build()?;
 
         // The wallet always signs: it's the party actually spending its
@@ -529,13 +432,13 @@ where
             tx.add_witness(self.signer.verification_key(), consumer_signature);
         }
 
-        self.write_state(|s| s.cache.tx = Some(tx.clone()));
+        self.write_state(|c| c.set_built_tx(tx.clone()));
         Ok(tx)
     }
 
     /// Submit the cached tx (from the most recent `sign`) per `submit_policy`.
     pub async fn submit(&self) -> Result<Hash<32>, Error> {
-        let tx = self.cached_tx().ok_or(Error::NoCachedTx)?;
+        let tx = self.cached_tx().ok_or(Error::NoStatedTx)?;
 
         match self.submit_policy() {
             SubmitPolicy::ViaConnector => {

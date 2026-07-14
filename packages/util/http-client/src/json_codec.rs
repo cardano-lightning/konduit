@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use crate::{Decoder, Encoder};
 
+#[derive(Debug, Clone)]
 pub struct JsonCodec;
 
 impl<T: serde::Serialize> Encoder<T> for JsonCodec {
