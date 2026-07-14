@@ -5,22 +5,22 @@ use cardano_sdk::{
     Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, Transaction,
     VerificationKey, cbor::ToCbor, transaction::state,
 };
-use http_client::{HttpTransport, JsonCodec};
+use http_client::{Transport, codec};
 use std::collections::BTreeMap;
 
-pub type HttpClient<T> = http_client::HttpClient<T, JsonCodec>;
+pub type Client<Transport> = http_client::Client<Transport, codec::Json>;
 
-/// A facade to a remote Cardano connector, abstracted over an HttpClient.
-pub struct Connector<Http: HttpTransport> {
-    http_client: HttpClient<Http>,
+/// A facade to a remote Cardano connector, abstracted over an Client.
+pub struct Connector<T: Transport> {
+    http_client: Client<T>,
     network: Network,
 }
 
-impl<Http: HttpTransport> Connector<Http>
+impl<T: Transport> Connector<T>
 where
-    Http::Error: Into<anyhow::Error>,
+    T::Error: Into<anyhow::Error>,
 {
-    pub async fn new(http_client: HttpClient<Http>) -> anyhow::Result<Self> {
+    pub async fn new(http_client: Client<T>) -> anyhow::Result<Self> {
         let network = Network::try_from(
             http_client
                 .get::<endpoints::network::Response>("/network")
@@ -68,9 +68,9 @@ where
 
 // -------------------------------------------------------- CardanoConnector Trait
 
-impl<Http: HttpTransport> CardanoConnector for Connector<Http>
+impl<T: Transport> CardanoConnector for Connector<T>
 where
-    Http::Error: Into<anyhow::Error>,
+    T::Error: Into<anyhow::Error>,
 {
     fn network(&self) -> Network {
         self.network

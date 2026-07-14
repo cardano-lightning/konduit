@@ -9,14 +9,28 @@ pub mod wasm;
 pub(crate) use prelude::*;
 #[allow(unused_imports)]
 mod prelude {
-    pub use cardano_connector::CardanoConnector;
-    pub use cardano_connector_client::Connector;
-    pub use http_client::{GlooTransport, HttpTransport, JsonCodec};
-    pub type HttpClient = http_client::HttpClient<GlooTransport, JsonCodec>;
+    use http_client::{codec, transport};
+
+    pub type HttpClient = http_client::Client<transport::Gloo, codec::Json>;
     pub fn new_http_client(url: &str) -> HttpClient {
-        HttpClient::new(GlooTransport::default(), JsonCodec, url.to_string())
+        HttpClient::new(transport::Gloo::default(), codec::Json, url.to_string())
     }
-    pub use konduit_client::{Adaptor, l1, l2};
+
+    pub type Adaptor = konduit_client::Adaptor<transport::Gloo>;
+
+    pub type Connector = cardano_connector_client::Connector<transport::Gloo>;
+
+    pub mod l1 {
+        #[cfg(feature = "black-box-api")]
+        pub type Client<'a> = konduit_client::l1::Client<'a, super::Connector>;
+    }
+
+    pub mod l2 {
+        use http_client::transport;
+        #[cfg(feature = "black-box-api")]
+        pub type Client<'a> = konduit_client::l2::Client<'a, transport::Gloo>;
+    }
+
     pub mod core {
         pub use bln_sdk::types::Invoice;
         pub use cardano_connector_client::types::*;

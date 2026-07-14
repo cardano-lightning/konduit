@@ -25,7 +25,7 @@ base64.workspace = true
 bln-sdk.workspace = true
 futures.workspace = true
 hex.workspace = true
-reqwest = { workspace = true, features = ["json", "stream"] }
+reqwest = { workspace = true, features = ["json", "query", "stream"] }
 serde.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["hex", "base64"] }

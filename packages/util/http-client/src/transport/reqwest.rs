@@ -1,6 +1,4 @@
-use crate::prelude::*;
-
-use crate::HttpTransport;
+use crate::Transport;
 use core::future::Future;
 use reqwest::Client;
 use web_time::Duration;
@@ -10,7 +8,7 @@ pub struct ReqwestTransport {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum NativeTransportError {
+pub enum ReqwestTransportError {
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
@@ -31,8 +29,8 @@ impl ReqwestTransport {
     }
 }
 
-impl HttpTransport for ReqwestTransport {
-    type Error = NativeTransportError;
+impl Transport for ReqwestTransport {
+    type Error = ReqwestTransportError;
 
     fn transport(
         &self,

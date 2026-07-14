@@ -3,24 +3,22 @@ use crate::core::{
     Tag, TxHelp,
 };
 use anyhow::anyhow;
-use http_client::{HttpTransport, JsonCodec};
+use http_client::{HeaderPolicy, Transport, codec, header_policy};
 
-const HEADER_CONTENT_TYPE_JSON: (&str, &str) = ("Content-Type", "application/json");
-const HEADER_CONTENT_TYPE_CBOR: (&str, &str) = ("Content-Type", "application/cbor");
 const HEADER_NAME_KEYTAG: &str = "KONDUIT";
 
-pub type HttpClient<T> = http_client::HttpClient<T, JsonCodec>;
+pub type Client<T> = http_client::Client<T, codec::Json>;
 
-pub struct Adaptor<H: HttpTransport> {
-    http_client: HttpClient<H>,
+pub struct Adaptor<T: Transport> {
+    http_client: Client<T>,
     info: AdaptorInfo<()>,
     keytag: Option<(Tag, String)>,
 }
 
 /// An isomorphic Adaptor (a.k.a konduit-server) client that selectively pick a platform-compatible
 /// http client internally. From the outside, it provides the exact same interface.
-impl<H: HttpTransport> Adaptor<H> {
-    pub async fn new(http_client: HttpClient<H>, keytag: Option<&Keytag>) -> anyhow::Result<Self> {
+impl<T: Transport> Adaptor<T> {
+    pub async fn new(http_client: Client<T>, keytag: Option<&Keytag>) -> anyhow::Result<Self> {
         let info = http_client
             .get::<AdaptorInfo<TxHelp>>("/info")
             .await
@@ -37,14 +35,11 @@ impl<H: HttpTransport> Adaptor<H> {
         Ok(adaptor)
     }
 
-    fn with_keytag_header<'a>(
-        &'a self,
-        others: &[(&'static str, &'a str)],
-    ) -> Vec<(&'static str, &'a str)> {
-        let mut headers = Vec::from(others);
+    fn with_keytag_header(&self) -> Vec<Box<dyn HeaderPolicy>> {
+        let mut headers = vec![];
 
         if let Some((_, keytag)) = self.keytag.as_ref() {
-            headers.push((HEADER_NAME_KEYTAG, keytag));
+            headers.push(header_policy::Custom::new(HEADER_NAME_KEYTAG, keytag).boxed());
         }
 
         headers
@@ -71,7 +66,7 @@ impl<H: HttpTransport> Adaptor<H> {
 
     pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
         self.http_client
-            .get_with_headers::<Option<Receipt>>("/ch/receipt", &self.with_keytag_header(&[]))
+            .get_with_headers::<Option<Receipt>>("/ch/receipt", self.with_keytag_header())
             .await
             .map_err(|e| anyhow!(e))
     }
@@ -80,8 +75,8 @@ impl<H: HttpTransport> Adaptor<H> {
         self.http_client
             .post_with_headers::<QuoteBody, Quote>(
                 "/ch/quote",
-                &self.with_keytag_header(&[HEADER_CONTENT_TYPE_JSON]),
                 &QuoteBody::Bolt11(invoice.clone()),
+                self.with_keytag_header(),
             )
             .await
             .map_err(|e| anyhow!(e))
@@ -91,12 +86,12 @@ impl<H: HttpTransport> Adaptor<H> {
         self.http_client
             .post_with_headers::<PayBody, SquashStatus>(
                 "/ch/pay",
-                &self.with_keytag_header(&[HEADER_CONTENT_TYPE_JSON]),
                 &PayBody {
                     cheque_body: locked.body,
                     signature: locked.signature,
                     invoice: invoice.to_string(),
                 },
+                self.with_keytag_header(),
             )
             .await
             .map_err(|e| anyhow!(e))
@@ -109,12 +104,11 @@ impl<H: HttpTransport> Adaptor<H> {
     // we need to fix this elsewhere: the server, and then permit the client to
     // switch between json and cbor.
     pub async fn squash(&self, squash: Squash) -> anyhow::Result<SquashStatus> {
+        let mut headers = self.with_keytag_header();
+        headers.push(header_policy::ContentType::from_encoder::<()>(&codec::Cbor).boxed());
+
         self.http_client
-            .post_with_headers::<Squash, SquashStatus>(
-                "/ch/squash",
-                &self.with_keytag_header(&[HEADER_CONTENT_TYPE_CBOR]),
-                &squash,
-            )
+            .post_with_headers::<Squash, SquashStatus>("/ch/squash", &squash, headers)
             .await
             .map_err(|e| anyhow!(e))
     }

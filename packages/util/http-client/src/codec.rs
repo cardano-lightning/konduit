@@ -1,4 +1,12 @@
-use crate::prelude::*;
+#[cfg(feature = "json")]
+mod json;
+#[cfg(feature = "json")]
+pub use json::JsonCodec as Json;
+
+#[cfg(feature = "cbor")]
+mod cbor;
+#[cfg(feature = "cbor")]
+pub use cbor::CborCodec as Cbor;
 
 pub trait Encoder<T> {
     type Error: core::error::Error + Send + Sync + 'static;

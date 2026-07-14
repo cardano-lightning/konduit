@@ -1,7 +1,5 @@
-use crate::HttpTransport;
-use crate::prelude::*;
+use crate::Transport;
 use core::future::Future;
-
 use futures::{FutureExt as _, select};
 use gloo_net::http::RequestBuilder;
 use gloo_timers::future::TimeoutFuture;
@@ -46,7 +44,7 @@ impl Default for GlooTransport {
     }
 }
 
-impl HttpTransport for GlooTransport {
+impl Transport for GlooTransport {
     type Error = GlooTransportError;
 
     fn transport(

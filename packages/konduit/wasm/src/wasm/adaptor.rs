@@ -1,10 +1,9 @@
 use crate::{new_http_client, wasm, wasm_proxy};
-use http_client::GlooTransport;
 use wasm_bindgen::prelude::*;
 
 wasm_proxy! {
     #[doc = "A Konduit Adaptor."]
-        Adaptor => crate::Adaptor<GlooTransport>
+    Adaptor => crate::Adaptor
 }
 
 #[wasm_bindgen]

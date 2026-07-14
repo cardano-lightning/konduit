@@ -1,4 +1,3 @@
-use crate::prelude::*;
 use crate::{Decoder, Encoder};
 
 pub struct CborCodec;

@@ -6,20 +6,20 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use http_client::HttpTransport;
+use http_client::Transport;
 use web_time::{SystemTime, UNIX_EPOCH};
 
-pub struct Client<'a, Http: HttpTransport> {
-    adaptor: &'a Adaptor<Http>,
+pub struct Client<'a, T: Transport> {
+    adaptor: &'a Adaptor<T>,
     signing_key: &'a SigningKey,
 }
 
-impl<'a, Http> Client<'a, Http>
+impl<'a, T> Client<'a, T>
 where
-    Http: HttpTransport,
-    Http::Error: Into<anyhow::Error>,
+    T: Transport,
+    T::Error: Into<anyhow::Error>,
 {
-    pub fn new(adaptor: &'a Adaptor<Http>, signing_key: &'a SigningKey) -> Self {
+    pub fn new(adaptor: &'a Adaptor<T>, signing_key: &'a SigningKey) -> Self {
         Self {
             adaptor,
             signing_key,

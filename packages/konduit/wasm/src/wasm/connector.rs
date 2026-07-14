@@ -1,12 +1,11 @@
 use crate::{new_http_client, wasm, wasm_proxy};
-use http_client::GlooTransport;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 wasm_proxy! {
     #[derive(Clone)]
     #[doc = "A reference to a Cardano connector."]
-    Connector => Rc<crate::Connector<GlooTransport>>
+    Connector => Rc<crate::Connector>
 }
 
 #[wasm_bindgen]

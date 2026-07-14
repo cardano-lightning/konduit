@@ -1,7 +1,8 @@
-// tests/native.r// tests/native.rs
-use http_client::{CborCodec, HttpClient, JsonCodec, ReqwestTransport, header_policy};
-use wiremock::matchers::{header, header_exists, method};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use http_client::{Client, codec, header_policy, transport};
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{header, header_exists, method},
+};
 
 #[derive(
     Debug, PartialEq, serde::Serialize, serde::Deserialize, minicbor::Encode, minicbor::Decode,
@@ -18,12 +19,8 @@ async fn native_json_roundtrip() {
         .respond_with(ResponseTemplate::new(200).set_body_json(&Foo { x: 42 }))
         .mount(&server)
         .await;
-    let client = HttpClient::new(ReqwestTransport::new(None), JsonCodec, server.uri());
-    let resp: Foo = client
-        .request(http::Method::GET, "/foo")
-        .send::<(), Foo>(None)
-        .await
-        .unwrap();
+    let client = Client::new(transport::Reqwest::new(None), codec::Json, server.uri());
+    let resp: Foo = client.get("/foo").await.unwrap();
     assert_eq!(resp, Foo { x: 42 });
 }
 
@@ -36,45 +33,36 @@ async fn native_cbor_roundtrip() {
         .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/cbor"))
         .mount(&server)
         .await;
-    let client = HttpClient::new(ReqwestTransport::new(None), CborCodec, server.uri());
-    let resp: Foo = client
-        .request(http::Method::GET, "/foo")
-        .map_builder(|b| b.header("ACCEPT", "application/cbor"))
-        .send::<(), Foo>(None)
-        .await
-        .unwrap();
+    let client = Client::new(transport::Reqwest::new(None), codec::Cbor, server.uri());
+    let resp: Foo = client.get("/foo").await.unwrap();
     assert_eq!(resp, Foo { x: 42 });
 }
 
 #[tokio::test]
 async fn native_json_and_cbor_equivalent() {
     let server = MockServer::start().await;
+
     let foo = Foo { x: 42 };
     let cbor_body = minicbor::to_vec(&foo).unwrap();
+
     Mock::given(method("GET"))
         .and(header("Accept", "application/json"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&foo))
         .mount(&server)
         .await;
+
     Mock::given(method("GET"))
         .and(header("Accept", "application/cbor"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(cbor_body, "application/cbor"))
         .mount(&server)
         .await;
-    let json_client = HttpClient::new(ReqwestTransport::new(None), JsonCodec, server.uri())
-        .with_policy(header_policy::ContentNegotiation::from_encoder(&JsonCodec));
-    let cbor_client = HttpClient::new(ReqwestTransport::new(None), CborCodec, server.uri())
-        .with_policy(header_policy::ContentNegotiation::from_encoder(&CborCodec));
-    let json_resp: Foo = json_client
-        .request(http::Method::GET, "/foo")
-        .send::<(), Foo>(None)
-        .await
-        .unwrap();
-    let cbor_resp: Foo = cbor_client
-        .request(http::Method::GET, "/foo")
-        .send::<(), Foo>(None)
-        .await
-        .unwrap();
+
+    let json_client = Client::new(transport::Reqwest::new(None), codec::Json, server.uri());
+    let cbor_client = Client::new(transport::Reqwest::new(None), codec::Cbor, server.uri());
+
+    let json_resp: Foo = json_client.get("/foo").await.unwrap();
+    let cbor_resp: Foo = cbor_client.get("/foo").await.unwrap();
+
     assert_eq!(json_resp, cbor_resp);
 }
 
@@ -88,14 +76,11 @@ async fn policy_sets_content_headers_on_post() {
         .respond_with(ResponseTemplate::new(200).set_body_json(&Foo { x: 1 }))
         .mount(&server)
         .await;
-    let client = HttpClient::new(ReqwestTransport::new(None), JsonCodec, server.uri())
-        .with_policy(header_policy::ContentNegotiation::from_encoder(&JsonCodec))
-        .with_policy(header_policy::ContentLength);
-    let resp: Foo = client
-        .request(http::Method::POST, "/foo")
-        .send::<Foo, Foo>(Some(&Foo { x: 1 }))
-        .await
-        .unwrap();
+
+    let client = Client::new(transport::Reqwest::new(None), codec::Json, server.uri());
+
+    let resp: Foo = client.post("/foo", &Foo { x: 1 }).await.unwrap();
+
     assert_eq!(resp, Foo { x: 1 });
 }
 
@@ -108,13 +93,8 @@ async fn policy_sets_accept_on_get() {
         .respond_with(ResponseTemplate::new(200).set_body_json(&Foo { x: 7 }))
         .mount(&server)
         .await;
-    let client = HttpClient::new(ReqwestTransport::new(None), JsonCodec, server.uri())
-        .with_policy(header_policy::ContentNegotiation::from_encoder(&JsonCodec));
-    let resp: Foo = client
-        .request(http::Method::GET, "/foo")
-        .send::<(), Foo>(None)
-        .await
-        .unwrap();
+    let client = Client::new(transport::Reqwest::new(None), codec::Json, server.uri());
+    let resp: Foo = client.get("/foo").await.unwrap();
     assert_eq!(resp, Foo { x: 7 });
 }
 
@@ -128,12 +108,12 @@ async fn send_no_policy_skips_client_policies() {
         .mount(&server)
         .await;
     // Client has json policy, but we override entirely via send_no_policy + map_builder.
-    let client = HttpClient::new(ReqwestTransport::new(None), JsonCodec, server.uri())
-        .with_policy(header_policy::ContentNegotiation::from_encoder(&JsonCodec));
+    let client = Client::new(transport::Reqwest::new(None), codec::Json, server.uri());
     let resp: Foo = client
-        .request(http::Method::GET, "/foo")
-        .map_builder(|b| b.header("Accept", "application/cbor"))
-        .send_no_policy::<(), Foo>(None)
+        .get_with_headers(
+            "/foo",
+            vec![header_policy::Accept::from_decoder::<()>(&codec::Cbor).boxed()],
+        )
         .await
         .unwrap();
     assert_eq!(resp, Foo { x: 3 });

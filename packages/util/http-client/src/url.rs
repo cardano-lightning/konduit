@@ -1,5 +1,3 @@
-use crate::prelude::*;
-
 pub fn clean_base(base_url: &str) -> &str {
     base_url.strip_suffix('/').unwrap_or(base_url)
 }
