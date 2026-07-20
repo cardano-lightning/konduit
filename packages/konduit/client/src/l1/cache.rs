@@ -8,8 +8,8 @@ use crate::core::Input;
 
 /// Pulled-from-chain state plus anything rebuildable from it: protocol
 /// facts, current wallet/channel state, and the last built (unsigned)
-/// transaction. Fully disposable — re-pull or rebuild replaces anything
-/// lost here.
+/// transaction.
+/// Fully disposable re-pull or rebuild replaces anything lost here.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
 pub struct Cache {
     #[n(0)]
@@ -55,10 +55,9 @@ impl Cache {
     }
 
     /// Replace the cached tip. Returns the set of inputs that no longer
-    /// have a live channel, so the caller (`State::set_tip`) can drop
-    /// any directives referring to them — keeping that reconciliation at
-    /// the `State` level, since `Cache` alone doesn't know about
-    /// `Directives`.
+    /// have a live channel, so the caller (`L1::set_tip`) can drop any
+    /// directives referring to them — keeping that reconciliation at the
+    /// `L1` level, since `Cache` alone doesn't know about `Directives`.
     pub fn set_tip(
         &mut self,
         wallet_utxos: BTreeMap<Input, Output>,

@@ -96,9 +96,9 @@ impl Directives {
     }
 
     /// Drop any intent/force entry for an input no longer in `live_inputs`
-    /// — called from `State::set_tip` after the chain-pulled tip changes,
-    /// so cached intent never drifts out of sync with the channels it
-    /// refers to.
+    /// — called from `L1::set_tip` after the chain-pulled tip changes, so
+    /// cached intent never drifts out of sync with the channels it refers
+    /// to.
     pub(crate) fn retain_live(&mut self, live_inputs: &BTreeSet<Input>) {
         self.intents.retain(|input, _| live_inputs.contains(input));
         self.force.retain(|input| live_inputs.contains(input));

@@ -20,7 +20,7 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = ["json", "cbor", "cli"]
+default = ["json", "cbor", "cli", "wasm"]
 cli = [
   "dep:clap",
   "dep:dotenvy",
@@ -28,6 +28,7 @@ cli = [
   # "dep:serde_json",
   "dep:tokio",
 ]
+wasm = ["dep:idb"]
 json = ["dep:serde_json", "http-client/json"]
 cbor = ["dep:minicbor", "http-client/cbor"]
 
@@ -53,6 +54,8 @@ web-time.workspace = true
 problem-details.workspace = true
 serde.workspace = true
 serde_with.workspace = true
+async-trait.workspace = true
+idb = { workspace = true, optional = true }
 # FIXME :: Disabled to appease cargo machete, and while main is broken
 # serde_json = { workspace = true, optional = true }
 # http-client-native = { workspace = true, optional = true }

@@ -70,6 +70,7 @@ gloo-timers = { features = ["futures"], version = "0.3.0" }
 hex = "0.4.3"
 http = { version = "1.4.1", default-features = false }
 humantime = "2.3.0"
+idb = "0.6.5"
 indoc = "2.0.6"
 itertools = "0.14.0"
 js-sys = "0.3.82"

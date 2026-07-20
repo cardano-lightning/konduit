@@ -27,15 +27,25 @@ mod commitments;
 use commitments::Commitments;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
+pub struct Config {
+    #[n(0)]
+    keys: Keys,
+    #[n(1)]
+    l1: l1::Config,
+    #[n(2)]
+    l2s: BTreeMap<Tag, l2::Config>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
 pub struct State {
     #[n(0)]
     keys: Keys,
     #[n(1)]
-    commitments: Commitments,
-    #[n(2)]
     l1: l1::State,
-    #[n(3)]
+    #[n(2)]
     l2s: BTreeMap<Tag, l2::State>,
+    #[n(3)]
+    commitments: Commitments,
 }
 
 impl State {

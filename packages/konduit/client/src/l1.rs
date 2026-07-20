@@ -8,7 +8,7 @@ use konduit_tx::{
     Channel, ChannelUtxo, NetworkParameters, Open, SteppedUtxos, find_reference_script,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::{
     Signer, Wallet,
@@ -16,8 +16,11 @@ use crate::{
     time, utxo_batch,
 };
 
+mod policies;
+pub use policies::{BoundsPolicy, Policies, SubmitPolicy};
+
 mod config;
-pub use config::{BoundsPolicy, Config, SubmitPolicy};
+pub use config::Config;
 
 mod directives;
 pub use directives::{Directives, Intent, OpenIntent};
@@ -25,39 +28,33 @@ pub use directives::{Directives, Intent, OpenIntent};
 mod cache;
 pub use cache::Cache;
 
-mod state;
-pub use state::State;
+mod error;
+pub use error::Error;
 
-/// FIXME :: Use #[from].
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("time: {0}")]
-    Time(#[from] time::Error),
-    #[error("nothing to do: no channels to open and no konduit utxos found")]
-    NothingToDo,
-    #[error("no reference script utxo cached: call pull_reference_script first")]
-    NoReferenceScript,
-    #[error("no network parameters cached: call pull_network_parameters first")]
-    NoNetworkParameters,
-    #[error("no change address cached: call pull_change_address first")]
-    NoChangeAddress,
-    #[error("no tx cached: call build first")]
-    NoStatedTx,
-    #[error("connector error: {0}")]
-    Connector(String),
-    #[error("wallet error: {0}")]
-    Wallet(String),
-    #[error("failed to build transaction: {0}")]
-    Tx(String),
-    #[error("signing error: {0}")]
-    Signing(String),
-}
-
+/// `L1` has a single owner (there's no `Arc<L1>` fan-out — the orchestrator
+/// holds one, and swaps it wholesale on config change), so `Config`,
+/// `Cache`, and `Directives` are plain, lock-free fields:
+///
+/// - [`Config`] is caller-authored and immutable through `L1` — there's
+///   no `&mut` path to it at all. To change anything in it, pull a copy
+///   out with [`L1::config`], mutate the copy via `Config`'s own setters,
+///   and build a fresh `L1` via [`L1::with_cache`].
+/// - [`Cache`] is chain-pulled and fully disposable; a re-pull replaces
+///   anything lost.
+/// - [`Directives`] is pending build intent with no chain-side source to
+///   recover it from.
+///
+/// `Cache` and `Directives` are mutated through ordinary `&mut self`
+/// methods — no locking, no poisoning to account for. They're still
+/// reconciled together in [`L1::set_tip`], which is the one place that
+/// needs both.
 pub struct L1<Connector: CardanoConnector, S: Signer, W: Wallet> {
     connector: Arc<Connector>,
     signer: Arc<S>,
     wallet: Arc<W>,
-    state: RwLock<State>,
+    config: Config,
+    cache: Cache,
+    directives: Directives,
 }
 
 impl<Connector, S, W> L1<Connector, S, W>
@@ -66,39 +63,58 @@ where
     S: Signer,
     W: Wallet,
 {
-    pub fn new(connector: Arc<Connector>, signer: Arc<S>, wallet: Arc<W>) -> Self {
+    /// Fresh `L1`: no chain-pulled cache, no pending directives yet.
+    pub fn new(connector: Arc<Connector>, signer: Arc<S>, wallet: Arc<W>, config: Config) -> Self {
         L1 {
             connector,
             signer,
             wallet,
-            state: RwLock::new(State::default()),
+            config,
+            cache: Cache::default(),
+            directives: Directives::default(),
         }
     }
 
-    pub fn from_state(
+    /// Reinstantiate with a (possibly just-updated) `Config`, carrying
+    /// over previously chain-pulled `Cache` and previously-set
+    /// `Directives` — e.g. after changing a policy via `config()` +
+    /// `Config::set_*`, so the caller doesn't lose already-pulled
+    /// channels or pending intent in the process.
+    pub fn with_cache(
         connector: Arc<Connector>,
         signer: Arc<S>,
         wallet: Arc<W>,
-        state: State,
+        config: Config,
+        cache: Cache,
+        directives: Directives,
     ) -> Self {
         L1 {
             connector,
             signer,
             wallet,
-            state: RwLock::new(state),
+            config,
+            cache,
+            directives,
         }
     }
 
-    fn read_state<T>(&self, f: impl FnOnce(&State) -> T) -> T {
-        f(&self.state.read().unwrap_or_else(|p| p.into_inner()))
+    /// The current, caller-owned config. There is no `config_mut` —
+    /// mutate a `.clone()` via `Config`'s own setters and pass it to
+    /// [`L1::with_cache`] to get an `L1` reflecting the change.
+    pub fn config(&self) -> &Config {
+        &self.config
     }
-
-    fn write_state<T>(&self, f: impl FnOnce(&mut State) -> T) -> T {
-        f(&mut self.state.write().unwrap_or_else(|p| p.into_inner()))
+    pub fn cache(&self) -> &Cache {
+        &self.cache
     }
-
-    pub fn state(&self) -> State {
-        self.read_state(Clone::clone)
+    pub fn cache_mut(&mut self) -> &mut Cache {
+        &mut self.cache
+    }
+    pub fn directives(&self) -> &Directives {
+        &self.directives
+    }
+    pub fn directives_mut(&mut self) -> &mut Directives {
+        &mut self.directives
     }
 
     // add_vkey
@@ -106,127 +122,47 @@ where
         self.signer.verification_key().into_bytes().into()
     }
 
-    // -- Policies --
-
-    pub fn submit_policy(&self) -> SubmitPolicy {
-        self.read_state(State::submit_policy)
-    }
-    pub fn set_submit_policy(&self, policy: SubmitPolicy) {
-        self.write_state(|c| c.set_submit_policy(policy));
-    }
-    pub fn bounds_policy(&self) -> BoundsPolicy {
-        self.read_state(State::bounds_policy)
-    }
-    pub fn set_bounds_policy(&self, policy: BoundsPolicy) {
-        self.write_state(|c| c.set_bounds_policy(policy));
-    }
-    pub fn autocomplete(&self) -> bool {
-        self.read_state(State::autocomplete)
-    }
-    pub fn set_autocomplete(&self, autocomplete: bool) {
-        self.write_state(|c| c.set_autocomplete(autocomplete));
-    }
-
-    // -- Delegations, mutated piecewise --
-
-    pub fn add_delegation(&self, credential: Credential) {
-        self.write_state(|c| c.add_delegation(credential));
-    }
-    pub fn remove_delegation(&self, credential: &Credential) {
-        self.write_state(|c| c.remove_delegation(credential));
-    }
-    pub fn delegations(&self) -> Vec<Credential> {
-        self.read_state(State::delegations)
-    }
-
-    // -- Intent, mutated piecewise --
-
-    pub fn add_intent(&self, input: Input, intent: Intent) {
-        self.write_state(|c| c.add_intent(input, intent));
-    }
-
     /// Resolve `tag` against currently cached channels and set `intent`
     /// for the matching input(s). Reusing a tag across multiple channels
     /// is strongly discouraged but not an error: if more than one channel
     /// matches, `intent` is applied to all of them and a warning is logged.
-    pub fn add_intent_by_tag(&self, tag: &Tag, intent: Intent) {
-        let matched = self.write_state(|c| c.add_intent_by_tag(tag, intent));
+    pub fn add_intent_by_tag(&mut self, tag: &Tag, intent: Intent) {
+        let inputs: Vec<Input> = self
+            .cache
+            .channels()
+            .iter()
+            .filter(|(_, (_, channel))| channel.constants().tag == *tag)
+            .map(|(input, _)| input.clone())
+            .collect();
+        let matched = inputs.len();
         if matched > 1 {
             log::warn!(
                 "tag {tag:?} matches {matched} channels; applying intent to all of them — \
                  reusing a tag across channels is strongly discouraged",
             );
         }
+        for input in inputs {
+            self.directives.add_intent(input, intent.clone());
+        }
     }
 
-    pub fn remove_intent(&self, input: &Input) {
-        self.write_state(|c| c.remove_intent(input));
-    }
-    pub fn clear_intents(&self) {
-        self.write_state(State::clear_intents);
-    }
-
-    // -- Force: manual expire/elapse/end overrides. Only consulted when
-    // `autocomplete` is `false` — ignored entirely when it's `true`.
-    // FIXME: not yet consulted in `build` at all — see `State::autocomplete`.
-
-    pub fn force(&self) -> BTreeSet<Input> {
-        self.read_state(State::force)
-    }
-    pub fn add_force(&self, input: Input) {
-        self.write_state(|c| c.add_force(input));
-    }
-    pub fn remove_force(&self, input: &Input) {
-        self.write_state(|c| c.remove_force(input));
-    }
-    pub fn clear_force(&self) {
-        self.write_state(State::clear_force);
-    }
-
-    // -- Opens, keyed by tag, mutated piecewise --
-
-    pub fn add_open(&self, open: OpenIntent) {
-        self.write_state(|c| c.add_open(open));
-    }
-    pub fn remove_open(&self, tag: &Tag) {
-        self.write_state(|c| c.remove_open(tag));
-    }
-    pub fn clear_opens(&self) {
-        self.write_state(State::clear_opens);
-    }
-    pub fn opens(&self) -> BTreeMap<Tag, OpenIntent> {
-        self.read_state(State::opens)
-    }
-
-    // -- Change address: cached, settable directly or pulled from the wallet --
-
-    pub fn change_address(&self) -> Option<Address<kind::Any>> {
-        self.read_state(State::change_address)
-    }
-
-    /// Set the change address directly, bypassing the wallet. Overwritten
-    /// the next time `pull_change_address` or `pull_all` runs.
-    pub fn set_change_address(&self, address: Address<kind::Any>) {
-        self.write_state(|c| c.set_change_address(address));
-    }
-
-    /// Pull the wallet's preferred change address (CIP-30
-    /// `getChangeAddress`) and cache it, overwriting whatever was there.
-    pub async fn pull_change_address(&self) -> Result<(), Error> {
-        let change_address = self
-            .wallet
+    /// Query the wallet's preferred change address (CIP-30
+    /// `getChangeAddress`). Purely a read against the wallet — doesn't
+    /// touch `Config`. To actually update the change address, fold the
+    /// result into a copy of `config()` and reinstantiate via
+    /// `with_cache`.
+    pub async fn wallet_change_address(&self) -> Result<Address<kind::Any>, Error> {
+        self.wallet
             .change_address()
             .await
-            .map_err(|e| Error::Wallet(e.to_string()))?;
-        self.write_state(|c| c.set_change_address(change_address));
-        Ok(())
+            .map_err(|e| Error::Wallet(e.to_string()))
     }
 
     // -- Chain state, pulled explicitly, each on its own cadence --
 
     /// Pull the (singular) konduit reference script utxo. Changes rarely.
     pub async fn pull_reference_script(
-        &self,
+        &mut self,
         reference_script_address: &Address<kind::Shelley>,
     ) -> Result<(), Error> {
         let utxos_at_script = self
@@ -239,13 +175,13 @@ where
             .map_err(|e| Error::Connector(e.to_string()))?;
         let reference_script =
             find_reference_script(&utxos_at_script).ok_or(Error::NoReferenceScript)?;
-        self.write_state(|c| c.set_reference_script(reference_script));
+        self.cache.set_reference_script(reference_script);
         Ok(())
     }
 
     /// Pull network parameters. Changes only on hard forks / param
     /// updates — call on its own, much coarser cadence than channel pulls.
-    pub async fn pull_network_parameters(&self) -> Result<(), Error> {
+    pub async fn pull_network_parameters(&mut self) -> Result<(), Error> {
         let network_parameters = NetworkParameters {
             network_id: NetworkId::from(self.connector.network()),
             protocol_parameters: self
@@ -254,8 +190,20 @@ where
                 .await
                 .map_err(|e| Error::Connector(e.to_string()))?,
         };
-        self.write_state(|c| c.set_network_parameters(network_parameters));
+        self.cache.set_network_parameters(network_parameters);
         Ok(())
+    }
+
+    /// Replace the cached tip, and drop any directive referring to an
+    /// input that no longer has a live channel — the one place `Cache`
+    /// and `Directives` need to be reconciled together.
+    fn set_tip(
+        &mut self,
+        wallet_utxos: BTreeMap<Input, Output>,
+        channels: BTreeMap<Input, (Output, Channel)>,
+    ) {
+        let live_inputs = self.cache.set_tip(wallet_utxos, channels);
+        self.directives.retain_live(&live_inputs);
     }
 
     /// Pull konduit channel utxos across the base credential and every
@@ -263,9 +211,9 @@ where
     /// and keeping only those matching this consumer's `add_vkey`. Also
     /// pulls wallet fuel utxos, since both feed the same tx-building step
     /// and share this cadence. Any pending intent whose channel no
-    /// longer exists is dropped by `State::set_tip`; the rest are kept.
-    pub async fn pull_channels(&self) -> Result<(), Error> {
-        let delegations = self.read_state(State::delegations);
+    /// longer exists is dropped by `set_tip`; the rest are kept.
+    pub async fn pull_channels(&mut self) -> Result<(), Error> {
+        let delegations = self.config.delegations();
         let add_vkey = self.verifying_key();
 
         let payment_credential = KONDUIT_VALIDATOR.to_credential();
@@ -304,53 +252,43 @@ where
             .unwrap_or_default()
             .into();
 
-        self.write_state(|c| c.set_tip(wallet_utxos, channels));
+        self.set_tip(wallet_utxos, channels);
         Ok(())
     }
 
-    /// Pull everything: reference script, network parameters, channels
-    /// (+ fuel), and the change address. Note: this **overwrites** any
-    /// change address set via `set_change_address` with whatever the
-    /// wallet currently reports.
+    /// Pull everything on its own cadence: reference script, network
+    /// parameters, and channels (+ fuel). Does **not** touch the change
+    /// address — that lives in `Config` now, and changing it means
+    /// building a new `Config` (see `wallet_change_address`) and
+    /// reinstantiating via `with_cache`.
     pub async fn pull_all(
-        &self,
+        &mut self,
         reference_script_address: &Address<kind::Shelley>,
     ) -> Result<(), Error> {
         self.pull_reference_script(reference_script_address).await?;
         self.pull_network_parameters().await?;
         self.pull_channels().await?;
-        self.pull_change_address().await?;
         Ok(())
-    }
-
-    /// Currently cached channels belonging to this consumer.
-    pub fn channels(&self) -> BTreeMap<Input, (Output, Channel)> {
-        self.read_state(State::channels)
-    }
-
-    /// Currently cached, most recently built tx, if any.
-    pub fn cached_tx(&self) -> Option<Transaction<ReadyForSigning>> {
-        self.read_state(State::built_tx)
     }
 
     /// Purely functional assembly from cached state — no I/O, no signing.
     fn build(&self) -> Result<Transaction<ReadyForSigning>, Error> {
-        let bounds = self.bounds_policy().to_bounds(&time::now()?);
+        let bounds = self.config.bounds_policy().to_bounds(&time::now()?);
         let add_vkey = self.verifying_key();
 
-        let state::BuildInputs {
-            network_parameters,
-            reference_script,
-            change_address,
-            wallet_utxos,
-            channels,
-            opens,
-            intents,
-        } = self.read_state(State::build_inputs);
-
-        let network_parameters = network_parameters.ok_or(Error::NoNetworkParameters)?;
-        let reference_script = reference_script.ok_or(Error::NoReferenceScript)?;
-        let change_address = change_address.ok_or(Error::NoChangeAddress)?;
+        let network_parameters = self
+            .cache
+            .network_parameters()
+            .ok_or(Error::NoNetworkParameters)?;
+        let reference_script = self
+            .cache
+            .reference_script()
+            .ok_or(Error::NoReferenceScript)?;
+        let change_address = self.config.change_address().ok_or(Error::NoChangeAddress)?;
+        let wallet_utxos = self.cache.wallet_utxos();
+        let channels = self.cache.channels();
+        let opens = self.directives.opens();
+        let intents = self.directives.intents();
 
         if opens.is_empty() && channels.is_empty() {
             return Err(Error::NothingToDo);
@@ -407,9 +345,9 @@ where
 
     /// Sign a freshly `build`-ed tx: wallet always signs, plus the
     /// consumer key when distinct from the wallet and channels are being
-    /// spent. States the result.
-    pub async fn sign(&self) -> Result<Transaction<ReadyForSigning>, Error> {
-        let channels_spent = !self.read_state(State::channels).is_empty();
+    /// spent. Caches the result.
+    pub async fn sign(&mut self) -> Result<Transaction<ReadyForSigning>, Error> {
+        let channels_spent = !self.cache.channels().is_empty();
         let mut tx = self.build()?;
 
         // The wallet always signs: it's the party actually spending its
@@ -432,15 +370,16 @@ where
             tx.add_witness(self.signer.verification_key(), consumer_signature);
         }
 
-        self.write_state(|c| c.set_built_tx(tx.clone()));
+        self.cache.set_built_tx(tx.clone());
         Ok(tx)
     }
 
-    /// Submit the cached tx (from the most recent `sign`) per `submit_policy`.
+    /// Submit the cached tx (from the most recent `sign`) per
+    /// `config().submit_policy()`.
     pub async fn submit(&self) -> Result<Hash<32>, Error> {
-        let tx = self.cached_tx().ok_or(Error::NoStatedTx)?;
+        let tx = self.cache.built_tx().ok_or(Error::NoStatedTx)?;
 
-        match self.submit_policy() {
+        match self.config.submit_policy() {
             SubmitPolicy::ViaConnector => {
                 self.connector
                     .submit(&tx)
@@ -458,7 +397,7 @@ where
         Ok(tx.id())
     }
 
-    pub async fn execute(&self) -> Result<Hash<32>, Error> {
+    pub async fn execute(&mut self) -> Result<Hash<32>, Error> {
         self.build()?;
         self.sign().await?;
         self.submit().await

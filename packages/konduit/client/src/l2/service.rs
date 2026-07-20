@@ -1,5 +1,5 @@
 use bln_sdk::types::Invoice;
-use cardano_sdk::{cbor::ToCbor};
+use cardano_sdk::cbor::ToCbor;
 use cobbl3::Mac;
 use http_client::Transport;
 use konduit_data::{ChequeBody, Duration, Lock, Locked, Secret, Signature, Tag, VerifyingKey};
@@ -10,21 +10,12 @@ use konduit_wire::{
 use std::sync::Arc;
 
 use crate::{
-    Signer, core::{Squash, SquashBody, wire}, server, time,
-Commitments, 
+    Commitments, Signer,
+    core::{Squash, SquashBody, wire},
+    server, time,
 };
 
-mod policies;
-pub use policies::{Policies, RegPolicy, SquashPolicy};
-
-mod config;
-pub use config::Config;
-
-mod cache;
-pub use cache::Cache;
-
-mod error;
-pub use error::{Error, SquashError};
+use super::{Cache, Config, Error, RegPolicy, SquashError, SquashPolicy};
 
 /// Outcome of verifying a single squash proposal: secrets recovered from
 /// newly-verified unlockeds, and the body to resubmit if the caller
@@ -69,7 +60,13 @@ where
     S: Signer,
 {
     /// Fresh `L2`: no cached credential/pay-request yet.
-    pub fn new(server: Arc<server::Client<Http, C>>, signer: Arc<S>, commitments: Arc<Commitments>, tag: Tag, config: Config) -> Self {
+    pub fn new(
+        server: Arc<server::Client<Http, C>>,
+        signer: Arc<S>,
+        commitments: Arc<Commitments>,
+        tag: Tag,
+        config: Config,
+    ) -> Self {
         Self::with_cache(server, signer, commitments, tag, config, Cache::default())
     }
 
@@ -78,9 +75,16 @@ where
     /// policy via `config()` + `Config::set_*`, so the caller doesn't
     /// lose an already-issued credential or pending quote in the
     /// process.
-    pub fn with_cache(server: Arc<server::Client<Http, C>>, signer: Arc<S>, commitments: Arc<Commitments>, tag: Tag, config: Config, cache: Cache) -> Self {
+    pub fn with_cache(
+        server: Arc<server::Client<Http, C>>,
+        signer: Arc<S>,
+        commitments: Arc<Commitments>,
+        tag: Tag,
+        config: Config,
+        cache: Cache,
+    ) -> Self {
         Self {
-            tag, 
+            tag,
             config,
             server,
             signer,
@@ -109,13 +113,16 @@ where
     C: server::Codec,
     S: Signer,
 {
-
     pub fn tag(&self) -> &Tag {
         &self.tag
     }
 
     pub fn try_credential_str(&self) -> Result<String, Error> {
-        let credential = self.config.credential().cloned().ok_or(Error::MissingCredential)?;
+        let credential = self
+            .config
+            .credential()
+            .cloned()
+            .ok_or(Error::MissingCredential)?;
         let now = time::now()?;
         if credential.body.ttl < now.as_millis() as u64 {
             return Err(Error::CredentialExpired);
@@ -199,7 +206,10 @@ where
     ) -> Result<wire::auth::pay::bolt11::quote::Response, Error> {
         let quote = self
             .server
-            .pay_bolt11_quote(&self.try_credential_str()?.to_string(), &invoice.to_string())
+            .pay_bolt11_quote(
+                &self.try_credential_str()?.to_string(),
+                &invoice.to_string(),
+            )
             .await?;
         self.cache.set_pay_request(invoice.to_string().to_cbor());
         Ok(quote)
@@ -210,11 +220,11 @@ where
     /// secret is actually among what came back — that check belongs
     /// here, not in the shared squash-handling path, since it's specific
     /// to what `commit` itself is trying to confirm.
-    pub async fn commit(&mut self, cheque_proposal: ChequeProposal) -> Result<CommitOutcome, Error> {
-        let pay_request = self
-            .cache
-            .pay_request()
-            .ok_or(Error::PayRequestMissing)?;
+    pub async fn commit(
+        &mut self,
+        cheque_proposal: ChequeProposal,
+    ) -> Result<CommitOutcome, Error> {
+        let pay_request = self.cache.pay_request().ok_or(Error::PayRequestMissing)?;
         let invoice_str: String =
             minicbor::decode(&pay_request).map_err(|_| Error::PayRequestCorrupt)?;
         let invoice = invoice_str
@@ -228,7 +238,6 @@ where
             relative_timeout,
             ..
         } = cheque_proposal;
-        self.commitments.insert(lock,Commitment)
         let cheque_body = ChequeBody::new(
             index,
             amount,
