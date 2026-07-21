@@ -16,11 +16,7 @@
 mod prelude;
 pub(crate) use prelude::*;
 
-mod signer;
-pub use signer::*;
-
-mod wallet;
-pub use wallet::*;
+mod keys;
 
 mod commitments;
 pub use commitments::{Commitment, Commitments};
@@ -34,11 +30,8 @@ pub mod l2;
 mod config;
 pub use config::Config;
 
-//
-// pub mod state;
-
-// #[cfg(feature = "cli")]
-// pub mod cli;
+#[cfg(feature = "cli")]
+pub mod cli;
 
 mod time;
 mod utxo_batch;

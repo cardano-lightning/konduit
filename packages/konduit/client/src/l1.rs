@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::{
-    Signer, Wallet,
     core::{Input, KONDUIT_VALIDATOR},
+    keys::{Signer, Wallet},
     time, utxo_batch,
 };
 

@@ -1,5 +1,4 @@
 use crate::{
-    Signer,
     core::{Credential, Input, NetworkId, Output, Value},
     utxo_batch,
 };
@@ -8,6 +7,8 @@ use cardano_sdk::{
     Address, Hash, Signature, Transaction, VerificationKey, address::kind, transaction::state,
 };
 use std::{collections::BTreeMap, future::Future, sync::Arc};
+
+use super::Signer;
 
 /// Based on CIP-30. At least permits a CIP-30 wallet to be wrapped and impl this trait.
 pub trait Wallet {

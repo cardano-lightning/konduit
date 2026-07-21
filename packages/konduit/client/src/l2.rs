@@ -10,8 +10,9 @@ use konduit_wire::{
 use std::sync::Arc;
 
 use crate::{
-    Commitment, Commitments, Signer,
+    Commitment, Commitments,
     core::{Squash, SquashBody, wire},
+    keys::Signer,
     server, time,
 };
 

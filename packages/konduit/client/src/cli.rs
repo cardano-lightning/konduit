@@ -1,78 +1,41 @@
-use clap::Parser;
-use konduit_data::{SigningKey, Tag};
-use std::{io, io::Write};
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+pub mod config;
+pub mod env;
+pub mod keygen;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Konduit Consumer CLI")]
 pub struct Cli {
-    #[command(subcommand)]
-    pub command: Commands,
-
-    /// URL of the Konduit server
+    /// Path to the konduit.toml config file
     #[arg(
         long,
-        env = "KONDUIT_SERVER_URL",
-        default_value = "http://127.0.0.1:5663"
+        short = 'c',
+        env = "KONDUIT_CONFIG",
+        default_value = "./konduit.toml",
+        global = true
     )]
-    pub server_url: String,
+    pub config: PathBuf,
 
-    /// Hex encoded signing key
-    #[arg(long, env = "KONDUIT_SIGNING_KEY")]
-    pub signing_key: SigningKey,
-
-    /// Hex encoded Tag. Required.
-    #[arg(long, env = "KONDUIT_TAG")]
-    pub tag: Tag,
-
-    /// Optional LND REST URL
-    #[arg(long, env = "LND_BASE_URL")]
-    pub lnd_url: Option<String>,
-
-    /// Optional LND Macaroon (Hex)
-    #[arg(long, env = "LND_MACAROON")]
-    pub lnd_macaroon: Option<String>,
-
-    /// Skip confirmation prompts
-    #[arg(short, long)]
-    pub yes: bool,
+    #[command(subcommand)]
+    pub command: Commands,
 }
 
-#[derive(Debug, clap::Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Show info about the server
-    Info,
-    /// Create an invoice on a local LND node
-    AddInvoice { amount_msat: u64, memo: String },
-    /// Get a quote for a lightning invoice
-    Quote { invoice: String },
-    /// Full workflow: Get quote -> Pay -> Squash
-    Pay { invoice: String },
-    /// Manually squash using the latest state
-    Squash,
+    /// Generate a fresh random 32-byte key, hex-encoded
+    Keygen,
+    /// Get and set values in konduit.toml
+    #[clap(subcommand)]
+    Config(config::Cmd),
 }
 
-pub fn confirm(prompt: &str) -> anyhow::Result<bool> {
-    eprint!("\n{} [y/N] ", prompt);
-
-    io::stderr().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-
-    if input.trim().is_empty() || input.trim().to_lowercase() == "n" {
-        return Ok(false);
-    }
-
-    if input.trim().to_lowercase() == "y" {
-        return Ok(true);
-    }
-
-    confirm(prompt)
-}
-
-pub fn prompt_if_incomplete(st: &SquashStatus, auto_confirm: bool) -> anyhow::Result<bool> {
-    if !auto_confirm && matches!(st, SquashStatus::Incomplete { .. }) {
-        confirm("Verify proposal and execute squash?")
-    } else {
-        Ok(auto_confirm)
+impl Cli {
+    pub fn run(self) -> anyhow::Result<()> {
+        match self.command {
+            Commands::Keygen => keygen::run(),
+            Commands::Config(cmd) => cmd.run(&self.config),
+        }
     }
 }

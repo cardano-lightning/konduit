@@ -49,7 +49,7 @@ dependencies = [
  "mime",
  "percent-encoding",
  "pin-project-lite",
- "rand 0.10.1",
+ "rand 0.10.2",
  "sha1",
  "smallvec",
  "tokio",
@@ -2399,6 +2399,7 @@ dependencies = [
  "cobbl3",
  "dotenvy",
  "getrandom 0.3.4",
+ "hex",
  "http 1.4.1",
  "http-client",
  "idb",
@@ -2411,11 +2412,13 @@ dependencies = [
  "problem-details",
  "proptest",
  "proptest-derive",
+ "rand_core 0.6.4",
  "serde",
  "serde_json",
  "serde_with",
  "thiserror 2.0.18",
  "tokio",
+ "toml",
  "wasm-bindgen",
  "wasm-bindgen-test",
  "web-time",
@@ -3412,9 +3415,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
+checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
 dependencies = [
  "chacha20",
  "getrandom 0.4.2",

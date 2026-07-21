@@ -22,11 +22,14 @@ required-features = ["cli"]
 [features]
 default = ["json", "cbor", "cli", "idb"]
 cli = [
+  "toml",
   "dep:clap",
   "dep:dotenvy",
   # "dep:http-client-native",
   # "dep:serde_json",
   "dep:tokio",
+  "dep:hex",
+  "dep:rand_core",
 ]
 idb = ["dep:idb", "dep:js-sys", "dep:wasm-bindgen"]
 serde = [
@@ -38,6 +41,7 @@ serde = [
   "konduit-tx/serde",
 ]
 json = ["serde", "dep:serde_json", "http-client/json", "problem-details/json"]
+toml = ["serde", "dep:toml"]
 cbor = ["http-client/cbor", "problem-details/cbor"]
 
 # Minicbor is always required for `Tbs`
@@ -67,6 +71,9 @@ thiserror.workspace = true
 tokio = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 web-time.workspace = true
+toml = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+rand_core = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest = { workspace = true, default-features = false, features = [
