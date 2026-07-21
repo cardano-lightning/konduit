@@ -164,7 +164,7 @@ where
                     ));
                 }
 
-                log::info!("proposal = {:?}", &st.proposal);
+                log::info!("proposal = {:?}", st.proposal);
 
                 let res = self.squash(st.proposal).await?;
 

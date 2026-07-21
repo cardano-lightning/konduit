@@ -13,7 +13,7 @@ pub struct Input(Arc<pallas::TransactionInput>);
 
 impl fmt::Display for Input {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Input({}#{})", &self.0.transaction_id, self.0.index)
+        write!(f, "Input({}#{})", self.0.transaction_id, self.0.index)
     }
 }
 

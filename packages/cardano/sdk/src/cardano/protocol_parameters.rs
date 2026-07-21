@@ -86,7 +86,7 @@ impl ProtocolParameters {
             .with_execution_price_cpu(7.21e-05)
             .with_start_time(1506203091)
             .with_first_shelley_slot(4492800)
-            .with_plutus_v3_cost_model(PLUTUS_V3_01_CHANG_PRE2.into())
+            .with_plutus_v3_cost_model(PLUTUS_V3_02_VAN_ROSSEM.into())
     }
 
     /// _Current_ PreProd protocol parameters.

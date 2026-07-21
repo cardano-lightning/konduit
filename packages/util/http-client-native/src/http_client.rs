@@ -44,12 +44,7 @@ impl HttpClient {
         let body: String = res.text().await?;
 
         if !status.is_success() {
-            return Err(anyhow!(
-                "request to {} failed ({}): {}",
-                path,
-                status,
-                &body
-            ));
+            return Err(anyhow!("request to {} failed ({}): {}", path, status, body));
         }
 
         serde_json::from_str::<T>(&body).with_context(|| {
