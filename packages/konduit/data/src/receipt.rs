@@ -252,7 +252,7 @@ impl Receipt {
             .cheques
             .binary_search_by(|probe| probe.index().cmp(&index))
         {
-            Ok(_) => Err(anyhow!("Duplicate index {}", &index))?,
+            Ok(_) => Err(anyhow!("Duplicate index {}", index))?,
             Err(position) => self.cheques.insert(position, cheque),
         };
         Ok(())

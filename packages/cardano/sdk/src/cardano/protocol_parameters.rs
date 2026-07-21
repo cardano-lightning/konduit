@@ -86,32 +86,7 @@ impl ProtocolParameters {
             .with_execution_price_cpu(7.21e-05)
             .with_start_time(1506203091)
             .with_first_shelley_slot(4492800)
-            .with_plutus_v3_cost_model(vec![
-                100788, 420, 1, 1, 1000, 173, 0, 1, 1000, 59957, 4, 1, 11183, 32, 201305, 8356, 4,
-                16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 100, 100,
-                16000, 100, 94375, 32, 132994, 32, 61462, 4, 72010, 178, 0, 1, 22151, 32, 91189,
-                769, 4, 2, 85848, 123203, 7305, -900, 1716, 960, 57, 85848, 0, 1, 1, 1000, 42921,
-                4, 2, 30623, 28755, 75, 1, 898148, 27279, 1, 51775, 558, 1, 39184, 1000, 60594, 1,
-                141895, 32, 83150, 32, 15299, 32, 76049, 1, 13169, 4, 22100, 10, 28999, 74, 1,
-                28999, 74, 1, 43285, 552, 1, 44749, 541, 1, 33852, 32, 68246, 32, 72362, 32, 7243,
-                32, 7391, 32, 11546, 32, 85848, 123203, 7305, -900, 1716, 960, 57, 85848, 0, 1,
-                90434, 519, 0, 1, 74433, 32, 85848, 123203, 7305, -900, 1716, 960, 57, 85848, 0, 1,
-                1, 85848, 123203, 7305, -900, 1716, 960, 57, 85848, 0, 1, 955506, 213312, 0, 2,
-                270652, 22588, 4, 1457325, 64566, 4, 20467, 1, 4, 0, 141992, 32, 100788, 420, 1, 1,
-                81663, 32, 59498, 32, 20142, 32, 24588, 32, 20744, 32, 25933, 32, 24623, 32,
-                43053543, 10, 53384111, 14333, 10, 43574283, 26308, 10, 16000, 100, 16000, 100,
-                962335, 18, 2780678, 6, 442008, 1, 52538055, 3756, 18, 267929, 18, 76433006, 8868,
-                18, 52948122, 18, 1995836, 36, 3227919, 12, 901022, 1, 166917843, 4307, 36, 284546,
-                36, 158221314, 26549, 36, 74698472, 36, 333849714, 1, 254006273, 72, 2174038, 72,
-                2261318, 64571, 4, 207616, 8310, 4, 1293828, 28716, 63, 0, 1, 1006041, 43623, 251,
-                0, 1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1,
-                107878, 680, 0, 1, 95336, 1, 281145, 18848, 0, 1, 180194, 159, 1, 1, 158519, 8942,
-                0, 1, 159378, 8813, 0, 1, 107490, 3298, 1, 106057, 655, 1, 1964219, 24520, 3,
-                607153, 231697, 53144, 0, 1, 116711, 1957, 4, 231883, 10, 1000, 24838, 7, 1,
-                232010, 32, 321837444, 25087669, 18, 617887431, 67302824, 36, 356924, 18413, 45,
-                21, 219951, 9444, 1, 1000, 172116, 183150, 6, 24, 21, 213283, 618401, 1998, 28258,
-                1, 1000, 38159, 2, 22, 1000, 95933, 1, 1, 11, 1000, 277577, 12, 21,
-            ])
+            .with_plutus_v3_cost_model(PLUTUS_V3_02_VAN_ROSSEM.into())
     }
 
     /// _Current_ PreProd protocol parameters.
@@ -120,6 +95,7 @@ impl ProtocolParameters {
     /// reconstructed from a blockchain provider.</div>
     pub fn preprod() -> Self {
         Self::mainnet()
+            .with_plutus_v3_cost_model(PLUTUS_V3_02_VAN_ROSSEM.into())
             .with_start_time(1654041600)
             .with_first_shelley_slot(86400)
     }
@@ -132,6 +108,7 @@ impl ProtocolParameters {
     /// FIXME :: This has not been verified.
     pub fn preview() -> Self {
         Self::mainnet()
+            .with_plutus_v3_cost_model(PLUTUS_V3_02_VAN_ROSSEM.into())
             .with_start_time(1666656000)
             .with_first_shelley_slot(0)
     }
@@ -279,4 +256,86 @@ impl From<&ProtocolParameters> for uplc::tx::SlotConfig {
     }
 }
 
-// ------------------------------------------------------------------------ WASM
+/// PlutusV3 cost model registry — raw parameter arrays.
+///
+/// Naming: `PLUTUS_V3_<ORDINAL>_<FORK_LABEL>`, ordinal scoped to this
+/// language only, incrementing once per distinct observed cost model
+/// (not once per hard fork, not tied to protocol-version bumps — see
+/// prior discussion for why _00 and _01 below can share a protocol
+/// version).
+///
+/// Order within each array is NOT arbitrary: it must match the ledger's
+/// canonical ordering (lexicographic by cost-model parameter name, per
+/// Plutus's `ParamName` enum for this language). Reordering silently
+/// corrupts every value's meaning without a compiler error — this is
+/// the single easiest way to make this file wrong. Generate, don't
+/// hand-transcribe, if at all possible.
+///
+/// Array lengths are independent per entry. Later ordinals may be
+/// longer than earlier ones (new builtins land as new trailing cost
+/// parameters); they are never shorter, and never reordered — this
+/// codebase must not assume a fixed length.
+///
+/// A note from @ktorz:
+/// - Cost models are tied to a Semantics and a Plutus Version.
+/// - There are (currently) 5 semantics: A, B, C, D and E.
+/// - A, B, and D are exclusively used for Plutus V1 and V2.
+/// - C and E are exclusively used for Plutus V3.
+/// - The protocol major version determines which semantics is used for which Plutus version.
+/// - In v10 (current version), we use B for V1 and V2 and C for V3.
+/// - In v11 (upcoming "Van Rossem"), we use D for V1 and V2, and E for V4.
+/// - The order in which one interprets the array of integers that's usually circulated as cost models depends on both the Semantics and Plutus Version. They are NOT aligned. So the parameter at position N does not necessarily have the same meaning and may (are in practice) related to totally different builtins.
+/// - The protocol version also determines which builtins are recognized when parsing scripts; and so they give a meaning to some of the cost model elements.
+///
+/// Genesis of PlutusV3, introduced at the Chang hard fork.
+/// `pub const PLUTUS_V3_00_CHANG: &[i64] = &[ NOT KNOWN ];`
+///
+/// GA04 parameter change, enacted before Chang#2. Same protocol version
+/// as _00_CHANG — a different cost model under an unchanged PV.
+pub const PLUTUS_V3_01_CHANG_PRE2: &[i64] = &[
+    100788, 420, 1, 1, 1000, 173, 0, 1, 1000, 59957, 4, 1, 11183, 32, 201305, 8356, 4, 16000, 100,
+    16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 100, 100, 16000, 100, 94375, 32,
+    132994, 32, 61462, 4, 72010, 178, 0, 1, 22151, 32, 91189, 769, 4, 2, 85848, 123203, 7305, -900,
+    1716, 549, 57, 85848, 0, 1, 1, 1000, 42921, 4, 2, 24548, 29498, 38, 1, 898148, 27279, 1, 51775,
+    558, 1, 39184, 1000, 60594, 1, 141895, 32, 83150, 32, 15299, 32, 76049, 1, 13169, 4, 22100, 10,
+    28999, 74, 1, 28999, 74, 1, 43285, 552, 1, 44749, 541, 1, 33852, 32, 68246, 32, 72362, 32,
+    7243, 32, 7391, 32, 11546, 32, 85848, 123203, 7305, -900, 1716, 549, 57, 85848, 0, 1, 90434,
+    519, 0, 1, 74433, 32, 85848, 123203, 7305, -900, 1716, 549, 57, 85848, 0, 1, 1, 85848, 123203,
+    7305, -900, 1716, 549, 57, 85848, 0, 1, 955506, 213312, 0, 2, 270652, 22588, 4, 1457325, 64566,
+    4, 20467, 1, 4, 0, 141992, 32, 100788, 420, 1, 1, 81663, 32, 59498, 32, 20142, 32, 24588, 32,
+    20744, 32, 25933, 32, 24623, 32, 43053543, 10, 53384111, 14333, 10, 43574283, 26308, 10, 16000,
+    100, 16000, 100, 962335, 18, 2780678, 6, 442008, 1, 52538055, 3756, 18, 267929, 18, 76433006,
+    8868, 18, 52948122, 18, 1995836, 36, 3227919, 12, 901022, 1, 166917843, 4307, 36, 284546, 36,
+    158221314, 26549, 36, 74698472, 36, 333849714, 1, 254006273, 72, 2174038, 72, 2261318, 64571,
+    4, 207616, 8310, 4, 1293828, 28716, 63, 0, 1, 1006041, 43623, 251, 0, 1, 100181, 726, 719, 0,
+    1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1, 107878, 680, 0, 1, 95336, 1, 281145, 18848,
+    0, 1, 180194, 159, 1, 1, 158519, 8942, 0, 1, 159378, 8813, 0, 1, 107490, 3298, 1, 106057, 655,
+    1, 1964219, 24520, 3,
+];
+
+/// Standalone ParameterChange action ahead of the PV11 (Van Rossem)
+/// hard fork. Likely LONGER than _00/_01 — Van Rossem unifies builtin
+/// availability across V1/V2/V3, which means new trailing params here.
+pub const PLUTUS_V3_02_VAN_ROSSEM: &[i64] = &[
+    100788, 420, 1, 1, 1000, 173, 0, 1, 1000, 59957, 4, 1, 11183, 32, 201305, 8356, 4, 16000, 100,
+    16000, 100, 16000, 100, 16000, 100, 16000, 100, 16000, 100, 100, 100, 16000, 100, 94375, 32,
+    132994, 32, 61462, 4, 72010, 178, 0, 1, 22151, 32, 91189, 769, 4, 2, 85848, 123203, 7305, -900,
+    1716, 960, 57, 85848, 0, 1, 1, 1000, 42921, 4, 2, 30623, 28755, 75, 1, 898148, 27279, 1, 51775,
+    558, 1, 39184, 1000, 60594, 1, 141895, 32, 83150, 32, 15299, 32, 76049, 1, 13169, 4, 22100, 10,
+    28999, 74, 1, 28999, 74, 1, 43285, 552, 1, 44749, 541, 1, 33852, 32, 68246, 32, 72362, 32,
+    7243, 32, 7391, 32, 11546, 32, 85848, 123203, 7305, -900, 1716, 960, 57, 85848, 0, 1, 90434,
+    519, 0, 1, 74433, 32, 85848, 123203, 7305, -900, 1716, 960, 57, 85848, 0, 1, 1, 85848, 123203,
+    7305, -900, 1716, 960, 57, 85848, 0, 1, 955506, 213312, 0, 2, 270652, 22588, 4, 1457325, 64566,
+    4, 20467, 1, 4, 0, 141992, 32, 100788, 420, 1, 1, 81663, 32, 59498, 32, 20142, 32, 24588, 32,
+    20744, 32, 25933, 32, 24623, 32, 43053543, 10, 53384111, 14333, 10, 43574283, 26308, 10, 16000,
+    100, 16000, 100, 962335, 18, 2780678, 6, 442008, 1, 52538055, 3756, 18, 267929, 18, 76433006,
+    8868, 18, 52948122, 18, 1995836, 36, 3227919, 12, 901022, 1, 166917843, 4307, 36, 284546, 36,
+    158221314, 26549, 36, 74698472, 36, 333849714, 1, 254006273, 72, 2174038, 72, 2261318, 64571,
+    4, 207616, 8310, 4, 1293828, 28716, 63, 0, 1, 1006041, 43623, 251, 0, 1, 100181, 726, 719, 0,
+    1, 100181, 726, 719, 0, 1, 100181, 726, 719, 0, 1, 107878, 680, 0, 1, 95336, 1, 281145, 18848,
+    0, 1, 180194, 159, 1, 1, 158519, 8942, 0, 1, 159378, 8813, 0, 1, 107490, 3298, 1, 106057, 655,
+    1, 1964219, 24520, 3, 607153, 231697, 53144, 0, 1, 116711, 1957, 4, 231883, 10, 1000, 24838, 7,
+    1, 232010, 32, 321837444, 25087669, 18, 617887431, 67302824, 36, 356924, 18413, 45, 21, 219951,
+    9444, 1, 1000, 172116, 183150, 6, 24, 21, 213283, 618401, 1998, 28258, 1, 1000, 38159, 2, 22,
+    1000, 95933, 1, 1, 11, 1000, 277577, 12, 21,
+];
