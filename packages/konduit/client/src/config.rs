@@ -26,6 +26,7 @@ pub struct Config {
     #[n(3)]
     l2s: BTreeMap<Tag, l2::Config>,
 }
+
 impl Config {
     pub fn keys(&self) -> &keys::Config {
         &self.keys
@@ -33,6 +34,45 @@ impl Config {
 
     pub fn keys_mut(&mut self) -> &mut keys::Config {
         &mut self.keys
+    }
+
+    pub fn l1(&self) -> &l1::Config {
+        &self.l1
+    }
+
+    pub fn l1_mut(&mut self) -> &mut l1::Config {
+        &mut self.l1
+    }
+
+    pub fn servers(&self) -> &[server::Config] {
+        &self.servers
+    }
+
+    pub fn add_server(&mut self, server: server::Config) {
+        self.servers.retain(|s| s.base_url() != server.base_url());
+        self.servers.push(server);
+    }
+
+    pub fn remove_server(&mut self, base_url: &str) -> bool {
+        let before = self.servers.len();
+        self.servers.retain(|s| s.base_url() != base_url);
+        before != self.servers.len()
+    }
+
+    pub fn l2(&self, tag: &Tag) -> Option<&l2::Config> {
+        self.l2s.get(tag)
+    }
+
+    pub fn l2_mut(&mut self, tag: &Tag) -> Option<&mut l2::Config> {
+        self.l2s.get_mut(tag)
+    }
+
+    pub fn add_l2(&mut self, tag: Tag, server: server::Config) {
+        self.l2s.insert(tag, l2::Config::new(server));
+    }
+
+    pub fn remove_l2(&mut self, tag: &Tag) -> bool {
+        self.l2s.remove(tag).is_some()
     }
 
     /// Human-readable summary with secret material redacted, for `config show`.

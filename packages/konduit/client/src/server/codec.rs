@@ -88,6 +88,34 @@ pub enum Kind {
     Json,
 }
 
+impl std::fmt::Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            #[cfg(feature = "cbor")]
+            Kind::Cbor => "cbor",
+            #[cfg(feature = "json")]
+            Kind::Json => "json",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::str::FromStr for Kind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            #[cfg(feature = "cbor")]
+            "cbor" => Ok(Kind::Cbor),
+            #[cfg(feature = "json")]
+            "json" => Ok(Kind::Json),
+            other => Err(format!(
+                "unknown codec kind `{other}` (expected one of: cbor, json)"
+            )),
+        }
+    }
+}
+
 /// Unifies the underlying codecs' errors into one type for `Any`.
 #[derive(Debug, thiserror::Error)]
 pub enum AnyError {

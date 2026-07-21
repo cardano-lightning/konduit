@@ -11,13 +11,20 @@ pub struct Cli {
     /// Path to the konduit.toml config file
     #[arg(
         long,
-        short = 'c',
         env = "KONDUIT_CONFIG",
         default_value = "./konduit.toml",
         global = true
     )]
     pub config: PathBuf,
 
+    // /// Path to cache file
+    // #[arg(
+    //     long,
+    //     env = "KONDUIT_CACHE",
+    //     default_value = "./konduit-cache.json",
+    //     global = true
+    // )]
+    // pub cache: Path,
     #[command(subcommand)]
     pub command: Commands,
 }
