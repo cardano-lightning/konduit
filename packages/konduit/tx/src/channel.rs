@@ -2,9 +2,13 @@ use std::{cmp, collections::BTreeMap};
 
 use cardano_sdk::{Output, Value};
 use konduit_data::{
-    Constants, Cont, Datum, Duration, Eol, Keytag, Lock, Pending, Receipt, Secret, Stage, Tag,
-    Unpend,
+    Cheque, Constants, Cont, Datum, Duration, Eol, Lock, Pending, Secret, Squash, Stage, Tag,
+    Unlocked, Unpend, Used, Verified,
 };
+use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::{
     Bounds, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, StepError, StepTo, Stepped, variables::Variables,
@@ -52,7 +56,7 @@ impl TryFrom<&Output> for Channel {
             constants,
             stage,
         } = Datum::try_from(data).map_err(|_| Error::ParseDatum)?;
-        if own_hash != KONDUIT_VALIDATOR.hash {
+        if own_hash != <[u8; 28]>::from(KONDUIT_VALIDATOR.hash) {
             return Err(Error::OwnHash);
         }
         let amount = debuffer_amount(output.value());
@@ -68,10 +72,35 @@ pub fn debuffer_amount(value: &cardano_sdk::Value<u64>) -> u64 {
     value.lovelace().saturating_sub(MIN_ADA_BUFFER)
 }
 
+/// True if the item (identified by index/timeout) is still active: not
+/// already accounted for in `useds`, and not past `upper`.
+fn is_live(index: u64, timeout: Duration, useds: &[Used], upper: &Duration) -> bool {
+    timeout > *upper && !useds.iter().any(|u| u.index == index)
+}
+
+/// Sum of `useds` amounts not already folded into `squash`.
+fn active_useds_amount(useds: &[Used], squash: &Squash<Verified>) -> u64 {
+    useds
+        .iter()
+        .filter(|u| !squash.is_index_squashed(u.index))
+        .map(|u| u.amount)
+        .sum()
+}
+
+/// `min(relative_owed, capacity)`, where `relative_owed = (squash_amount + extra) - subbed`.
+fn gain_from_owed(squash_amount: u64, extra: u64, subbed: u64, capacity: u64) -> u64 {
+    let absolute_owed = squash_amount + extra;
+    let relative_owed = absolute_owed.saturating_sub(subbed);
+    cmp::min(relative_owed, capacity)
+}
+
 /// Data obtained from parsing a channel
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Channel {
+    #[n(0)]
     constants: Constants,
+    #[n(1)]
     variables: Variables,
 }
 
@@ -87,10 +116,6 @@ impl Channel {
 
     pub fn tag(&self) -> &Tag {
         &self.constants().tag
-    }
-
-    pub fn keytag(&self) -> Keytag {
-        Keytag::new(self.constants().add_vkey, self.tag().clone())
     }
 
     pub fn constants(&self) -> &Constants {
@@ -122,7 +147,7 @@ impl Channel {
     /// As datum
     pub fn datum(&self) -> Datum {
         Datum {
-            own_hash: KONDUIT_VALIDATOR.hash,
+            own_hash: KONDUIT_VALIDATOR.hash.into(),
             constants: self.constants.clone(),
             stage: self.stage().clone(),
         }
@@ -138,25 +163,48 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::default()))
     }
 
-    pub fn sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+    pub fn sub(
+        self,
+        squash: Squash<Verified>,
+        unlockeds: Vec<Unlocked<Verified>>,
+        upper: &Duration,
+    ) -> SteppedElseChannel {
         let Stage::Opened(subbed, useds) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Sub")));
         };
-        let (unlockeds, useds) = receipt.next_unlockeds_useds(useds, upper);
-        let squash = receipt.squash.clone();
-        let absolute_owed = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
-        let relative_owed = absolute_owed.saturating_sub(*subbed);
-        let gain = cmp::min(relative_owed, self.amount());
+
+        let unlockeds: Vec<Unlocked<Verified>> = unlockeds
+            .into_iter()
+            .filter(|u| is_live(u.index(), u.timeout(), useds, upper))
+            .collect();
+
+        let mut next_useds: Vec<Used> = useds
+            .iter()
+            .filter(|u| !squash.is_index_squashed(u.index))
+            .cloned()
+            .chain(unlockeds.iter().map(Used::from))
+            .collect();
+        next_useds.sort_by_key(|u| u.index);
+
+        let extra: u64 = next_useds.iter().map(|u| u.amount).sum();
+        let gain = gain_from_owed(squash.amount(), extra, *subbed, self.amount());
         if gain == 0 {
             return Err((Box::new(self), StepError::NoStep));
         }
+
         // It ought to be impossible to fail
-        let variables = match self.variables.sub(gain, useds) {
+        let variables = match self.variables.sub(gain, next_useds) {
             Ok(variables) => variables,
             Err(err) => return Err((Box::new(self), err)),
         };
-        let step_to = StepTo::cont(Cont::Sub(squash, unlockeds), variables);
+        let step_to = StepTo::cont(
+            Cont::Sub(
+                squash.into_unverified(),
+                unlockeds.into_iter().map(|x| x.into_unverified()).collect(),
+            ),
+            variables,
+        );
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
@@ -180,36 +228,51 @@ impl Channel {
         ))
     }
 
-    pub fn respond(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+    pub fn respond(
+        self,
+        squash: Squash<Verified>,
+        cheques: Vec<Cheque<Verified>>,
+        upper: &Duration,
+    ) -> SteppedElseChannel {
         let Stage::Closed(subbed, useds, _) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Respond")));
         };
-        let (cheques, pendings, useds_amount) =
-            receipt.next_cheques_pendings_useds_amount(useds, upper);
-        let squash = receipt.squash.clone();
-        let absolute_owed = squash.amount() + useds_amount;
-        let relative_owed = absolute_owed.saturating_sub(*subbed);
-        let gain = cmp::min(relative_owed, self.amount());
+
+        let mut filtered = Vec::new();
+        let mut pendings = Vec::new();
+        let mut extra = active_useds_amount(useds, &squash);
+
+        for c in &cheques {
+            if is_live(c.index(), c.timeout(), useds, upper) {
+                filtered.push(c.clone());
+
+                if let Some(locked) = c.as_locked() {
+                    pendings.push(Pending::from(locked));
+                } else if let Some(unlocked) = c.as_unlocked() {
+                    extra += unlocked.amount();
+                }
+            }
+        }
+
+        let gain = gain_from_owed(squash.amount(), extra, *subbed, self.amount());
+
         // It ought to be impossible to fail
         let variables = match self.variables.respond(gain, pendings) {
             Ok(variables) => variables,
             Err(err) => return Err((Box::new(self), err)),
         };
-        let step_to = StepTo::cont(Cont::Respond(squash, cheques), variables);
+        let step_to = StepTo::cont(
+            Cont::Respond(
+                squash.into_unverified(),
+                filtered.into_iter().map(|x| x.into_unverified()).collect(),
+            ),
+            variables,
+        );
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
-    pub fn unlock(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
-        let secrets = receipt
-            .unlockeds()
-            .into_iter()
-            .map(|u| u.secret)
-            .collect::<Vec<_>>();
-        self.unlock_with_secrets(secrets, upper)
-    }
-
-    pub fn unlock_with_secrets(self, secrets: Vec<Secret>, upper: &Duration) -> SteppedElseChannel {
+    pub fn unlock(self, secrets: Vec<Secret>, upper: &Duration) -> SteppedElseChannel {
         let Stage::Responded(_pendings_amount, pendings) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Unlock")));
@@ -299,13 +362,5 @@ impl Channel {
         };
         let step_to = StepTo::eol(Eol::End);
         Ok(Stepped::new(self, step_to, bounds))
-    }
-
-    pub fn any_sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
-        match self.stage() {
-            Stage::Opened(_, _) => self.sub(receipt, upper),
-            Stage::Closed(_, _, _) => self.respond(receipt, upper),
-            Stage::Responded(_, _) => self.unlock(receipt, upper),
-        }
     }
 }

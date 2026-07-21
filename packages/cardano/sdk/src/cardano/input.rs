@@ -6,6 +6,11 @@ use crate::{Hash, cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr, sync::Arc};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(feature = "serde")]
+use serde_with::{hex::Hex, serde_as};
+
 /// A reference to a past transaction output.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -18,7 +23,6 @@ impl fmt::Display for Input {
 }
 
 // -------------------------------------------------------------------- Building
-
 impl Input {
     /// See also [`input!`](crate::input).
     pub fn new(transaction_id: Hash<32>, output_index: u64) -> Self {
@@ -26,6 +30,43 @@ impl Input {
             transaction_id: pallas::Hash::from(transaction_id),
             index: output_index,
         }))
+    }
+}
+
+// ------------------------------------------------------------------------ serde
+#[cfg(feature = "serde")]
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+struct InputRaw {
+    #[serde_as(as = "Hex")]
+    transaction_id: [u8; 32],
+    index: u64,
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Input {
+    fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        // ASSUMPTION: `pallas::Hash<32>` exposes its bytes via `AsRef<[u8]>`
+        // (or similar) — adjust the extraction if the real accessor differs.
+        let bytes: [u8; 32] = self
+            .0
+            .transaction_id
+            .as_ref()
+            .try_into()
+            .map_err(|_| serde::ser::Error::custom("transaction_id was not 32 bytes"))?;
+        InputRaw {
+            transaction_id: bytes,
+            index: self.0.index,
+        }
+        .serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Input {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = InputRaw::deserialize(deserializer)?;
+        Ok(Self::new(Hash::from(raw.transaction_id), raw.index))
     }
 }
 

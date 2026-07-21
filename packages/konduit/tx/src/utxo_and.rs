@@ -1,11 +1,18 @@
 use cardano_sdk::{Input, Output};
+use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::Utxo;
 
 /// We inspect a Utxo once, and then parse it around, endowed with extra data.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UtxoAnd<T> {
+    #[n(0)]
     utxo: Utxo,
+    #[n(1)]
     data: T,
 }
 

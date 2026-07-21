@@ -3,26 +3,35 @@ use konduit_data::{Constants, Stage};
 
 use crate::{Channel, Variables, konduit_address};
 
-#[derive()]
-pub struct Open(Channel, Option<Credential>);
+#[derive(Debug, Clone)]
+pub struct Open {
+    channel: Channel,
+    delegation: Option<Credential>,
+}
 
 impl Open {
     pub fn new(amount: u64, constants: Constants, delegation: Option<Credential>) -> Self {
         let variables = Variables::new(amount, Stage::Opened(0, vec![]));
-        Self(Channel::new(constants, variables), delegation)
+        Self {
+            channel: Channel::new(constants, variables),
+            delegation,
+        }
     }
 
     /// Specify any kind of output. Can start a channel "mid-lifecycle".
-    pub fn new_raw(data: Channel, delegation: Option<Credential>) -> Self {
-        Self(data, delegation)
+    pub fn new_raw(channel: Channel, delegation: Option<Credential>) -> Self {
+        Self {
+            channel,
+            delegation,
+        }
     }
 
     pub fn data(&self) -> &Channel {
-        &self.0
+        &self.channel
     }
 
     pub fn delegation(&self) -> Option<&Credential> {
-        self.1.as_ref()
+        self.delegation.as_ref()
     }
 
     pub fn buffered_amount(&self) -> u64 {

@@ -20,33 +20,69 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = []
+default = ["json", "cbor", "cli", "idb"]
 cli = [
+  "toml",
   "dep:clap",
   "dep:dotenvy",
   # "dep:http-client-native",
   # "dep:serde_json",
   "dep:tokio",
+  "dep:hex",
+  "dep:rand_core",
 ]
+idb = ["dep:idb", "dep:js-sys", "dep:wasm-bindgen"]
+serde = [
+  "dep:serde",
+  "dep:serde_with",
+  "cobbl3/serde",
+  "konduit-data/serde",
+  "konduit-wire/serde",
+  "konduit-tx/serde",
+]
+json = ["serde", "dep:serde_json", "http-client/json", "problem-details/json"]
+toml = ["serde", "dep:toml"]
+cbor = ["http-client/cbor", "problem-details/cbor"]
 
+# Minicbor is always required for `Tbs`
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 bln-sdk.workspace = true
 cardano-connector.workspace = true
 cardano-sdk.workspace = true
-http-client.workspace = true
+clap = { workspace = true, features = ["env"], optional = true }
+cobbl3 = { workspace = true, features = ["problem-details"] }
+dotenvy = { workspace = true, optional = true }
+http-client = { workspace = true, features = ["time"] }
+http.workspace = true
+idb = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
 konduit-data.workspace = true
 konduit-tx.workspace = true
+konduit-wire.workspace = true
 log.workspace = true
-web-time.workspace = true
-# -F cli
-clap = { workspace = true, features = ["env"], optional = true }
-dotenvy = { workspace = true, optional = true }
+minicbor = { workspace = true }
+problem-details = { workspace = true, features = [] }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
+thiserror.workspace = true
 tokio = { workspace = true, optional = true }
-# FIXME :: Disabled to appease cargo machete, and while main is broken
-# serde_json = { workspace = true, optional = true }
-# http-client-native = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+web-time.workspace = true
+toml = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+rand_core = { workspace = true, optional = true }
 
 [dev-dependencies]
-proptest.workspace = true
+proptest = { workspace = true, default-features = false, features = [
+  "std",
+  "bit-set",
+] }
 proptest-derive.workspace = true
+tokio.workspace = true
+wasm-bindgen-test = "0.3.76"
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }

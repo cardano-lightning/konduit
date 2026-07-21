@@ -2,11 +2,16 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Hash, PlutusData};
 use std::fmt;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+use crate::{Hash, PlutusData};
 
 /// A datum as found in [`Output`](crate::Output).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Datum {
     Hash(Hash<32>),
     Inline(PlutusData<'static>),

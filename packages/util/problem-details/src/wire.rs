@@ -1,21 +1,25 @@
+#[cfg(feature = "cbor")]
 use minicbor::{Decode, Encode};
+#[cfg(feature = "json")]
 use serde::{Deserialize, Serialize};
 
 // ── Wire type ─────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "json", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "cbor", derive(Encode, Decode))]
 pub struct ProblemDetailBody {
-    #[n(0)]
+    #[cfg_attr(feature = "cbor", n(0))]
     pub r#type: String,
-    #[n(1)]
+    #[cfg_attr(feature = "cbor", n(1))]
     pub title: String,
-    #[n(2)]
+    #[cfg_attr(feature = "cbor", n(2))]
     pub status: u16,
-    #[n(3)]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "cbor", n(3))]
+    #[cfg_attr(feature = "json", serde(skip_serializing_if = "Option::is_none"))]
     pub detail: Option<String>,
-    #[n(4)]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "cbor", n(4))]
+    #[cfg_attr(feature = "json", serde(skip_serializing_if = "Option::is_none"))]
     pub instance: Option<String>,
 }
 
@@ -46,12 +50,14 @@ pub trait ProblemDetail {
         }
     }
 
+    #[cfg(feature = "cbor")]
     fn to_cbor(&self) -> Vec<u8> {
         let mut buf = Vec::new();
         minicbor::encode(self.to_body(), &mut buf).expect("infallible");
         buf
     }
 
+    #[cfg(feature = "json")]
     fn to_json(&self) -> Vec<u8> {
         serde_json::to_vec(&self.to_body()).expect("infallible")
     }
@@ -186,6 +192,7 @@ mod tests {
     // ── CBOR round-trip ───────────────────────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "cbor")]
     fn cbor_round_trip() {
         let original = Error::NotPatron.with_detail("no channel on record");
         let bytes = original.to_cbor();
@@ -200,6 +207,7 @@ mod tests {
     // ── JSON round-trip ───────────────────────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "json")]
     fn json_round_trip() {
         let original = Error::Unauthorized.with_detail("clock skew was 5s");
         let bytes = original.to_json();
@@ -212,6 +220,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "json")]
     fn json_omits_none_fields() {
         let bytes = Error::Unauthorized.to_json();
         let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -228,6 +237,7 @@ mod tests {
     // ── Manifest ──────────────────────────────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "json")]
     fn manifest_is_valid_json() {
         let manifest: serde_json::Value = serde_json::from_str(Error::PROBLEM_DETAILS_MANIFEST)
             .expect("manifest is not valid JSON");
@@ -330,6 +340,7 @@ mod tests_part_ii {
     // ── CBOR round-trip ───────────────────────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "cbor")]
     fn cbor_round_trip() {
         let original = Error::NotPatron.with_detail("no channel on record");
         let bytes = original.to_cbor();
@@ -344,6 +355,7 @@ mod tests_part_ii {
     // ── JSON round-trip ───────────────────────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "json")]
     fn json_round_trip() {
         let original = Error::Unauthorized.with_detail("clock skew was 5s");
         let bytes = original.to_json();
@@ -356,6 +368,7 @@ mod tests_part_ii {
     }
 
     #[test]
+    #[cfg(feature = "json")]
     fn json_omits_none_fields() {
         let bytes = Error::Unauthorized.to_json();
         let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -396,6 +409,7 @@ mod tests_part_ii {
     }
 
     #[test]
+    #[cfg(feature = "cbor")]
     fn delegate_cbor_round_trip() {
         let e = Error::Common(CommonError::InsufficientFunds);
         let bytes = e.to_cbor();
@@ -405,6 +419,7 @@ mod tests_part_ii {
     }
 
     #[test]
+    #[cfg(feature = "json")]
     fn delegate_not_in_manifest() {
         let manifest: serde_json::Value =
             serde_json::from_str(Error::PROBLEM_DETAILS_MANIFEST).expect("valid JSON");
@@ -414,6 +429,7 @@ mod tests_part_ii {
     }
 
     #[test]
+    #[cfg(feature = "json")]
     fn manifest_is_valid_json() {
         let manifest: serde_json::Value = serde_json::from_str(Error::PROBLEM_DETAILS_MANIFEST)
             .expect("manifest is not valid JSON");

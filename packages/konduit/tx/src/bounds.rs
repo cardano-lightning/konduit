@@ -1,11 +1,17 @@
 use std::cmp;
 
 use konduit_data::Duration;
-use web_time::{SystemTime, UNIX_EPOCH};
+use minicbor::{Decode, Encode};
 
-#[derive(Debug, Clone, Default)]
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Bounds {
+    #[n(0)]
     pub lower: Option<Duration>,
+    #[n(1)]
     pub upper: Option<Duration>,
 }
 
@@ -24,6 +30,19 @@ impl Bounds {
         }
     }
 
+    /// Get a bounded window from (about) now.
+    /// "about" to handle staleness from external services
+    pub fn start_at(start: &Duration, window: Option<&Duration>) -> Self {
+        // Hack to handle blockfrost slots not aligning with current time.
+        let buffer = Duration::from_secs(60);
+        let lower = start.saturating_sub(buffer);
+        let upper = window.map(|x| lower.saturating_add(*x));
+        Bounds {
+            lower: Some(lower),
+            upper: upper,
+        }
+    }
+
     pub fn intersect(&self, other: &Self) -> Self {
         let lower = match (self.lower, other.lower) {
             (Some(a), Some(b)) => Some(cmp::max(a, b)),
@@ -35,22 +54,5 @@ impl Bounds {
         };
 
         Self { lower, upper }
-    }
-
-    pub fn twenty_mins() -> Self {
-        // TODO :: Either use std time, or upstream methods
-        let lower = Duration::from_secs(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                // Hack to handle blockfrost slots not aligning with current time.
-                .saturating_sub(60),
-        );
-        let upper = Duration::from_secs(lower.as_secs() + 19 * 60);
-        Bounds {
-            lower: Some(lower),
-            upper: Some(upper),
-        }
     }
 }

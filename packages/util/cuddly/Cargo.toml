@@ -1,0 +1,19 @@
+[package]
+name = "cuddly"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+cuddly-derive = { workspace = true, optional = true }
+
+[features]
+default = []
+derive = ["dep:cuddly-derive"]
+
+[dev-dependencies]
+cddl-cat.workspace = true
+minicbor.workspace = true
+proptest.workspace = true

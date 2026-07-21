@@ -5,20 +5,22 @@ use cardano_sdk::{
     Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, Transaction,
     VerificationKey, cbor::ToCbor, transaction::state,
 };
-use http_client::HttpClient;
+use http_client::{JsonCodec, Transport};
 use std::collections::BTreeMap;
 
-/// A facade to a remote Cardano connector, abstracted over an HttpClient.
-pub struct Connector<Http: HttpClient> {
-    http_client: Http,
+pub type HttpClient<T> = http_client::Client<T, JsonCodec>;
+
+/// A facade to a remote Cardano connector, abstracted over an http_client::Client.
+pub struct Connector<Http: Transport> {
+    http_client: HttpClient<Http>,
     network: Network,
 }
 
-impl<Http: HttpClient> Connector<Http>
+impl<Http: Transport> Connector<Http>
 where
     Http::Error: Into<anyhow::Error>,
 {
-    pub async fn new(http_client: Http) -> anyhow::Result<Self> {
+    pub async fn new(http_client: HttpClient<Http>) -> anyhow::Result<Self> {
         let network = Network::try_from(
             http_client
                 .get::<endpoints::network::Response>("/network")
@@ -66,7 +68,7 @@ where
 
 // -------------------------------------------------------- CardanoConnector Trait
 
-impl<Http: HttpClient> CardanoConnector for Connector<Http>
+impl<Http: Transport> CardanoConnector for Connector<Http>
 where
     Http::Error: Into<anyhow::Error>,
 {
@@ -121,11 +123,11 @@ where
         }
 
         self.http_client
-            .post::<serde_json::Value>(
+            .post::<SubmitRequest, serde_json::Value>(
                 "/submit",
-                Http::to_json(&SubmitRequest {
+                &SubmitRequest {
                     transaction: hex::encode(transaction.to_cbor()),
-                }),
+                },
             )
             .await
             .map_err(|e| anyhow!(e))?;

@@ -1,0 +1,55 @@
+[package]
+name = "konduit-wire"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+cbor = ["problem-details/cbor"]
+serde = [
+  "dep:serde",
+  "dep:serde_with",
+  "problem-details/serde",
+  "cobbl3/serde",
+  "konduit-data/serde",
+  "cardano-sdk/serde",
+]
+json = ["serde"]
+
+gen-docs = ["dep:syn", "dep:quote"]
+# FIXME : Turn this back on once upstream crates have utoipa.
+# openapi = [ "dep:utoipa" ]
+
+[dependencies]
+base64.workspace = true
+cardano-sdk.workspace = true
+cbor-with.workspace = true
+cobbl3 = { workspace = true, features = ["problem-details"] }
+const_format = "0.2.36"
+konduit-data = { workspace = true, features = [] }
+minicbor.workspace = true
+problem-details = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
+# FIXME : Turn this back on once upstream crates have utoipa.
+syn = { version = "2", features = [
+  "full",
+  "parsing",
+  "extra-traits",
+], optional = true }
+quote = { version = "1", optional = true }
+
+[[bin]]
+name = "gen-api-docs"
+path = "src/main.rs"
+required-features = ["gen-docs"]

@@ -1,0 +1,17 @@
+[package]
+name = "konduit-receipt"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+konduit-data.workspace = true
+minicbor.workspace = true
+serde.workspace = true
+thiserror.workspace = true

@@ -13,17 +13,33 @@ rust-version.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+serde = ["dep:serde", "dep:serde_with", "cardano-sdk/serde"]
+json = ["serde", "dep:serde_json"]
+cardano_sdk = ["dep:cardano-sdk", "dep:anyhow"]
+proptest = [
+  "json",
+  "dep:proptest",
+  "dep:proptest-derive",
+  "cardano_sdk",
+  "cardano-sdk/test-utils",
+]
+
 [dependencies]
-anyhow.workspace = true
-bln-sdk.workspace = true
-cardano-sdk.workspace = true
-chrono.workspace = true
+anyhow = { workspace = true, optional = true }
+cardano-sdk = { workspace = true, optional = true, features = [] }
+cbor-with = { workspace = true, features = ["full"] }
 cryptoxide.workspace = true
 hex.workspace = true
+minicbor.workspace = true
+proptest = { workspace = true, optional = true, default-features = false, features = [
+  "std",
+  "bit-set",
+] }
+proptest-derive = { workspace = true, optional = true }
 rand_core.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-serde_with = { workspace = true, features = ["hex"] }
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_json = { workspace = true, optional = true }
+serde_with = { workspace = true, features = ["hex"], optional = true }
 thiserror.workspace = true
-uplc.workspace = true
-web-time.workspace = true

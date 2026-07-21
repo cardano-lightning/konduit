@@ -14,12 +14,14 @@ rust-version.workspace = true
 
 [dependencies]
 actix-web = { workspace = true, features = ["macros"], optional = true }
-minicbor.workspace = true
+minicbor = { workspace = true, optional = true }
 problem-details-derive.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
-
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_json = { workspace = true, optional = true }
 
 [features]
-default = ["actix"]
+default = ["actix", "cbor", "json"]
 actix = ["dep:actix-web"]
+cbor = ["dep:minicbor"]
+serde = ["dep:serde"]
+json = ["serde", "dep:serde_json"]

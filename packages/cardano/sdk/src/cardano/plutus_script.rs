@@ -2,6 +2,11 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "serde")]
+use serde_with::serde_as;
+
 use crate::{Hash, PlutusVersion, pallas};
 use std::fmt;
 
@@ -17,7 +22,11 @@ use std::fmt;
 /// )
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PlutusScript(PlutusVersion, Vec<u8>);
+#[cfg_attr(feature = "serde", serde_as, derive(Serialize, Deserialize))]
+pub struct PlutusScript(
+    PlutusVersion,
+    #[cfg_attr(feature = "serde", serde_as(as = "Hex"))] Vec<u8>,
+);
 
 impl fmt::Display for PlutusScript {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

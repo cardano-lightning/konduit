@@ -1,219 +1,215 @@
-use cardano_sdk::VerificationKey;
-use konduit_data::{
-    Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
-};
+//! A model of channel state according to the server.
+//! This includes:
+//! - Keytag ie the Channel id
+//! - Bits of the L1 state
+//! - The L2 state (ie receipt)
+//! - Other account management such as last quote, and resource bucket.
+//!
+//! The DB can then be dumb ie agnostic to the domain.
+
+use konduit_data::{Locked, Secret, Squash, Tag, VerifyingKey};
+use konduit_wire::auth::squash::SquashProposal;
+use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::cmp;
 
-/// A channel is an edge in the Lightning network.
-/// In Konduit, a channel is from Consumer to Adaptor.
-///
-/// What a `channel` actually is, is a subtle business.
-/// The design of Konduit does not enforce a uniqueness of well-formed UTXOs
-/// at tip at the Konduit script address.
-/// Konduit design does require some chain liveness to guarantee safety.
-/// More precisely, if Adaptor sees tip (confirmed tip) `< close_period / 2`,
-/// then they are safe upto general chain safety (eg tx failures due to chain congestion).
-/// also does not depend on "tracing" state through channels.
+pub mod receipt;
+pub use receipt::Receipt;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Aux {
-    is_active: bool,
+mod error;
+pub use error::Error;
+
+mod bucket;
+use bucket::Bucket;
+
+mod backing;
+use backing::Backing;
+
+mod thread;
+use thread::Thread;
+
+use crate::time::{self, now};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct Channel {
+    /// Channel id
+    #[n(0)]
+    key: VerifyingKey,
+    /// Channel id
+    #[n(1)]
+    tag: Tag,
+    /// L1 state. Cached for serving `./auth/state`.
+    /// Use external service prior to quote.
+    /// FIXME :: Does this even make sense?
+    #[n(2)]
+    backing: Backing,
+    /// L2 state
+    #[n(3)]
+    receipt: Option<Receipt>,
+    /// Resourcing
+    #[n(4)]
+    bucket: Bucket,
+    /// Pending state such as last quote.
+    #[n(5)]
+    cache: Cache,
 }
 
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum ChannelError {
-    #[error("Retainer required")]
-    NoRetainer,
-    #[error("Receipt required")]
-    NoReceipt,
-    #[error("Not Active")]
-    NotActive,
-    #[error("Input not well-formed")]
-    BadInput,
-    #[error("Insufficient capacity")]
-    Capacity,
-    #[error("Insufficient funds")]
-    Funds,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct Config {
+    #[n(0)]
+    bucket_capacity: u64,
+    #[n(1)]
+    bucket_refill_rate: u64,
 }
 
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Channel {
-    #[serde_as(as = "serde_with::hex::Hex")]
-    key: VerificationKey,
-    #[serde_as(as = "serde_with::hex::Hex")]
-    tag: Tag,
-    retainer: Option<Retainer>,
-    receipt: Option<Receipt>,
-    aux: Aux,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Default)]
+pub struct Cache {
+    #[n(0)]
+    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quote: Option<Vec<u8>>,
 }
 
 impl Channel {
-    pub fn new(keytag: Keytag) -> Self {
-        let (key, tag) = keytag.split();
-        Channel {
+    /// TODO :: The bucket is not plumbed in.
+    /// Any read or write to the channel should consume from the bucket.
+    /// The specific amounts need to be configured.
+    pub fn new(config: &Config, key: VerifyingKey, tag: Tag) -> Self {
+        Self {
             key,
             tag,
-            retainer: None,
+            backing: Backing::default(),
             receipt: None,
-            aux: Aux { is_active: true },
+            bucket: Bucket::new(
+                config.bucket_capacity,
+                config.bucket_refill_rate,
+                time::now(),
+            ),
+            cache: Cache::default(),
         }
     }
 
-    pub fn assert_active(&self) -> Result<(), ChannelError> {
-        if !self.aux.is_active {
-            return Err(ChannelError::NotActive);
-        }
-        Ok(())
+    // --- Accessors ----------------------------------------------------------
+
+    pub fn key(&self) -> &VerifyingKey {
+        &self.key
     }
 
-    pub fn update_retainer(&mut self, l1s: Vec<Retainer>) -> Result<(), ChannelError> {
-        // FIXME :: Handle Useds better!
-        self.retainer = match &self.receipt {
-            None => l1s.into_iter().max_by_key(|l1| l1.amount),
-            Some(receipt) => l1s.into_iter().max_by_key(|l1| {
-                (
-                    cmp::min(
-                        receipt
-                            .potentially_subable(&l1.useds)
-                            .saturating_sub(l1.subbed),
-                        l1.amount,
-                    ),
-                    l1.amount,
-                )
-            }),
-        };
-        Ok(())
+    pub fn tag(&self) -> &Tag {
+        &self.tag
     }
 
-    pub fn update_squash(&mut self, squash: Squash) -> Result<bool, ChannelError> {
-        let _ = self.assert_active();
-        if !squash.verify(&self.key, &self.tag) {
-            return Err(ChannelError::BadInput);
-        };
+    pub fn receipt(&self) -> Option<&Receipt> {
+        self.receipt.as_ref()
+    }
+
+    pub fn backing(&self) -> &Backing {
+        &self.backing
+    }
+
+    pub fn bucket(&self) -> &Bucket {
+        &self.bucket
+    }
+
+    fn bucket_mut(&mut self) -> &mut Bucket {
+        &mut self.bucket
+    }
+
+    pub fn cache(&self) -> &Cache {
+        &self.cache
+    }
+
+    fn receipt_mut(&mut self) -> Result<&mut Receipt, Error> {
+        self.receipt.as_mut().ok_or(Error::NoReceipt)
+    }
+
+    // --- Events -------------------------------------------------------------
+
+    /// Apply a consumer-signed squash.
+    /// Creates the receipt if this is the first squash; advances it otherwise.
+    pub fn apply_squash(&mut self, squash: Squash) -> Result<(), Error> {
+        let squash = squash.try_verify(&self.key, &self.tag)?;
         match &mut self.receipt {
             None => {
                 self.receipt = Some(Receipt::new(squash));
-                Ok(true)
             }
-            Some(receipt) => Ok(receipt.update_squash(squash)),
+            Some(r) => {
+                r.apply_squash(squash)?;
+            }
         }
+        Ok(())
     }
 
-    pub fn squash_proposal(&self) -> Result<SquashProposal, ChannelError> {
-        match &self.receipt {
-            None => Err(ChannelError::NoReceipt),
-            Some(receipt) => receipt
-                .squash_proposal()
-                .map_err(|_e| ChannelError::BadInput),
+    /// Append a consumer-signed locked cheque.
+    /// Verifies the signature and checks available funds before accepting.
+    pub fn apply_locked(&mut self, locked: Locked) -> Result<(), Error> {
+        let locked = locked.try_verify(&self.key, &self.tag)?;
+        let available = self.spendable()?;
+        if locked.amount() > available {
+            return Err(Error::Funds);
         }
+        self.receipt_mut()?.apply_locked(locked)?;
+        Ok(())
     }
 
-    /// How much funds are currently unspent, uncommitted.
-    /// Error if no funds can be spent because of other reasons.
-    pub fn potentially_subable(&self) -> Result<u64, ChannelError> {
-        self.assert_active()?;
-        let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
-        let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
-        if receipt.capacity() == 0 {
-            return Err(ChannelError::Capacity);
-        };
-        let abs = receipt.potentially_subable(&retainer.useds);
-        let rel = abs.saturating_sub(retainer.subbed);
-        Ok(retainer.amount.saturating_sub(rel))
+    /// Resolve a locked cheque with its payment preimage aka secret.
+    pub fn apply_secret(&mut self, secret: Secret) -> Result<(), Error> {
+        self.receipt_mut()?.apply_secret(secret)?;
+        Ok(())
     }
 
-    pub fn next_index(&self) -> Result<u64, ChannelError> {
-        self.assert_active()?;
-        let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
-        let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
-        let index = match retainer.useds.last() {
-            None => receipt.max_index(),
-            Some(u) => cmp::max(receipt.max_index(), u.index),
-        };
-        Ok(index + 1)
+    /// Apply backing. Replace what is there
+    pub fn apply_backing(&mut self, _backing: Backing) {
+        todo!()
     }
 
-    pub fn append_locked(&mut self, locked: Locked) -> Result<(), ChannelError> {
-        if !locked.verify(&self.key, &self.tag) {
-            Err(ChannelError::BadInput)
-        } else if locked.amount() > self.potentially_subable()? {
-            Err(ChannelError::Funds)
-        } else {
-            self.receipt
-                .as_mut()
-                .expect("Impossible")
-                .append_locked(locked)
-                .map_err(|_err| ChannelError::BadInput)
-        }
+    /// Apply Opened.
+    pub fn apply_opened(&mut self, _amount: u64, _subbed: u64, _created_at: u64) {
+        todo!()
     }
 
-    pub fn receipt(&self) -> Option<Receipt> {
-        self.receipt.clone()
+    /// Apply closed. Effectivly drop backing.
+    pub fn apply_closed(&mut self) {
+        todo!()
     }
 
-    pub fn unlock(&mut self, secret: Secret) -> Result<(), ChannelError> {
-        self.receipt
-            .as_mut()
-            .ok_or(ChannelError::NoReceipt)?
-            .unlock(secret)
-            .map_err(|_err| ChannelError::BadInput)
+    /// Apply quote caches the quote in the cache
+    /// Note the type erasure
+    pub fn apply_quote(&mut self, quote: Vec<u8>) {
+        self.cache.quote = Some(quote);
     }
 
-    /// We need to verify that if the channel is active, then there is
-    /// still a potential retainer with at as much capacity.
-    /// FIXME :: There is still a potential issue with useds here.
-    pub fn steps(
-        &self,
-        _l1_channels: &Vec<L1Channel>,
-    ) -> Result<Vec<Option<(Step, L1Channel)>>, ChannelError> {
+    /// Apply commit: gives quote to caller and clears cache.
+    pub fn apply_commit(&mut self) -> Option<Vec<u8>> {
+        self.cache.quote.take()
+    }
+
+    // --- Queries ------------------------------------------------------------
+
+    /// The next squash the server expects the client to sign.
+    pub fn propose_squash(&self) -> Result<SquashProposal, Error> {
+        let proposal = self.receipt().ok_or(Error::NoReceipt)?.propose_squash()?;
+        Ok(proposal)
+    }
+
+    /// Amount available for new payments, given current on-chain backing and receipt state.
+    /// FIXME :: this should be an external
+    pub fn spendable(&self) -> Result<u64, Error> {
+        todo!()
+    }
+
+    /// The index to assign to the next cheque.
+    pub fn next_index(&self) -> Result<u64, Error> {
         todo!()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Quote {
-    index: u64,
-    amount: u64,
-}
+// --- Ops ------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Retainer {
-    amount: u64,
-    subbed: u64,
-    useds: Vec<Used>,
-}
-
-impl TryFrom<&L1Channel> for Retainer {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &L1Channel) -> Result<Self, Self::Error> {
-        let Stage::Opened(subbed, useds) = value.stage.clone() else {
-            return Err(anyhow::anyhow!("Not openened"));
-        };
-        let amount = value.amount;
-        Ok(Retainer {
-            amount,
-            subbed,
-            useds,
-        })
-    }
-}
-
-impl TryFrom<&konduit_tx::Channel> for Retainer {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &konduit_tx::Channel) -> Result<Self, Self::Error> {
-        let Stage::Opened(subbed, useds) = value.stage().clone() else {
-            return Err(anyhow::anyhow!("Not openened"));
-        };
-        let amount = value.amount();
-        Ok(Retainer {
-            amount,
-            subbed,
-            useds,
-        })
+pub fn consume(amount: u64) -> impl FnOnce(Channel) -> Result<(Channel, Option<()>), Error> {
+    move |mut channel| {
+        channel.bucket_mut().consume(amount, now())?;
+        Ok((channel, None))
     }
 }

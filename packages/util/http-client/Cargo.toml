@@ -10,5 +10,58 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen-futures"]
+
 [dependencies]
-serde.workspace = true
+http.workspace = true
+minicbor = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror.workspace = true
+futures.workspace = true
+
+# ----- TIME -----
+web-time = { workspace = true, optional = true }
+# ---------------------
+
+# --- GLOO ----
+gloo-net = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+# --------------
+
+# ---- REQWEST -----
+reqwest = { workspace = true, optional = true }
+# ----------------- 
+
+[features]
+# Default enables all features for IDE/LSP support only.
+# Consumers should select features explicitly; do not rely on default.
+default = ["std", "json", "cbor", "gloo", "reqwest", "bindgen"]
+# http does not yet support no_std. Has a compile error. 
+# But when it does we're ready 
+std = ["serde?/std", "serde_json?/std", "http/std"]
+json = ["dep:serde", "dep:serde_json", "serde/derive"]
+cbor = ["dep:minicbor"]
+time = ["dep:web-time"]
+gloo = [
+  "time",
+  "dep:gloo-net",
+  "dep:gloo-timers",
+  "dep:js-sys",
+  "dep:send_wrapper",
+]
+reqwest = ["time", "dep:reqwest"]
+bindgen = ["gloo", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { version = "1", features = ["full"] }

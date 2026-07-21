@@ -5,4 +5,5 @@ pub mod core {
     pub use cardano_sdk::*;
     pub use konduit_data::*;
     pub use konduit_tx::*;
+    pub use konduit_wire as wire;
 }

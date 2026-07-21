@@ -2,52 +2,108 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use minicbor::{Decode, Encode};
 use num::rational::Ratio;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Protocol parameters restricted to the set immediately useful to this library.
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProtocolParameters {
     /// Multiplier fee coefficient on the size of transactions
+    #[n(0)]
     fee_per_byte: u64,
-
     /// Flat/fixed fee for all transactions, in lovelace
+    #[n(1)]
     fee_constant: u64,
-
     /// Price of a single memory execution unit, in lovelace/unit
+    #[n(2)]
     price_mem: f64,
-
     /// Price of a single cpu execution unit, in lovelace/unit
+    #[n(3)]
     price_cpu: f64,
-
     /// Coefficient to apply to fees to obtain the collateral, in lovelace
+    #[n(4)]
     collateral_coefficient: f64,
-
     /// Initial fee coefficient on the size of referenced scripts, in lovelace/bytes
+    #[n(5)]
     referenced_scripts_base_fee_per_byte: u64,
-
     /// Multiplier exponentially increasing the cost of reference scripts at each size step.
     ///
     /// NOTE: This isn't an actual protocol parameter and is currently hard-wired in the ledger.
     /// But it may very well be soon enough.
+    #[n(6)]
+    #[cbor(with = "ratio_u64")]
+    #[cfg_attr(feature = "serde", serde(with = "ratio_u64_serde"))]
     referenced_scripts_fee_multiplier: Ratio<u64>,
-
     /// Size of each step after which the cost of referenced script bytes increases, in bytes
     ///
     /// NOTE: This isn't an actual protocol parameter and is currently hard-wired in the ledger.
     /// But it may very well be soon enough.
+    #[n(7)]
     referenced_scripts_fee_step_size: u64,
-
     /// Cost model for Plutus version 3, ordered according to the [_"spec"_](https://github.com/IntersectMBO/plutus/blob/b12c894833cae725bab11577c845701aeb05dc97/plutus-ledger-api/CostModel/Params/CostModelParams/costModelParamNames.golden.txt)
+    #[n(8)]
     plutus_v3_cost_model: PlutusV3CostModel,
-
     /// The network POSIX start time, in seconds.
+    #[n(9)]
     start_time: u64,
-
     /// The first (not-necessarily active) slot of the Shelley era.
+    #[n(10)]
     first_shelley_slot: u64,
 }
-
 type PlutusV3CostModel = Vec<i64>;
+
+/// `Ratio<u64>` as a plain `(numerator, denominator)` pair — sidesteps
+/// `num-rational`'s lack of a native minicbor impl.
+mod ratio_u64 {
+    use minicbor::{Decoder, Encoder};
+    use num::rational::Ratio;
+
+    pub fn encode<C, W: minicbor::encode::Write>(
+        v: &Ratio<u64>,
+        e: &mut Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.array(2)?;
+        e.u64(*v.numer())?;
+        e.u64(*v.denom())?;
+        Ok(())
+    }
+
+    pub fn decode<C>(
+        d: &mut Decoder<'_>,
+        _ctx: &mut C,
+    ) -> Result<Ratio<u64>, minicbor::decode::Error> {
+        d.array()?;
+        let numer = d.u64()?;
+        let denom = d.u64()?;
+        Ok(Ratio::new(numer, denom))
+    }
+}
+
+/// Same idea for serde: `Ratio<u64>` as `(numerator, denominator)`,
+/// avoiding any dependency on `num-rational`'s own (feature-gated, and
+/// possibly differently-shaped) serde impl.
+#[cfg(feature = "serde")]
+mod ratio_u64_serde {
+    use num::rational::Ratio;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<Ser: Serializer>(
+        v: &Ratio<u64>,
+        serializer: Ser,
+    ) -> Result<Ser::Ok, Ser::Error> {
+        (*v.numer(), *v.denom()).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Ratio<u64>, D::Error> {
+        let (numer, denom) = <(u64, u64)>::deserialize(deserializer)?;
+        Ok(Ratio::new(numer, denom))
+    }
+}
 
 // --------------------------------------------------------------------- Building
 
