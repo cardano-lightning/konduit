@@ -10,5 +10,51 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.cargo-machete]
+ignored = ["wasm-bindgen-futures"]
+
 [dependencies]
-serde.workspace = true
+http.workspace = true
+thiserror.workspace = true
+futures.workspace = true
+# ----- CODEC:JSON -----
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+# ----- CODEC:CBOR -----
+minicbor = { workspace = true, optional = true }
+# ---- HTTP-CLIENT:GLOO ----
+gloo-net = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+send_wrapper = { workspace = true, optional = true, features = ["futures"] }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+# ---- HTTP-CLIENT:REQWEST ----
+reqwest = { workspace = true, optional = true }
+# ----- GLOO & REQWEST -----
+web-time = { workspace = true, optional = true }
+
+[features]
+# Default enables all features for IDE/LSP support only.
+# Consumers should select features explicitly; do not rely on default.
+default = ["json", "cbor", "gloo", "reqwest"]
+json = ["dep:serde", "dep:serde_json", "serde/derive"]
+cbor = ["dep:minicbor"]
+gloo = [
+  "json",
+  "dep:web-time",
+  "dep:gloo-net",
+  "dep:gloo-timers",
+  "dep:js-sys",
+  "dep:send_wrapper",
+  "dep:wasm-bindgen",
+  "dep:wasm-bindgen-futures"
+]
+reqwest = ["dep:web-time", "dep:reqwest"]
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { version = "1", features = ["full"] }

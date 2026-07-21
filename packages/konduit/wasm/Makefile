@@ -11,7 +11,7 @@ core:
 
 black-box:
 	@echo "📦 Building WASM (full black-box API)..."
-	wasm-pack build --profile wasm --no-pack --target browser -d $(OUT)-black-box . -F black-box-api
+	wasm-pack build --profile wasm --no-pack --target browser -d $(OUT)-black-box . -- -F black-box-api
 
 clean:
 	@echo "🧹 Cleaning..."
