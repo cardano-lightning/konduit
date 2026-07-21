@@ -20,10 +20,11 @@ subtle.workspace = true
 blake3 = { workspace = true, optional = true }
 problem-details = { workspace = true, optional = true }
 thiserror.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde_with.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_with = { workspace = true, optional = true }
 
 [features]
 default = ["server", "problem-details"]
 server = ["dep:blake3"]
 problem-details = ["dep:problem-details"]
+serde = ["dep:serde", "dep:serde_with"]

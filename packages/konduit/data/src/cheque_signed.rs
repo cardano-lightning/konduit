@@ -1,16 +1,22 @@
 use crate::{Duration, Signature, Unverified, Verified, VerifyState, cheque_body::ChequeBody};
-use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "T: Serialize",
-    deserialize = "T: for<'de2> Deserialize<'de2>, V: Default",
-))]
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(bound(
+        serialize = "T: Serialize",
+        deserialize = "T: for<'de2> Deserialize<'de2>, V: Default",
+    ))
+)]
 pub struct ChequeSigned<T, V: VerifyState = Unverified> {
     pub body: ChequeBody<T>,
     pub signature: Signature,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub _marker: PhantomData<V>,
 }
 

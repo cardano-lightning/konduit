@@ -1,11 +1,14 @@
 use konduit_data::{Duration, Pending, Stage, Used};
 use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::StepError;
 
 /// Channel Variables aka Channel Data but without the constants.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Variables {
     #[n(0)]
     amount: u64,

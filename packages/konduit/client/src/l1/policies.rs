@@ -1,9 +1,11 @@
 use konduit_data::Duration;
 use konduit_tx::Bounds;
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubmitPolicy {
     #[n(0)]
     ViaConnector,
@@ -19,7 +21,8 @@ impl Default for SubmitPolicy {
 
 /// How far into the future the transaction's upper validity bound is set,
 /// anchored to the moment `build` runs. Defaults to 20 minutes.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BoundsPolicy {
     #[n(0)]
     window: Duration,
@@ -49,7 +52,8 @@ impl Default for BoundsPolicy {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Policies {
     #[n(0)]
     submit: SubmitPolicy,

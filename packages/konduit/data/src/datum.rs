@@ -1,11 +1,15 @@
 use crate::{Constants, Stage};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
-#[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Datum {
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub own_hash: [u8; 28],
     pub constants: Constants,
     pub stage: Stage,
@@ -73,25 +77,6 @@ where
 }
 
 // =========================================================================
-// Testing Utilities
-// =========================================================================
-#[cfg(feature = "proptest")]
-impl proptest::arbitrary::Arbitrary for Datum {
-    type Parameters = ();
-    type Strategy = proptest::strategy::BoxedStrategy<Self>;
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-        use proptest::prelude::*;
-        (any::<[u8; 28]>(), any::<Constants>(), any::<Stage>())
-            .prop_map(|(own_hash, constants, stage)| Datum {
-                own_hash,
-                constants,
-                stage,
-            })
-            .boxed()
-    }
-}
-
-// =========================================================================
 // PlutusData Conversions (cardano_sdk-gated)
 // =========================================================================
 #[cfg(feature = "cardano_sdk")]
@@ -135,6 +120,25 @@ mod via_plutus_data {
                 PlutusData::from(value.stage),
             ])
         }
+    }
+}
+
+// =========================================================================
+// Testing Utilities
+// =========================================================================
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for Datum {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+        (any::<[u8; 28]>(), any::<Constants>(), any::<Stage>())
+            .prop_map(|(own_hash, constants, stage)| Datum {
+                own_hash,
+                constants,
+                stage,
+            })
+            .boxed()
     }
 }
 

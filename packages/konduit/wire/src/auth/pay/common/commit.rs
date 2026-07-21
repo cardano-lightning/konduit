@@ -1,11 +1,14 @@
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::auth::squash::SquashProposal;
 
 /// The common response is a ChequeProposal
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Status {
     /// Commitment resolved. Secret present in squash proposal.
     #[n(0)]

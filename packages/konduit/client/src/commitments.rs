@@ -18,37 +18,47 @@
 //! It is safe to "forget" the lock as soon as the corresponding commitments have resolved,
 //! via either timeouts or discovery of secret.
 //!
-//! How about "recommitting": paying an invoice (secret learned), and then attempting to commit to paying the same
-//! invoice?
+//! The `at` field is a coarse pruning guide only — not a precise
+//! timestamp of anything. Commits happen within minutes of each other;
+//! pruning happens on the order of weeks. There is no need to keep
+//! `at` accurate across re-commits; see "Commit semantics" below.
 //!
-//! All major lightning implementations prevent double commitments internally.
-//! This is no prevention to a malicious merchant, but it's unclear what is gained in this scenario.
-//! It is equivalent to the merchant using public information and therefore there is no
-//! expectation a payment will be received. The beneficiary is the server who already knows the secret.
+//! ## Commit semantics
 //!
-//! So then it is relevant only when the server is colluding with the node.
-//! But the client will again learn secret and be able to present proof of payment.
-//! And our assumption is that the merchant will recognize this (whatever that means: eg give me my
-//! coffee).
+//! `commit(lock, tag, index)`:
+//! - No existing entry for `lock`: a new `Commitment` is stored, with
+//!   `at` set to this backend's own idea of "now".
+//! - Existing entry with the same `tag`/`index`: no-op. `at` is left
+//!   untouched — there's nothing to gain by refreshing a coarse
+//!   pruning guide on every re-commit, so `now()` isn't even called on
+//!   this path.
+//! - Existing entry with a different `tag`/`index`: `Error::Conflict`,
+//!   existing entry untouched.
 //!
-//! We suggest the Client should retain proof of purchase aka secret for "a long time".
-//! Where the safe amount of time is in the wider context of the thing for which the client is paying.
-//!
-//! The `at` field allows for pruning of old commitments.
-
-use std::collections::BTreeMap;
-use std::sync::Mutex;
+//! Each `Backend` impl owns its own clock (`now()` / `wasm_now()` /
+//! `system_now()`), injectable at construction for tests — see
+//! `backend_test_suite::FakeClock`.
 
 use konduit_data::{Duration, Lock, Tag};
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-// FIXME :: fix
-// #[cfg(feature = "wasm")]
-// mod backend_idb;
+
+pub mod in_memory;
+
+#[cfg(all(not(target_family = "wasm"), feature = "json"))]
+pub mod file_backend;
+
+#[cfg(feature = "idb")]
+pub mod idb_backend;
+
+#[cfg(test)]
+pub(crate) mod backend_test_suite;
 
 /// The `(tag, index)` pair a lock is committed to, plus the time it was
 /// recorded. `at` is insert time, not an expiry — see module docs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
     #[n(0)]
     tag: Tag,
@@ -59,7 +69,6 @@ pub struct Commitment {
 }
 
 impl Commitment {
-    /// Records `tag`/`index` as committed now.
     pub fn new(tag: Tag, index: u64, at: Duration) -> Self {
         Self { tag, index, at }
     }
@@ -69,49 +78,41 @@ impl Commitment {
     pub fn index(&self) -> u64 {
         self.index
     }
-
     pub fn at(&self) -> &Duration {
         &self.at
     }
-}
 
-// ---------- Backend ----------
-
-#[async_trait::async_trait]
-pub trait Backend: Send + Sync {
-    /// Insert `lock -> commitment`, atomically. Fails with
-    /// `Error::KeyExists` if `lock` is already committed — to any
-    /// commitment, including the same tag/index — since a lock's
-    /// commitment must be set exactly once and never silently
-    /// overwritten.
-    ///
-    /// `&self`, not `&mut self`: the whole point of this trait is
-    /// atomicity under concurrent callers, so each backend owns its
-    /// own interior synchronization (a lock, or the storage engine's
-    /// native compare-and-swap/`INSERT ... ON CONFLICT`) rather than
-    /// relying on a single external `&mut` to serialize every call.
-    async fn insert(&self, lock: Lock, commitment: Commitment) -> Result<(), Error>;
-
-    async fn get(&self, lock: &Lock) -> Result<Option<Commitment>, Error>;
-
-    /// Sweep every entry whose `at` is old enough that the protocol
-    /// guarantees resolution (see [`MAX_COMMITMENT_WINDOW_SECS`]),
-    /// regardless of whether an explicit resolution signal was ever
-    /// received. Returns the number of entries removed. A safety net for
-    /// entries that were never explicitly `remove`d — e.g. after a crash
-    /// with a gap in event history.
-    async fn drop_before(&self, threshold: Duration) -> Result<u64, Error>;
+    /// Same `tag`/`index` as `other` (ignoring `at`). Currently unused
+    /// internally — each `Backend` impl compares `tag()`/`index()`
+    /// directly against the incoming call's arguments, since `commit`
+    /// no longer receives a full candidate `Commitment` to compare
+    /// against. Kept as a public convenience.
+    pub fn same_target(&self, other: &Commitment) -> bool {
+        self.tag == other.tag && self.index == other.index
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("lock already committed")]
-    KeyExists,
+    #[error("lock already committed to a different tag/index")]
+    Conflict,
     #[error("backend error: {0}")]
     Backend(String),
 }
 
-// ---------- Commitments ----------
+#[async_trait::async_trait(?Send)]
+pub trait Backend {
+    /// Insert or no-op; see module "Commit semantics".
+    async fn commit(&self, lock: Lock, tag: Tag, index: u64) -> Result<(), Error>;
+
+    async fn get(&self, lock: &Lock) -> Result<Option<Commitment>, Error>;
+
+    /// Remove every entry with `at <= threshold`. `threshold` is the
+    /// caller's call — this module has no retention policy. A safety
+    /// net for entries never explicitly resolved, not the primary
+    /// cleanup path. Returns the number of entries removed.
+    async fn sweep_before(&self, threshold: Duration) -> Result<u64, Error>;
+}
 
 pub struct Commitments {
     backend: Box<dyn Backend>,
@@ -122,70 +123,15 @@ impl Commitments {
         Self { backend }
     }
 
-    pub async fn insert(&self, lock: Lock, commitment: Commitment) -> Result<(), Error> {
-        self.backend.insert(lock, commitment).await
+    pub async fn commit(&self, lock: Lock, tag: Tag, index: u64) -> Result<(), Error> {
+        self.backend.commit(lock, tag, index).await
     }
 
     pub async fn get(&self, lock: &Lock) -> Result<Option<Commitment>, Error> {
         self.backend.get(lock).await
     }
 
-    /// Sweep everything past [`MAX_COMMITMENT_WINDOW_SECS`], using the
-    /// current wall-clock time. Fallback safety net; see module docs.
-    pub async fn drop_before(&self, threshold: Duration) -> Result<u64, Error> {
-        self.backend.drop_before(threshold).await
-    }
-}
-
-// ---------- In-memory backend (tests) ----------
-
-/// Reference backend for tests. Correct, not fast — one global mutex
-/// around a plain map. `entry().or_insert()` gives the atomic
-/// check-and-set for free: the mutex guard holds the whole
-/// check-then-write as one critical section, so two concurrent
-/// `insert`s on the same lock can't both observe "absent".
-#[derive(Default)]
-pub struct InMemory {
-    entries: Mutex<BTreeMap<Lock, Commitment>>,
-}
-
-impl InMemory {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-#[async_trait::async_trait]
-impl Backend for InMemory {
-    async fn insert(&self, lock: Lock, commitment: Commitment) -> Result<(), Error> {
-        let mut entries = self
-            .entries
-            .lock()
-            .map_err(|_| Error::Backend("poisoned".into()))?;
-        match entries.entry(lock) {
-            std::collections::btree_map::Entry::Occupied(_) => Err(Error::KeyExists),
-            std::collections::btree_map::Entry::Vacant(slot) => {
-                slot.insert(commitment);
-                Ok(())
-            }
-        }
-    }
-
-    async fn get(&self, lock: &Lock) -> Result<Option<Commitment>, Error> {
-        let entries = self
-            .entries
-            .lock()
-            .map_err(|_| Error::Backend("poisoned".into()))?;
-        Ok(entries.get(lock).cloned())
-    }
-
-    async fn drop_before(&self, threshold: Duration) -> Result<u64, Error> {
-        let mut entries = self
-            .entries
-            .lock()
-            .map_err(|_| Error::Backend("poisoned".into()))?;
-        let before = entries.len();
-        entries.retain(|_, commitment| *commitment.at() > threshold);
-        Ok((before - entries.len()) as u64)
+    pub async fn sweep_before(&self, threshold: Duration) -> Result<u64, Error> {
+        self.backend.sweep_before(threshold).await
     }
 }

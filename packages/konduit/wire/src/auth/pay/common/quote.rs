@@ -1,9 +1,12 @@
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// The common response is a ChequeProposal
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChequeProposal {
     /// Cheque index
     #[n(0)]

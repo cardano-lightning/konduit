@@ -1,19 +1,26 @@
 use crate::{ParseError, Secret, utils::try_into_array};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 /// An unpending instruction — either continue holding, expire, or unlock with a secret.
 ///
 /// On-chain encoding: an empty bytestring for `Continue`, a 1-byte bytestring for
 /// `Expire`, and a 32-byte bytestring for `Unlock`. Any non-zero, non-32-byte length
 /// is treated as `Expire` when decoding.
-#[serde_as]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Unpend {
     Continue,
     Expire,
-    Unlock(#[serde_as(as = "serde_with::hex::Hex")] [u8; 32]),
+    Unlock(
+        #[cfg_attr(
+            feature = "serde",
+            serde(with = "serde_with::As::<serde_with::hex::Hex>")
+        )]
+        [u8; 32],
+    ),
 }
 
 impl Unpend {

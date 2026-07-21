@@ -10,14 +10,17 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[features]
+default = []
+serde = ["dep:serde", "cardano-sdk/serde", "konduit-data/serde"]
+
 [dependencies]
 anyhow.workspace = true
 cardano-sdk = { workspace = true, features = ["serde"] }
 hex.workspace = true
-konduit-data.workspace = true
+konduit-data = { workspace = true, features = ["cardano_sdk"] }
 minicbor.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-serde_with.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true }                               # required to read plutus.json
 thiserror.workspace = true
 web-time.workspace = true

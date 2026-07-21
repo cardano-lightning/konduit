@@ -1,13 +1,19 @@
 use crate::{ParseError, utils::try_into_array};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
-#[serde_as]
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 #[repr(transparent)]
-#[serde(transparent)]
-pub struct Secret(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
+pub struct Secret(
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
+    pub [u8; 32],
+);
 
 impl std::str::FromStr for Secret {
     type Err = ParseError;

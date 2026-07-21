@@ -1,12 +1,17 @@
 use crate::{Duration, Lock, Secret};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "T: Serialize",
-    deserialize = "T: for<'de2> Deserialize<'de2>",
-))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(bound(
+        serialize = "T: Serialize",
+        deserialize = "T: for<'de2> Deserialize<'de2>",
+    ))
+)]
 pub struct ChequeBody<T = Lock> {
     index: u64,
     amount: u64,

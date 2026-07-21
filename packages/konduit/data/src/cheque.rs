@@ -2,10 +2,16 @@ use crate::{
     ChequeBody, Duration, Lock, Secret, Signature, Tag, Unverified, Verified, VerifyError,
     VerifyState, VerifyingKey, locked::Locked, unlocked::Unlocked,
 };
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(bound(deserialize = "V: Default"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(bound(deserialize = "V: Default"))
+)]
 pub enum Cheque<V: VerifyState = Unverified> {
     Unlocked(Unlocked<V>),
     Locked(Locked<V>),

@@ -1,5 +1,4 @@
 use crate::ParseError;
-use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     ops::{Add, Deref, DerefMut},
@@ -7,8 +6,12 @@ use std::{
     time,
 };
 
-#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Duration(pub time::Duration);
 
 impl Duration {

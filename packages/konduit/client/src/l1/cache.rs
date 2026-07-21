@@ -1,6 +1,7 @@
 use cardano_sdk::{Output, Transaction, transaction::state::ReadyForSigning};
 use konduit_tx::{Channel, NetworkParameters, Utxo};
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,7 +11,8 @@ use crate::core::Input;
 /// facts, current wallet/channel state, and the last built (unsigned)
 /// transaction.
 /// Fully disposable re-pull or rebuild replaces anything lost here.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Cache {
     #[n(0)]
     network_parameters: Option<NetworkParameters>,
@@ -25,7 +27,8 @@ pub struct Cache {
 /// Current on-chain state relevant to this wallet, keyed by input so
 /// membership/lookup is O(log n) and there's no possibility of two
 /// entries for the same utxo.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 struct Tip {
     #[n(0)]
     wallet_utxos: BTreeMap<Input, Output>,

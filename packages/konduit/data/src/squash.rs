@@ -4,14 +4,20 @@ use crate::{
     Indexes, Signature, SigningKey, SquashBody, Tag, Unverified, Verified, VerifyError,
     VerifyState, VerifyingKey,
 };
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(bound(deserialize = "V: Default"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(bound(deserialize = "V: Default"))
+)]
 pub struct Squash<V: VerifyState = Unverified> {
     body: SquashBody,
     signature: Signature,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     _marker: PhantomData<V>,
 }
 

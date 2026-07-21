@@ -1,13 +1,15 @@
 use cardano_sdk::{Address, Hash, address::kind::Shelley};
 use konduit_data::{Duration, VerifyingKey};
 use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 const ENDPOINT: &str = "/info";
 pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Response {
     /// Terms of service. Purely informational
     #[n(0)]
@@ -22,7 +24,8 @@ pub struct Response {
 
 /// Terms of service:
 /// Purely informational. Advertised fee and service parameters
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TosInfo {
     #[n(0)]
     pub flat_fee: u64,
@@ -32,24 +35,29 @@ pub struct TosInfo {
     pub time_to_settled: u64,
 }
 
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TxHelp {
     #[cbor(n(0), with = "cbor_with::display_from_str")]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::DisplayFromStr>")
+    )]
     pub host_address: Address<Shelley>,
     #[n(1)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub validator: Hash<28>,
 }
 
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelParameters {
     #[n(0)]
-    #[serde_as(as = "serde_with::hex::Hex")]
     pub adaptor_key: VerifyingKey,
-    #[cbor(n(1), with = "konduit_data::cbor_with::plutus_data")]
+    #[cbor(n(1))]
     pub close_period: Duration,
     #[n(2)]
     pub tag_length: usize,

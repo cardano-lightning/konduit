@@ -23,4 +23,5 @@ serde_json = { workspace = true, optional = true }
 default = ["actix", "cbor", "json"]
 actix = ["dep:actix-web"]
 cbor = ["dep:minicbor"]
-json = ["dep:serde", "dep:serde_json"]
+serde = ["dep:serde"]
+json = ["serde", "dep:serde_json"]

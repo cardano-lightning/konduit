@@ -1,14 +1,15 @@
 use std::collections::BTreeMap;
 
 use cardano_sdk::cbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 /// Version should work for _all_ clients with _all_ servers.
 /// Thus `Response` datatype should *never* change.
 /// All other endpoints may be entirely different, but
 /// at least a client will be able to establish incompatibility from the version.
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Response {
     /// Support diversity in versioning.
     /// If you want to make a new version, make the flavour distinct and identifiable.
@@ -47,12 +48,12 @@ pub struct Response {
     /// Self-hosters set this to their own docs server.
     /// In Unknown/Dirty builds this may be empty — use git or local access instead.
     #[n(5)]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub docs_base_url: Option<String>,
 }
 
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FeatureInfo {
     /// Bumped on any breaking change.
     /// At clients discression how to proceed.
@@ -65,16 +66,19 @@ pub struct FeatureInfo {
     /// Fast mismatch detection across independently-versioned features.
     /// Not collision-resistant — use `version` for authoritative compatibility checks.
     #[n(1)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub schema_hash: [u8; 8],
 
     /// Path to the human-readable spec, relative to VCS root.
     /// Always of the form "docs/spec/<feature>.md".
     ///
     /// Three access methods, all mechanically derived from this path:
-    ///   git:   `git show <vcs_hash>:doc_path`
-    ///   local: `docs/book/spec/<feature>.html`  (after `mdbook build`)
-    ///   web:   `<Response::docs_base_url>/spec/<feature>`
+    ///    git:   `git show <vcs_hash>:doc_path`
+    ///    local: `docs/book/spec/<feature>.html`  (after `mdbook build`)
+    ///    web:   `<Response::docs_base_url>/spec/<feature>`
     ///
     /// The convention "docs/spec/*.md" → "/spec/*" must be preserved
     /// for all three to stay in correspondence.
@@ -89,7 +93,8 @@ pub struct FeatureInfo {
     pub source_path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum VcsHash {
     /// Standard & Prod builds _ought_ to advertise their VCS hash.
     #[n(0)]
@@ -106,7 +111,8 @@ pub enum VcsHash {
     Unknown,
 }
 
-#[derive(Debug, Serialize, Deserialize, Encode, Decode, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Hash, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SemVer {
     /// Bumped on any breaking change
     #[n(0)]

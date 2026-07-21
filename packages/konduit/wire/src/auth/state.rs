@@ -1,14 +1,15 @@
-use konduit_data::{Cheque, Squash, Stage, Used};
+use konduit_data::{Cheque, Squash, Stage};
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
-use serde::{Deserialize, Serialize};
 
-use serde_with::serde_as;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 pub const ENDPOINT: &str = "/state";
 pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Params {
     /// A utxo a user specifies to indicate which thread to follow.
     /// A server may use this to select a lineage or thread,
@@ -18,11 +19,15 @@ pub struct Params {
     /// NOTE: this does offend  HTTP verb purists.
     /// Subsequent GET are impacted by this.
     #[n(0)]
-    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(flatten, skip_serializing_if = "Option::is_none")
+    )]
     pub focus: Option<Input>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Response {
     /// L1 data
     #[n(0)]
@@ -42,7 +47,8 @@ pub enum DomainError {
 }
 
 /// The backing consists of the thread of Utxos representing the L1 state of the channel
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Backing {
     /// If current is set to `[Option::None]`, then there are no recognized channel Utxos.
     #[n(0)]
@@ -63,7 +69,8 @@ pub struct Backing {
 }
 
 /// Date
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelUtxo {
     #[n(0)]
     pub input: Input,
@@ -80,7 +87,8 @@ pub struct ChannelUtxo {
 /// A time indicator.
 /// Posix time may refer to the block time slot.
 /// It allows for a proxy on block depth without knowledge of current chain state.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Point {
     #[n(0)]
     pub posix: u64,
@@ -91,7 +99,8 @@ pub struct Point {
 
 /// As the user must register before accessing this endpoint,
 /// a squash must be in posession of the server.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Receipt {
     #[n(0)]
     pub squash: Squash,
@@ -100,11 +109,14 @@ pub struct Receipt {
 }
 
 /// Input (aka OutputReference) to identify a UTXO
-#[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Input {
     #[n(0)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub output_reference: [u8; 32],
     #[n(1)]
     pub index: u64,

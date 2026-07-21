@@ -1,7 +1,5 @@
-use std::time::SystemTimeError;
-
 use konduit_data::Duration;
-use web_time::{SystemTime, UNIX_EPOCH};
+use web_time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {

@@ -1,5 +1,6 @@
 use cardano_sdk::{Address, address::kind};
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use super::{BoundsPolicy, Policies, SubmitPolicy};
@@ -7,7 +8,8 @@ use crate::core::Credential;
 
 /// Locally-authored configuration: set directly by the caller and left
 /// alone until changed. Not recoverable from the chain if lost.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config {
     /// User policies
     #[n(0)]

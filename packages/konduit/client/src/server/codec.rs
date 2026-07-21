@@ -2,6 +2,8 @@ use http_client::{Decoder, Encoder};
 use konduit_wire as wire;
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetailBody;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 pub trait Codec:
@@ -71,8 +73,12 @@ mod json {
 /// real construction path goes through `Client::from_config`, and nothing
 /// in this codebase ever supplies a caller-defined codec, so there's no
 /// value chasing an open `C: Codec` type parameter through `Client`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(rename_all = "lowercase")
+)]
 pub enum Kind {
     #[cfg(feature = "cbor")]
     #[n(0)]
@@ -210,6 +216,12 @@ impl<T: serde::de::DeserializeOwned> Decoder<T> for Any {
         Ok(c.decode(bytes)?)
     }
 }
+
+#[cfg(not(any(feature = "cbor", feature = "json")))]
+compile_error!(
+    "konduit-client requires at least one of the `cbor` or `json` features \
+     (Codec::Any needs at least one wire format to implement Encoder/Decoder)."
+);
 
 impl Codec for Any {
     type Error = AnyError;

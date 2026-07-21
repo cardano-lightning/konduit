@@ -1,9 +1,11 @@
-use crate::{server, time};
+use crate::{commitments, server, time};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("time: {0}")]
     Time(#[from] time::Error),
+    #[error("commitments: {0}")]
+    Commitments(#[from] commitments::Error),
     #[error("no credential set: call reg first")]
     MissingCredential,
     #[error("credential expired: call reg again")]

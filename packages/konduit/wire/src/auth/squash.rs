@@ -1,13 +1,16 @@
 use konduit_data::{Squash, SquashBody, Unlocked};
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 pub const ENDPOINT: &str = "/squash";
 pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 #[cbor(transparent)]
 pub struct Body(#[n(0)] pub Squash);
 
@@ -33,7 +36,8 @@ impl std::ops::Deref for Body {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Response {
     #[n(0)]
     Ok,
@@ -50,7 +54,8 @@ pub enum DomainError {
     InvalidSquash,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SquashProposal {
     #[n(0)]
     pub current: Squash,

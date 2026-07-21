@@ -7,12 +7,12 @@ use konduit_data::{Stage, Tag, VerifyingKey};
 use konduit_tx::{
     Channel, ChannelUtxo, NetworkParameters, Open, SteppedUtxos, find_reference_script,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::{
     Signer, Wallet,
-    core::{Credential, Input, KONDUIT_VALIDATOR},
+    core::{Input, KONDUIT_VALIDATOR},
     time, utxo_batch,
 };
 

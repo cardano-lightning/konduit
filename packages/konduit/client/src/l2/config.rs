@@ -1,8 +1,8 @@
 use cardano_sdk::Input;
 use konduit_wire::reg::cobbl3::Credential;
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 use crate::server;
 
@@ -10,8 +10,8 @@ use super::{Policies, RegPolicy, SquashPolicy};
 
 /// Tag belongs in global store, since used as channel id
 /// with respect to single signer context.
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config {
     /// Keeps own copy of server config.
     /// Allow the safe deletion known `servers` without breaking a channel.
@@ -22,7 +22,10 @@ pub struct Config {
     #[n(2)]
     focus: Option<Input>,
     #[n(3)]
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<Option<serde_with::DisplayFromStr>>")
+    )]
     credential: Option<Credential>,
 }
 

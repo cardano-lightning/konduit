@@ -1,4 +1,6 @@
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
 use std::{cmp::Ordering, fmt, str};
 
 use crate::{MAX_EXCLUDE_LENGTH, ParseError};
@@ -20,7 +22,8 @@ pub enum IndexesError {
 /// A sorted, deduplicated, bounded list of u64 indexes.
 ///
 /// On-chain encoding: a CBOR indefinite-length array of uint items.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Indexes(pub(crate) Vec<u64>);
 
 impl fmt::Display for Indexes {

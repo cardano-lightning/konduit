@@ -42,8 +42,8 @@
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use subtle::ConstantTimeEq;
 
 #[cfg(feature = "problem-details")]
@@ -142,13 +142,15 @@ pub const MAC_LEN: usize = 20;
 ///
 /// `N` is fixed by the downstream crate via a type alias.
 /// `PartialEq` is constant-time - timing-safe by construction.
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Encode, Decode)]
 #[cbor(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 pub struct Mac<const N: usize = MAC_LEN>(
     #[n(0)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     [u8; N],
 );
 
@@ -184,14 +186,17 @@ impl<const N: usize> Eq for Mac<N> {}
 ///
 /// The client signs `body.tbs_bytes()` with their Ed25519 key and attaches
 /// the 64-byte raw signature. The server calls `body.verify(&signature)`.
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Request<B> {
     #[n(0)]
     pub body: B,
     /// Raw 64-byte Ed25519 signature over `body.tbs_bytes()`.
     #[n(1)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub signature: [u8; 64],
 }
 
@@ -247,7 +252,15 @@ where
 #[derive(Debug, Clone, Encode, Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
-pub struct HmacKey(#[n(0)] [u8; 32]);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
+pub struct HmacKey(
+    #[n(0)]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
+    [u8; 32],
+);
 
 #[cfg(feature = "server")]
 impl From<[u8; 32]> for HmacKey {

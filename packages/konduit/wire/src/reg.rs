@@ -15,6 +15,8 @@
 use konduit_data::Squash;
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::limit::LimitError;
@@ -26,14 +28,15 @@ const ENDPOINT: &str = "/reg";
 pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
 /// Request body
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Body<T> {
     /// Token depends on the authorization scheme used
     #[n(0)]
     pub token: T,
     /// The initial handshake must include a squash
     #[n(1)]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub squash: Option<Squash>,
 }
 

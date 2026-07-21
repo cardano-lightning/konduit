@@ -6,8 +6,9 @@
 //! Beware! There is mild divergence between what is a "token" between here and Cobbl3.
 
 use minicbor::{Decode, Encode};
-
 use problem_details::ProblemDetail;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Header
@@ -18,8 +19,9 @@ pub type Credential = cobbl3::Token<TokenBody>;
 pub type Body = super::Body<cobbl3::Request<TokenBody>>;
 
 /// Response
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 #[cbor(transparent)]
 pub struct Response(#[n(0)] pub cobbl3::Response);
 
@@ -43,7 +45,8 @@ pub enum Error {
 ///
 /// Conversion to/from `konduit-data` types (`VerificationKey`, channel tag)
 /// happens at the server layer — the wire crate treats both as plain bytes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TokenBody {
     /// Consumer key
     #[n(0)]

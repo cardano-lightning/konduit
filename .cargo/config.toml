@@ -1,2 +1,5 @@
 [env]
 PROBLEM_DETAIL_BASE_URL = "https://konduit.channel/errors"
+
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", 'getrandom_backend="wasm_js"']

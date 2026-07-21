@@ -14,28 +14,32 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["proptest"]
+default = []
+serde = ["dep:serde", "dep:serde_with", "cardano-sdk/serde"]
+json = ["serde", "dep:serde_json"]
 cardano_sdk = ["dep:cardano-sdk", "dep:anyhow"]
-proptest = ["dep:proptest", "dep:proptest-derive", "cardano_sdk"]
+proptest = [
+  "json",
+  "dep:proptest",
+  "dep:proptest-derive",
+  "cardano_sdk",
+  "cardano-sdk/test-utils",
+]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-cardano-sdk = { workspace = true, optional = true }
+cardano-sdk = { workspace = true, optional = true, features = [] }
 cbor-with = { workspace = true, features = ["full"] }
 cryptoxide.workspace = true
 hex.workspace = true
 minicbor.workspace = true
-proptest = { workspace = true, optional = true }
+proptest = { workspace = true, optional = true, default-features = false, features = [
+  "std",
+  "bit-set",
+] }
 proptest-derive = { workspace = true, optional = true }
 rand_core.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
-serde_with = { workspace = true, features = ["hex"] }
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_json = { workspace = true, optional = true }
+serde_with = { workspace = true, features = ["hex"], optional = true }
 thiserror.workspace = true
-
-[dev-dependencies]
-proptest.workspace = true
-
-[[test]]
-name = "proptests"
-required-features = ["proptest"]

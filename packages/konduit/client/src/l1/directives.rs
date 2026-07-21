@@ -1,12 +1,13 @@
-// directives.rs
 use konduit_data::{Constants, Duration, Tag, VerifyingKey};
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::core::Input;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OpenIntent {
     #[n(0)]
     pub tag: Tag,
@@ -29,7 +30,8 @@ impl OpenIntent {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Intent {
     #[n(0)]
     Add(#[n(0)] u64),
@@ -42,7 +44,8 @@ pub enum Intent {
 /// intent, and — when `Config::autocomplete` is `false` — the set of
 /// inputs to force-expire, -elapse, or -end. Ignored entirely when
 /// `autocomplete` is `true`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Directives {
     #[n(0)]
     opens: BTreeMap<Tag, OpenIntent>,

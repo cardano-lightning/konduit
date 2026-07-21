@@ -1,7 +1,10 @@
 use crate::{Duration, Tag, VerifyingKey};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Constants {
     pub tag: Tag,
     pub add_vkey: VerifyingKey,

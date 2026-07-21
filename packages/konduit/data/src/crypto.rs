@@ -1,11 +1,18 @@
 use cryptoxide::ed25519;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 /// Ed25519 verification key (public key), 32 bytes.
-#[serde_as]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct VerifyingKey(#[serde_as(as = "serde_with::hex::Hex")] [u8; 32]);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct VerifyingKey(
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
+    [u8; 32],
+);
 
 impl VerifyingKey {
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
@@ -84,11 +91,17 @@ impl<'b, C> minicbor::Decode<'b, C> for VerifyingKey {
 
 // =========================================================================
 
-/// Ed25519 signature, 64 bytes.
-#[serde_as]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Signature(#[serde_as(as = "serde_with::hex::Hex")] [u8; 64]);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Signature(
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
+    [u8; 64],
+);
 
+/// Ed25519 signature, 64 bytes.
 impl Signature {
     pub fn from_bytes(bytes: [u8; 64]) -> Self {
         Self(bytes)

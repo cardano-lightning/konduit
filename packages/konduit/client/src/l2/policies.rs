@@ -1,10 +1,10 @@
-//! Determines the behaviour when managing an L2.
-
 use konduit_data::Duration;
 use minicbor::{Decode, Encode};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode, Default)]
+#[derive(Debug, Clone, Encode, Decode, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Policies {
     #[n(0)]
     reg: RegPolicy,
@@ -30,7 +30,8 @@ impl Policies {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum RegPolicy {
     #[n(0)]
     None,
@@ -44,7 +45,8 @@ impl Default for RegPolicy {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SquashPolicy {
     /// No automatic squash handling. `sync`/`commit` verify at most one
     /// proposal and return without resubmitting — resolving further is

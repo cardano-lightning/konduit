@@ -1,15 +1,21 @@
 use crate::{ParseError, Secret, utils::try_into_array};
 use cryptoxide::hashing::sha256;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::fmt;
 
-#[serde_as]
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
-#[serde(transparent)]
-pub struct Lock(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
+pub struct Lock(
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
+    pub [u8; 32],
+);
 
 impl fmt::Display for Lock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {

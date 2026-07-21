@@ -1,7 +1,9 @@
 use core::cmp::Ordering;
 
-use serde::{Deserialize, Serialize};
 use std::cmp;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::{ChequeBody, Indexes, IndexesError, Unlocked, Verified};
 
@@ -18,7 +20,8 @@ pub enum SquashBodyError {
 }
 
 /// On-chain encoding: an indefinite-length array of [amount, index, exclude].
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SquashBody {
     amount: u64,
     index: u64,

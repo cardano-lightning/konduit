@@ -2,9 +2,12 @@ use std::cmp;
 
 use konduit_data::Duration;
 use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Bounds {
     #[n(0)]
     pub lower: Option<Duration>,

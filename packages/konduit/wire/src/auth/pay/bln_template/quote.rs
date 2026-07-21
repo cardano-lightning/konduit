@@ -11,35 +11,48 @@
 //! We follow the naming and structure of the spec.
 
 use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 const ENDPOINT: &str = "/quote";
 pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Body {
     #[n(0)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub payee: [u8; 33],
     #[n(1)]
     pub amount_msat: u64,
     #[n(2)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub r_hash: [u8; 32],
     #[n(3)]
     /// If not included, assume default
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub final_cltv: Option<u64>,
     #[n(4)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Vec::is_empty"))]
     pub route_hints: Vec<RouteHint>,
     /// The payment secret is an anti-probing defense.
     /// Not to be confused with the r_preimage which in Konduit we refer to as `Secret`.
     #[n(5)]
-    #[serde_as(as = "Option<serde_with::hex::Hex>")]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "serde_with::As::<Option<serde_with::hex::Hex>>"
+        )
+    )]
     pub payment_secret: Option<[u8; 32]>,
 }
 
@@ -56,18 +69,22 @@ pub type DomainError = crate::auth::pay::common::quote::Error;
 /// An invoice may contain multiple [`RouteHint`]s, giving the payer
 /// several candidate paths. Each hint is a sequence of [`RouteHintHop`]s
 /// to traverse in order.
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cbor(transparent)]
 pub struct RouteHint(#[n(0)] pub Vec<RouteHintHop>);
 
 /// A single hop within a [`RouteHint`], describing a channel that can
 /// be used to reach the recipient of a BOLT11 invoice.
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RouteHintHop {
     /// The node through which this hop routes.
     #[n(0)]
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     pub src_node_id: [u8; 33],
 
     /// The channel to use for this hop, identified by its short channel ID.
@@ -99,7 +116,8 @@ pub struct RouteHintHop {
 /// ```math
 /// fee = base_msat + (amount_msat * proportional_millionths / 1_000_000)
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RoutingFees {
     /// Flat fee, in millisatoshis, charged for forwarding any HTLC.
     #[n(0)]

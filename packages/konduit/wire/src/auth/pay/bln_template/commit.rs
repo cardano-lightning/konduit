@@ -1,19 +1,26 @@
 use konduit_data::Locked;
 use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 pub const ENDPOINT: &str = "/commit";
 pub const PATH: &str = const_format::concatcp!(super::PATH, ENDPOINT);
 
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Body {
     #[n(0)]
     pub cheque: Locked,
     #[n(1)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "serde_with::As::<Option<serde_with::hex::Hex>>"
+        )
+    )]
     pub payment_secret: Option<[u8; 32]>,
 }
 

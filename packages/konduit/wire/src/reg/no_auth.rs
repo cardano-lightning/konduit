@@ -9,8 +9,8 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use minicbor::{Decode, Encode};
 use problem_details::ProblemDetail;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::fmt;
 use std::str::FromStr;
 
@@ -22,7 +22,8 @@ pub type Credential = Keytag;
 pub type Body = super::Body<Keytag>;
 
 /// Response
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Response();
 
 #[derive(ProblemDetail)]
@@ -35,12 +36,14 @@ pub enum Error {
 ///
 /// Encodes `key || tag` — the server splits and interprets them.
 /// `Display` encodes to base64url (no padding); `FromStr` decodes.
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 #[cbor(transparent)]
-#[serde(transparent)]
 pub struct Keytag(
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+    )]
     #[n(0)]
     pub Vec<u8>,
 );

@@ -6,6 +6,8 @@ use konduit_data::{
     Unlocked, Unpend, Used, Verified,
 };
 use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -93,7 +95,8 @@ fn gain_from_owed(squash_amount: u64, extra: u64, subbed: u64, capacity: u64) ->
 }
 
 /// Data obtained from parsing a channel
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Channel {
     #[n(0)]
     constants: Constants,

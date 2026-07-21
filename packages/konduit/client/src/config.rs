@@ -3,23 +3,30 @@
 //! Pieces together the config of different components
 use std::collections::BTreeMap;
 
-use konduit_data::{Lock, Tag};
+use konduit_data::Tag;
 use minicbor::{Decode, Encode};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 use crate::{l1, l2, server};
 
-#[serde_as]
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config {
     /// Set if there is an embedded wallet
     #[n(0)]
-    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<Option<serde_with::hex::Hex>>")
+    )]
     wallet: Option<[u8; 32]>,
     /// Set if there is an embedded signer `add_vkey`.
     #[n(1)]
-    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "serde_with::As::<Option<serde_with::hex::Hex>>")
+    )]
     signer: Option<[u8; 32]>,
     /// L1 config
     #[n(2)]
