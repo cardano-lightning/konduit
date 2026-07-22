@@ -6,6 +6,8 @@ use crate::{cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 /// A _blake2b_ hash digest; typically 28 or 32 bytes long.
 ///
 /// There are several ways to construct [`Self`], but fundamentally:
@@ -200,6 +202,37 @@ impl std::ops::Deref for Hash32 {
     type Target = Hash<32>;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+// ------------------------------------------------------------ serde
+#[cfg(feature = "serde")]
+impl<const SIZE: usize> Serialize for Hash<SIZE> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::hex_bytes::serialize(self, serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, const SIZE: usize> Deserialize<'de> for Hash<SIZE> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        crate::hex_bytes::deserialize(deserializer)
+    }
+}
+
+// ------------------------------------------------------------ tests
+
+#[cfg(all(test, feature = "serde"))]
+mod tests_serde {
+    use super::*;
+
+    #[test]
+    fn json_roundtrip_hex() {
+        let h: Hash<4> = Hash(pallas::Hash::from([0xde, 0xad, 0xbe, 0xef]));
+        let json = serde_json::to_string(&h).unwrap();
+        assert_eq!(json, r#""deadbeef""#);
+        let back: Hash<4> = serde_json::from_str(&json).unwrap();
+        assert_eq!(h, back);
     }
 }
 

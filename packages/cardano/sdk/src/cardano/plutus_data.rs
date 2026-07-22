@@ -6,6 +6,8 @@ use crate::{cbor, cbor::ToCbor, pallas};
 use anyhow::anyhow;
 use num::ToPrimitive;
 use num_bigint::BigInt;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt};
 
 /// An arbitrary data format used by Plutus smart contracts.
@@ -22,6 +24,7 @@ use std::{borrow::Cow, fmt};
 /// - [`Self::constr`]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PlutusData<'a>(Cow<'a, pallas::PlutusData>);
 
 impl<'a> fmt::Display for PlutusData<'a> {
