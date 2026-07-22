@@ -11,5 +11,5 @@ async fn main() -> anyhow::Result<()> {
         })?;
     }
 
-    Cli::parse().run()
+    Cli::parse().run().await
 }

@@ -44,6 +44,9 @@ impl Config {
 }
 
 #[cfg(feature = "cli")]
+use cardano_sdk::{Credential, Hash, NetworkId, SigningKey};
+
+#[cfg(feature = "cli")]
 impl Config {
     /// Effective wallet key, resolving `env:VAR_NAME` if that's what's stored.
     pub fn wallet(&self) -> anyhow::Result<Option<[u8; 32]>> {
@@ -67,21 +70,62 @@ impl Config {
         Ok(Some(arr))
     }
 
-    /// Redacted summary for `config show` — never prints key material,
-    /// but does say whether each key comes from a literal value or an env ref.
-    pub fn describe_redacted(&self) -> String {
+    /// Redacted summary for `config show` — never prints raw key bytes,
+    /// but derives and displays the verifying key (and, for the wallet,
+    /// its hash and per-network addresses) so the operator can confirm
+    /// which identity is configured without exposing the signing key.
+    pub fn show(&self) -> String {
         format!(
-            "wallet: {}\nsigner: {}",
-            Self::describe_one(self.wallet.as_deref()),
-            Self::describe_one(self.signer.as_deref()),
+            "wallet:\n{}\nsigner:\n{}",
+            self.show_wallet(),
+            self.show_signer(),
         )
     }
 
-    fn describe_one(raw: Option<&str>) -> String {
-        match raw {
-            None => "unset".to_string(),
-            Some(v) if v.starts_with("env:") => format!("set (via {v})"),
-            Some(_) => "set (literal)".to_string(),
+    fn show_signer(&self) -> String {
+        let Some(raw) = self.signer.as_deref() else {
+            return "  unset".to_string();
+        };
+        match self.signer() {
+            Ok(Some(bytes)) => {
+                let vk = SigningKey::from(bytes.clone()).to_verification_key();
+                format!(
+                    "  verifying_key: {vk}\n  source: {}",
+                    Self::source_label(raw)
+                )
+            }
+            Ok(None) => "  unset".to_string(),
+            Err(e) => format!("  error resolving signer: {e}"),
+        }
+    }
+
+    fn show_wallet(&self) -> String {
+        let Some(raw) = self.wallet.as_deref() else {
+            return "  unset".to_string();
+        };
+        match self.wallet() {
+            Ok(Some(bytes)) => {
+                let vk = SigningKey::from(bytes.clone()).to_verification_key();
+                let vk_hash = Hash::<28>::new(vk);
+                let mainnet_address =
+                    cardano_sdk::Address::new(NetworkId::MAINNET, Credential::from_key(vk_hash));
+                let testnet_address =
+                    cardano_sdk::Address::new(NetworkId::TESTNET, Credential::from_key(vk_hash));
+                format!(
+                    "  verifying_key: {vk}\n  verifying_key_hash: {vk_hash}\n  mainnet: {mainnet_address}\n  testnet: {testnet_address}\n  source: {}",
+                    Self::source_label(raw)
+                )
+            }
+            Ok(None) => "  unset".to_string(),
+            Err(e) => format!("  error resolving wallet: {e}"),
+        }
+    }
+
+    fn source_label(raw: &str) -> &str {
+        if raw.starts_with("env:") {
+            "env"
+        } else {
+            "literal"
         }
     }
 }

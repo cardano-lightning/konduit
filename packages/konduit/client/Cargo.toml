@@ -20,7 +20,7 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = ["json", "cbor", "cli", "idb"]
+default = ["json", "cbor", "cli", "idb", "direct", "utxorpc"]
 cli = [
   "toml",
   "dep:clap",
@@ -30,6 +30,8 @@ cli = [
   "dep:tokio",
   "dep:hex",
   "dep:rand_core",
+  "http-client/reqwest",
+  "cardano-sdk/clap",
 ]
 idb = ["dep:idb", "dep:js-sys", "dep:wasm-bindgen"]
 serde = [
@@ -43,6 +45,9 @@ serde = [
 json = ["serde", "dep:serde_json", "http-client/json", "problem-details/json"]
 toml = ["serde", "dep:toml"]
 cbor = ["http-client/cbor", "problem-details/cbor"]
+# Cardano connectors
+direct = ["dep:cardano-connector-direct"]
+utxorpc = ["dep:cardano-connector-utxorpc"]
 
 # Minicbor is always required for `Tbs`
 [dependencies]
@@ -74,6 +79,9 @@ web-time.workspace = true
 toml = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 rand_core = { workspace = true, optional = true }
+cardano-connector-direct = { workspace = true, optional = true }
+cardano-connector-utxorpc = { workspace = true, optional = true }
+cardano-connector-client.workspace = true
 
 [dev-dependencies]
 proptest = { workspace = true, default-features = false, features = [

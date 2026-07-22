@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub mod config;
 pub mod env;
 pub mod keygen;
+pub mod l1;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Konduit Consumer CLI")]
@@ -17,14 +18,14 @@ pub struct Cli {
     )]
     pub config: PathBuf,
 
-    // /// Path to cache file
-    // #[arg(
-    //     long,
-    //     env = "KONDUIT_CACHE",
-    //     default_value = "./konduit-cache.json",
-    //     global = true
-    // )]
-    // pub cache: Path,
+    /// Path to cache file
+    #[arg(
+        long,
+        env = "KONDUIT_CACHE",
+        default_value = "./.konduit-cache.json",
+        global = true
+    )]
+    pub cache: PathBuf,
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -36,13 +37,17 @@ pub enum Commands {
     /// Get and set values in konduit.toml
     #[clap(subcommand)]
     Config(config::Cmd),
+    /// Tx build and submit
+    #[clap(subcommand)]
+    L1(l1::Cmd),
 }
 
 impl Cli {
-    pub fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self) -> anyhow::Result<()> {
         match self.command {
             Commands::Keygen => keygen::run(),
             Commands::Config(cmd) => cmd.run(&self.config),
+            Commands::L1(cmd) => cmd.run(&self.config, &self.cache).await,
         }
     }
 }

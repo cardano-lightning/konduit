@@ -2,6 +2,7 @@ use std::path::Path;
 
 use clap::Subcommand;
 
+pub mod cardano;
 pub mod keys;
 pub mod l1;
 pub mod l2;
@@ -29,13 +30,16 @@ pub enum Cmd {
     /// Get and set wallet/signer keys
     #[clap(subcommand)]
     Keys(keys::Cmd),
-    /// Get and set L1 policy config
+    /// Get and set Cardano config
+    #[clap(subcommand)]
+    Cardano(cardano::Cmd),
+    /// Get and set L1 config
     #[clap(subcommand)]
     L1(l1::Cmd),
-    /// Get and set L2 policy config
+    /// Get and set L2 config
     #[clap(subcommand)]
     L2(l2::Cmd),
-    /// Get and set known servers
+    /// Get and set servers
     #[clap(subcommand)]
     Server(server::Cmd),
 }
@@ -53,14 +57,17 @@ impl Cmd {
                 Ok(())
             }
             Cmd::Keys(cmd) => cmd.run(config_path),
+            Cmd::Cardano(cmd) => cmd.run(config_path),
             Cmd::L1(cmd) => cmd.run(config_path),
             Cmd::L2(cmd) => cmd.run(config_path),
             Cmd::Server(cmd) => cmd.run(config_path),
-            Cmd::Show => {
-                let cfg = config::Config::load(config_path)?;
-                println!("{}", cfg.describe_redacted());
-                Ok(())
-            }
+            Cmd::Show => self.show(config_path),
         }
+    }
+
+    pub fn show(&self, config_path: &Path) -> anyhow::Result<()> {
+        let cfg = config::Config::load(config_path)?;
+        println!("{}", cfg.show());
+        Ok(())
     }
 }

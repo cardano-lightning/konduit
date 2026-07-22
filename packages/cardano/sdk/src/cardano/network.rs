@@ -4,7 +4,7 @@ use std::fmt;
 
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "String", try_from = "&str"))]
+#[cfg_attr(feature = "serde", serde(into = "String", try_from = "String"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, cbor::Encode, cbor::Decode)]
 pub enum Network {
     #[n(0)]
@@ -85,6 +85,14 @@ impl TryFrom<&str> for Network {
                 Self::Preview
             )),
         }
+    }
+}
+
+impl TryFrom<String> for Network {
+    type Error = anyhow::Error;
+
+    fn try_from(text: String) -> anyhow::Result<Self> {
+        Self::try_from(text.as_str())
     }
 }
 

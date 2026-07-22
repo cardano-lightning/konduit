@@ -1,7 +1,7 @@
 //! # Config
 //!
 //! Pieces together the config of different components
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 use konduit_data::Tag;
 use minicbor::{Decode, Encode};
@@ -9,21 +9,24 @@ use minicbor::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{keys, l1, l2, server};
+use crate::{cardano, keys, l1, l2, server};
 
 #[derive(Debug, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config {
     #[n(0)]
     keys: keys::Config,
-    /// L1 config
+    /// Cardano config
     #[n(1)]
+    cardano: cardano::Config,
+    /// L1 config
+    #[n(2)]
     l1: l1::Config,
     /// Known konduit servers
-    #[n(2)]
+    #[n(3)]
     servers: Vec<server::Config>,
     /// L2 configs which may or may not use a base_url from the known servers.
-    #[n(3)]
+    #[n(4)]
     l2s: BTreeMap<Tag, l2::Config>,
 }
 
@@ -34,6 +37,18 @@ impl Config {
 
     pub fn keys_mut(&mut self) -> &mut keys::Config {
         &mut self.keys
+    }
+
+    pub fn cardano(&self) -> &cardano::Config {
+        &self.cardano
+    }
+
+    pub fn cardano_mut(&mut self) -> &mut cardano::Config {
+        &mut self.cardano
+    }
+
+    pub fn set_cardano(&mut self, cardano: cardano::Config) {
+        self.cardano = cardano;
     }
 
     pub fn l1(&self) -> &l1::Config {
@@ -76,12 +91,32 @@ impl Config {
     }
 
     /// Human-readable summary with secret material redacted, for `config show`.
-    pub fn describe_redacted(&self) -> String {
+    pub fn show(&self) -> String {
+        let servers = if self.servers.is_empty() {
+            "  none configured".to_string()
+        } else {
+            self.servers
+                .iter()
+                .map(|s| format!("  {} ({:?})", s.base_url(), s.codec()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+
+        let l2s = if self.l2s.is_empty() {
+            "  none configured".to_string()
+        } else {
+            self.l2s
+                .keys()
+                .map(|tag| format!("  {tag:?}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+
         format!(
-            "{}\nservers: {} configured\nl2s: {} configured",
-            self.keys.describe_redacted(),
-            self.servers.len(),
-            self.l2s.len(),
+            ">> keys\n{}\n>> cardano\n{}\n>> l1\n{:?}\n>> servers\n{servers}\n>> l2s\n{l2s}",
+            self.keys.show(),
+            self.cardano,
+            self.l1,
         )
     }
 }

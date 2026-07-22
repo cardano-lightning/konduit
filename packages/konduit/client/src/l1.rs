@@ -161,10 +161,11 @@ where
     // -- Chain state, pulled explicitly, each on its own cadence --
 
     /// Pull the (singular) konduit reference script utxo. Changes rarely.
-    pub async fn pull_reference_script(
-        &mut self,
-        reference_script_address: &Address<kind::Shelley>,
-    ) -> Result<(), Error> {
+    pub async fn pull_reference_script(&mut self) -> Result<(), Error> {
+        let reference_script_address = self
+            .config
+            .reference_script_address()
+            .ok_or(Error::NoReferenceScriptAddress)?;
         let utxos_at_script = self
             .connector
             .utxos_at(
@@ -261,11 +262,8 @@ where
     /// address — that lives in `Config` now, and changing it means
     /// building a new `Config` (see `wallet_change_address`) and
     /// reinstantiating via `with_cache`.
-    pub async fn pull_all(
-        &mut self,
-        reference_script_address: &Address<kind::Shelley>,
-    ) -> Result<(), Error> {
-        self.pull_reference_script(reference_script_address).await?;
+    pub async fn pull_all(&mut self) -> Result<(), Error> {
+        self.pull_reference_script().await?;
         self.pull_network_parameters().await?;
         self.pull_channels().await?;
         Ok(())

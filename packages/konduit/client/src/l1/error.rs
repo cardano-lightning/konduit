@@ -7,6 +7,8 @@ pub enum Error {
     Time(#[from] time::Error),
     #[error("nothing to do: no channels to open and no konduit utxos found")]
     NothingToDo,
+    #[error("no reference script address. Must be set to find reference script")]
+    NoReferenceScriptAddress,
     #[error("no reference script utxo cached: call pull_reference_script first")]
     NoReferenceScript,
     #[error("no network parameters cached: call pull_network_parameters first")]
