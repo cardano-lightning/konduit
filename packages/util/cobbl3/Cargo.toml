@@ -15,13 +15,16 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 base64.workspace = true
-minicbor.workspace = true
-subtle.workspace = true
 blake3 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+minicbor.workspace = true
 problem-details = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+subtle.workspace = true
 thiserror.workspace = true
 
 [features]
-default = ["server", "problem-details"]
+default = ["server", "problem-details", "serde"]
 server = ["dep:blake3"]
+serde = ["dep:serde", "dep:hex"]
 problem-details = ["dep:problem-details"]

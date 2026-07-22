@@ -112,6 +112,7 @@ cardano-connector-client = { path = "packages/cardano/connector-client" }
 cardano-connector-direct = { path = "packages/cardano/connector-direct" }
 cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
 cardano-sdk = { path = "packages/cardano/sdk" }
+cobbl3 = { path = "packages/util/cobbl3", default-features = false }
 fx-client = { path = "packages/util/fx-client" }
 http-client = { path = "packages/util/http-client", default-features = false }
 konduit-client = { path = "packages/konduit/client" }

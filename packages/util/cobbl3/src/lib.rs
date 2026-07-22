@@ -44,6 +44,9 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use minicbor::{Decode, Encode};
 use subtle::ConstantTimeEq;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 #[cfg(feature = "problem-details")]
 #[allow(unused_imports)]
 use problem_details::ProblemDetail;
@@ -142,7 +145,12 @@ pub const MAC_LEN: usize = 20;
 /// `PartialEq` is constant-time - timing-safe by construction.
 #[derive(Debug, Clone, Encode, Decode)]
 #[cbor(transparent)]
-pub struct Mac<const N: usize = MAC_LEN>(#[n(0)] [u8; N]);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
+pub struct Mac<const N: usize = MAC_LEN>(
+    #[n(0)]
+    #[cfg_attr(feature = "serde", serde(with = "hex_bytes"))]
+    [u8; N],
+);
 
 impl<const N: usize> Mac<N> {
     pub fn new(bytes: [u8; N]) -> Self {
@@ -177,11 +185,13 @@ impl<const N: usize> Eq for Mac<N> {}
 /// The client signs `body.tbs_bytes()` with their Ed25519 key and attaches
 /// the 64-byte raw signature. The server calls `body.verify(&signature)`.
 #[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Request<B> {
     #[n(0)]
     pub body: B,
     /// Raw 64-byte Ed25519 signature over `body.tbs_bytes()`.
     #[n(1)]
+    #[cfg_attr(feature = "serde", serde(with = "hex_bytes"))]
     pub signature: [u8; 64],
 }
 
@@ -237,7 +247,12 @@ where
 #[derive(Debug, Clone, Encode, Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
-pub struct HmacKey(#[n(0)] [u8; 32]);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
+pub struct HmacKey(
+    #[n(0)]
+    #[cfg_attr(feature = "serde", serde(with = "hex_bytes"))]
+    [u8; 32],
+);
 
 #[cfg(feature = "server")]
 impl From<[u8; 32]> for HmacKey {
@@ -279,7 +294,7 @@ impl HmacKey {
 // Error
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 #[cfg_attr(feature = "problem-details", derive(problem_details::ProblemDetail))]
 pub enum Error {
     /// Client signature could not be verified.
@@ -313,6 +328,39 @@ pub enum Error {
         )
     )]
     HmacSignature,
+}
+
+#[cfg(feature = "serde")]
+mod hex_bytes {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<T, S>(bytes: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        T: AsRef<[u8]>,
+        S: Serializer,
+    {
+        let bytes = bytes.as_ref();
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(bytes))
+        } else {
+            serializer.serialize_bytes(bytes)
+        }
+    }
+
+    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+    where
+        T: TryFrom<Vec<u8>>,
+        D: Deserializer<'de>,
+    {
+        let bytes = if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            hex::decode(&s).map_err(serde::de::Error::custom)?
+        } else {
+            Vec::<u8>::deserialize(deserializer)?
+        };
+        let len = bytes.len();
+        T::try_from(bytes).map_err(|_| serde::de::Error::invalid_length(len, &"wrong length"))
+    }
 }
 
 #[cfg(test)]
