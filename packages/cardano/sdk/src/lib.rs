@@ -47,4 +47,7 @@ mod non_extensible;
 mod pallas;
 mod pretty;
 
+#[cfg(feature = "serde")]
+pub mod hex_bytes;
+
 pub(crate) type BoxedIterator<'iter, T> = Box<dyn Iterator<Item = T> + 'iter>;

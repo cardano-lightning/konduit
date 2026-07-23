@@ -18,6 +18,9 @@ use std::{
     ops::Deref,
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 mod builder;
 pub mod state;
 pub use state::IsTransactionBodyState;
@@ -34,6 +37,8 @@ pub use state::IsTransactionBodyState;
 ///
 /// Note that [`Self::build`] is currently the only way by which one can get a transaction in the
 /// [`state::ReadyForSigning`].
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Transaction<State: IsTransactionBodyState> {
     inner: pallas::Tx,
     change_strategy: State::ChangeStrategy,
@@ -294,7 +299,24 @@ impl Transaction<state::ReadyForSigning> {
         sign: impl FnOnce(Hash<32>) -> (VerificationKeyLike, SignatureLike),
     ) -> &mut Self {
         let (verification_key, signature) = sign(self.id());
+        self.add_witness(verification_key, signature)
+    }
 
+    /// Attach a single witness directly, given an already-computed
+    /// verification key and signature — no callback involved. This is
+    /// the primitive `sign_with` itself is built on; it also covers
+    /// cases where the signature was obtained elsewhere ahead of time
+    /// (e.g. an async signer awaited before this call, or a signature
+    /// relayed from an external source), where a synchronous callback
+    /// isn't the right shape.
+    pub fn add_witness<
+        VerificationKeyLike: Borrow<VerificationKey>,
+        SignatureLike: Borrow<Signature>,
+    >(
+        &mut self,
+        verification_key: VerificationKeyLike,
+        signature: SignatureLike,
+    ) -> &mut Self {
         let public_key = pallas::Bytes::from(Vec::from(<[u8; VerificationKey::SIZE]>::from(
             *(verification_key.borrow()),
         )));

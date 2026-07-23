@@ -6,6 +6,9 @@ use crate::{Hash, VerificationKey, WithNetworkId, cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// A wrapper around the _blake2b-224_ hash digest of a key or script.
 ///
 /// It behaves like a enum with two variants, although the constructors are kept private to avoid
@@ -21,6 +24,7 @@ use std::{fmt, str::FromStr};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(transparent)]
 #[cbor(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Credential(#[n(0)] pallas::StakeCredential);
 
 impl fmt::Display for Credential {

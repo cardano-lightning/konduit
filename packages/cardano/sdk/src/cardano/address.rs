@@ -6,6 +6,9 @@ use crate::{Credential, NetworkId, pallas};
 use anyhow::anyhow;
 use std::{cmp::Ordering, fmt, marker::PhantomData, str::FromStr, sync::Arc};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 pub mod kind;
 pub use kind::IsAddressKind;
 
@@ -87,6 +90,32 @@ impl<T: IsAddressKind + Eq> Ord for Address<T> {
 enum AddressKind {
     Byron(pallas::ByronAddress),
     Shelley(pallas::ShelleyAddress),
+}
+
+impl<C, T: IsAddressKind> minicbor::Encode<C> for Address<T> {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        let bytes: Vec<u8> = self.into();
+        e.bytes(&bytes)?;
+        Ok(())
+    }
+}
+
+impl<'b, C, T> minicbor::Decode<'b, C> for Address<T>
+where
+    T: IsAddressKind,
+    Address<T>: TryFrom<&'b [u8], Error = anyhow::Error>,
+{
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        let bytes = d.bytes()?;
+        Address::<T>::try_from(bytes).map_err(|e| minicbor::decode::Error::message(e.to_string()))
+    }
 }
 
 // ------------------------------------------------------ Building (Shelley)
@@ -350,7 +379,25 @@ impl<T: IsAddressKind> From<&Address<T>> for Vec<u8> {
     }
 }
 
-// --------------------------------------------------------------- Wasm
+// --------------------------------------------------------------- Serde
+
+#[cfg(feature = "serde")]
+impl<T: IsAddressKind> Serialize for Address<T> {
+    fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: IsAddressKind> Deserialize<'de> for Address<T>
+where
+    Address<T>: FromStr<Err = anyhow::Error>,
+{
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse::<Self>().map_err(serde::de::Error::custom)
+    }
+}
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {

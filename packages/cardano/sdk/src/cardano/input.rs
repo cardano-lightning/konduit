@@ -6,6 +6,9 @@ use crate::{Hash, cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr, sync::Arc};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 /// A reference to a past transaction output.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -26,6 +29,31 @@ impl Input {
             transaction_id: pallas::Hash::from(transaction_id),
             index: output_index,
         }))
+    }
+}
+
+// ------------------------------------------------------------------------ serde
+#[cfg(feature = "serde")]
+impl Serialize for Input {
+    fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        use serde::ser::SerializeStruct;
+        let mut s = serializer.serialize_struct("Input", 2)?;
+        s.serialize_field("transaction_id", &self.transaction_id())?;
+        s.serialize_field("index", &self.output_index())?;
+        s.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Input {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Fields {
+            transaction_id: Hash<32>,
+            index: u64,
+        }
+        let f = Fields::deserialize(deserializer)?;
+        Ok(Self::new(f.transaction_id, f.index))
     }
 }
 

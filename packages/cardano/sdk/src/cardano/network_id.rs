@@ -6,6 +6,9 @@ use crate::{cbor, pallas};
 use anyhow::anyhow;
 use std::{fmt, str::FromStr};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 /// A network identifier to protect misuses of addresses or transactions on a wrong network.
 ///
 /// Note that you can convert to and from [`u8`] using [`u8::from`] and [`Self::try_from`]
@@ -33,6 +36,22 @@ impl fmt::Display for NetworkId {
             pallas::NetworkId::Testnet => "testnet",
             pallas::NetworkId::Mainnet => "mainnet",
         })
+    }
+}
+
+// ------------------------------------------------------------------------ serde
+#[cfg(feature = "serde")]
+impl Serialize for NetworkId {
+    fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for NetworkId {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse::<Self>().map_err(serde::de::Error::custom)
     }
 }
 
