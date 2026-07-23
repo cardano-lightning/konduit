@@ -916,8 +916,10 @@ version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
+ "hex",
  "minicbor",
  "problem-details",
+ "serde",
  "subtle",
  "thiserror 2.0.18",
 ]
