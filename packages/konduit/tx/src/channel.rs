@@ -90,7 +90,7 @@ impl Channel {
     }
 
     pub fn keytag(&self) -> Keytag {
-        Keytag::new(self.constants().add_vkey, self.tag().clone())
+        Keytag::new(&self.constants().add_vkey, self.tag())
     }
 
     pub fn constants(&self) -> &Constants {

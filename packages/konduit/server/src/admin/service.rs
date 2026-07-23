@@ -16,7 +16,7 @@ use std::{collections::BTreeMap, iter, sync::Arc};
 pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
     cardano: Arc<Connector>,
-    db: Arc<dyn db::Api + Send + Sync + 'static>,
+    db: Arc<db::Db>,
     network_parameters: NetworkParameters,
     channel_parameters: ChannelParameters,
     tx_preferences: AdaptorPreferences,
@@ -29,7 +29,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         config: Config,
         bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
         cardano: Arc<Connector>,
-        db: Arc<dyn db::Api + Send + Sync + 'static>,
+        db: Arc<db::Db>,
     ) -> anyhow::Result<Self> {
         let Config {
             wallet,
@@ -145,7 +145,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
 
     pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
         // This is a silly implementation.
-        let channels = self.db.get_all().await?;
+        let channels = self.db.iter().await?;
         for (keytag, channel) in channels.iter() {
             if let Some(lockeds) = channel.receipt().map(|x| x.lockeds()) {
                 for locked in lockeds.iter() {

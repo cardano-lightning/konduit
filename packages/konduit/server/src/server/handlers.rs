@@ -126,7 +126,7 @@ pub async fn squash(
     }
     let channel = match data.db().update_squash(&keytag, squash.clone()).await {
         Ok(channel) => channel,
-        Err(db::Error::Logic(db::LogicError::NoEntry(_))) => {
+        Err(db::Error::Logic(db::Error::NotFound)) => {
             log::warn!(
                 "squash: channel {} not found locally, forcing admin sync before retrying",
                 keytag
