@@ -486,7 +486,200 @@ fn with_assets<AssetName, Quantity: Zero>(
     }
 }
 
-// ------------------------------------------------------------------------ WASM
+// -------------------------------------------------------------------- Selecting
+
+/// The result of a successful [`Value::cover`] call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Selection<'a, T> {
+    /// The subset of `utxos` chosen to cover the target, in the order they were picked.
+    pub inputs: Vec<&'a T>,
+    /// The difference between the combined value of `inputs` and the target; i.e. what would
+    /// need to be returned as change.
+    pub excess: Value<u64>,
+}
+
+/// A single fungible quantity tracked during selection: either lovelace, or a specific native
+/// asset identified by its policy (script hash) and asset name.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum Unit {
+    Lovelace,
+    Asset(Hash<28>, Vec<u8>),
+}
+
+impl Value<u64> {
+    /// Attempt to select, from `utxos`, a subset whose combined value covers `target` (i.e. is
+    /// greater than or equal to `target` for lovelace and every native asset), trying to keep
+    /// the leftover excess (what would need to be returned as change) as small as possible.
+    ///
+    /// `value_of` extracts the [`Value<u64>`] out of an arbitrary utxo representation `T`, so
+    /// this can operate directly over e.g. a slice of full utxo records without requiring the
+    /// caller to pre-extract their values.
+    ///
+    /// Returns `None` when no subset of `utxos` can cover `target` (e.g. there isn't enough of
+    /// some asset available in total).
+    ///
+    /// # Algorithm
+    ///
+    /// Finding a subset with the *smallest possible* excess is a multi-dimensional variant of
+    /// subset-sum, and is NP-hard in general. This method therefore settles for "roughly least
+    /// excess" via a greedy heuristic, repeating the following until every requirement is met:
+    ///
+    /// 1. Identify the *scarcest* outstanding requirement — the lovelace or asset quantity
+    ///    satisfied by the fewest remaining (not yet selected) utxos. Ties are broken in favor
+    ///    of the requirement with the largest outstanding deficit. This mirrors the common
+    ///    coin-selection wisdom of dealing with the hardest-to-satisfy constraint first, so as
+    ///    not to paint the selection into a corner.
+    /// 2. Among the utxos able to satisfy that requirement, pick the *smallest* one that alone
+    ///    covers the remaining deficit, to minimize overshoot; if none can cover it alone, fall
+    ///    back to the *largest* one available, to make the most progress towards covering it.
+    ///
+    /// # examples
+    ///
+    /// ```rust
+    /// # use cardano_sdk::Value;
+    /// let utxos = vec![
+    ///     Value::<u64>::new(2_000_000),
+    ///     Value::<u64>::new(5_000_000),
+    ///     Value::<u64>::new(10_000_000),
+    /// ];
+    ///
+    /// let selection = Value::cover(&Value::new(7_000_000), &utxos, |v| v).unwrap();
+    ///
+    /// assert_eq!(selection.inputs, vec![&Value::new(10_000_000)]);
+    /// assert_eq!(selection.excess, Value::new(3_000_000));
+    /// ```
+    pub fn cover<'a, T>(
+        target: &Value<u64>,
+        utxos: &'a [T],
+        value_of: impl Fn(&T) -> &Value<u64>,
+    ) -> Option<Selection<'a, T>> {
+        let mut remaining: BTreeMap<Unit, u64> = BTreeMap::new();
+
+        if target.lovelace() > 0 {
+            remaining.insert(Unit::Lovelace, target.lovelace());
+        }
+
+        for (script_hash, assets) in target.assets() {
+            for (asset_name, quantity) in assets {
+                if *quantity > 0 {
+                    remaining.insert(Unit::Asset(*script_hash, asset_name.clone()), *quantity);
+                }
+            }
+        }
+
+        let mut chosen = vec![false; utxos.len()];
+        let mut inputs = Vec::new();
+        let mut accumulated = Value::new(0);
+
+        while let Some(unit) = scarcest_unit(&remaining, utxos, &chosen, &value_of) {
+            let need = remaining[&unit];
+
+            let candidate = (0..utxos.len())
+                .filter(|&i| !chosen[i] && quantity_of(value_of(&utxos[i]), &unit) > 0)
+                .min_by_key(|&i| {
+                    let have = quantity_of(value_of(&utxos[i]), &unit);
+                    if have >= need {
+                        (0, have)
+                    } else {
+                        (1, u64::MAX - have)
+                    }
+                })?;
+
+            chosen[candidate] = true;
+            inputs.push(candidate);
+
+            let value = value_of(&utxos[candidate]);
+            accumulated.add(value);
+
+            remaining.retain(|unit, deficit| {
+                let contributed = quantity_of(value, unit);
+                if contributed >= *deficit {
+                    false
+                } else {
+                    *deficit -= contributed;
+                    true
+                }
+            });
+        }
+
+        let excess = excess_of(&accumulated, target)?;
+
+        Some(Selection {
+            inputs: inputs.into_iter().map(|i| &utxos[i]).collect(),
+            excess,
+        })
+    }
+}
+
+/// Find the outstanding requirement satisfied by the fewest not-yet-selected utxos, breaking
+/// ties in favor of the largest remaining deficit. Returns `None` once `remaining` is empty.
+fn scarcest_unit<T>(
+    remaining: &BTreeMap<Unit, u64>,
+    utxos: &[T],
+    chosen: &[bool],
+    value_of: &impl Fn(&T) -> &Value<u64>,
+) -> Option<Unit> {
+    let mut best: Option<(Unit, usize, u64)> = None;
+
+    for (unit, deficit) in remaining {
+        let candidates = (0..utxos.len())
+            .filter(|&i| !chosen[i] && quantity_of(value_of(&utxos[i]), unit) > 0)
+            .count();
+
+        let is_better = match &best {
+            None => true,
+            Some((_, best_candidates, best_deficit)) => {
+                candidates < *best_candidates
+                    || (candidates == *best_candidates && *deficit > *best_deficit)
+            }
+        };
+
+        if is_better {
+            best = Some((unit.clone(), candidates, *deficit));
+        }
+    }
+
+    best.map(|(unit, _, _)| unit)
+}
+
+/// The quantity of a given [`Unit`] held by a value.
+fn quantity_of(value: &Value<u64>, unit: &Unit) -> u64 {
+    match unit {
+        Unit::Lovelace => value.lovelace(),
+        Unit::Asset(script_hash, asset_name) => value
+            .assets()
+            .get(script_hash)
+            .and_then(|assets| assets.get(asset_name))
+            .copied()
+            .unwrap_or(0),
+    }
+}
+
+/// Compute `accumulated - target`, returning `None` when `accumulated` does not, in fact, cover
+/// `target` for lovelace or some asset.
+fn excess_of(accumulated: &Value<u64>, target: &Value<u64>) -> Option<Value<u64>> {
+    let lovelace = accumulated.lovelace().checked_sub(target.lovelace())?;
+
+    let mut assets = accumulated.assets().clone();
+
+    for (script_hash, target_assets) in target.assets() {
+        for (asset_name, target_quantity) in target_assets {
+            if *target_quantity == 0 {
+                continue;
+            }
+
+            let quantity = assets
+                .get_mut(script_hash)
+                .and_then(|inner| inner.get_mut(asset_name))?;
+
+            *quantity = quantity.checked_sub(*target_quantity)?;
+        }
+    }
+
+    Some(Value::new(lovelace).with_assets(assets))
+}
+
+// ---------------------------------------------------------------- TESTS
 
 #[cfg(test)]
 mod tests {
@@ -530,5 +723,193 @@ mod tests {
                 } \
             }",
         )
+    }
+    //  ---------------------------------------------------------------- cover
+
+    #[test]
+    fn cover_picks_smallest_sufficient_utxo() {
+        let utxos = vec![
+            Value::<u64>::new(2_000_000),
+            Value::<u64>::new(5_000_000),
+            Value::<u64>::new(10_000_000),
+        ];
+
+        let selection = Value::cover(&Value::new(7_000_000), &utxos, |v| v).unwrap();
+
+        // 10_000_000 is the smallest utxo that alone covers 7_000_000, so it's preferred over
+        // combining 2_000_000 + 5_000_000 (which would also work, with less excess, but at the
+        // cost of an extra input).
+        assert_eq!(selection.inputs, vec![&Value::new(10_000_000)]);
+        assert_eq!(selection.excess, Value::new(3_000_000));
+    }
+
+    #[test]
+    fn cover_exact_match_leaves_no_excess() {
+        let utxos = vec![Value::<u64>::new(4_000_000), Value::<u64>::new(6_000_000)];
+
+        let selection = Value::cover(&Value::new(6_000_000), &utxos, |v| v).unwrap();
+
+        assert_eq!(selection.inputs, vec![&Value::new(6_000_000)]);
+        assert_eq!(selection.excess, Value::new(0));
+    }
+
+    #[test]
+    fn cover_combines_multiple_utxos_when_none_is_sufficient_alone() {
+        let utxos = vec![
+            Value::<u64>::new(2_000_000),
+            Value::<u64>::new(3_000_000),
+            Value::<u64>::new(3_500_000),
+        ];
+
+        let selection = Value::cover(&Value::new(8_000_000), &utxos, |v| v).unwrap();
+
+        let mut total = Value::new(0);
+        for input in &selection.inputs {
+            total.add(input);
+        }
+
+        assert_eq!(total.lovelace(), 8_500_000);
+        assert_eq!(selection.excess, Value::new(500_000));
+    }
+
+    #[test]
+    fn cover_returns_none_when_lovelace_is_insufficient() {
+        let utxos = vec![Value::<u64>::new(1_000_000), Value::<u64>::new(2_000_000)];
+
+        assert!(Value::cover(&Value::new(10_000_000), &utxos, |v| v).is_none());
+    }
+
+    #[test]
+    fn cover_returns_none_when_required_asset_is_absent() {
+        let target: Value<u64> = value!(
+            2_000_000,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                100
+            ),
+        );
+
+        let utxos = vec![Value::<u64>::new(10_000_000)];
+
+        assert!(Value::cover(&target, &utxos, |v| v).is_none());
+    }
+
+    #[test]
+    fn cover_selects_the_utxo_holding_the_required_asset() {
+        let target: Value<u64> = value!(
+            2_000_000,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                100
+            ),
+        );
+
+        let with_asset: Value<u64> = value!(
+            1_500_000,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                250
+            ),
+        );
+        let without_asset = Value::<u64>::new(5_000_000);
+
+        let utxos = vec![without_asset.clone(), with_asset.clone()];
+
+        let selection = Value::cover(&target, &utxos, |v| v).unwrap();
+
+        assert!(selection.inputs.contains(&&with_asset));
+    }
+
+    #[test]
+    fn cover_combines_utxos_across_assets_and_lovelace() {
+        let target: Value<u64> = value!(
+            9_000_000,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                100
+            ),
+            (
+                "a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235",
+                "484f534b59",
+                1000
+            ),
+        );
+
+        // Each of these carries just one of the two required assets, plus some lovelace that,
+        // combined, still falls short of the target.
+        let snek_utxo: Value<u64> = value!(
+            2_000_000,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                150
+            ),
+        );
+        let hosky_utxo: Value<u64> = value!(
+            2_000_000,
+            (
+                "a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235",
+                "484f534b59",
+                1200
+            ),
+        );
+        let ada_only = Value::<u64>::new(6_000_000);
+
+        let utxos = vec![snek_utxo.clone(), hosky_utxo.clone(), ada_only.clone()];
+
+        let selection = Value::cover(&target, &utxos, |v| v).unwrap();
+
+        // All three utxos are needed: one for each asset, and the third to make up the
+        // remaining lovelace deficit.
+        assert!(selection.inputs.contains(&&snek_utxo));
+        assert!(selection.inputs.contains(&&hosky_utxo));
+        assert!(selection.inputs.contains(&&ada_only));
+        assert_eq!(selection.inputs.len(), 3);
+
+        let mut total = Value::new(0);
+        for input in &selection.inputs {
+            total.add(input);
+        }
+        assert_eq!(
+            total.lovelace() - target.lovelace(),
+            selection.excess.lovelace()
+        );
+    }
+
+    #[test]
+    fn cover_excess_includes_leftover_of_an_unrequested_asset() {
+        // The only utxo available happens to carry an asset that the target doesn't ask for at
+        // all; since it's the only way to reach the lovelace target, it gets selected, and the
+        // whole of that asset ends up as excess.
+        let target = Value::<u64>::new(1_000_000);
+
+        let utxo: Value<u64> = value!(
+            2_000_000,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                42
+            ),
+        );
+
+        let utxos = vec![utxo.clone()];
+
+        let selection = Value::cover(&target, &utxos, |v| v).unwrap();
+
+        let expected_excess: Value<u64> = value!(
+            1_000_000,
+            (
+                "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+                "534e454b",
+                42
+            ),
+        );
+
+        assert_eq!(selection.inputs, vec![&utxo]);
+        assert_eq!(selection.excess, expected_excess);
     }
 }
