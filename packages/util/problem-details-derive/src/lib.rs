@@ -76,6 +76,22 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         .map(parse_variant)
         .collect::<syn::Result<_>>()?;
 
+    let extra_bounds: Vec<TokenStream2> = metas
+        .iter()
+        .filter_map(|m| {
+            if !matches!(m.kind, VariantKind::Delegate) {
+                return None;
+            }
+            // Safe to unwrap: parse_variant already enforces newtype shape
+            if let Fields::Unnamed(f) = &m.fields {
+                let ty = &f.unnamed[0].ty;
+                Some(quote! { #ty: ::problem_details::ProblemDetail })
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let slug_arms = method_arms(&metas, &|m| match &m.kind {
         VariantKind::Leaf { slug, .. } => quote!(#slug),
         VariantKind::Delegate => delegate_call(m, quote!(slug())),
@@ -103,6 +119,14 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         .filter(|m| matches!(m.kind, VariantKind::Leaf { .. }))
         .collect();
     let manifest = manifest_json(&leaf_metas);
+
+    let where_clause = if extra_bounds.is_empty() {
+        quote! { #where_clause }
+    } else if where_clause.is_some() {
+        quote! { #where_clause #(#extra_bounds,)* }
+    } else {
+        quote! { where #(#extra_bounds,)* }
+    };
 
     Ok(quote! {
         impl #impl_generics ::problem_details::ProblemDetail for #name #ty_generics #where_clause {
@@ -132,17 +156,23 @@ fn method_arms(
     metas
         .iter()
         .map(|m| {
-            let p = pat(&m.ident, &m.fields);
             let val = f(m);
+            // Delegate variants need `inner` bound; leaf variants use wildcard
+            let p = match &m.kind {
+                VariantKind::Delegate => {
+                    let ident = &m.ident;
+                    quote! { Self::#ident(inner) }
+                }
+                VariantKind::Leaf { .. } => pat(&m.ident, &m.fields),
+            };
             quote! { #p => #val, }
         })
         .collect()
 }
 
-/// Emits `match self { Self::Foo(inner) => inner.method() }` for a delegate newtype variant.
-fn delegate_call(m: &VariantMeta, method: TokenStream2) -> TokenStream2 {
-    let ident = &m.ident;
-    quote! { { match self { Self::#ident(inner) => inner.#method, _ => unreachable!() } } }
+fn delegate_call(_m: &VariantMeta, method: TokenStream2) -> TokenStream2 {
+    // `inner` is bound in the pattern above
+    quote! { inner.#method }
 }
 
 // ── Parsing ───────────────────────────────────────────────────────────────────

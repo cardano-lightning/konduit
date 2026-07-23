@@ -119,7 +119,7 @@ konduit-client = { path = "packages/konduit/client" }
 konduit-data = { path = "packages/konduit/data" }
 konduit-server = { path = "packages/konduit/server" }
 konduit-tx = { path = "packages/konduit/tx" }
-problem-details = { path = "packages/util/problem-details" }
+problem-details = { path = "packages/util/problem-details", default-features = false }
 problem-details-derive = { path = "packages/util/problem-details-derive" }
 
 [profile.wasm]
