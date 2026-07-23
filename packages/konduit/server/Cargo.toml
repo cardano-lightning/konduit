@@ -38,6 +38,8 @@ serde_with = { workspace = true, features = ["base64", "hex", "json"] }
 sled.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+redb = "4.1.0"
+minicbor.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

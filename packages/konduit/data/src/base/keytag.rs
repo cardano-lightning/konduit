@@ -38,7 +38,7 @@ impl TryFrom<Vec<u8>> for Keytag {
 }
 
 impl Keytag {
-    pub fn new(key: VerificationKey, tag: Tag) -> Self {
+    pub fn new(key: &VerificationKey, tag: &Tag) -> Self {
         Self(
             key.as_ref()
                 .to_vec()

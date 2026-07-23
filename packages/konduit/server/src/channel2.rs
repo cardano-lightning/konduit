@@ -2,7 +2,6 @@ use cardano_sdk::VerificationKey;
 use konduit_data::{
     Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
 };
-use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::cmp;
@@ -18,14 +17,13 @@ use std::cmp;
 /// then they are safe upto general chain safety (eg tx failures due to chain congestion).
 /// also does not depend on "tracing" state through channels.
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Aux {
-    #[n(0)]
     is_active: bool,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
-pub enum ChannelError {
+pub enum Error {
     #[error("Retainer required")]
     NoRetainer,
     #[error("Receipt required")]
@@ -41,27 +39,21 @@ pub enum ChannelError {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-pub struct Channel {
-    #[n(0)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Channel2 {
     #[serde_as(as = "serde_with::hex::Hex")]
-    #[n(1)]
     key: VerificationKey,
     #[serde_as(as = "serde_with::hex::Hex")]
-    #[n(2)]
     tag: Tag,
-    #[n(3)]
     retainer: Option<Retainer>,
-    #[n(4)]
     receipt: Option<Receipt>,
-    #[n(5)]
     aux: Aux,
 }
 
-impl Channel {
+impl Channel2 {
     pub fn new(keytag: Keytag) -> Self {
         let (key, tag) = keytag.split();
-        Channel {
+        Channel2 {
             key,
             tag,
             retainer: None,
@@ -70,18 +62,52 @@ impl Channel {
         }
     }
 
-    pub fn keytag(&self) -> Keytag {
-        Keytag::new(&self.key, &self.tag)
-    }
-
-    pub fn assert_active(&self) -> Result<(), ChannelError> {
+    pub fn assert_active(&self) -> Result<(), Error> {
         if !self.aux.is_active {
-            return Err(ChannelError::NotActive);
+            return Err(Error::NotActive);
         }
         Ok(())
     }
 
-    pub fn update_retainer(&mut self, l1s: Vec<Retainer>) -> Result<(), ChannelError> {
+    pub fn receipt(&self) -> Option<Receipt> {
+        self.receipt.clone()
+    }
+
+    pub fn squash_proposal(&self) -> Result<SquashProposal, Error> {
+        match &self.receipt {
+            None => Err(Error::NoReceipt),
+            Some(receipt) => receipt.squash_proposal().map_err(|_e| Error::BadInput),
+        }
+    }
+
+    /// How much funds are currently unspent, uncommitted.
+    /// Error if no funds can be spent because of other reasons.
+    pub fn potentially_subable(&self) -> Result<u64, Error> {
+        self.assert_active()?;
+        let retainer = self.retainer.as_ref().ok_or(Error::NoRetainer)?;
+        let receipt = self.receipt.as_ref().ok_or(Error::NoReceipt)?;
+        if receipt.capacity() == 0 {
+            return Err(Error::Capacity);
+        };
+        let abs = receipt.potentially_subable(&retainer.useds);
+        let rel = abs.saturating_sub(retainer.subbed);
+        Ok(retainer.amount.saturating_sub(rel))
+    }
+
+    pub fn next_index(&self) -> Result<u64, Error> {
+        self.assert_active()?;
+        let retainer = self.retainer.as_ref().ok_or(Error::NoRetainer)?;
+        let receipt = self.receipt.as_ref().ok_or(Error::NoReceipt)?;
+        let index = match retainer.useds.last() {
+            None => receipt.max_index(),
+            Some(u) => cmp::max(receipt.max_index(), u.index),
+        };
+        Ok(index + 1)
+    }
+
+    // ---- Modifiers ----
+
+    pub fn update_retainer(&mut self, l1s: Vec<Retainer>) -> Result<(), Error> {
         // FIXME :: Handle Useds better!
         self.retainer = match &self.receipt {
             None => l1s.into_iter().max_by_key(|l1| l1.amount),
@@ -100,10 +126,10 @@ impl Channel {
         Ok(())
     }
 
-    pub fn update_squash(&mut self, squash: Squash) -> Result<bool, ChannelError> {
+    pub fn update_squash(&mut self, squash: Squash) -> Result<bool, Error> {
         let _ = self.assert_active();
         if !squash.verify(&self.key, &self.tag) {
-            return Err(ChannelError::BadInput);
+            return Err(Error::BadInput);
         };
         match &mut self.receipt {
             None => {
@@ -114,74 +140,26 @@ impl Channel {
         }
     }
 
-    pub fn squash_proposal(&self) -> Result<SquashProposal, ChannelError> {
-        match &self.receipt {
-            None => Err(ChannelError::NoReceipt),
-            Some(receipt) => receipt
-                .squash_proposal()
-                .map_err(|_e| ChannelError::BadInput),
-        }
-    }
-
-    /// How much funds are currently unspent, uncommitted.
-    /// Error if no funds can be spent because of other reasons.
-    pub fn potentially_subable(&self) -> Result<u64, ChannelError> {
-        self.assert_active()?;
-        let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
-        let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
-        if receipt.capacity() == 0 {
-            return Err(ChannelError::Capacity);
-        };
-        let abs = receipt.potentially_subable(&retainer.useds);
-        let rel = abs.saturating_sub(retainer.subbed);
-        Ok(retainer.amount.saturating_sub(rel))
-    }
-
-    pub fn next_index(&self) -> Result<u64, ChannelError> {
-        self.assert_active()?;
-        let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
-        let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
-        let index = match retainer.useds.last() {
-            None => receipt.max_index(),
-            Some(u) => cmp::max(receipt.max_index(), u.index),
-        };
-        Ok(index + 1)
-    }
-
-    pub fn append_locked(&mut self, locked: Locked) -> Result<(), ChannelError> {
+    pub fn append_locked(&mut self, locked: Locked) -> Result<(), Error> {
         if !locked.verify(&self.key, &self.tag) {
-            Err(ChannelError::BadInput)
+            Err(Error::BadInput)
         } else if locked.amount() > self.potentially_subable()? {
-            Err(ChannelError::Funds)
+            Err(Error::Funds)
         } else {
             self.receipt
                 .as_mut()
                 .expect("Impossible")
                 .append_locked(locked)
-                .map_err(|_err| ChannelError::BadInput)
+                .map_err(|_err| Error::BadInput)
         }
     }
 
-    pub fn receipt(&self) -> Option<Receipt> {
-        self.receipt.clone()
-    }
-
-    pub fn unlock(&mut self, secret: Secret) -> Result<(), ChannelError> {
+    pub fn unlock(&mut self, secret: Secret) -> Result<(), Error> {
         self.receipt
             .as_mut()
-            .ok_or(ChannelError::NoReceipt)?
+            .ok_or(Error::NoReceipt)?
             .unlock(secret)
-            .map_err(|_err| ChannelError::BadInput)
-    }
-
-    /// We need to verify that if the channel is active, then there is
-    /// still a potential retainer with at as much capacity.
-    /// FIXME :: There is still a potential issue with useds here.
-    pub fn steps(
-        &self,
-        _l1_channels: &Vec<L1Channel>,
-    ) -> Result<Vec<Option<(Step, L1Channel)>>, ChannelError> {
-        todo!()
+            .map_err(|_err| Error::BadInput)
     }
 }
 
@@ -191,13 +169,10 @@ pub struct Quote {
     amount: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Retainer {
-    #[n(0)]
     amount: u64,
-    #[n(1)]
     subbed: u64,
-    #[n(2)]
     useds: Vec<Used>,
 }
 
