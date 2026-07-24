@@ -1,5 +1,5 @@
-use crate::ChequeBody;
 use cardano_sdk::Signature;
+use konduit_data::ChequeBody;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 

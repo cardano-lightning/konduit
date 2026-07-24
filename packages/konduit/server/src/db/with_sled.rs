@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use sled::Db;
 use std::{collections::BTreeMap, sync::Arc};
 
-use konduit_data::{Keytag, Locked, Secret, Squash};
+use konduit_data::{Locked, Secret, Squash};
+use konduit_tmp::Keytag;
 
 mod args;
 pub use args::SledArgs as Args;

@@ -4,11 +4,14 @@ use crate::{
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
 use cardano_sdk::cbor;
-use konduit_data::{Keytag, Locked, PayBody, Quote, QuoteBody, Secret, Squash, SquashStatus};
+use konduit_data::{Duration, Locked, Secret, Squash};
+use konduit_tmp::{Keytag, PayBody, Quote, QuoteBody, SquashStatus};
 use std::{
     ops::Deref,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
+
+use konduit_tmp::{from_verifying_key, to_verifying_key};
 
 type Data = web::Data<server::Data>;
 
@@ -47,11 +50,11 @@ impl ResponseError for HandlerError {
 
 // TODO :: MOVE TO CONFIG
 /// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
-const ADAPTOR_TIME_DELTA: std::time::Duration = Duration::from_secs(40 * 10 * 60);
+const ADAPTOR_TIME_DELTA: std::time::Duration = std::time::Duration::from_secs(40 * 10 * 60);
 /// Extra time between the "quoted" rel time and the time that might be allowed for in a
 /// "pay". I don't know why this has to be so high.
 /// LND fails for values much smaller than this.
-const QUOTE_PAY_TIME_MARGIN: std::time::Duration = Duration::from_secs(4 * 10 * 60);
+const QUOTE_PAY_TIME_MARGIN: std::time::Duration = std::time::Duration::from_secs(4 * 10 * 60);
 
 pub async fn info(data: Data) -> HttpResponse {
     HttpResponse::Ok().json(data.info().deref())
@@ -121,10 +124,14 @@ pub async fn squash(
     };
 
     let (key, tag) = keytag.split();
-    if !squash.verify(&key, &tag) {
+    let Ok(squash) = squash.try_verify(&to_verifying_key(key), &tag) else {
         return Ok(HttpResponse::BadRequest().body("Invalid squash"));
-    }
-    let channel = match data.db().update_squash(&keytag, squash.clone()).await {
+    };
+    let channel = match data
+        .db()
+        .update_squash(&keytag, squash.clone().into_unverified())
+        .await
+    {
         Ok(channel) => channel,
         Err(db::Error::Logic(db::LogicError::NoEntry(_))) => {
             log::warn!(
@@ -142,24 +149,26 @@ pub async fn squash(
                 )));
             }
 
-            data.db().update_squash(&keytag, squash.clone()).await?
+            data.db()
+                .update_squash(&keytag, squash.clone().into_unverified())
+                .await?
         }
         Err(err) => return Err(err.into()),
     };
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
     };
-    let proposal = match receipt.squash_proposal() {
+    let proposal = match receipt.propose_squash() {
         Ok(proposal) => proposal,
         Err(err) => {
             return Ok(HttpResponse::InternalServerError()
                 .body(format!("Failed to resolve squash: {}", err)));
         }
     };
-    let response_body = if squash.body == proposal.proposal {
+    let response_body = if *squash.body() == proposal.proposal {
         // Consumer up-to-date
         SquashStatus::Complete
-    } else if proposal.proposal == proposal.current.body {
+    } else if proposal.proposal == *proposal.current.body() {
         // Consumer not up-to-date, but nothing to squash
         SquashStatus::Stale(proposal)
     } else {
@@ -182,7 +191,7 @@ pub async fn quote(
     let Some(channel) = data.db().get_channel(&keytag).await? else {
         return Ok(HttpResponse::BadRequest().body("No channel found"));
     };
-    let potentially_subable = match channel.potentially_subable() {
+    let potentially_subable = match channel.uncommitted() {
         Ok(amt) => amt,
         Err(err) => {
             return Ok(HttpResponse::BadRequest().body(err.to_string()));
@@ -239,13 +248,13 @@ pub async fn pay(
     };
     let fx = data.fx().read().await.clone();
     let body = body.into_inner();
-    let locked = Locked::new(body.cheque_body, body.signature);
+    let locked = Locked::new(body.cheque_body, <[u8; 64]>::from(body.signature).into());
     let invoice = match bln_client::types::Invoice::try_from(&body.invoice) {
         Ok(inv) => inv,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
     };
     let (key, tag) = keytag.split();
-    if !locked.verify(&key, &tag) {
+    let Ok(locked) = locked.try_verify(&to_verifying_key(key), &tag) else {
         return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
     };
     if invoice.payment_hash != locked.lock().0 {
@@ -269,17 +278,17 @@ pub async fn pay(
     // We need to convert to a time delta.
     // And then the BLN handler can convert to (relative) blocks and then block height
     // ie absolute blocks.
-    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+    let Ok(now) = now() else {
         return Ok(HttpResponse::InternalServerError().body("System time not available"));
     };
 
     let relative_timeout = locked
         .timeout()
         .saturating_sub(now)
-        .saturating_sub(ADAPTOR_TIME_DELTA);
+        .saturating_sub(to_konduit_duration(ADAPTOR_TIME_DELTA));
 
     if relative_timeout.is_zero() {
-        let min_timeout = (now + ADAPTOR_TIME_DELTA).as_secs();
+        let min_timeout = (now + to_konduit_duration(ADAPTOR_TIME_DELTA)).as_secs();
         // FIXME :: this error is kinda meaningless.
         // The effective min acceptable timeout is attained only for routes no-one will use.
         return Ok(HttpResponse::InternalServerError().body(format!(
@@ -288,12 +297,16 @@ pub async fn pay(
         )));
     };
 
-    if let Err(err) = data.db().append_locked(&keytag, locked).await {
+    if let Err(err) = data
+        .db()
+        .append_locked(&keytag, locked.into_unverified())
+        .await
+    {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
     let pay_request = bln_client::types::PayRequest {
         fee_limit,
-        relative_timeout,
+        relative_timeout: from_konduit_duration(relative_timeout),
         invoice,
     };
 
@@ -319,18 +332,31 @@ pub async fn pay(
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Failure to recover receipt"));
     };
-    let proposal = match receipt.squash_proposal() {
+    let proposal = match receipt.propose_squash() {
         Ok(proposal) => proposal,
         Err(err) => {
             return Ok(HttpResponse::InternalServerError()
                 .body(format!("Failed to resolve squash: {}", err)));
         }
     };
-    let response_body = if proposal.current.body == proposal.proposal {
+    let response_body = if *proposal.current.body() == proposal.proposal {
         SquashStatus::Complete
     } else {
         SquashStatus::Incomplete(proposal)
     };
 
     Ok(HttpResponse::Ok().json(response_body))
+}
+
+fn now() -> Result<konduit_data::Duration, std::time::SystemTimeError> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(to_konduit_duration)
+}
+
+fn to_konduit_duration(x: std::time::Duration) -> konduit_data::Duration {
+    Duration::from_millis(x.as_millis() as u64)
+}
+fn from_konduit_duration(x: konduit_data::Duration) -> std::time::Duration {
+    std::time::Duration::from_millis(x.as_millis() as u64)
 }
