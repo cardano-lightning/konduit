@@ -6,9 +6,11 @@ use crate::{
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::{ChannelParameters, Keytag, Secret};
+use konduit_data::Secret;
+use konduit_tmp::{ChannelParameters, Keytag};
 use konduit_tx::{
     Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
+    to_verifying_key,
 };
 use std::{collections::BTreeMap, iter, sync::Arc};
 
@@ -106,7 +108,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             .filter(|u| {
                 let channel = u.data();
                 let constants = channel.constants();
-                constants.sub_vkey == own_vkey
+                constants.sub_vkey == to_verifying_key(own_vkey)
                     && constants.close_period >= close_period
                     && constants.tag.len() <= tag_length
                     && channel.stage().is_opened()
@@ -147,7 +149,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         // This is a silly implementation.
         let channels = self.db.get_all().await?;
         for (keytag, channel) in channels.iter() {
-            if let Some(lockeds) = channel.receipt().map(|x| x.lockeds()) {
+            if let Some(lockeds) = channel.receipt().map(|x| x.lockeds().collect::<Vec<_>>()) {
                 for locked in lockeds.iter() {
                     if let bln_client::types::RevealResponse {
                         secret: Some(secret),

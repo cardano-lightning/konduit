@@ -1,6 +1,6 @@
 use clap::Parser;
-use konduit_data::AdaptorInfo;
 use konduit_server::{admin, args, server};
+use konduit_tmp::AdaptorInfo;
 use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::interval};

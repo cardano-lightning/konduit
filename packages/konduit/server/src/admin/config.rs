@@ -1,6 +1,6 @@
 use crate::common;
 use cardano_sdk::{Address, SigningKey, VerificationKey, address::kind};
-use konduit_data::ChannelParameters;
+use konduit_tmp::ChannelParameters;
 use konduit_tx::adaptor::AdaptorPreferences;
 
 pub struct Config {

@@ -2405,18 +2405,17 @@ name = "konduit-data"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bln-sdk",
  "cardano-sdk",
- "chrono",
  "cryptoxide 0.5.1",
  "hex",
+ "minicbor",
+ "proptest",
+ "proptest-derive",
  "rand_core 0.6.4",
  "serde",
  "serde_json",
  "serde_with",
  "thiserror 2.0.18",
- "uplc",
- "web-time",
 ]
 
 [[package]]
@@ -2440,6 +2439,7 @@ dependencies = [
  "hex",
  "humantime",
  "konduit-data",
+ "konduit-tmp",
  "konduit-tx",
  "log",
  "postcard",
@@ -2455,6 +2455,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "konduit-tmp"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bln-sdk",
+ "cardano-sdk",
+ "chrono",
+ "hex",
+ "konduit-data",
+ "minicbor",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.18",
+ "uplc",
+ "web-time",
+]
+
+[[package]]
 name = "konduit-tx"
 version = "0.0.0"
 dependencies = [
@@ -2462,6 +2480,7 @@ dependencies = [
  "cardano-sdk",
  "hex",
  "konduit-data",
+ "konduit-tmp",
  "serde_json",
  "thiserror 2.0.18",
  "web-time",
@@ -3190,8 +3209,6 @@ dependencies = [
  "rand_chacha 0.9.0",
  "rand_xorshift",
  "regex-syntax",
- "rusty-fork",
- "tempfile",
  "unarray",
 ]
 
@@ -3257,12 +3274,6 @@ checksum = "52c2c1bf36ddb1a1c396b3601a3cec27c2462e45f07c386894ec3ccf5332bd16"
 dependencies = [
  "prost",
 ]
-
-[[package]]
-name = "quick-error"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quinn"
@@ -3693,18 +3704,6 @@ name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
-
-[[package]]
-name = "rusty-fork"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc6bf79ff24e648f6da1f8d1f011e9cac26491b619e6b9280f2b47f1774e6ee2"
-dependencies = [
- "fnv",
- "quick-error",
- "tempfile",
- "wait-timeout",
-]
 
 [[package]]
 name = "ryu"
@@ -4691,15 +4690,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "wait-timeout"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "walkdir"

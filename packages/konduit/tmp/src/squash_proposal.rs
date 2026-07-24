@@ -1,4 +1,4 @@
-use crate::{Locked, Squash, SquashBody, Unlocked};
+use konduit_data::{Locked, Squash, SquashBody, Unlocked};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-use konduit_data::Keytag;
+use konduit_tmp::Keytag;
 
 use crate::ChannelError;
 

@@ -1,0 +1,30 @@
+[package]
+name = "konduit-tmp"
+version.workspace = true
+edition.workspace = true
+description = "TEMPORARY"
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+
+[dependencies]
+anyhow = { workspace = true }
+bln-sdk.workspace = true
+chrono.workspace = true
+cardano-sdk = { workspace = true }
+hex.workspace = true
+konduit-data = { workspace = true, features = ["serde"] }
+minicbor.workspace = true
+serde.workspace = true
+serde_with.workspace = true
+thiserror.workspace = true
+web-time.workspace = true
+uplc.workspace = true
