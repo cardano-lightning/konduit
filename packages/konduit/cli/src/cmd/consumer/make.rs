@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use cardano_sdk::{PlutusData, cbor::ToCbor};
 use konduit_data::{ChequeBody, Duration, Indexes, Lock, Locked, Secret, Squash, SquashBody, Tag};
+use konduit_tmp::to_signing_key;
 
 use crate::config::consumer::Config;
 
@@ -67,11 +67,11 @@ impl Cmd {
                 exclude,
             } => {
                 let body = SquashBody::new(amount, index, exclude)?;
-                let squash = Squash::make(&config.wallet, &tag, body);
+                let squash = Squash::make(&to_signing_key(config.wallet.clone()), &tag, body);
                 println!(
                     "{},{}",
-                    hex::encode(PlutusData::from(squash.body).to_cbor()),
-                    squash.signature
+                    hex::encode(minicbor::to_vec(squash.body()).unwrap()),
+                    hex::encode(squash.signature())
                 );
                 Ok(())
             }
@@ -91,11 +91,11 @@ impl Cmd {
                     .or_else(|| duration.map(duration_from_relative))
                     .ok_or(anyhow::anyhow!("timeout or duration required"))?;
                 let body = ChequeBody::new(index, amount, timeout, lock);
-                let locked = Locked::make(&config.wallet, &tag, body);
+                let locked = Locked::make(&to_signing_key(config.wallet.clone()), &tag, body);
                 println!(
                     "{},{}",
-                    hex::encode(PlutusData::from(locked.body).to_cbor()),
-                    locked.signature
+                    hex::encode(minicbor::to_vec(locked.body()).unwrap()),
+                    hex::encode(locked.signature())
                 );
                 Ok(())
             }

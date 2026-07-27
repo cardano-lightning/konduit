@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use http_client::Transport;
+use konduit_tmp::{to_signing_key, to_verifying_key};
 use web_time::{SystemTime, UNIX_EPOCH};
 
 pub struct Client<'a, T: Transport> {
@@ -55,15 +56,15 @@ where
 
         let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
 
-        let locked = Locked::make(self.signing_key, tag, body);
+        let locked = Locked::make(&to_signing_key(self.signing_key.clone()), tag, body);
 
-        self.adaptor.pay(invoice, locked).await
+        self.adaptor.pay(invoice, locked.into_unverified()).await
     }
 
     pub async fn squash(&self, squash_body: SquashBody) -> anyhow::Result<SquashStatus> {
         let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
-        let squash = Squash::make(self.signing_key, tag, squash_body);
-        self.adaptor.squash(squash).await
+        let squash = Squash::make(&to_signing_key(self.signing_key.clone()), tag, squash_body);
+        self.adaptor.squash(squash.into_unverified()).await
     }
 
     /// Synchronize with an adaptor. 'expected_unlockeds' can be used by the client to ensure
@@ -86,15 +87,15 @@ where
             SquashStatus::Incomplete(st) if and_confirm => {
                 log::info!("squash incomplete; verifying...");
 
-                let verification_key = self.signing_key.to_verification_key();
+                let verifying_key = to_verifying_key(self.signing_key.to_verification_key());
 
                 // 1. Verify the current squash
-                if !st.current.verify(&verification_key, tag) {
+                let Ok(current) = st.current.try_verify(&verifying_key, tag) else {
                     return Err(anyhow!("current squash does not verify"));
-                }
-                log::info!("currently squashed = {}", st.current.amount());
+                };
+                log::info!("currently squashed = {}", current.amount());
 
-                let current_squash_index = st.current.index();
+                let current_squash_index = current.index();
 
                 // 2. Sum-verify all the unlockeds
                 //
@@ -126,6 +127,8 @@ where
                 // So, it is only truly an issue for the consumer when it comes to determining its
                 // currently available balance: a consumer needs to be able to rely on the cheque
                 // to timeout eventually so that it can update its own reported state.
+                //
+                // FIXME :: This is just wrong but cannot be fixed on this branch. see konduit-wire.
                 let mut squashed_unlockeds = vec![];
                 let unlocked_value = st.unlockeds.into_iter().try_fold(0, |value, unlocked| {
                     if unlocked.index() <= current_squash_index {
@@ -134,11 +137,11 @@ where
                             unlocked.index(),
                             current_squash_index,
                         );
-                        return Ok(value);
+                        return Ok::<u64, anyhow::Error>(value);
 
                     }
 
-                    if !known_lock(*unlocked.lock()) {
+                    if !known_lock(unlocked.lock()) {
                         // NOTE: No error raised here, because it'll be raised below as the squash
                         // amount wouldn't match.
                         log::warn!(
@@ -147,18 +150,14 @@ where
                         return Ok(value);
                     }
 
-                    if !unlocked.verify_no_time(&verification_key, tag) {
-                        return Err(anyhow!("current squash does not verify"));
-                    }
-
-                    squashed_unlockeds.push(*unlocked.lock());
+                    squashed_unlockeds.push(unlocked.lock());
 
                     Ok(value + unlocked.amount())
                 })?;
 
                 log::info!("total unlocked = {}", unlocked_value);
 
-                if st.proposal.amount > st.current.amount() + unlocked_value {
+                if st.proposal.amount() > current.amount() + unlocked_value {
                     return Err(anyhow!(
                         "adaptor requesting to squash more than provably owed"
                     ));

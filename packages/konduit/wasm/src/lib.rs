@@ -36,10 +36,12 @@ mod prelude {
         pub use cardano_connector_client::types::*;
         pub use cardano_sdk::*;
         pub use konduit_data::*;
+        pub use konduit_tmp::*;
         pub use konduit_tx::*;
         // NOTE: 'funny enough', #[wasm_bindgen] explicitly uses core::borrow for some of the
         // automatic derivations... which means that if we override core, we run into funny
         // problems.
+        pub use cardano_sdk::SigningKey;
         pub use std::borrow;
     }
 }

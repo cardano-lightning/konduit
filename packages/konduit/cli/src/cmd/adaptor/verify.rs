@@ -1,4 +1,6 @@
-use konduit_data::{Keytag, Locked, Squash};
+use konduit_data::{Locked, Squash};
+use konduit_tmp::Keytag;
+use konduit_tx::to_verifying_key;
 
 use crate::{
     cmd::parsers::{parse_locked, parse_squash},
@@ -32,12 +34,18 @@ impl Cmd {
         match self {
             Cmd::Squash { keytag, squash } => {
                 let (key, tag) = keytag.split();
-                println!("{}", squash.verify(&key, &tag));
+                println!(
+                    "{}",
+                    squash.try_verify(&to_verifying_key(key), &tag).is_ok()
+                );
                 Ok(())
             }
             Cmd::Locked { keytag, locked } => {
                 let (key, tag) = keytag.split();
-                println!("{}", locked.verify(&key, &tag));
+                println!(
+                    "{}",
+                    locked.try_verify(&to_verifying_key(key), &tag).is_ok()
+                );
                 Ok(())
             }
         }

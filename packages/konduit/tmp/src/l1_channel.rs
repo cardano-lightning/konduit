@@ -1,4 +1,4 @@
-use crate::Stage;
+use konduit_data::Stage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

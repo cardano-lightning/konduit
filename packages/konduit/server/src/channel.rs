@@ -1,7 +1,7 @@
 use cardano_sdk::VerificationKey;
-use konduit_data::{
-    Keytag, L1Channel, Locked, Receipt, Secret, Squash, SquashProposal, Stage, Step, Tag, Used,
-};
+use konduit_data::{Locked, Secret, Squash, Stage, Step, Tag, Used, VerifyingKey};
+use konduit_tmp::{Keytag, L1Channel, Receipt, SquashProposal};
+use konduit_tx::to_verifying_key;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::cmp;
@@ -30,6 +30,10 @@ pub enum ChannelError {
     NoReceipt,
     #[error("Not Active")]
     NotActive,
+    #[error("receipt: {0}")]
+    Receipt(#[from] konduit_tmp::receipt::Error),
+    #[error("Verify failed")]
+    VerifyFailed,
     #[error("Input not well-formed")]
     BadInput,
     #[error("Insufficient capacity")]
@@ -62,6 +66,10 @@ impl Channel {
         }
     }
 
+    pub fn verifying_key(&self) -> VerifyingKey {
+        to_verifying_key(self.key)
+    }
+
     pub fn assert_active(&self) -> Result<(), ChannelError> {
         if !self.aux.is_active {
             return Err(ChannelError::NotActive);
@@ -76,9 +84,8 @@ impl Channel {
             Some(receipt) => l1s.into_iter().max_by_key(|l1| {
                 (
                     cmp::min(
-                        receipt
-                            .potentially_subable(&l1.useds)
-                            .saturating_sub(l1.subbed),
+                        // FIXME :: This is now incorrect, but will leave to the indexer proxy
+                        receipt.committed().saturating_sub(l1.subbed),
                         l1.amount,
                     ),
                     l1.amount,
@@ -90,7 +97,7 @@ impl Channel {
 
     pub fn update_squash(&mut self, squash: Squash) -> Result<bool, ChannelError> {
         let _ = self.assert_active();
-        if !squash.verify(&self.key, &self.tag) {
+        let Ok(squash) = squash.try_verify(&to_verifying_key(self.key), &self.tag) else {
             return Err(ChannelError::BadInput);
         };
         match &mut self.receipt {
@@ -98,7 +105,12 @@ impl Channel {
                 self.receipt = Some(Receipt::new(squash));
                 Ok(true)
             }
-            Some(receipt) => Ok(receipt.update_squash(squash)),
+            Some(receipt) => {
+                // FIXME: Apply squash errors if no change, so the interface here requiring a bool
+                // makes little sense.
+                receipt.apply_squash(squash)?;
+                Ok(true)
+            }
         }
     }
 
@@ -106,46 +118,46 @@ impl Channel {
         match &self.receipt {
             None => Err(ChannelError::NoReceipt),
             Some(receipt) => receipt
-                .squash_proposal()
+                .propose_squash()
                 .map_err(|_e| ChannelError::BadInput),
         }
     }
 
-    /// How much funds are currently unspent, uncommitted.
+    /// How much funds are currently uncommitted (available to be committed).
     /// Error if no funds can be spent because of other reasons.
-    pub fn potentially_subable(&self) -> Result<u64, ChannelError> {
+    pub fn uncommitted(&self) -> Result<u64, ChannelError> {
         self.assert_active()?;
         let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
         let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
         if receipt.capacity() == 0 {
             return Err(ChannelError::Capacity);
         };
-        let abs = receipt.potentially_subable(&retainer.useds);
-        let rel = abs.saturating_sub(retainer.subbed);
-        Ok(retainer.amount.saturating_sub(rel))
+        let abs_committed = receipt.committed();
+        let rel_committed = abs_committed.saturating_sub(retainer.subbed);
+        Ok(retainer.amount.saturating_sub(rel_committed))
     }
 
     pub fn next_index(&self) -> Result<u64, ChannelError> {
         self.assert_active()?;
         let retainer = self.retainer.as_ref().ok_or(ChannelError::NoRetainer)?;
         let receipt = self.receipt.as_ref().ok_or(ChannelError::NoReceipt)?;
-        let index = match retainer.useds.last() {
-            None => receipt.max_index(),
-            Some(u) => cmp::max(receipt.max_index(), u.index),
-        };
-        Ok(index + 1)
+        Ok(cmp::max(
+            retainer.useds.last().map_or(0, |u| u.index),
+            receipt.propose_index(),
+        ))
     }
 
     pub fn append_locked(&mut self, locked: Locked) -> Result<(), ChannelError> {
-        if !locked.verify(&self.key, &self.tag) {
-            Err(ChannelError::BadInput)
-        } else if locked.amount() > self.potentially_subable()? {
+        let Ok(locked) = locked.try_verify(&self.verifying_key(), &self.tag) else {
+            return Err(ChannelError::BadInput);
+        };
+        if locked.amount() > self.uncommitted()? {
             Err(ChannelError::Funds)
         } else {
             self.receipt
                 .as_mut()
                 .expect("Impossible")
-                .append_locked(locked)
+                .apply_locked(locked)
                 .map_err(|_err| ChannelError::BadInput)
         }
     }
@@ -158,7 +170,7 @@ impl Channel {
         self.receipt
             .as_mut()
             .ok_or(ChannelError::NoReceipt)?
-            .unlock(secret)
+            .apply_secret(secret)
             .map_err(|_err| ChannelError::BadInput)
     }
 

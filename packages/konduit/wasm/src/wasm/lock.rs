@@ -3,7 +3,7 @@ use crate::{
     wasm::{self},
     wasm_proxy,
 };
-use std::{ops::Deref, str::FromStr};
+use std::ops::Deref;
 use wasm_bindgen::prelude::*;
 
 wasm_proxy! {
@@ -21,7 +21,10 @@ impl Lock {
 
     #[wasm_bindgen(js_name = "tryParse")]
     pub fn _wasm_try_parse(value: &str) -> wasm::Result<Self> {
-        Ok(Self(core::Lock::from_str(value)?))
+        Ok(Self(
+            core::Lock::try_from(hex::decode(value).map_err(|_| anyhow::anyhow!("hex error"))?)
+                .map_err(|_| anyhow::anyhow!("lock from vec error"))?,
+        ))
     }
 
     #[wasm_bindgen(js_name = "equals")]

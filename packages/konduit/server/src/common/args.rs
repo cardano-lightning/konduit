@@ -1,6 +1,7 @@
 use crate::{common::metavar, env};
 use cardano_sdk::{Address, SigningKey, VerificationKey, address::kind};
-use konduit_data::{AdaptorInfo, ChannelParameters, Duration, TosInfo, TxHelp};
+use konduit_data::Duration;
+use konduit_tmp::{AdaptorInfo, ChannelParameters, TosInfo, TxHelp};
 use konduit_tx::KONDUIT_VALIDATOR;
 
 #[derive(Debug, Clone, clap::Args)]

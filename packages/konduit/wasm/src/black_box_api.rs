@@ -55,7 +55,7 @@ impl Konduit {
     async fn squash(
         &self,
         client: l2::Client<'_>,
-        tag: &core::Tag,
+        _tag: &core::Tag, // FIXME : Why is this part of the signature
         squash_status: core::SquashStatus,
         lockeds: &mut Lockeds,
     ) -> wasm::Result<SyncStatus> {
@@ -72,28 +72,22 @@ impl Konduit {
         sync_status.owed = if let Some(mut receipt) = client.receipt().await? {
             // Prune expired *locked* cheques, including a grace period.
             let now = get_current_time() - LOCKED_CHEQUE_GRACE_PERIOD;
-            receipt.timeout(core::Duration::from_secs(now.as_secs()));
+            receipt.apply_timeout(core::Duration::from_secs(now.as_secs()));
 
             // Update our internal state with the remaining locked cheques.
-            lockeds.reset(
-                receipt
-                    .lockeds()
-                    .into_iter()
-                    .map(|locked| *locked.lock())
-                    .collect(),
-            );
+            lockeds.reset(receipt.lockeds().map(|locked| *locked.lock()).collect());
 
             // We have *just squashed* everything with the adaptor, hence we do not expect any
             // unlocked cheques to be present in the receipt. If it's the case, then the
             // adaptor is doing something odd and we should abort.
-            if !receipt.unlockeds().is_empty() {
+            if receipt.unlockeds().next().is_some() {
                 return Err(anyhow!(
                     "found unlocked cheques even after squashing; adaptor is onto something..."
                 )
                 .into());
             }
 
-            receipt.provably_owed(&self.wallet.verification_key(), tag)
+            receipt.owed()
         } else {
             0
         };
@@ -178,7 +172,7 @@ impl Konduit {
     pub fn set_channel_tag(&mut self, tag: &Tag) -> wasm::Result<()> {
         if self.adaptor.as_ref()?.tag() != Some(tag) {
             let tag: core::Tag = tag.clone().into();
-            let keytag = core::Keytag::new(self.wallet.verification_key(), tag.clone());
+            let keytag = core::Keytag::new(&self.wallet.verification_key(), &tag);
             self.adaptor.as_mut()?.set_keytag(Some(&keytag));
         }
 

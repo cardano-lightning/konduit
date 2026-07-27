@@ -1,4 +1,7 @@
-use crate::{Bounds, ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script};
+use crate::{
+    Bounds, ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script,
+    to_verifying_key,
+};
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
@@ -16,8 +19,8 @@ impl OpenIntent {
     fn constant(self, add_vkey: VerificationKey) -> Constants {
         Constants {
             tag: self.tag,
-            add_vkey,
-            sub_vkey: self.sub_vkey,
+            add_vkey: to_verifying_key(add_vkey),
+            sub_vkey: to_verifying_key(self.sub_vkey),
             close_period: self.close_period,
         }
     }
@@ -43,7 +46,7 @@ pub fn tx(
     let consumer_channels = utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
-        .filter(|u| u.data().constants().add_vkey == *wallet);
+        .filter(|u| u.data().constants().add_vkey == to_verifying_key(*wallet));
 
     let steppeds = consumer_channels
         .filter_map(|u| match u.data().stage() {

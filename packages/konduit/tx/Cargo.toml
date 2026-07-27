@@ -14,7 +14,9 @@ rust-version.workspace = true
 anyhow.workspace = true
 cardano-sdk.workspace = true
 hex.workspace = true
-konduit-data.workspace = true
+konduit-data = { workspace = true, features = ["cardano_sdk"] }
+
+konduit-tmp.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 web-time.workspace = true

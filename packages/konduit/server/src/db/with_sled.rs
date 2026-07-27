@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use sled::Db;
 use std::{collections::BTreeMap, sync::Arc};
 
-use konduit_data::{Keytag, Locked, Secret, Squash};
+use konduit_data::{Locked, Secret, Squash};
+use konduit_tmp::Keytag;
 
 mod args;
 pub use args::SledArgs as Args;
@@ -202,7 +203,7 @@ impl Api for WithSled {
 
     async fn unlock(&self, keytag: &Keytag, secret: Secret) -> super::Result<Channel> {
         self.update_channel(keytag, |c: &mut Channel| {
-            c.unlock(secret.clone())?;
+            c.unlock(secret)?;
             Ok(())
         })
     }

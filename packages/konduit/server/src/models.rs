@@ -1,6 +1,6 @@
 use crate::Channel;
 use cardano_sdk::Signature;
-use konduit_data::{Keytag, L1Channel, Receipt};
+use konduit_tmp::{Keytag, L1Channel, Receipt};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::BTreeMap;

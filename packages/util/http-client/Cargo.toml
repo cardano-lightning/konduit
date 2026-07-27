@@ -51,7 +51,7 @@ gloo = [
   "dep:js-sys",
   "dep:send_wrapper",
   "dep:wasm-bindgen",
-  "dep:wasm-bindgen-futures"
+  "dep:wasm-bindgen-futures",
 ]
 reqwest = ["dep:web-time", "dep:reqwest"]
 

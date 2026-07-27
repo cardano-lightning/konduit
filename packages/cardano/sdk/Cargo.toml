@@ -40,14 +40,20 @@ clap = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["rc"] }
 serde_json = { workspace = true, optional = true }
 # -F test-utils
-proptest = { workspace = true, optional = true }
+proptest = { workspace = true, optional = true, default-features = false, features = [
+  "std",
+  "bit-set",
+] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 env_logger.workspace = true
 
 [dev-dependencies]
 indoc.workspace = true
-proptest.workspace = true
+proptest = { workspace = true, default-features = false, features = [
+  "std",
+  "bit-set",
+] }
 
 [target.'cfg(target_family="wasm")'.dependencies]
 getrandom = { workspace = true, features = ["js"] }

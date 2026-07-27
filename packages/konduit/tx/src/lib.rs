@@ -53,3 +53,6 @@ pub mod adaptor;
 pub use adaptor::InsufficientTotalGain;
 pub mod admin;
 pub mod consumer;
+
+pub use konduit_tmp::from_verifying_key;
+pub use konduit_tmp::to_verifying_key;
