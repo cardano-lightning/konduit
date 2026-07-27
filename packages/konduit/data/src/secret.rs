@@ -65,7 +65,7 @@ fn verify_encoding_differs_from_default_array() {
     let raw = [0xdeu8; 32];
 
     // What our Encode impl produces (bytes encoding, matching PlutusData)
-    let our_encoding = minicbor::to_vec(&Secret(raw)).unwrap();
+    let our_encoding = minicbor::to_vec(Secret(raw)).unwrap();
 
     // What minicbor would produce if [u8;32] were encoded as a CBOR array of integers (the default for arrays)
     let mut e = minicbor::Encoder::new(Vec::new());
@@ -128,7 +128,7 @@ mod roundtrip {
     fn secret_encodes_as_plutus_bytes() {
         let raw = [0u8; 32];
         let secret = Secret(raw);
-        let mini_bytes = minicbor::to_vec(&secret).unwrap();
+        let mini_bytes = minicbor::to_vec(secret).unwrap();
         let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
         assert_eq!(mini_bytes, pd_bytes);
     }
@@ -137,7 +137,7 @@ mod roundtrip {
         /// minicbor encodes and decodes Secret back to the same value.
         #[test]
         fn secret_cbor_roundtrip(val: Secret) {
-            let bytes = minicbor::to_vec(&val).unwrap();
+            let bytes = minicbor::to_vec(val).unwrap();
             let recovered: Secret = minicbor::decode(&bytes).unwrap();
             prop_assert_eq!(val, recovered);
         }
@@ -145,7 +145,7 @@ mod roundtrip {
         /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
         #[test]
         fn secret_matches_plutus_encoding(val: Secret) {
-            let mini = minicbor::to_vec(&val).unwrap();
+            let mini = minicbor::to_vec(val).unwrap();
             let pd = PlutusData::from(val).to_cbor();
             prop_assert_eq!(mini, pd);
         }
@@ -153,7 +153,7 @@ mod roundtrip {
         /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
         #[test]
         fn secret_plutus_roundtrip(val: Secret) {
-            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let pd_bytes = PlutusData::from(val).to_cbor();
             let recovered: Secret = minicbor::decode(&pd_bytes).unwrap();
             prop_assert_eq!(val, recovered);
         }
@@ -161,7 +161,7 @@ mod roundtrip {
         /// From<Secret> for PlutusData and TryFrom<PlutusData> for Secret are mutual inverses.
         #[test]
         fn secret_plutus_tryfrom_roundtrip(val: Secret) {
-            let pd = PlutusData::from(val.clone());
+            let pd = PlutusData::from(val);
             let recovered = Secret::try_from(pd).unwrap();
             prop_assert_eq!(val, recovered);
         }

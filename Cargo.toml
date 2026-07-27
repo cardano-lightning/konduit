@@ -32,7 +32,7 @@ repository = "https://github.com/cardano-lightning/konduit"
 homepage = "https://github.com/cardano-lightning/konduit"
 license = "MPL-2.0"
 authors = ["waalge", "KtorZ <matthias.benkort@gmail.com>"]
-rust-version = "1.95.0"
+rust-version = "1.96.1"
 
 [workspace.metadata.release]
 shared-version = true

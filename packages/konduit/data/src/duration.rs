@@ -173,7 +173,7 @@ mod roundtrip {
         /// minicbor encodes and decodes Duration back to the same value.
         #[test]
         fn duration_cbor_roundtrip(val: Duration) {
-            let bytes = minicbor::to_vec(&val).unwrap();
+            let bytes = minicbor::to_vec(val).unwrap();
             let recovered: Duration = minicbor::decode(&bytes).unwrap();
             prop_assert_eq!(val, recovered);
         }
@@ -181,9 +181,9 @@ mod roundtrip {
         /// Duration is encoded as its millisecond count — a plain u64.
         #[test]
         fn duration_encodes_as_millis(val: Duration) {
-            let mini = minicbor::to_vec(&val).unwrap();
+            let mini = minicbor::to_vec(val).unwrap();
             let millis = val.as_millis() as u64;
-            let expected = minicbor::to_vec(&millis).unwrap();
+            let expected = minicbor::to_vec(millis).unwrap();
             prop_assert_eq!(mini, expected);
         }
     }

@@ -84,7 +84,7 @@ impl<'b, C> minicbor::Decode<'b, C> for Lock {
 fn verify_encoding_differs_from_default_array() {
     let raw = [0xabu8; 32];
 
-    let our_encoding = minicbor::to_vec(&Lock(raw)).unwrap();
+    let our_encoding = minicbor::to_vec(Lock(raw)).unwrap();
 
     let mut e = minicbor::Encoder::new(Vec::new());
     e.array(32).unwrap();
@@ -139,7 +139,7 @@ mod roundtrip {
     fn lock_encodes_as_plutus_bytes() {
         let raw = [0xabu8; 32];
         let lock = Lock(raw);
-        let mini_bytes = minicbor::to_vec(&lock).unwrap();
+        let mini_bytes = minicbor::to_vec(lock).unwrap();
         let pd_bytes = ToCbor::to_cbor(&PlutusData::bytes(raw));
         assert_eq!(mini_bytes, pd_bytes);
     }
@@ -148,7 +148,7 @@ mod roundtrip {
         /// minicbor encodes and decodes Lock back to the same value.
         #[test]
         fn lock_cbor_roundtrip(val: Lock) {
-            let bytes = minicbor::to_vec(&val).unwrap();
+            let bytes = minicbor::to_vec(val).unwrap();
             let recovered: Lock = minicbor::decode(&bytes).unwrap();
             prop_assert_eq!(val, recovered);
         }
@@ -156,7 +156,7 @@ mod roundtrip {
         /// minicbor bytes are byte-for-byte identical to PlutusData's canonical CBOR.
         #[test]
         fn lock_matches_plutus_encoding(val: Lock) {
-            let mini = minicbor::to_vec(&val).unwrap();
+            let mini = minicbor::to_vec(val).unwrap();
             let pd = PlutusData::from(val).to_cbor();
             prop_assert_eq!(mini, pd);
         }
@@ -164,7 +164,7 @@ mod roundtrip {
         /// PlutusData's canonical CBOR decodes via minicbor back to the same value.
         #[test]
         fn lock_plutus_roundtrip(val: Lock) {
-            let pd_bytes = PlutusData::from(val.clone()).to_cbor();
+            let pd_bytes = PlutusData::from(val).to_cbor();
             let recovered: Lock = minicbor::decode(&pd_bytes).unwrap();
             prop_assert_eq!(val, recovered);
         }
@@ -172,7 +172,7 @@ mod roundtrip {
         /// From<Lock> for PlutusData and TryFrom<PlutusData> for Lock are mutual inverses.
         #[test]
         fn lock_plutus_tryfrom_roundtrip(val: Lock) {
-            let pd = PlutusData::from(val.clone());
+            let pd = PlutusData::from(val);
             let recovered = Lock::try_from(pd).unwrap();
             prop_assert_eq!(val, recovered);
         }

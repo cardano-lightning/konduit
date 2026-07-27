@@ -131,7 +131,7 @@ mod roundtrip {
         // Unlock → 32 bytes
         let key = [0xabu8; 32];
         assert_eq!(
-            minicbor::to_vec(&Unpend::Unlock(key)).unwrap(),
+            minicbor::to_vec(Unpend::Unlock(key)).unwrap(),
             ToCbor::to_cbor(&PlutusData::bytes(key))
         );
     }
