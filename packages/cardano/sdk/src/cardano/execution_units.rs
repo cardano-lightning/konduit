@@ -80,6 +80,8 @@ impl From<ExecutionUnits> for pallas::ExUnits {
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
     use crate::{ExecutionUnits};
+    #[cfg(test)]
+    use crate::{any, pallas};
     use proptest::prelude::*;
 
     // -------------------------------------------------------------- Unit tests
