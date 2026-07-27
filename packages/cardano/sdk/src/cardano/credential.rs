@@ -260,7 +260,7 @@ impl From<&Credential> for Hash<28> {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{Credential, any, key_credential, pallas, script_credential};
+    use crate::{Credential, any};
     use proptest::prelude::*;
 
     // -------------------------------------------------------------- Unit tests
