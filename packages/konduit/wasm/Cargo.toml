@@ -11,7 +11,7 @@ documentation.workspace = true
 rust-version.workspace = true
 
 [features]
-default = []
+default = ["black-box-api"]
 black-box-api = []
 
 [lib]
