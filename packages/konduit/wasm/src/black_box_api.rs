@@ -75,18 +75,12 @@ impl Konduit {
             receipt.apply_timeout(core::Duration::from_secs(now.as_secs()));
 
             // Update our internal state with the remaining locked cheques.
-            lockeds.reset(
-                receipt
-                    .lockeds()
-                    .into_iter()
-                    .map(|locked| *locked.lock())
-                    .collect(),
-            );
+            lockeds.reset(receipt.lockeds().map(|locked| *locked.lock()).collect());
 
             // We have *just squashed* everything with the adaptor, hence we do not expect any
             // unlocked cheques to be present in the receipt. If it's the case, then the
             // adaptor is doing something odd and we should abort.
-            if !receipt.unlockeds().next().is_none() {
+            if receipt.unlockeds().next().is_some() {
                 return Err(anyhow!(
                     "found unlocked cheques even after squashing; adaptor is onto something..."
                 )
