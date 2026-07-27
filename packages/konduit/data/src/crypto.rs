@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct VerifyingKey(
     #[cfg_attr(
         feature = "serde",
-        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+        serde(with = "crate::hex_bytes")
     )]
     [u8; 32],
 );
@@ -96,7 +96,7 @@ impl<'b, C> minicbor::Decode<'b, C> for VerifyingKey {
 pub struct Signature(
     #[cfg_attr(
         feature = "serde",
-        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+        serde(with = "crate::hex_bytes")
     )]
     [u8; 64],
 );
@@ -182,5 +182,10 @@ impl SigningKey {
 impl From<[u8; 32]> for SigningKey {
     fn from(b: [u8; 32]) -> Self {
         Self(b)
+    }
+}
+impl From<SigningKey> for [u8; 32] {
+    fn from(x: SigningKey) -> Self {
+        x.0
     }
 }

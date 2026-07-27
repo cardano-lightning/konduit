@@ -37,6 +37,10 @@ impl<S, V: VerifyState> ChequeSigned<S, V> {
         &self.body
     }
 
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
     pub fn index(&self) -> u64 {
         self.body.index()
     }

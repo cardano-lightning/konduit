@@ -17,7 +17,7 @@ pub enum Unpend {
     Unlock(
         #[cfg_attr(
             feature = "serde",
-            serde(with = "serde_with::As::<serde_with::hex::Hex>")
+            serde(with = "crate::hex_bytes")
         )]
         [u8; 32],
     ),

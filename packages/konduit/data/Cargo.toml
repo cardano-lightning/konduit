@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["proptest"]
-serde = ["dep:serde", "dep:serde_with", "cardano-sdk/serde"]
+serde = ["dep:serde", "cardano-sdk/serde"]
 json = ["serde", "dep:serde_json"]
 cardano_sdk = ["dep:cardano-sdk", "dep:anyhow"]
 proptest = [
@@ -41,5 +41,4 @@ proptest-derive = { workspace = true, optional = true }
 rand_core.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
-serde_with = { workspace = true, features = ["hex"], optional = true }
 thiserror.workspace = true

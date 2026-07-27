@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Datum {
     #[cfg_attr(
         feature = "serde",
-        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+        serde(with = "crate::hex_bytes")
     )]
     pub own_hash: [u8; 28],
     pub constants: Constants,

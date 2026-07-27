@@ -12,10 +12,7 @@ use serde::{Deserialize, Serialize};
 #[cbor(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Tag(
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "serde_with::As::<serde_with::hex::Hex>")
-    )]
+    #[cfg_attr( feature = "serde", serde(with = "crate::hex_bytes"))]
     #[cbor(with = "crate::cbor_with::plutus_bytes", n(0))]
     Vec<u8>,
 );

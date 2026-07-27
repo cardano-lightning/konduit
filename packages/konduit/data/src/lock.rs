@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub struct Lock(
     #[cfg_attr(
         feature = "serde",
-        serde(with = "serde_with::As::<serde_with::hex::Hex>")
+        serde(with = "crate::hex_bytes")
     )]
     pub [u8; 32],
 );

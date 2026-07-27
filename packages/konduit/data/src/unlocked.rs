@@ -1,6 +1,6 @@
 use crate::{
-    ChequeSigned, Locked, Secret, SigningKey, Tag, Unverified, Verified, VerifyError, VerifyState,
-    VerifyingKey, cheque_body::ChequeBody,
+    ChequeSigned, Lock, Locked, Secret, SigningKey, Tag, Unverified, Verified, VerifyError,
+    VerifyState, VerifyingKey, cheque_body::ChequeBody,
 };
 
 pub type Unlocked<V = Unverified> = ChequeSigned<Secret, V>;
@@ -22,6 +22,10 @@ impl<V: VerifyState> Unlocked<V> {
 
     pub fn secret(&self) -> &Secret {
         self.latch()
+    }
+
+    pub fn lock(&self) -> Lock {
+        Lock::from(self.secret())
     }
 }
 

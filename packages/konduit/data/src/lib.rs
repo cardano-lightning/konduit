@@ -83,3 +83,4 @@ mod parse_error;
 pub use parse_error::ParseError;
 
 pub mod cbor_with;
+pub(crate) mod hex_bytes;
