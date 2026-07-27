@@ -215,7 +215,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> SyncApi for Service<Co
 
 #[cfg(test)]
 mod tests {
-    use super::Service;
+    use super::*;
     use crate::{Channel, ChannelError, admin::config::Config, channel::Retainer, db};
     use async_trait::async_trait;
     use cardano_connector::CardanoConnector;
@@ -223,7 +223,7 @@ mod tests {
         Address, Credential, Hash, Input, Network, Output, PlutusScript, PlutusVersion,
         ProtocolParameters, SigningKey, Transaction, Value, address::kind, transaction::state,
     };
-    use konduit_data::{ChannelParameters, Duration, Keytag, Locked, Secret, Squash};
+    use konduit_data::{Duration, Locked, Secret, Squash};
     use konduit_tx::{KONDUIT_VALIDATOR, adaptor::AdaptorPreferences};
     use std::{collections::BTreeMap, sync::Arc};
 

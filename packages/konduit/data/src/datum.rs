@@ -6,10 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Datum {
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "crate::hex_bytes")
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))]
     pub own_hash: [u8; 28],
     pub constants: Constants,
     pub stage: Stage,

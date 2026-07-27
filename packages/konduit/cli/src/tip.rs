@@ -2,7 +2,7 @@ use crate::config::{self};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Address, Credential, Hash, Input, Value, address::kind};
 use konduit_data::{Pending, Used};
-use konduit_tx::{Channel, KONDUIT_VALIDATOR, Utxo, Utxos};
+use konduit_tx::{Channel, KONDUIT_VALIDATOR, Utxo, Utxos, to_verifying_key};
 use std::{collections::BTreeMap, fmt};
 
 pub struct Consumer {
@@ -40,9 +40,11 @@ impl Consumer {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let channels = filter_channels(&konduit_utxos, |co| co.constants().add_vkey == add_vkey)
-            .into_iter()
-            .collect();
+        let channels = filter_channels(&konduit_utxos, |co| {
+            co.constants().add_vkey == to_verifying_key(add_vkey)
+        })
+        .into_iter()
+        .collect();
         Ok(Self {
             wallet,
             reference_script,
@@ -65,7 +67,7 @@ impl fmt::Display for Consumer {
             writeln!(
                 f,
                 "  Sub : {} || Close Period : {}",
-                channel.constants().sub_vkey,
+                hex::encode(channel.constants().sub_vkey),
                 channel.constants().close_period
             )?;
             display_stage(f, channel.stage())?;
@@ -96,9 +98,11 @@ impl Adaptor {
         let konduit_utxos = connector
             .utxos_at(&Credential::from_script(KONDUIT_VALIDATOR.hash), None)
             .await?;
-        let channels = filter_channels(&konduit_utxos, |co| co.constants().sub_vkey == sub_vkey)
-            .into_iter()
-            .collect();
+        let channels = filter_channels(&konduit_utxos, |co| {
+            co.constants().sub_vkey == to_verifying_key(sub_vkey)
+        })
+        .into_iter()
+        .collect();
         Ok(Self {
             wallet,
             reference_script,

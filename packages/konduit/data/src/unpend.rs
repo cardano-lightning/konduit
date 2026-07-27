@@ -14,13 +14,7 @@ use serde::{Deserialize, Serialize};
 pub enum Unpend {
     Continue,
     Expire,
-    Unlock(
-        #[cfg_attr(
-            feature = "serde",
-            serde(with = "crate::hex_bytes")
-        )]
-        [u8; 32],
-    ),
+    Unlock(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] [u8; 32]),
 }
 
 impl Unpend {

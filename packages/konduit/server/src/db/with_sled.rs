@@ -203,7 +203,7 @@ impl Api for WithSled {
 
     async fn unlock(&self, keytag: &Keytag, secret: Secret) -> super::Result<Channel> {
         self.update_channel(keytag, |c: &mut Channel| {
-            c.unlock(secret.clone())?;
+            c.unlock(secret)?;
             Ok(())
         })
     }

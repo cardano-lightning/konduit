@@ -9,13 +9,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
-pub struct Lock(
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "crate::hex_bytes")
-    )]
-    pub [u8; 32],
-);
+pub struct Lock(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] pub [u8; 32]);
 
 impl fmt::Display for Lock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {

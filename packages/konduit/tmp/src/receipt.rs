@@ -83,6 +83,7 @@ impl<'b, C> Decode<'b, C> for Receipt {
 
 impl Receipt {
     /// Internal constructor to associate state markers.
+    /// FIXME :: this looks sus.
     pub fn new_with_state(squash: Squash<Verified>, cheques: Vec<Cheque<Verified>>) -> Self {
         Self { squash, cheques }
     }

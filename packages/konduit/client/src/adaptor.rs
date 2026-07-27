@@ -87,8 +87,8 @@ impl<T: Transport> Adaptor<T> {
             .post_with_headers::<PayBody, SquashStatus>(
                 "/ch/pay",
                 &PayBody {
-                    cheque_body: locked.body,
-                    signature: locked.signature,
+                    cheque_body: locked.body().to_owned(),
+                    signature: locked.signature().to_owned(),
                     invoice: invoice.to_string(),
                 },
                 self.with_keytag_header(),

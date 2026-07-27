@@ -6,13 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Ed25519 verification key (public key), 32 bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct VerifyingKey(
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "crate::hex_bytes")
-    )]
-    [u8; 32],
-);
+pub struct VerifyingKey(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] [u8; 32]);
 
 impl VerifyingKey {
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
@@ -93,13 +87,7 @@ impl<'b, C> minicbor::Decode<'b, C> for VerifyingKey {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Signature(
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "crate::hex_bytes")
-    )]
-    [u8; 64],
-);
+pub struct Signature(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] [u8; 64]);
 
 /// Ed25519 signature, 64 bytes.
 impl Signature {
@@ -160,8 +148,9 @@ impl<'b, C> minicbor::Decode<'b, C> for Signature {
 // =========================================================================
 
 /// Ed25519 signing key (secret key), 32 bytes. Not serialized.
-#[derive(Clone)]
-pub struct SigningKey([u8; 32]);
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SigningKey(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] [u8; 32]);
 
 impl SigningKey {
     pub fn from_bytes(bytes: [u8; 32]) -> Self {

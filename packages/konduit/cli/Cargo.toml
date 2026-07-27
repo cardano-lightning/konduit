@@ -19,10 +19,12 @@ cardano-sdk = { workspace = true, features = ["clap", "serde"] }
 clap.workspace = true
 dotenvy.workspace = true
 hex.workspace = true
-konduit-data.workspace = true
+konduit-data = { workspace = true, feature = ["serde"] }
 konduit-tx.workspace = true
 konduit-client.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 tokio.workspace = true
 toml.workspace = true
+konduit-tmp.workspace = true
+minicbor.workspace = true

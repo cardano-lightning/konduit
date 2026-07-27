@@ -127,9 +127,9 @@ impl<'d, C> cbor::Decode<'d, C> for Input {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{Input, any};
     #[cfg(test)]
-    use crate::{hash};
+    use crate::hash;
+    use crate::{Input, any};
     use proptest::prelude::*;
 
     // -------------------------------------------------------------- Unit tests

@@ -7,13 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 #[repr(transparent)]
-pub struct Secret(
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "crate::hex_bytes")
-    )]
-    pub [u8; 32],
-);
+pub struct Secret(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] pub [u8; 32]);
 
 impl std::str::FromStr for Secret {
     type Err = ParseError;

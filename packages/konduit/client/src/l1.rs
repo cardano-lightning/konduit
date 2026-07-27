@@ -6,6 +6,7 @@ use crate::core::{
 };
 use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
+use konduit_tmp::to_verifying_key;
 use konduit_tx::ChannelUtxo;
 use std::collections::BTreeMap;
 
@@ -43,7 +44,7 @@ where
         let consumer_channels = utxos_konduit
             .into_iter()
             .filter_map(|u| ChannelUtxo::try_from(u).ok())
-            .filter(move |u| u.data().constants().add_vkey == consumer)
+            .filter(move |u| u.data().constants().add_vkey == to_verifying_key(consumer))
             .map(|u| u.data().to_owned());
         Ok(consumer_channels)
     }
@@ -51,7 +52,7 @@ where
     /// Execute the given intents on any compatible channel owned by the client's credentials.
     pub async fn execute(
         &self,
-        wallet_sk: &SigningKey,
+        wallet_sk: &cardano_sdk::SigningKey,
         stake_credential: Option<&Credential>,
         opens: Vec<OpenIntent>,
         intents: BTreeMap<Tag, Intent>,
@@ -63,6 +64,7 @@ where
         };
 
         let consumer_sk = self.consumer;
+        // FIXME : should be separate anyway
         let consumer_vk = self.consumer.to_verification_key();
 
         let wallet_vk = wallet_sk.to_verification_key();
@@ -109,9 +111,10 @@ where
             Bounds::twenty_mins(),
         )?;
 
-        tx.sign_with(|msg| (consumer_vk, consumer_sk.sign(msg)));
+        let consumer_cardano_vk = cardano_sdk::VerificationKey::from(<[u8; 32]>::from(consumer_vk));
+        tx.sign_with(|msg| (consumer_cardano_vk, consumer_sk.sign(msg.as_ref())));
 
-        if wallet_vk != consumer_vk {
+        if wallet_vk != consumer_cardano_vk {
             tx.sign_with(|msg| (wallet_vk, wallet_sk.sign(msg)));
         }
 

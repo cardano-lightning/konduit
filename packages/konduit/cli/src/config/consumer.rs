@@ -6,9 +6,7 @@ use std::fmt::Display;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub connector: Connector,
-
     pub wallet: SigningKey,
-
     pub host_address: Address<kind::Shelley>,
 }
 

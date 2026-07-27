@@ -1,7 +1,7 @@
 use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::Credential;
-use konduit_data::{Keytag, Receipt};
+use konduit_tmp::{Keytag, Receipt};
 use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 use std::collections::BTreeMap;
 

@@ -1,5 +1,6 @@
 use crate::config::consumer::Config;
-use konduit_data::{Keytag, Tag};
+use konduit_data::Tag;
+use konduit_tmp::Keytag;
 
 /// Show
 #[derive(Debug, clap::Subcommand)]
@@ -39,7 +40,10 @@ impl Cmd {
                 Ok(())
             }
             Cmd::Keytag { tag } => {
-                print!("{}", Keytag::new(config.wallet.to_verification_key(), tag));
+                print!(
+                    "{}",
+                    Keytag::new(&config.wallet.to_verification_key(), &tag)
+                );
                 Ok(())
             }
             Cmd::Tip { verbose } => {

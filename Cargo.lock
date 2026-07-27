@@ -2373,7 +2373,9 @@ dependencies = [
  "hex",
  "konduit-client",
  "konduit-data",
+ "konduit-tmp",
  "konduit-tx",
+ "minicbor",
  "serde",
  "serde_with",
  "tokio",
@@ -2392,6 +2394,7 @@ dependencies = [
  "dotenvy",
  "http-client",
  "konduit-data",
+ "konduit-tmp",
  "konduit-tx",
  "log",
  "proptest",
@@ -2414,7 +2417,6 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "serde_json",
- "serde_with",
  "thiserror 2.0.18",
 ]
 
@@ -2501,6 +2503,7 @@ dependencies = [
  "js-sys",
  "konduit-client",
  "konduit-data",
+ "konduit-tmp",
  "konduit-tx",
  "log",
  "serde",

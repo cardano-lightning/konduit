@@ -11,7 +11,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use konduit_tmp::{from_verifying_key, to_verifying_key};
+use konduit_tmp::to_verifying_key;
 
 type Data = web::Data<server::Data>;
 

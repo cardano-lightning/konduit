@@ -224,10 +224,7 @@ impl Channel {
     }
 
     pub fn unlock(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
-        let secrets = receipt
-            .unlockeds()
-            .map(|u| u.secret().clone())
-            .collect::<Vec<_>>();
+        let secrets = receipt.unlockeds().map(|u| *u.secret()).collect::<Vec<_>>();
         self.unlock_with_secrets(secrets, upper)
     }
 
