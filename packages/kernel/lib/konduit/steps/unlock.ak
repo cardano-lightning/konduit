@@ -33,10 +33,15 @@ fn account(
   pends_in: List<t.Pending>,
   pends_out: List<t.Pending>,
 ) -> Amount {
-  let with =
-    with_(upper_bound, _, _, _, _, _)
-  let amount, pends_in, pends_out <-
-    foldl3(unpends, 0, pends_in, pends_out, with, _)
+  let with = with_(upper_bound, _, _, _, _, _)
+  let amount, pends_in, pends_out <- foldl3(
+    unpends,
+    0,
+    pends_in,
+    pends_out,
+    with,
+    _,
+  )
   expect pends_in == pends_out
   amount
 }

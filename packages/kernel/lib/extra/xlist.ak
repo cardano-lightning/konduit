@@ -93,10 +93,8 @@ pub fn drop2_with(
 test test_drop2_with() {
   let l = [1, 2, 3, 4, 5]
   let r = [1, 2, 5]
-  let with =
-    fn(x, y) { x == y }
-  let l, _r <-
-    drop2_with(l, r, 2, with, _)
+  let with = fn(x, y) { x == y }
+  let l, _r <- drop2_with(l, r, 2, with, _)
   l == [3, 4, 5]
 }
 
@@ -180,14 +178,15 @@ pub fn foldl6(
   when self is {
     [] -> return(zero_a, zero_b, zero_c, zero_d, zero_e, zero_f)
     [x, ..xs] -> {
-      let
-        a,
-        b,
-        c,
-        d,
-        e,
-        f,
-      <- with(x, zero_a, zero_b, zero_c, zero_d, zero_e, zero_f)
+      let a, b, c, d, e, f <- with(
+        x,
+        zero_a,
+        zero_b,
+        zero_c,
+        zero_d,
+        zero_e,
+        zero_f,
+      )
       foldl6(xs, a, b, c, d, e, f, with, return)
     }
   }
@@ -212,15 +211,16 @@ pub fn foldl7(
   when self is {
     [] -> return(zero_a, zero_b, zero_c, zero_d, zero_e, zero_f, zero_g)
     [x, ..xs] -> {
-      let
-        a,
-        b,
-        c,
-        d,
-        e,
-        f,
-        g,
-      <- with(x, zero_a, zero_b, zero_c, zero_d, zero_e, zero_f, zero_g)
+      let a, b, c, d, e, f, g <- with(
+        x,
+        zero_a,
+        zero_b,
+        zero_c,
+        zero_d,
+        zero_e,
+        zero_f,
+        zero_g,
+      )
       foldl7(xs, a, b, c, d, e, f, g, with, return)
     }
   }
@@ -246,16 +246,17 @@ pub fn foldl8(
   when self is {
     [] -> return(zero_a, zero_b, zero_c, zero_d, zero_e, zero_f, zero_g, zero_h)
     [x, ..xs] -> {
-      let
-        a,
-        b,
-        c,
-        d,
-        e,
-        f,
-        g,
-        h,
-      <- with(x, zero_a, zero_b, zero_c, zero_d, zero_e, zero_f, zero_g, zero_h)
+      let a, b, c, d, e, f, g, h <- with(
+        x,
+        zero_a,
+        zero_b,
+        zero_c,
+        zero_d,
+        zero_e,
+        zero_f,
+        zero_g,
+        zero_h,
+      )
       foldl8(xs, a, b, c, d, e, f, g, h, with, return)
     }
   }
@@ -305,29 +306,18 @@ pub fn foldl9(
         zero_i,
       )
     [x, ..xs] -> {
-      let
-        a,
-        b,
-        c,
-        d,
-        e,
-        f,
-        g,
-        h,
-        i,
-      <-
-        with(
-          x,
-          zero_a,
-          zero_b,
-          zero_c,
-          zero_d,
-          zero_e,
-          zero_f,
-          zero_g,
-          zero_h,
-          zero_i,
-        )
+      let a, b, c, d, e, f, g, h, i <- with(
+        x,
+        zero_a,
+        zero_b,
+        zero_c,
+        zero_d,
+        zero_e,
+        zero_f,
+        zero_g,
+        zero_h,
+        zero_i,
+      )
       foldl9(xs, a, b, c, d, e, f, g, h, i, with, return)
     }
   }

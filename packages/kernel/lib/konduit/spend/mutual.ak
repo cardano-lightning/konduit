@@ -15,8 +15,8 @@ pub fn handle(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
   trace @"mutual.0": @"Both participants sign"
   expect extra_signatories |> list.has(add_vkey |> blake2b_224)
   expect extra_signatories |> list.has(sub_vkey |> blake2b_224)
-  expect Some(own_input) =
-    inputs |> list.find(fn(i) { i.output_reference == own_oref })
+  expect Some(own_input) = inputs
+    |> list.find(fn(i) { i.output_reference == own_oref })
   let own_cred = own_input.output.address.payment_credential
   trace @"mutual.1": @"Is solo channel input"
   1 == (

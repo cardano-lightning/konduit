@@ -15,8 +15,7 @@ pub fn handle(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
 fn main_oref(cred: Credential, inputs: List<Input>) -> OutputReference {
   when inputs is {
     [input, ..inputs] -> {
-      let Input { output_reference, output: Output { address, datum, .. } } =
-        input
+      let Input { output_reference, output: Output { address, datum, .. } } = input
       if address.payment_credential == cred {
         expect Script(get_own_hash(datum)) == cred
         output_reference
