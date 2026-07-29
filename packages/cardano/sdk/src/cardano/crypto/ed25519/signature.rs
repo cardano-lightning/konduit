@@ -5,6 +5,9 @@
 use crate::{PlutusData, pallas::ed25519};
 use std::{cmp, fmt, str::FromStr};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// An EdDSA signature on Curve25519.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(transparent)]
@@ -114,6 +117,21 @@ impl<'a> From<&'a Signature> for &'a ed25519::Signature {
 impl<'a> From<Signature> for PlutusData<'a> {
     fn from(key: Signature) -> Self {
         Self::bytes(key.0)
+    }
+}
+
+// ------------------------------------------------------------ serde
+#[cfg(feature = "serde")]
+impl Serialize for Signature {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::hex_bytes::serialize(self, serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Signature {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        crate::hex_bytes::deserialize(deserializer)
     }
 }
 

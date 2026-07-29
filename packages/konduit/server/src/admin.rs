@@ -9,6 +9,8 @@ pub use config::Config;
 mod service;
 pub use service::Service;
 
+mod coiter;
+
 #[async_trait(?Send)]
 pub trait SyncApi: Send + Sync {
     async fn sync(&self) -> Result<(), anyhow::Error>;

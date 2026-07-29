@@ -1,4 +1,5 @@
 use crate::{
+    channel::{apply_locked, apply_secrets, apply_squash},
     db,
     server::{self, cbor::decode_from_cbor},
 };
@@ -10,8 +11,6 @@ use std::{
     ops::Deref,
     time::{SystemTime, UNIX_EPOCH},
 };
-
-use konduit_tmp::to_verifying_key;
 
 type Data = web::Data<server::Data>;
 
@@ -67,7 +66,12 @@ pub async fn fx(data: Data) -> HttpResponse {
 
 pub async fn show(data: Data) -> Result<HttpResponse, HandlerError> {
     log::info!("SHOW");
-    let results = data.db().get_all().await?;
+    let keys = data.db().keys()?;
+    let results = keys
+        .iter()
+        .map(|x| data.db().get(x))
+        .collect::<Result<Vec<_>, _>>()?;
+
     Ok(HttpResponse::Ok().json(results))
 }
 
@@ -82,13 +86,9 @@ pub async fn receipt(req: HttpRequest, data: Data) -> Result<HttpResponse, Handl
     let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
-
-    let channel = if let Some(channel) = data.db().get_channel(&keytag).await? {
-        channel
-    } else {
+    let Some(channel) = data.db().get(&keytag)? else {
         return Ok(HttpResponse::NotFound().body(format!("no channel for keytag={}", keytag)));
     };
-
     Ok(HttpResponse::Ok().json(channel.receipt()))
 }
 
@@ -123,37 +123,45 @@ pub async fn squash(
         }
     };
 
-    let (key, tag) = keytag.split();
-    let Ok(squash) = squash.try_verify(&to_verifying_key(key), &tag) else {
-        return Ok(HttpResponse::BadRequest().body("Invalid squash"));
-    };
-    let channel = match data
-        .db()
-        .update_squash(&keytag, squash.clone().into_unverified())
-        .await
-    {
-        Ok(channel) => channel,
-        Err(db::Error::Logic(db::LogicError::NoEntry(_))) => {
-            log::warn!(
-                "squash: channel {} not found locally, forcing admin sync before retrying",
-                keytag
-            );
-
-            if let Err(err) = data.admin().sync().await {
-                log::error!(
-                    "squash: forced admin sync failed while recovering {}: {err:#}",
+    if let Err(err) = data.db().update(&keytag, apply_squash(squash.clone())) {
+        match err {
+            db::Error::NotFound => {
+                // FIXME :: this should move to registration
+                log::warn!(
+                    "squash: channel {} not found locally, forcing admin sync before retrying",
                     keytag
                 );
-                return Ok(HttpResponse::InternalServerError().body(format!(
-                    "failed to sync latest tip while recovering channel: {err}"
-                )));
-            }
 
-            data.db()
-                .update_squash(&keytag, squash.clone().into_unverified())
-                .await?
+                if let Err(err) = data.admin().sync().await {
+                    log::error!(
+                        "squash: forced admin sync failed while recovering {}: {err:#}",
+                        keytag
+                    );
+                    return Ok(HttpResponse::InternalServerError().body(format!(
+                        "failed to sync latest tip while recovering channel: {err}"
+                    )));
+                }
+
+                data.db().update(&keytag, apply_squash(squash.clone()))?;
+            }
+            db::Error::Channel(_error) => {
+                return Err(HandlerError::Other);
+            }
+            db::Error::AlreadyExists => {
+                // Impossible error
+                return Err(HandlerError::Other);
+            }
+            db::Error::Contended => {
+                // TODO DB busy. Try again?
+                return Err(HandlerError::Db(db::Error::Contended));
+            }
+            db::Error::Backend(_) => return Err(HandlerError::Db(db::Error::Contended)),
         }
-        Err(err) => return Err(err.into()),
+    };
+
+    let Some(channel) = data.db().get(&keytag)? else {
+        // Impossible?!
+        return Err(HandlerError::Other);
     };
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Impossible result"));
@@ -188,10 +196,10 @@ pub async fn quote(
         return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
     };
     let fx = data.fx().read().await.clone();
-    let Some(channel) = data.db().get_channel(&keytag).await? else {
+    let Some(channel) = data.db().get(&keytag)? else {
         return Ok(HttpResponse::BadRequest().body("No channel found"));
     };
-    let potentially_subable = match channel.uncommitted() {
+    let uncommitted = match channel.uncommitted() {
         Ok(amt) => amt,
         Err(err) => {
             return Ok(HttpResponse::BadRequest().body(err.to_string()));
@@ -202,7 +210,7 @@ pub async fn quote(
     };
     let request = body.into_inner();
     let min_amount = fx.msat_to_lovelace(request.amount_msat()) + FEE_PLACEHOLDER + 1;
-    if min_amount > potentially_subable {
+    if min_amount > uncommitted {
         return Ok(HttpResponse::BadRequest().body("Insufficient funds"));
     }
     let quote_request = bln_client::types::QuoteRequest {
@@ -224,7 +232,7 @@ pub async fn quote(
     // FIXME :: we need to sort out the Tos
     let amount =
         fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + FEE_PLACEHOLDER + 1;
-    if amount > potentially_subable {
+    if amount > uncommitted {
         return Ok(HttpResponse::BadRequest().body("Insufficient funds"));
     }
     let relative_timeout = (ADAPTOR_TIME_DELTA + QUOTE_PAY_TIME_MARGIN + bln_quote.relative_timeout)
@@ -253,10 +261,8 @@ pub async fn pay(
         Ok(inv) => inv,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
     };
-    let (key, tag) = keytag.split();
-    let Ok(locked) = locked.try_verify(&to_verifying_key(key), &tag) else {
-        return Ok(HttpResponse::BadRequest().body("Invalid cheque"));
-    };
+    // ## Compare Cardano side commitment with Bitcoin commitment.
+    // #### Lock
     if invoice.payment_hash != locked.lock().0 {
         return Ok(HttpResponse::BadRequest().body(format!(
             "provided lock's secret={} does not match invoice's payment_hash={}",
@@ -265,6 +271,7 @@ pub async fn pay(
         )));
     }
 
+    // #### Funds
     let effective_amount_msat = fx.lovelace_to_msat(locked.amount() - FEE_PLACEHOLDER);
     if effective_amount_msat < invoice.amount_msat {
         return Ok(HttpResponse::BadRequest().body(format!(
@@ -274,10 +281,12 @@ pub async fn pay(
     }
     let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
 
+    // #### Time
     // The cheque timeout is in posix time.
     // We need to convert to a time delta.
     // And then the BLN handler can convert to (relative) blocks and then block height
     // ie absolute blocks.
+
     let Ok(now) = now() else {
         return Ok(HttpResponse::InternalServerError().body("System time not available"));
     };
@@ -297,11 +306,7 @@ pub async fn pay(
         )));
     };
 
-    if let Err(err) = data
-        .db()
-        .append_locked(&keytag, locked.into_unverified())
-        .await
-    {
+    if let Err(err) = data.db().update(&keytag, apply_locked(locked)) {
         return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
     };
     let pay_request = bln_client::types::PayRequest {
@@ -310,24 +315,23 @@ pub async fn pay(
         invoice,
     };
 
+    // Committing!
     let pay_response = match data.bln().pay(pay_request).await {
         Ok(res) => res,
-        Err(err) => return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err))),
-    };
-    let channel = if let Some(secret) = pay_response.secret {
-        data.db().unlock(&keytag, Secret(secret)).await
-    } else {
-        match data.db().get_channel(&keytag).await {
-            Ok(Some(c)) => Ok(c),
-            Ok(None) => return Ok(HttpResponse::InternalServerError().body("Impossible")),
-            Err(err) => Err(err),
-        }
-    };
-    let channel = match channel {
-        Ok(channel) => channel,
         Err(err) => {
-            return Ok(HttpResponse::BadRequest().body(format!("Error handling secret: {}", err)));
+            // FIXME :: Handle the distinction between pre and post commitment error. error
+            return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err)));
         }
+    };
+
+    // Resolving
+    if let Some(secret) = pay_response.secret {
+        data.db()
+            .update(&keytag, apply_secrets(vec![Secret(secret)]))?;
+    };
+    // TODO: Revisit the design decision. Having the squash proposal here is
+    let Some(channel) = data.db().get(&keytag)? else {
+        return Err(HandlerError::Other);
     };
     let Some(receipt) = channel.receipt() else {
         return Ok(HttpResponse::InternalServerError().body("Failure to recover receipt"));
@@ -344,7 +348,6 @@ pub async fn pay(
     } else {
         SquashStatus::Incomplete(proposal)
     };
-
     Ok(HttpResponse::Ok().json(response_body))
 }
 
@@ -357,6 +360,7 @@ fn now() -> Result<konduit_data::Duration, std::time::SystemTimeError> {
 fn to_konduit_duration(x: std::time::Duration) -> konduit_data::Duration {
     Duration::from_millis(x.as_millis() as u64)
 }
+
 fn from_konduit_duration(x: konduit_data::Duration) -> std::time::Duration {
     std::time::Duration::from_millis(x.as_millis() as u64)
 }
