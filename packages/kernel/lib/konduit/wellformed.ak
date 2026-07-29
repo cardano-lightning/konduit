@@ -1,4 +1,3 @@
-use aiken/builtin.{append_bytearray}
 use aiken/cbor
 use aiken/crypto.{Signature, VerificationKey}
 use aiken/primitive/bytearray

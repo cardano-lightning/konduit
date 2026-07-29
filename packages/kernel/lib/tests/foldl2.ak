@@ -2,14 +2,13 @@ use aiken/collection/list.{foldl2}
 
 test test_order() {
   let src = [1, 2, 3]
-  let got0, got1 <-
-    foldl2(
-      src,
-      [],
-      0,
-      fn(i, acc, tot, return) { return([i, ..acc], i + tot) },
-      _,
-    )
+  let got0, got1 <- foldl2(
+    src,
+    [],
+    0,
+    fn(i, acc, tot, return) { return([i, ..acc], i + tot) },
+    _,
+  )
   let want0 = [3, 2, 1]
   let want1 = 6
   trace (got0, got1)
@@ -63,16 +62,14 @@ fn do_foldl(
 
 test test_foldr_cps() {
   let src = [1, 2, 3]
-  let got <-
-    foldr(src, [], fn(i, acc, return) { return([i, ..acc]) }, _)
+  let got <- foldr(src, [], fn(i, acc, return) { return([i, ..acc]) }, _)
   let want = [1, 2, 3]
   got == want
 }
 
 test test_foldl_cps() {
   let src = [1, 2, 3]
-  let got <-
-    foldl(src, [], fn(i, acc, return) { return([i, ..acc]) }, _)
+  let got <- foldl(src, [], fn(i, acc, return) { return([i, ..acc]) }, _)
   let want = [3, 2, 1]
   got == want
 }
