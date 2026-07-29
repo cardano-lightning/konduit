@@ -46,3 +46,4 @@ proptest = { workspace = true, default-features = false, features = [
 ] }
 proptest-derive.workspace = true
 tokio.workspace = true
+tempfile = "3.27.0"
