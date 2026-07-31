@@ -277,7 +277,6 @@ where
     }
 }
 
-// FIXME: <<<<<<< HEAD
 impl<'b, C> minicbor::Decode<'b, C> for Step
 where
     Cont: minicbor::Decode<'b, C>,
