@@ -230,13 +230,19 @@ mod via_plutus_data {
             ])
         }
     }
+
+    impl<'a> From<SquashBody> for PlutusData<'a> {
+        fn from(value: SquashBody) -> Self {
+            PlutusData::from(&value)
+        }
+    }
 }
 
 #[cfg(feature = "proptest")]
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{cbor::ToCbor, PlutusData};
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
 
     proptest! {

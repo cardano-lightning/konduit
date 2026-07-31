@@ -65,7 +65,6 @@ impl ChequeBody<Lock> {
     }
 }
 
-// <<<<<<< HEAD
 impl ChequeBody<Secret> {
     pub fn secret(&self) -> Secret {
         *self.latch()
@@ -176,7 +175,7 @@ mod via_plutus_data {
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{cbor::ToCbor, PlutusData};
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
 
     proptest! {
@@ -213,24 +212,6 @@ mod roundtrip {
         }
     }
 }
-
-// FIXME: MERGE: This could be moved to the cardano-sdk gated section if at all.
-// =======
-// impl<'a> From<&ChequeBody> for PlutusData<'a> {
-//     fn from(value: &ChequeBody) -> Self {
-//         Self::list([
-//             PlutusData::from(value.index),
-//             PlutusData::from(value.amount),
-//             PlutusData::from(value.timeout),
-//             PlutusData::from(value.lock),
-//         ])
-//>>>>>>> 3e7f19f (Pre-release version of the kupo based indexer)
-//
-// impl<'a> From<ChequeBody> for PlutusData<'a> {
-//     fn from(value: ChequeBody) -> Self {
-//         Self::from(&value)
-//     }
-// }
 
 #[cfg(test)]
 #[cfg(all(test, feature = "json"))]
