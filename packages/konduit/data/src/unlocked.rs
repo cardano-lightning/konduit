@@ -1,6 +1,6 @@
 use crate::{
-    ChequeSigned, Lock, Locked, Secret, SigningKey, Tag, Unverified, Verified, VerifyError,
-    VerifyState, VerifyingKey, cheque_body::ChequeBody,
+    cheque_body::ChequeBody, ChequeSigned, Lock, Locked, Secret, SigningKey, Tag, Unverified,
+    Verified, VerifyError, VerifyState, VerifyingKey,
 };
 
 pub type Unlocked<V = Unverified> = ChequeSigned<Secret, V>;
@@ -80,6 +80,7 @@ impl proptest::arbitrary::Arbitrary for Unlocked<Unverified> {
     }
 }
 
+// FIXME: <<<<<<< HEAD
 // =========================================================================
 // PlutusData Conversions (cardano_sdk-gated)
 // =========================================================================
@@ -120,11 +121,11 @@ mod via_plutus_data {
         }
     }
 
-    impl<'a, V: VerifyState> From<Unlocked<V>> for PlutusData<'a> {
-        fn from(unlocked: Unlocked<V>) -> Self {
+    impl<'a, V: VerifyState> From<&Unlocked<V>> for PlutusData<'a> {
+        fn from(unlocked: &Unlocked<V>) -> Self {
             Self::list(vec![
-                PlutusData::from(unlocked.body),
-                PlutusData::bytes(unlocked.signature.to_bytes()),
+                PlutusData::from(&unlocked.body),
+                PlutusData::bytes(unlocked.signature.as_ref()),
             ])
         }
     }
@@ -134,7 +135,7 @@ mod via_plutus_data {
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::{cbor::ToCbor, PlutusData};
     use proptest::prelude::*;
 
     proptest! {
@@ -171,3 +172,20 @@ mod roundtrip {
         }
     }
 }
+
+// FIXME: MERGE: This could be moved to the cardano-sdk gated section if at all.
+// =======
+// impl<'a> From<&Unlocked> for PlutusData<'a> {
+//     fn from(unlocked: &Unlocked) -> Self {
+//         PlutusData::list([
+//             PlutusData::from(&unlocked.body),
+//             signature_to_plutus_data(unlocked.signature),
+//             PlutusData::from(&unlocked.secret),
+//         ])
+//     }
+// }
+//
+// impl<'a> From<Unlocked> for PlutusData<'a> {
+//     fn from(unlocked: Unlocked) -> Self {
+//         PlutusData::from(&unlocked)
+// >>>>>>> 3e7f19f (Pre-release version of the kupo based indexer)

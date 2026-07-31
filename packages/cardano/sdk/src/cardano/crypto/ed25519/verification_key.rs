@@ -149,3 +149,9 @@ impl<'a> From<&'a VerificationKey> for PlutusData<'a> {
         Self::bytes(key.0)
     }
 }
+
+impl From<VerificationKey> for PlutusData<'_> {
+    fn from(key: VerificationKey) -> Self {
+        Self::bytes(key.0)
+    }
+}
