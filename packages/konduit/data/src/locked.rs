@@ -115,7 +115,6 @@ mod via_plutus_data {
     }
 }
 
-// FIXME: <<<<<<< HEAD
 #[cfg(feature = "proptest")]
 #[allow(unused_imports)]
 mod roundtrip {
@@ -157,21 +156,3 @@ mod roundtrip {
         }
     }
 }
-
-// FIXME: MERGE: This could be moved to the cardano-sdk gated section if at all.
-// =======
-// impl<'a> From<&Locked> for PlutusData<'a> {
-//     fn from(locked: &Locked) -> Self {
-//         PlutusData::list([
-//             PlutusData::from(&locked.body),
-//             signature_to_plutus_data(locked.signature),
-//         ])
-//     }
-// }
-//
-// impl<'a> From<Locked> for PlutusData<'a> {
-//     fn from(locked: Locked) -> Self {
-//         Self::from(&locked)
-// >>>>>>> 3e7f19f (Pre-release version of the kupo based indexer)
-//     }
-// }

@@ -1,6 +1,6 @@
 use crate::{
-    locked::Locked, unlocked::Unlocked, ChequeBody, Duration, Lock, Secret, Signature, Tag,
-    Unverified, Verified, VerifyError, VerifyState, VerifyingKey,
+    ChequeBody, Duration, Lock, Secret, Signature, Tag, Unverified, Verified, VerifyError,
+    VerifyState, VerifyingKey, locked::Locked, unlocked::Unlocked,
 };
 
 #[cfg(feature = "serde")]
@@ -259,21 +259,21 @@ mod via_plutus_data {
         }
     }
 
-    impl<'a, V: VerifyState> From<&Cheque<V>> for PlutusData<'a> {
-        fn from(value: &Cheque<V>) -> Self {
+    impl<'a, V: VerifyState> From<Cheque<V>> for PlutusData<'a> {
+        fn from(value: Cheque<V>) -> Self {
             match value {
                 Cheque::Unlocked(u) => PlutusData::constr(
                     0,
                     vec![
-                        PlutusData::from(&u.body),
-                        PlutusData::bytes(u.signature.as_ref()),
+                        PlutusData::from(u.body),
+                        PlutusData::bytes(u.signature.to_bytes()),
                     ],
                 ),
                 Cheque::Locked(l) => PlutusData::constr(
                     1,
                     vec![
-                        PlutusData::from(l.body.as_ref()),
-                        PlutusData::bytes(l.signature.as_ref()),
+                        PlutusData::from(l.body),
+                        PlutusData::bytes(l.signature.to_bytes()),
                     ],
                 ),
             }
@@ -285,7 +285,7 @@ mod via_plutus_data {
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{cbor::ToCbor, PlutusData};
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
 
     proptest! {
@@ -322,14 +322,3 @@ mod roundtrip {
         }
     }
 }
-
-// =======
-// impl<'a> From<&Cheque> for PlutusData<'a> {
-//     fn from(value: &Cheque) -> Self {
-//         match value {
-//             Cheque::Unlocked(unlocked) => PlutusData::constr(0, [unlocked]),
-//             Cheque::Locked(locked) => PlutusData::constr(1, [locked]),
-// >>>>>>> 3e7f19f (Pre-release version of the kupo based indexer)
-//         }
-//     }
-// }
