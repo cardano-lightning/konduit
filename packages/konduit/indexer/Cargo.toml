@@ -1,0 +1,31 @@
+[package]
+name = "konduit-indexer"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "konduit-indexer"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["dep:clap"]
+
+[dependencies]
+anyhow.workspace = true
+cardano-sdk.workspace = true
+clap = { workspace = true, features = ["derive", "env"], optional = true }
+derive_more.workspace = true
+hex.workspace = true
+itertools.workspace = true
+konduit-data = { workspace = true, features = ["serde", "cardano_sdk"] }
+kupo-client.workspace = true
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror.workspace = true

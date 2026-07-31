@@ -18,6 +18,12 @@
       inputs.rust-overlay.follows = "rust-overlay";
     };
     capkgs.url = "github:input-output-hk/capkgs";
+    jailed-agents.url = "github:andersonjoseph/jailed-agents";
+    cardano-kupo.url = "github:paluh/cardano-kupo";
+    cardonnay-src = {
+      url = "github:IntersectMBO/cardonnay?ref=v0.3.6";
+      flake = false;
+    };
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -40,6 +46,32 @@
       }: let
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
         wasm-pack = pkgs.callPackage ./flake/wasm-pack.nix {};
+
+        packages =
+          [
+            # aiken
+            inputs'.aiken.packages.aiken
+            # kupo
+            inputs'.cardano-kupo.packages.kupo
+            # JS
+            pkgs.yarn
+            pkgs.nodejs
+            pkgs.typescript-language-server
+            # RUST
+            pkgs.openssl
+            config.rust-project.toolchain
+            wasm-pack
+            clang-unwrapped
+            pkgs.cargo-machete
+            # PRE-COMMIT
+            pkgs.prek
+            # UTILS
+            pkgs.just
+            # DOC BUILING
+            pkgs.pandoc
+            pkgs.d2
+          ]
+          ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
         devShell = {
           name = "konduit-shell";
           shellHook = ''
@@ -47,45 +79,134 @@
             echo 1>&2 "Welcome to the development shell!"
               export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
           '';
-          packages =
-            [
-              # aiken
-              inputs'.aiken.packages.aiken
-              # JS
-              pkgs.yarn
-              pkgs.nodejs
-              pkgs.typescript-language-server
-              # RUST
-              pkgs.openssl
-              config.rust-project.toolchain
-              wasm-pack
-              clang-unwrapped
-              pkgs.cargo-machete
-              # PRE-COMMIT
-              pkgs.prek
-              # UTILS
-              pkgs.just
-              # DOC BUILING
-              pkgs.pandoc
-              pkgs.d2
-            ]
-            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
+          inherit packages;
+
           nativeBuildInputs =
             [config.treefmt.build.wrapper]
             ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
+
           buildInputs =
             [pkgs.libiconv]
             ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates);
+
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
+
+        # Jail which is shared between a real opencode
+        # agent and a bash jail sandbox used for testing the jailed env itself.
+        commonJail = {
+          baseJailOptions = let
+            jail = inputs.jailed-agents.lib.${pkgs.system}.internals.jail;
+          in [
+            jail.combinators.network
+            jail.combinators.time-zone
+            jail.combinators.no-new-session
+            jail.combinators.mount-cwd
+            (jail.combinators.try-fwd-env "PKG_CONFIG_PATH")
+            (jail.combinators.try-fwd-env "LD_LIBRARY_PATH")
+          ];
+
+          extraReadwriteDirs = [
+            "~/projects/cl/konduit/paluh/indexer"
+            "~/.config/opencode"
+            "~/.local/share/opencode"
+            "~/.cache/opencode"
+          ];
+          extraPkgs =
+            packages
+            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates)
+            ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates)
+            ++ [
+              config.treefmt.build.wrapper
+              pkgs.libiconv
+              pkgs.coreutils
+              pkgs.gcc
+            ];
+        };
+
+        # A package to setup testnet in the dev shell extras
+        cardonnay = pkgs.python313.pkgs.buildPythonApplication {
+          pname = "cardonnay";
+          version = "0.3.4";
+          SETUPTOOLS_SCM_PRETEND_VERSION = "0.3.4";
+          src = inputs.cardonnay-src;
+          pyproject = true;
+          build-system = with pkgs.python313.pkgs; [setuptools setuptools-scm];
+          pythonRelaxDeps = ["setuptools"];
+          nativeBuildInputs = with pkgs.python313.pkgs; [
+            pythonRelaxDepsHook
+          ];
+          postPatch = ''
+            # Reduce initial TX submission delay (safe for local testnets)
+            # find src/cardonnay_scripts/scripts \
+            #   -name 'common-start-*' -type f -exec \
+            #   sed -i 's/readonly TX_SUBMISSION_DELAY=60/readonly TX_SUBMISSION_DELAY=20/' {} +
+          '';
+          dependencies = with pkgs.python313.pkgs; [
+            supervisor
+            click
+            pygments
+            pydantic
+            filelock
+          ];
+        };
+        cardano-cli = inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f;
+
+        cardano-node = inputs.capkgs.packages.${system}.cardano-node-input-output-hk-cardano-node-10-2-1-52b708f;
+
+        process-compose-testnet-yaml = pkgs.callPackage ./flake/process-compose/testnet.nix {
+          inherit cardonnay cardano-node cardano-cli;
+        };
+
+        process-compose = pkgs.writeShellApplication {
+          name = "process-compose";
+          runtimeInputs = [];
+          text = ''
+            ${pkgs.process-compose}/bin/process-compose up -f ${process-compose-testnet-yaml} -L "$RUN_DIR"/process-compose-testnet;
+          '';
+        };
+
         devShellExtra =
           devShell
           // {
             name = "konduit-shell-with-extras";
+
+            shellHook = ''
+              ${devShell.shellHook}
+              echo 1>&2 "Welcome to the development shell with extras!"
+              export ROOT_DIR="$(git rev-parse --show-toplevel)"
+              export RUN_DIR="$ROOT_DIR/.run"
+
+              # Vars required by testnet part of the process compose:
+              export TESTNET_DIR="$RUN_DIR/testnet"
+              export CARDONNAY_TESTNET_ID="9"
+              export CARDANO_NODE_NETWORK_ID=42
+              source <(cardonnay control print-env -i "$CARDONNAY_TESTNET_ID" -w "$TESTNET_DIR")
+
+              # This **will be** initialized by the testnet process compose when executed
+              export FAUCET_ADDR_FILE="$TESTNET_DIR/faucet.addr"
+              export FAUCET_SKEY_FILE="$TESTNET_DIR/faucet.skey"
+
+              export PROCESS_COMPOSE_YAML=${process-compose-testnet-yaml}
+            '';
+
             packages =
               devShell.packages
               ++ [
-                inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f
+                cardano-node
+                cardano-cli
+                cardonnay
+                process-compose
+
+                (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
+                  inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
+                })
+
+                (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
+                  name = "jailed-bash";
+                  pkg = pkgs.bashInteractive;
+                  inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
+                })
               ];
           };
       in {

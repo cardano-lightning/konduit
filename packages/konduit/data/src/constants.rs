@@ -88,6 +88,38 @@ impl proptest::arbitrary::Arbitrary for Constants {
     }
 }
 
+// FIXME: MERGE: Those should be moved to cardano-sdk gated section if at all.
+// impl<'a> From<&'a Constants> for PlutusData<'a> {
+//     fn from(value: &'a Constants) -> Self {
+//         constr!(
+//             0,
+//             PlutusData::from(value.tag.clone()),
+//             PlutusData::from(value.add_vkey),
+//             PlutusData::from(value.sub_vkey),
+//             PlutusData::from(value.close_period),
+//         )
+//     }
+// }
+//
+// impl<'a> From<Constants> for PlutusData<'a> {
+//     fn from(value: Constants) -> Self {
+//         constr!(
+//             0,
+//             PlutusData::from(value.tag),
+//             PlutusData::from(<[u8; 32]>::from(value.add_vkey)),
+//             PlutusData::from(<[u8; 32]>::from(value.sub_vkey)),
+//             PlutusData::from(value.close_period),
+//         )
+//         .prop_map(|(tag, add_bytes, sub_bytes, close_period)| Constants {
+//             tag,
+//             add_vkey: VerifyingKey::from_bytes(add_bytes),
+//             sub_vkey: VerifyingKey::from_bytes(sub_bytes),
+//             close_period,
+//         })
+//         .boxed()
+//     }
+// }
+
 // =========================================================================
 // PlutusData Conversions (cardano_sdk-gated)
 // =========================================================================

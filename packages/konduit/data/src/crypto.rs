@@ -178,3 +178,36 @@ impl From<SigningKey> for [u8; 32] {
         x.0
     }
 }
+
+// =========================================================================
+// Cardano sdk conversions (cardano_sdk-gated)
+// =========================================================================
+#[cfg(feature = "cardano_sdk")]
+mod verification_key {
+    use super::*;
+    use cardano_sdk::VerificationKey;
+
+    impl From<VerificationKey> for VerifyingKey {
+        fn from(verification_key: VerificationKey) -> Self {
+            VerifyingKey(verification_key.into())
+        }
+    }
+
+    impl From<&VerificationKey> for VerifyingKey {
+        fn from(verification_key: &VerificationKey) -> Self {
+            VerifyingKey(verification_key.clone().into())
+        }
+    }
+
+    impl From<VerifyingKey> for VerificationKey {
+        fn from(verifying_key: VerifyingKey) -> Self {
+            VerificationKey::from(verifying_key.0)
+        }
+    }
+
+    impl From<&VerifyingKey> for VerificationKey {
+        fn from(verifying_key: &VerifyingKey) -> Self {
+            VerificationKey::from(verifying_key.0)
+        }
+    }
+}
