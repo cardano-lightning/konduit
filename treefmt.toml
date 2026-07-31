@@ -1,18 +1,4 @@
-excludes = [
-    "*.lock",
-    "*.patch",
-    "package-lock.json",
-    "go.mod",
-    "go.sum",
-    ".gitattributes",
-    ".gitignore",
-    ".gitmodules",
-    ".hgignore",
-    ".svnignore",
-    "LICENSE",
-    "treefmt.toml",
-    ".pre-commit-config.yaml",
-]
+excludes = ["*.lock", "*.patch", "package-lock.json", "go.mod", "go.sum", ".gitattributes", ".gitignore", ".gitmodules", ".hgignore", ".svnignore", "LICENSE", "treefmt.toml", ".pre-commit-config.yaml"]
 
 [formatter.aiken]
 command = "aiken"
@@ -29,24 +15,7 @@ options = []
 [formatter.prettier]
 command = "prettier"
 excludes = []
-includes = [
-    "*.cjs",
-    "*.css",
-    "*.html",
-    "*.js",
-    "*.json",
-    "*.json5",
-    "*.jsx",
-    "*.md",
-    "*.mdx",
-    "*.mjs",
-    "*.scss",
-    "*.ts",
-    "*.tsx",
-    "*.vue",
-    "*.yaml",
-    "*.yml",
-]
+includes = ["*.cjs", "*.css", "*.html", "*.js", "*.json", "*.json5", "*.jsx", "*.md", "*.mdx", "*.mjs", "*.scss", "*.ts", "*.tsx", "*.vue", "*.yaml", "*.yml"]
 options = ["--write"]
 
 [formatter.rustfmt]
