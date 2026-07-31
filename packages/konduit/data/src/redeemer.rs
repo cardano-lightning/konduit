@@ -33,6 +33,59 @@ impl Step {
     }
 }
 
+// FIXME: MERGE: This could be moved to the cardano-sdk gated section if at all.
+// =======
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+// impl<'a> TryFrom<&PlutusData<'a>> for Step {
+//     type Error = anyhow::Error;
+//
+//     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+//         let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
+//         let [field] = <[PlutusData; 1]>::try_from(fields.collect::<Vec<_>>())
+//             .map_err(|_| anyhow!("invalid 'Step'"))?;
+//         match tag {
+//             0 => {
+//                 let cont = Cont::try_from(field)?;
+//                 Ok(Step::Cont(cont))
+//             }
+//             1 => {
+//                 let eol = Eol::try_from(field)?;
+//                 Ok(Step::Eol(eol))
+//             }
+//             _ => Err(anyhow!("Unknown Step tag: {}", tag)),
+//         }
+//     }
+// }
+//
+// impl<'a> TryFrom<PlutusData<'a>> for Step {
+//     type Error = anyhow::Error;
+//
+//     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+//         Step::try_from(&data)
+//     }
+// }
+//
+// impl<'a> From<Step> for PlutusData<'a> {
+//     fn from(value: Step) -> Self {
+//         match value {
+//             Step::Cont(cont) => constr!(0, PlutusData::from(cont)),
+//             Step::Eol(eol) => constr!(1, PlutusData::from(eol)),
+//         }
+//     }
+// }
+//
+// impl From<&Step> for PlutusData<'_> {
+//     fn from(value: &Step) -> Self {
+//         match value {
+//             Step::Cont(cont) => constr!(0, PlutusData::from(cont)),
+//             Step::Eol(eol) => constr!(1, PlutusData::from(eol)),
+//         }
+//     }
+// }
+//
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// >>>>>>> 3e7f19f (Pre-release version of the kupo based indexer)
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Cont {
@@ -44,6 +97,171 @@ pub enum Cont {
     Expire(Vec<Unpend>),
 }
 
+// <<<<<<< HEAD
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+// =======
+// impl<'a> TryFrom<&PlutusData<'a>> for Cont {
+//     type Error = anyhow::Error;
+//
+//     fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
+//         let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
+//         match tag {
+//             0 => Ok(Cont::Add),
+//             1 => {
+//                 let [a, b] = <[PlutusData; 2]>::try_from(fields.collect::<Vec<_>>())
+//                     .map_err(|_| anyhow!("invalid 'Cont::Sub'"))?;
+//                 let squash = Squash::try_from(&a)?;
+//                 let unlocked = <Vec<PlutusData>>::try_from(&b)?
+//                     .into_iter()
+//                     .map(|x| Unlocked::try_from(&x))
+//                     .collect::<anyhow::Result<Vec<Unlocked>>>()?;
+//                 Ok(Cont::Sub(squash, unlocked))
+//             }
+//             2 => Ok(Cont::Close),
+//             3 => {
+//                 let [a, b] = <[PlutusData; 2]>::try_from(fields.collect::<Vec<_>>())
+//                     .map_err(|_| anyhow!("invalid 'Cont::Sub'"))?;
+//                 let squash = Squash::try_from(&a)?;
+//                 let cheques = <Vec<PlutusData>>::try_from(&b)?
+//                     .into_iter()
+//                     .map(Cheque::try_from)
+//                     .collect::<anyhow::Result<Vec<Cheque>>>()?;
+//                 Ok(Cont::Respond(squash, cheques))
+//             }
+//             4 => {
+//                 let [a] = <[PlutusData; 1]>::try_from(fields.collect::<Vec<_>>())
+//                     .map_err(|_| anyhow!("invalid 'Cont::Unlock'"))?;
+//                 let unpends = <Vec<PlutusData>>::try_from(&a)?
+//                     .into_iter()
+//                     .map(|x| {
+//                         let bytes = Unpend::try_from(x)?;
+//                         Ok(bytes)
+//                     })
+//                     .collect::<anyhow::Result<Vec<Unpend>>>()?;
+//                 Ok(Cont::Unlock(unpends))
+//             }
+//             5 => {
+//                 let [field] = <[PlutusData; 1]>::try_from(fields.collect::<Vec<_>>())
+//                     .map_err(|_| anyhow!("invalid 'Cont::Expire'"))?;
+//                 let unpends = <Vec<PlutusData>>::try_from(&field)?
+//                     .into_iter()
+//                     .map(|x| {
+//                         let bytes = <Unpend>::try_from(x)?;
+//                         Ok(bytes)
+//                     })
+//                     .collect::<anyhow::Result<Vec<Unpend>>>()?;
+//                 Ok(Cont::Expire(unpends))
+//             }
+//             _ => Err(anyhow!("Unknown Cont tag: {}", tag)),
+//         }
+//     }
+// }
+//
+// impl<'a> TryFrom<PlutusData<'a>> for Cont {
+//     type Error = anyhow::Error;
+//
+//     fn try_from(data: PlutusData<'a>) -> anyhow::Result<Self> {
+//         Cont::try_from(&data)
+//     }
+// }
+//
+// impl<'a> From<&Cont> for PlutusData<'a> {
+//     fn from(value: &Cont) -> Self {
+//         match value {
+//             Cont::Add => constr!(0),
+//             Cont::Sub(squash, unlocked) => constr!(
+//                 1,
+//                 PlutusData::from(squash),
+//                 PlutusData::list(
+//                     unlocked
+//                         .iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 )
+//             ),
+//             Cont::Close => constr!(2),
+//             Cont::Respond(squash, cheques) => constr!(
+//                 3,
+//                 PlutusData::from(squash),
+//                 PlutusData::list(
+//                     cheques
+//                         .iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 ),
+//             ),
+//             Cont::Unlock(unpends) => constr!(
+//                 4,
+//                 PlutusData::list(
+//                     unpends
+//                         .iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 ),
+//             ),
+//             Cont::Expire(unpends) => constr!(
+//                 5,
+//                 PlutusData::list(
+//                     unpends
+//                         .iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 ),
+//             ),
+//         }
+//     }
+// }
+//
+// impl<'a> From<Cont> for PlutusData<'a> {
+//     fn from(value: Cont) -> Self {
+//         match value {
+//             Cont::Add => constr!(0),
+//             Cont::Sub(squash, unlocked) => constr!(
+//                 1,
+//                 PlutusData::from(&squash),
+//                 PlutusData::list(
+//                     unlocked
+//                         .into_iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 )
+//             ),
+//             Cont::Close => constr!(2),
+//             Cont::Respond(squash, cheques) => constr!(
+//                 3,
+//                 PlutusData::from(&squash),
+//                 PlutusData::list(
+//                     cheques
+//                         .iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 ),
+//             ),
+//             Cont::Unlock(unpends) => constr!(
+//                 4,
+//                 PlutusData::list(
+//                     unpends
+//                         .iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 ),
+//             ),
+//             Cont::Expire(unpends) => constr!(
+//                 5,
+//                 PlutusData::list(
+//                     unpends
+//                         .iter()
+//                         .map(PlutusData::from)
+//                         .collect::<Vec<PlutusData>>(),
+//                 ),
+//             ),
+//         }
+//     }
+// }
+//
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// >>>>>>> 3e7f19f (Pre-release version of the kupo based indexer)
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Eol {
@@ -277,6 +495,7 @@ where
     }
 }
 
+// FIXME: <<<<<<< HEAD
 impl<'b, C> minicbor::Decode<'b, C> for Step
 where
     Cont: minicbor::Decode<'b, C>,
@@ -459,7 +678,7 @@ impl proptest::arbitrary::Arbitrary for Redeemer {
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, constr};
+    use cardano_sdk::{constr, PlutusData};
 
     // --- Eol ---
 
@@ -667,6 +886,26 @@ mod via_plutus_data {
         }
     }
 
+    // TODO: Provide non consuming From<&Redeemer>
+    // because most of the pieces are copied anyway.
+    impl<'a> From<Redeemer> for PlutusData<'a> {
+        fn from(value: Redeemer) -> Self {
+            match value {
+                Redeemer::Defer => constr!(0),
+                Redeemer::Main(steps) => constr!(
+                    1,
+                    PlutusData::list(
+                        steps
+                            .into_iter()
+                            .map(PlutusData::from)
+                            .collect::<Vec<PlutusData>>(),
+                    ),
+                ),
+                Redeemer::Mutual => constr!(2),
+            }
+        }
+    }
+
     impl<'a> From<Redeemer> for PlutusData<'a> {
         fn from(value: Redeemer) -> Self {
             match value {
@@ -690,7 +929,7 @@ mod via_plutus_data {
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::{cbor::ToCbor, PlutusData};
     use proptest::prelude::*;
 
     proptest! {
@@ -829,5 +1068,20 @@ mod roundtrip {
             let recovered = Redeemer::try_from(pd).unwrap();
             prop_assert_eq!(val, recovered);
         }
+    }
+}
+
+impl TryFrom<&[u8]> for Redeemer {
+    type Error = minicbor::decode::Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        minicbor::decode(bytes)
+    }
+}
+
+impl From<&Redeemer> for Vec<u8> {
+    fn from(value: &Redeemer) -> Vec<u8> {
+        // Safe: unwrapping `Infallible`.
+        minicbor::to_vec(value).unwrap()
     }
 }

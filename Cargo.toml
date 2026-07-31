@@ -10,6 +10,7 @@ members = [
   "packages/util/cobbl3",
   "packages/util/fx-client",
   "packages/util/http-client",
+  "packages/util/kupo-client",
   "packages/util/powdos",
   "packages/util/problem-details-derive",
   "packages/util/problem-details",
@@ -17,6 +18,7 @@ members = [
   "packages/konduit/tmp",
   "packages/konduit/client",
   "packages/konduit/data",
+  "packages/konduit/indexer",
   "packages/konduit/server",
   "packages/konduit/tx",
   "packages/konduit/wasm",
@@ -57,6 +59,7 @@ clap = { version = "4.5.49", features = ["derive", "env"] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
 cryptoxide = "0.5.1"
+derive_more = { version = "2.1.1", features = ["display", "from", "into"] }
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
 envy = "0.4.2"
@@ -92,6 +95,7 @@ serde = "1.0.228"
 serde-hex = "0.1.0"
 serde-wasm-bindgen = "0.6.5"
 serde_json = { version = "1.0.145", features = ["std"] }
+serde_path_to_error = "0.1.20"
 serde_with = { version = "3.16.1", features = ["hex", "base64"] }
 sha2 = "0.11.0"
 sled = "0.34.7"
@@ -101,6 +105,7 @@ tokio = { version = "1.47.1", features = ["full"] }
 toml = "0.9.10"
 trait-variant = "0.1.2"
 uplc = "1.1.22"
+url = "2.5.8"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.55"
 web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
@@ -118,7 +123,9 @@ fx-client = { path = "packages/util/fx-client" }
 http-client = { path = "packages/util/http-client", default-features = false }
 konduit-client = { path = "packages/konduit/client" }
 konduit-data = { path = "packages/konduit/data", default-features = false }
+konduit-indexer = { path = "packages/konduit/indexer" }
 konduit-tmp = { path = "packages/konduit/tmp", default-features = false }
+kupo-client = { path = "packages/util/kupo-client" }
 konduit-server = { path = "packages/konduit/server" }
 konduit-tx = { path = "packages/konduit/tx" }
 problem-details = { path = "packages/util/problem-details", default-features = false }

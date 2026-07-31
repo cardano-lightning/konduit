@@ -180,3 +180,18 @@ mod roundtrip {
         }
     }
 }
+
+impl TryFrom<&[u8]> for Datum {
+    type Error = minicbor::decode::Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        minicbor::decode(bytes)
+    }
+}
+
+impl From<&Datum> for Vec<u8> {
+    fn from(value: &Datum) -> Vec<u8> {
+        // Safe: unwrapping `Infallible`.
+        minicbor::to_vec(value).unwrap()
+    }
+}

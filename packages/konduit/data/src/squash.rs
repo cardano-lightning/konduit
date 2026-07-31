@@ -205,21 +205,22 @@ mod via_plutus_data {
         }
     }
 
-    impl<'a, V: VerifyState> From<Squash<V>> for PlutusData<'a> {
-        fn from(value: Squash<V>) -> Self {
+    impl<'a, V: VerifyState> From<&Squash<V>> for PlutusData<'a> {
+        fn from(value: &Squash<V>) -> Self {
             Self::list(vec![
                 PlutusData::from(&value.body),
-                PlutusData::bytes(value.signature.to_bytes()),
+                PlutusData::bytes(value.signature.as_ref()),
             ])
         }
     }
 }
 
+// FIXME: <<<<<<< HEAD
 #[cfg(feature = "proptest")]
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::{cbor::ToCbor, PlutusData};
     use proptest::prelude::*;
 
     proptest! {
@@ -256,6 +257,38 @@ mod roundtrip {
         }
     }
 }
+
+// FIXME: MERGE: This could be moved to the cardano-sdk gated section if at all.
+// =======
+// impl From<&Squash> for [PlutusData<'_>; 2] {
+//     fn from(value: &Squash) -> Self {
+//         [
+//             PlutusData::from(&value.body),
+//             signature_to_plutus_data(value.signature),
+//         ]
+//     }
+// }
+//
+// impl<'a> From<Squash> for [PlutusData<'a>; 2] {
+//     fn from(value: Squash) -> Self {
+//         <[PlutusData<'a>; 2]>::from(&value)
+//     }
+// }
+//
+// impl From<&Squash> for PlutusData<'_> {
+//     fn from(value: &Squash) -> Self {
+//         Self::list(<[PlutusData; 2]>::from(value).to_vec())
+//     }
+// }
+//
+// impl From<Squash> for PlutusData<'_> {
+//     fn from(value: Squash) -> Self {
+//         PlutusData::from(&value)
+//     }
+// }
+//
+// #[cfg(test)]
+// >>>>>>> 3e7f19f (Pre-release version of the kupo based indexer)
 
 #[cfg(all(test, feature = "json"))]
 mod tests {

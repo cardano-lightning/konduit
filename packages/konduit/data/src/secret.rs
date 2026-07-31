@@ -1,4 +1,4 @@
-use crate::{ParseError, utils::try_into_array};
+use crate::{utils::try_into_array, ParseError};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -83,7 +83,7 @@ fn verify_encoding_differs_from_default_array() {
     // And our encoding is compact bytes: 0x58 0x20 <32 bytes>
     assert_eq!(our_encoding[0], 0x58); // major type 2 (bytes), 1-byte length follows
     assert_eq!(our_encoding[1], 0x20); // length = 32
-    // While array-of-ints starts with 0x98 0x20 (major type 4, 32 items)
+                                       // While array-of-ints starts with 0x98 0x20 (major type 4, 32 items)
     assert_eq!(array_encoding[0], 0x98); // major type 4 (array)
     assert_eq!(array_encoding[1], 0x20); // 32 items
 }
@@ -121,7 +121,7 @@ mod via_plutus_data {
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{PlutusData, cbor::ToCbor};
+    use cardano_sdk::{cbor::ToCbor, PlutusData};
     use proptest::prelude::*;
 
     #[test]
