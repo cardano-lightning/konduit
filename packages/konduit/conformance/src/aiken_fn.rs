@@ -49,7 +49,7 @@ pub struct Definition {
 
 #[derive(Debug, Deserialize)]
 pub struct Constructor {
-    pub title: String,
+    pub title: Option<String>,
     #[serde(rename = "dataType")]
     pub data_type: String,
     pub index: u32,

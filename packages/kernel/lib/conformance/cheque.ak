@@ -9,7 +9,7 @@ pub type Verify {
   cheque: t.Cheque,
 }
 
-pub fn verify(x: Verify) {
+pub fn verify(x: Verify) -> Bool {
   let (body, signature) = when x.cheque is {
     t.UnlockedCheque(body, signature) -> {
       let (index, amount, timeout, secret) = body
@@ -20,4 +20,5 @@ pub fn verify(x: Verify) {
     t.LockedCheque(body, sig) -> (body, sig)
   }
   expect wf.wellsigned(x.key, x.tag, body, signature)
+  True
 }

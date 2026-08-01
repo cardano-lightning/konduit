@@ -1,0 +1,139 @@
+{
+  "name": "conformance/cheque.verify",
+  "parameters": [
+    {
+      "title": "x",
+      "schema": {
+        "$ref": "#/definitions/conformance~1cheque~1Verify"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "58d701010029800aba2aba1aba0aab9eaab9dab9a4888888c9660033001375c600c60086ea80226eccdd3998029803180398021baa0083300530060014bd704dd718031803800ae5514a316400864b30013370e900018019baa001899191919192cc004cdc3a40806e340062660146e9ccc028c02c010cc028c02c00ccc028c02c008cc028dd49b920014bd701980518059806002a5eb822c8038dd718051805800980500098048009bac30070013004375400313233006300700133006300730080014bd7018021baa0014008600a600c600c60066ea801c1",
+  "hash": "c70ccf7cece47118a1c95dca6b06f7c1e6e4c26d89fdab43d1b0d913",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/crypto/Signature": {
+      "title": "Signature",
+      "dataType": "bytes"
+    },
+    "aiken/crypto/VerificationKey": {
+      "title": "VerificationKey",
+      "dataType": "bytes"
+    },
+    "conformance/cheque/Verify": {
+      "title": "Verify",
+      "anyOf": [
+        {
+          "title": "Verify",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "key",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+            },
+            {
+              "title": "tag",
+              "$ref": "#/definitions/konduit~1types~1Tag"
+            },
+            {
+              "title": "cheque",
+              "$ref": "#/definitions/konduit~1types~1Cheque"
+            }
+          ]
+        }
+      ]
+    },
+    "konduit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "konduit/prelude/Index": {
+      "title": "Index",
+      "dataType": "integer"
+    },
+    "konduit/types/Cheque": {
+      "title": "Cheque",
+      "anyOf": [
+        {
+          "title": "UnlockedCheque",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1ChequeBody"
+            },
+            {
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            }
+          ]
+        },
+        {
+          "title": "LockedCheque",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1ChequeBody"
+            },
+            {
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            }
+          ]
+        }
+      ]
+    },
+    "konduit/types/ChequeBody": {
+      "title": "ChequeBody",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Index"
+        },
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Timeout"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Latch"
+        }
+      ]
+    },
+    "konduit/types/Latch": {
+      "title": "Latch",
+      "dataType": "bytes"
+    },
+    "konduit/types/Tag": {
+      "title": "Tag",
+      "dataType": "bytes"
+    },
+    "konduit/types/Timeout": {
+      "title": "Timeout",
+      "dataType": "integer"
+    }
+  }
+}

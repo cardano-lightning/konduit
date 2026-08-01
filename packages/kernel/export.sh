@@ -11,7 +11,7 @@ TARGETS=(
     "conformance/wire::datum"
     "conformance/wire::stage"
     "conformance/wire::redeemer"
-    # "conformance/cheque::verify"
+    "conformance/cheque::verify"
 )
 
 # Splits "module::name" into globals TARGET_MODULE / TARGET_NAME.
