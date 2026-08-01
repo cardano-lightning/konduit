@@ -1,0 +1,144 @@
+{
+  "name": "conformance/wire.stage",
+  "parameters": [
+    {
+      "title": "x",
+      "schema": {
+        "$ref": "#/definitions/konduit~1types~1Stage"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "59016501010029800aba2aba1aab9faab9eaab9dab9a911919800800801911980180098010014528a4444444464b30013370e9000000c4c8cc896600260180031330063758601600244b3001002803c4c8c8cc896600260240071300530120068b2020375a601e0026eb4c03c008c03c004dd6180680120188b2014375a60120026014002600c6ea802a2b30013370e9001000c4c8c8c8cc8966002601c0071330083758601a00844b3001002804c4c8c8cc896600260280071300530140068b2024375a60220026eb4c044008c044004dd61807801201c8b2018375a60160026eb4c02c00cc02c004c028004c018dd5005456600266e1d200400189919912cc004c03000626600c6eb0c02c004896600200500789919194c004dd71808000cdd69808001cdd698080012444b3001301400489803980a0044590120c040004c03c004dd6180680120188b2014375a60120026014002600c6ea802a2c802100420083004375401201",
+  "hash": "4fac215acb6c66f03c9040b28cc3ba523ba2a4e7ce3feead4cac3b81",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "List<konduit/types/Pending>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Pending"
+      }
+    },
+    "List<konduit/types/Used>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Used"
+      }
+    },
+    "konduit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "konduit/prelude/Index": {
+      "title": "Index",
+      "dataType": "integer"
+    },
+    "konduit/types/ElapseAt": {
+      "title": "ElapseAt",
+      "dataType": "integer"
+    },
+    "konduit/types/Lock": {
+      "title": "Lock",
+      "dataType": "bytes"
+    },
+    "konduit/types/Pending": {
+      "title": "Pending",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Timeout"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Lock"
+        }
+      ]
+    },
+    "konduit/types/Stage": {
+      "title": "Stage",
+      "anyOf": [
+        {
+          "title": "Opened",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1prelude~1Amount"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Used>"
+            }
+          ]
+        },
+        {
+          "title": "Closed",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1prelude~1Amount"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Used>"
+            },
+            {
+              "$ref": "#/definitions/konduit~1types~1ElapseAt"
+            }
+          ]
+        },
+        {
+          "title": "Responded",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1prelude~1Amount"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Pending>"
+            }
+          ]
+        }
+      ]
+    },
+    "konduit/types/Timeout": {
+      "title": "Timeout",
+      "dataType": "integer"
+    },
+    "konduit/types/Used": {
+      "title": "Used",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Index"
+        },
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        }
+      ]
+    }
+  }
+}

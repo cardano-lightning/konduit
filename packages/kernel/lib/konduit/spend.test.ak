@@ -20,7 +20,7 @@ test test_one() {
   let add_vkey = b32_1
   let sub_vkey = b32_2
   let close_period = 24 * 60 * 60 * 1000
-  let constants = t.Constants { tag, add_vkey, sub_vkey, close_period }
+  let constants = (tag, add_vkey, sub_vkey, close_period)
   let stage = t.Opened(0, [])
 
   let datum = (own_hash, constants, stage)
@@ -75,12 +75,7 @@ test test_two() {
   let tag0 = "my_little_channel"
   let add_vkey0 = b32_1
   let sub_vkey0 = b32_2
-  let constants0 = t.Constants {
-    tag: tag0,
-    add_vkey: add_vkey0,
-    sub_vkey: sub_vkey0,
-    close_period,
-  }
+  let constants0 = (tag0, add_vkey0, sub_vkey0, close_period)
   let stage0 = t.Opened(0, [])
   let datum0 = (own_hash, constants0, stage0)
   let step0 = t.StepCont(t.Add)
@@ -102,12 +97,7 @@ test test_two() {
   let tag1 = "their_little_channel"
   let add_vkey1 = b32_3
   let sub_vkey1 = b32_4
-  let constants1 = t.Constants {
-    tag: tag1,
-    add_vkey: add_vkey1,
-    sub_vkey: sub_vkey1,
-    close_period,
-  }
+  let constants1 = (tag1, add_vkey1, sub_vkey1, close_period)
   let stage1 = t.Opened(0, [])
   let datum1 = (own_hash, constants1, stage1)
   let step1 = t.StepCont(t.Add)

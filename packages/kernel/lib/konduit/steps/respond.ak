@@ -18,7 +18,7 @@ pub fn do(
   squash: t.Squash,
   cheques: List<t.Cheque>,
 ) -> VerificationKey {
-  let t.Constants { tag, add_vkey, sub_vkey, .. } = constants
+  let (tag, add_vkey, sub_vkey, _close_period) = constants
   expect t.Closed(subbed_in, useds_in, _) = stage_in
   expect t.Responded(pends_amount, pends) = stage_out
   let subbed_out = subbed_in - amount_in(value_in) + amount_out(value_out)
@@ -87,12 +87,11 @@ fn with_(
   return: ReturnWith<result>,
 ) -> result {
   when cheques is {
-    t.UnlockedCheque(body, signature, secret) -> {
+    t.UnlockedCheque(body, signature) -> {
       let new_index, amount, timeout <- wf.unlocked(
         wellsinged,
         body,
         signature,
-        secret,
         _,
       )
       let owed, useds, index, exclude <- reduce_useds(

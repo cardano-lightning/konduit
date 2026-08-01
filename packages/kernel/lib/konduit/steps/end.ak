@@ -9,7 +9,7 @@ pub fn do(
   constants: t.Constants,
   stage_in: t.Stage,
 ) -> VerificationKey {
-  let t.Constants { add_vkey, .. } = constants
+  let (_tag, add_vkey, _sub_vkey, _close_period) = constants
   expect t.Responded(_, pends_in) = stage_in
   expect
     pends_in

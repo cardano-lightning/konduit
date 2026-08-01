@@ -8,7 +8,7 @@ pub fn do(
   constants: t.Constants,
   stage_in: t.Stage,
 ) -> VerificationKey {
-  let t.Constants { add_vkey, .. } = constants
+  let (_tag, add_vkey, _sub_vkey, _close_period) = constants
   expect t.Closed(_, _, elapse_at) = stage_in
   expect Finite(lower_bound) = lower_bound
   expect elapse_at <= lower_bound

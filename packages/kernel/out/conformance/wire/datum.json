@@ -1,0 +1,192 @@
+{
+  "name": "conformance/wire.datum",
+  "parameters": [
+    {
+      "title": "x",
+      "schema": {
+        "$ref": "#/definitions/konduit~1types~1Datum"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "5901c001010029800aba2aba1aab9faab9eaab9dab9a9bac00148888888c8cc8966002601400513232323298009bad300d0019bae300d0049bae300d0039bae300d0024888966002602400b132980098079baa0018a51911919800800801911980180098010012444b30013370e9000001c4c8cc896600260320031330043758603000244b3001002803c4c8c8cc8966002603e00713005301f0068b203a375a60380026eb4c070008c070004dd6180d00120328b202e375a602c002602e00260266ea80122b30013370e9001001c4c8c8c8cc896600260360071330063758603400844b3001002804c4c8c8cc896600260420071300530210068b203e375a603c0026eb4c078008c078004dd6180e00120368b2032375a60300026eb4c06000cc060004c05c004c04cdd5002456600266e1d200400389919912cc004c0640062660086eb0c060004896600200500789919194c004dd7180e800cdd6980e801cdd6980e8012444b3001302100489803981080445901f0c074004c070004dd6180d00120328b202e375a602c002602e00260266ea80122c8089011202218088054590100c034004c030004c02c004dd61804801c5900818040009bae300700230070011",
+  "hash": "e711a5010248410dff7df42d0523c79acd564b6b84d3ec977f155781",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "List<konduit/types/Pending>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Pending"
+      }
+    },
+    "List<konduit/types/Used>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Used"
+      }
+    },
+    "aiken/crypto/ScriptHash": {
+      "title": "ScriptHash",
+      "dataType": "bytes"
+    },
+    "aiken/crypto/VerificationKey": {
+      "title": "VerificationKey",
+      "dataType": "bytes"
+    },
+    "konduit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "konduit/prelude/Index": {
+      "title": "Index",
+      "dataType": "integer"
+    },
+    "konduit/types/Constants": {
+      "title": "Constants",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1types~1Tag"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        }
+      ]
+    },
+    "konduit/types/Datum": {
+      "title": "Datum",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Constants"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Stage"
+        }
+      ]
+    },
+    "konduit/types/ElapseAt": {
+      "title": "ElapseAt",
+      "dataType": "integer"
+    },
+    "konduit/types/Lock": {
+      "title": "Lock",
+      "dataType": "bytes"
+    },
+    "konduit/types/Pending": {
+      "title": "Pending",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Timeout"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Lock"
+        }
+      ]
+    },
+    "konduit/types/Stage": {
+      "title": "Stage",
+      "anyOf": [
+        {
+          "title": "Opened",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1prelude~1Amount"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Used>"
+            }
+          ]
+        },
+        {
+          "title": "Closed",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1prelude~1Amount"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Used>"
+            },
+            {
+              "$ref": "#/definitions/konduit~1types~1ElapseAt"
+            }
+          ]
+        },
+        {
+          "title": "Responded",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1prelude~1Amount"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Pending>"
+            }
+          ]
+        }
+      ]
+    },
+    "konduit/types/Tag": {
+      "title": "Tag",
+      "dataType": "bytes"
+    },
+    "konduit/types/Timeout": {
+      "title": "Timeout",
+      "dataType": "integer"
+    },
+    "konduit/types/Used": {
+      "title": "Used",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Index"
+        },
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        }
+      ]
+    }
+  }
+}
