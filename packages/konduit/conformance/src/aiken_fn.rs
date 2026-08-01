@@ -94,7 +94,7 @@ impl AikenFn {
         let program = self.program::<DeBruijn>(&arena);
         let arg = Term::data(&arena, try_into_plutus_data(&arena, value).unwrap());
         let result = program.apply(&arena, arg).eval(&arena);
-        println!("here {:?}", &result.term);
+        println!("here {:?}", result.term);
         pred(&result)
     }
 

@@ -12,7 +12,7 @@ use konduit_data::{
 use crate::AikenFn;
 
 fn verifying_key(seed: &[u8; 32]) -> VerifyingKey {
-    let vk: [u8; PUBLIC_KEY_LENGTH] = keypair(seed).1.into();
+    let vk: [u8; PUBLIC_KEY_LENGTH] = keypair(seed).1;
     VerifyingKey::from(vk)
 }
 
@@ -72,18 +72,18 @@ impl Verify {
                     x.index(),
                     x.amount().wrapping_add(1),
                     x.timeout(),
-                    x.secret().clone(),
+                    *x.secret(),
                 );
-                Cheque::Unlocked(Unlocked::new(body, x.signature().clone()))
+                Cheque::Unlocked(Unlocked::new(body, *x.signature()))
             }
             Cheque::Locked(x) => {
                 let body = ChequeBody::new(
                     x.index(),
                     x.amount().wrapping_add(1),
                     x.timeout(),
-                    x.lock().clone(),
+                    *x.lock(),
                 );
-                Cheque::Locked(Locked::new(body, x.signature().clone()))
+                Cheque::Locked(Locked::new(body, *x.signature()))
             }
         };
         Self { key, tag, cheque }
@@ -101,7 +101,7 @@ where
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.tag(minicbor::data::Tag::new(121))?;
         e.begin_array()?;
-        e.encode_with(&self.key, ctx)?;
+        e.encode_with(self.key, ctx)?;
         e.encode_with(&self.tag, ctx)?;
         e.encode_with(&self.cheque, ctx)?;
         e.end()?;
@@ -138,6 +138,7 @@ impl Arbitrary for Field {
 }
 
 impl Verify {
+    #[allow(clippy::too_many_arguments)]
     fn corrupt_field(
         mut self,
         field: Field,
@@ -181,12 +182,12 @@ impl Verify {
                 let secret = if matches!(field, Field::Lock) {
                     Secret(alt_lock.0)
                 } else {
-                    x.secret().clone()
+                    *x.secret()
                 };
                 let signature = if matches!(field, Field::Signature) {
                     Signature::from_bytes(alt_sig_bytes)
                 } else {
-                    x.signature().clone()
+                    *x.signature()
                 };
                 let body = ChequeBody::new(index, amount, timeout, secret);
                 Cheque::Unlocked(Unlocked::new(body, signature))
@@ -210,12 +211,12 @@ impl Verify {
                 let lock = if matches!(field, Field::Lock) {
                     alt_lock
                 } else {
-                    x.lock().clone()
+                    *x.lock()
                 };
                 let signature = if matches!(field, Field::Signature) {
                     Signature::from_bytes(alt_sig_bytes)
                 } else {
-                    x.signature().clone()
+                    *x.signature()
                 };
                 let body = ChequeBody::new(index, amount, timeout, lock);
                 Cheque::Locked(Locked::new(body, signature))
