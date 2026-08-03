@@ -276,20 +276,21 @@ practice this verification is postponed. Thus, we say a locked is well-formed
 ### Unlocked
 
 To use a cheque as proof of funds owed, the receiver must provide the "secret".
-A secret is a bytearray that hashes (sha2 256) to the lock. Moreover, it must be
-32 bytes in length
+A secret is a bytearray that hashes (sha2 256) to the lock which was signed.
+Moreover, it must be 32 bytes in length:
 
 ```aiken
 type Secret = Bytes32
-type Unlocked = (ChequeBody, Signature, Secret)
+type ChequeBody = (Index, Amount, Timeout, Secret)
+type Unlocked = (ChequeBody, Signature)
 ```
 
-We say that an unlocked `(body, sig, secret)` is **well-formed** with respect to
-the keytag `(key, tag)`, subject to an upper bound `bound` provided that:
+An unlocked `(body, sig)` is **well-formed** with respect to
+the keytag `(key, tag)`, subject to an upper bound `bound`:
 
-- unlocked.0 : `(body, sig)` is well-signed wrt `(key, tag)`
-- unlocked.1 : the secret hashes to the lock
-- unlocked.2 : the secret length is 32
+- unlocked.0 : the secret length is 32
+- unlocked.1 : letting body' be body with its secret replaced by `sha2_256(secret)`,
+  `(body', sig)` is well-signed with respect to `(key, tag)`.
 
 ### Cheque
 

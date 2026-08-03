@@ -1,15 +1,15 @@
 use aiken/crypto.{ScriptHash, Signature, VerificationKey}
 use konduit/prelude.{Amount, Bytes32, Index, Timestamp}
 
-/// ## Cheque 
-/// The lock, aka image, is the result of hashing the secret.
+/// Bytes used as either the secret (preimage)
+/// or the lock (SHA2-256 hash of the secret).
+/// Both have identical length.
 pub type Latch =
   Bytes32
 
 pub type Lock =
   Latch
 
-/// The secret aka the preimage
 pub type Secret =
   Latch
 
@@ -22,17 +22,18 @@ type Timeout =
 /// Cheque body
 /// Index must strictly monotonically increase in time.
 /// Locked : Latch = Lock
-/// Unlocked : Latch = Unlocked
+/// Unlocked : Latch = Secret
 pub type ChequeBody =
   (Index, Amount, Timeout, Latch)
 
-// pub type Locked = (Cheque, Signature)
-
 /// Locked
-/// The signature corresponds that of the 
+/// The signature corresponds that of the
 /// add_vkey on the messaged from of the "tagged" cheque body
 /// Note this is never used.
-/// An unlocked (cheque) is valid only if the secret hashes to the lock
+/// pub type Locked = (ChequeBody, Signature)
+/// Unlocked
+/// An unlocked cheque is valid only if the signature verifies against the
+/// body formed by replacing Latch (the Secret) with its SHA2-256 hash (the Lock).
 pub type Unlocked =
   (ChequeBody, Signature)
 
