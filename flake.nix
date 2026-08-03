@@ -9,7 +9,14 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     aiken.url = "github:aiken-lang/aiken";
-    rust-flake.url = "github:juspay/rust-flake/";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    rust-flake = {
+      url = "github:juspay/rust-flake";
+      inputs.rust-overlay.follows = "rust-overlay";
+    };
     capkgs.url = "github:input-output-hk/capkgs";
   };
 

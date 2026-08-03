@@ -13,7 +13,7 @@ pub fn do(
   value_out: Value,
   stage_out: t.Stage,
 ) -> VerificationKey {
-  let t.Constants { add_vkey, close_period, .. } = constants
+  let (_tag, add_vkey, _sub_vkey, close_period) = constants
   expect t.Opened(subbed, useds) = stage_in
   expect t.Closed(subbed_, useds_, elapse_at) = stage_out
   expect subbed == subbed_

@@ -16,7 +16,7 @@ pub fn do(
   stage_out: t.Stage,
   unpends: List<t.Unpend>,
 ) -> VerificationKey {
-  let t.Constants { add_vkey, .. } = constants
+  let (_tag, add_vkey, _sub_vkey, _close_period) = constants
   expect t.Responded(pends_amount_in, pends_in) = stage_in
   expect t.Responded(pends_amount_out, pends_out) = stage_out
   let amount = account(lower_bound, unpends, pends_in, pends_out)

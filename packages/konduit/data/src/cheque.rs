@@ -51,6 +51,13 @@ impl<V: VerifyState> Cheque<V> {
         }
     }
 
+    pub fn signature(&self) -> Signature {
+        match self {
+            Self::Unlocked(unlocked) => *unlocked.signature(),
+            Self::Locked(locked) => *locked.signature(),
+        }
+    }
+
     pub fn index(&self) -> u64 {
         self.body().index()
     }

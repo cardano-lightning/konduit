@@ -10,7 +10,7 @@ use konduit/types as t
 /// channels spent alongside a `Mutual` spend.
 pub fn handle(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
   let (_, constants, _) = datum
-  let t.Constants { add_vkey, sub_vkey, .. } = constants
+  let (_tag, add_vkey, sub_vkey, _close_period) = constants
   let Transaction { inputs, extra_signatories, .. } = tx
   trace @"mutual.0": @"Both participants sign"
   expect extra_signatories |> list.has(add_vkey |> blake2b_224)

@@ -61,15 +61,15 @@ impl<S, V: VerifyState> ChequeSigned<S, V> {
 // =========================================================================
 // Unverified State Methods
 // =========================================================================
-impl<T: Clone> ChequeSigned<T, Unverified> {
+impl<S: Clone> ChequeSigned<S, Unverified> {
     /// Creates a new, unverified cheque from a raw body and signature.
-    pub fn new(body: ChequeBody<T>, signature: Signature) -> Self {
+    pub fn new(body: ChequeBody<S>, signature: Signature) -> Self {
         Self::new_with_state(body, signature)
     }
 
     /// The unsafe version. Suitable when the data comes from a trusted source,
     /// such as your own database.
-    pub fn skip_verify(self) -> ChequeSigned<T, Verified> {
+    pub fn skip_verify(self) -> ChequeSigned<S, Verified> {
         ChequeSigned {
             body: self.body,
             signature: self.signature,

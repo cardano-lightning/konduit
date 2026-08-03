@@ -3,8 +3,15 @@ use konduit/prelude.{Amount, Bytes32, Index, Timestamp}
 
 /// ## Cheque 
 /// The lock, aka image, is the result of hashing the secret.
-pub type Lock =
+pub type Latch =
   Bytes32
+
+pub type Lock =
+  Latch
+
+/// The secret aka the preimage
+pub type Secret =
+  Latch
 
 /// Indicates the timeout, aka expiration of the cheque.
 /// It cannot be used as evidence after the timeout 
@@ -14,26 +21,24 @@ type Timeout =
 
 /// Cheque body
 /// Index must strictly monotonically increase in time.
+/// Locked : Latch = Lock
+/// Unlocked : Latch = Unlocked
 pub type ChequeBody =
-  (Index, Amount, Timeout, Lock)
+  (Index, Amount, Timeout, Latch)
+
+// pub type Locked = (Cheque, Signature)
 
 /// Locked
 /// The signature corresponds that of the 
 /// add_vkey on the messaged from of the "tagged" cheque body
-pub type Locked =
-  (ChequeBody, Signature)
-
-/// The secret aka the preimage
-pub type Secret =
-  Bytes32
-
+/// Note this is never used.
 /// An unlocked (cheque) is valid only if the secret hashes to the lock
 pub type Unlocked =
-  (ChequeBody, Signature, Secret)
+  (ChequeBody, Signature)
 
 /// A mix of unlocked or (locked) cheques
 pub type Cheque {
-  UnlockedCheque(ChequeBody, Signature, Secret)
+  UnlockedCheque(ChequeBody, Signature)
   LockedCheque(ChequeBody, Signature)
 }
 
@@ -63,12 +68,11 @@ pub type Tag =
 
 /// Constants
 /// These are held in the datum but persist for the full instance lifecycle.
-pub type Constants {
-  tag: Tag,
-  add_vkey: VerificationKey,
-  sub_vkey: VerificationKey,
-  close_period: Int,
-}
+/// ```aiken
+///    let (tag, add_vkey, sub_vkey, close_period) = constants
+/// ```
+pub type Constants =
+  (Tag, VerificationKey, VerificationKey, Int)
 
 /// STAGE
 type ElapseAt =

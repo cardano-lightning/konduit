@@ -1,0 +1,88 @@
+{
+  "name": "conformance/wire.unlocked",
+  "parameters": [
+    {
+      "title": "x",
+      "schema": {
+        "$ref": "#/definitions/konduit~1types~1Unlocked"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "586001010029800aba2aba1aab9f9bac00148888c8c966002600c00513232323298009bae30090019bad30090049bad30090039bad30090024888966002601c00b14a31640303009001300800130070013758600a0071640106eb8c010004c010005",
+  "hash": "d42b71521a2225a7022e4a0dff97a8d548c784f46097bb6f214a5a7c",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/crypto/Signature": {
+      "title": "Signature",
+      "dataType": "bytes"
+    },
+    "konduit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "konduit/prelude/Index": {
+      "title": "Index",
+      "dataType": "integer"
+    },
+    "konduit/types/ChequeBody": {
+      "title": "ChequeBody",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Index"
+        },
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Timeout"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Latch"
+        }
+      ]
+    },
+    "konduit/types/Latch": {
+      "title": "Latch",
+      "dataType": "bytes"
+    },
+    "konduit/types/Timeout": {
+      "title": "Timeout",
+      "dataType": "integer"
+    },
+    "konduit/types/Unlocked": {
+      "title": "Unlocked",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1types~1ChequeBody"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1Signature"
+        }
+      ]
+    }
+  }
+}

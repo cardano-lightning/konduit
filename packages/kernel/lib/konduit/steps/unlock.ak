@@ -17,7 +17,7 @@ pub fn do(
   stage_out: t.Stage,
   unpends: List<t.Unpend>,
 ) -> VerificationKey {
-  let t.Constants { sub_vkey, .. } = constants
+  let (_tag, _add_vkey, sub_vkey, _close_period) = constants
   expect t.Responded(pends_amount_in, pends_in) = stage_in
   expect t.Responded(pends_amount_out, pends_out) = stage_out
   let subbed = amount_in(value_in) - amount_out(value_out)

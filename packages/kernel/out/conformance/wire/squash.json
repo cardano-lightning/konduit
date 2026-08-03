@@ -1,0 +1,84 @@
+{
+  "name": "conformance/wire.squash",
+  "parameters": [
+    {
+      "title": "x",
+      "schema": {
+        "$ref": "#/definitions/konduit~1types~1Squash"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "587001010029800aba2aba1aab9f9bac00148888c8c966002600c0051323298009bad30070019804000cdd698038012444b3001300b002899198008009bac300b0032259800800c528c4c8cc00c00cc038008dd69806000a0168b201218038009bac30050038b2008375c600800260080021",
+  "hash": "55e999940ed13a0fdca3df68ad200087c7b8bc9ebc95d1e3edf447ee",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/crypto/Signature": {
+      "title": "Signature",
+      "dataType": "bytes"
+    },
+    "konduit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "konduit/prelude/Index": {
+      "title": "Index",
+      "dataType": "integer"
+    },
+    "konduit/types/Exclude": {
+      "title": "Exclude",
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1prelude~1Index"
+      }
+    },
+    "konduit/types/Squash": {
+      "title": "Squash",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1types~1SquashBody"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1Signature"
+        }
+      ]
+    },
+    "konduit/types/SquashBody": {
+      "title": "SquashBody",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        },
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Index"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Exclude"
+        }
+      ]
+    }
+  }
+}

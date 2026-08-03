@@ -1,0 +1,67 @@
+{
+  "name": "conformance/wire.constants",
+  "parameters": [
+    {
+      "title": "x",
+      "schema": {
+        "$ref": "#/definitions/konduit~1types~1Constants"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "584501010029800aba2aba1aab9f9bac00148888c8c8ca60026eb4c0180066eb8c0180126eb8c01800e6eb8c0180092222598009805802c528c590090c018004c014004c010005",
+  "hash": "bf556f9cdb314d43f14da5c9892f3f17432186cec157b6a89f2f696d",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "aiken/crypto/VerificationKey": {
+      "title": "VerificationKey",
+      "dataType": "bytes"
+    },
+    "konduit/types/Constants": {
+      "title": "Constants",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1types~1Tag"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        }
+      ]
+    },
+    "konduit/types/Tag": {
+      "title": "Tag",
+      "dataType": "bytes"
+    }
+  }
+}

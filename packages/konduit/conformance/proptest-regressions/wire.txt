@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 1121cdd63f35239cd5a9c199fbe0efca6c7e89517ee23d51210b80d99a6a273d # shrinks to redeemer = Defer
+cc b8721d8e28f36e362c1b197990dd5539769a326a554f6559e73981d87ef4432a # shrinks to stage = Opened(0, [])
+cc 1b366b02bda44376864b441ee70cfae2a2e1ba1919051eddf5510271b7e65147 # shrinks to constants = Constants { tag: Tag([]), add_vkey: VerifyingKey([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), sub_vkey: VerifyingKey([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), close_period: Duration(0ns) }
+cc e64c396dceaf0d2834fa05ec56e4266763a8fd1333a9fd87779fee87271bb085 # shrinks to datum = Datum { own_hash: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], constants: Constants { tag: Tag([]), add_vkey: VerifyingKey([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), sub_vkey: VerifyingKey([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), close_period: Duration(0ns) }, stage: Opened(0, []) }

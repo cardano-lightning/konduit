@@ -20,7 +20,7 @@ pub fn do(
   unlockeds: List<t.Unlocked>,
 ) -> VerificationKey {
   trace @"sub.do": @"starting sub step"
-  let t.Constants { tag, add_vkey, sub_vkey, .. } = constants
+  let (tag, add_vkey, sub_vkey, _close_period) = constants
   expect t.Opened(subbed_in, useds_in) = stage_in
   expect t.Opened(subbed_out, useds_out) = stage_out
   expect subbed_out - subbed_in == amount_in(value_in) - amount_out(value_out)
@@ -81,13 +81,12 @@ fn with_(
   let handle_unlocked = fn() {
     trace @"unlocked.0": @"Expect unlocked"
     expect [unlocked, ..unlockeds] = unlockeds
-    let (body, signature, secret) = unlocked
+    let (body, signature) = unlocked
     trace @"unlocked.1": @"Unlocked is well-formed"
     let new_index, amount, timeout <- wf.unlocked(
       wellsinged,
       body,
       signature,
-      secret,
       _,
     )
     trace @"unlocked.2": @"Unlocked is well-formed wrt upper bound"
@@ -155,9 +154,7 @@ test test_account_null() {
 test test_account_scenario_0() {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(1, 100), (2, 100), (3, 12), (4, 12)]
-  let unlockeds = [
-    ((2, 100, later, b32), b64, b32), ((4, 12, later, b32), b64, b32),
-  ]
+  let unlockeds = [((2, 100, later, b32), b64), ((4, 12, later, b32), b64)]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 224
 }
@@ -166,8 +163,8 @@ test test_account_scenario_1() {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12), (6, 111)]
   let unlockeds = [
-    ((2, 100, later, b32), b64, b32), ((4, 12, later, b32), b64, b32),
-    ((6, 111, later, b32), b64, b32),
+    ((2, 100, later, b32), b64), ((4, 12, later, b32), b64),
+    ((6, 111, later, b32), b64),
   ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
@@ -177,8 +174,8 @@ test test_ooo_useds_outs() fail {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(3, 12), (2, 100), (4, 12), (6, 111)]
   let unlockeds = [
-    ((2, 100, later, b32), b64, b32), ((4, 12, later, b32), b64, b32),
-    ((6, 111, later, b32), b64, b32),
+    ((2, 100, later, b32), b64), ((4, 12, later, b32), b64),
+    ((6, 111, later, b32), b64),
   ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
@@ -188,8 +185,8 @@ test test_ooo_useds_outs_1() fail {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (6, 111), (4, 12)]
   let unlockeds = [
-    ((2, 100, later, b32), b64, b32), ((4, 12, later, b32), b64, b32),
-    ((6, 111, later, b32), b64, b32),
+    ((2, 100, later, b32), b64), ((4, 12, later, b32), b64),
+    ((6, 111, later, b32), b64),
   ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
@@ -198,9 +195,7 @@ test test_ooo_useds_outs_1() fail {
 test test_useds_out_too_long() fail {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12), (6, 111)]
-  let unlockeds = [
-    ((2, 100, later, b32), b64, b32), ((4, 12, later, b32), b64, b32),
-  ]
+  let unlockeds = [((2, 100, later, b32), b64), ((4, 12, later, b32), b64)]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
 }
@@ -209,9 +204,7 @@ test test_with_squash() {
   let squash = ((1000, 1, []), sig)
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12)]
-  let unlockeds = [
-    ((2, 100, later, b32), b64, b32), ((4, 12, later, b32), b64, b32),
-  ]
+  let unlockeds = [((2, 100, later, b32), b64), ((4, 12, later, b32), b64)]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1124
 }
@@ -220,7 +213,7 @@ test test_used_already_squashed() fail {
   let squash = ((1000, 2, []), sig)
   let useds_in = [(2, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12)]
-  let unlockeds = [((4, 12, later, b32), b64, b32)]
+  let unlockeds = [((4, 12, later, b32), b64)]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1124
 }
@@ -229,7 +222,7 @@ test test_used_not_squashed() {
   let squash = ((1000, 3, [2]), sig)
   let useds_in = [(2, 100)]
   let useds_out = [(2, 100), (4, 12)]
-  let unlockeds = [((4, 12, later, b32), b64, b32)]
+  let unlockeds = [((4, 12, later, b32), b64)]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1112
 }
@@ -238,7 +231,7 @@ test test_unlocked_already_used() {
   let squash = ((1000, 3, [2]), sig)
   let useds_in = [(2, 100)]
   let useds_out = [(2, 100)]
-  let unlockeds = [((2, 100, later, b32), b64, b32)]
+  let unlockeds = [((2, 100, later, b32), b64)]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1100
 }
@@ -250,9 +243,9 @@ test test_big_scenario() {
     (80, 100), (82, 1), (84, 100), (86, 1), (88, 100), (92, 100), (96, 100),
   ]
   let unlockeds = [
-    ((80, 100, later, b32), b64, b32), ((84, 100, later, b32), b64, b32),
-    ((88, 100, later, b32), b64, b32), ((92, 100, later, b32), b64, b32),
-    ((96, 100, later, b32), b64, b32),
+    ((80, 100, later, b32), b64), ((84, 100, later, b32), b64),
+    ((88, 100, later, b32), b64), ((92, 100, later, b32), b64),
+    ((96, 100, later, b32), b64),
   ]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 10000502

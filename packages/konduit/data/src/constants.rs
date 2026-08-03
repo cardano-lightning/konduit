@@ -31,7 +31,6 @@ impl<C> minicbor::Encode<C> for Constants {
         e: &mut minicbor::Encoder<W>,
         ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.tag(minicbor::data::Tag::new(121))?;
         e.begin_array()?;
         e.encode_with(&self.tag, ctx)?;
         e.encode_with(self.add_vkey, ctx)?;
@@ -44,12 +43,6 @@ impl<C> minicbor::Encode<C> for Constants {
 
 impl<'b, C> minicbor::Decode<'b, C> for Constants {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let tag = d.tag()?;
-        if tag.as_u64() != 121 {
-            return Err(minicbor::decode::Error::message(
-                "expected CBOR tag 121 for Constants",
-            ));
-        }
         d.array()?;
         let tag_val: Tag = d.decode_with(ctx)?;
         let add_vkey: VerifyingKey = d.decode_with(ctx)?;
@@ -102,16 +95,13 @@ impl proptest::arbitrary::Arbitrary for Constants {
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{PlutusData, constr};
+    use cardano_sdk::PlutusData;
 
     impl<'a> TryFrom<&PlutusData<'a>> for Constants {
         type Error = anyhow::Error;
 
         fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
-            let (tag, fields) = data.as_constr().ok_or(anyhow!("Not a constructor"))?;
-            if tag != 0 {
-                return Err(anyhow!("Bad constructor tag: expected 0, got {tag}"));
-            }
+            let fields = data.as_list().ok_or(anyhow!("Not a constructor"))?;
             let [a, b, c, d] = <[PlutusData; 4]>::try_from(fields.collect::<Vec<_>>())
                 .map_err(|_| anyhow!("invalid 'Constants': expected 4 fields"))?;
             Ok(Self {
@@ -125,13 +115,12 @@ mod via_plutus_data {
 
     impl<'a> From<Constants> for PlutusData<'a> {
         fn from(value: Constants) -> Self {
-            constr!(
-                0,
+            PlutusData::list(vec![
                 PlutusData::from(value.tag),
                 PlutusData::bytes(value.add_vkey.to_bytes()),
                 PlutusData::bytes(value.sub_vkey.to_bytes()),
                 PlutusData::from(value.close_period),
-            )
+            ])
         }
     }
 }

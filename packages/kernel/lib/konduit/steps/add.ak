@@ -10,7 +10,7 @@ pub fn do(
   value_out: Value,
   stage_out: t.Stage,
 ) -> VerificationKey {
-  let t.Constants { add_vkey, .. } = constants
+  let (_tag, add_vkey, _sub_vkey, _close_period) = constants
   expect t.Opened(_, _) = stage_in
   expect stage_in == stage_out
   expect amount_in(value_in) < amount_out(value_out)

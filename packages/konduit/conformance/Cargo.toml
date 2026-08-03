@@ -1,0 +1,24 @@
+[package]
+name = "konduit-conformance"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[features]
+
+[dependencies]
+amaru-uplc.workspace = true
+cryptoxide.workspace = true
+# ed25519-dalek   = { version = "2", default-features = false, optional = true }
+hex.workspace = true
+minicbor.workspace = true
+proptest = { workspace = true, features = ["std", "bit-set"] }
+serde.workspace = true
+serde_json.workspace = true
+konduit-data = { workspace = true, features = ["serde", "proptest"] }

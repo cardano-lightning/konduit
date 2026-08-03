@@ -1,0 +1,313 @@
+{
+  "name": "conformance/wire.redeemer",
+  "parameters": [
+    {
+      "title": "x",
+      "schema": {
+        "$ref": "#/definitions/konduit~1types~1Redeemer"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "59040301010029800aba2aba1aab9faab9eaab9dab9a911919800800801911980180098010014528cdc3a4000911111111192cc004c0080062b3001300737540170038b20108992cc004c00400a264b3001300c0018998031bac300b0012259800801401e2646644b300130090028992cc004c04800626464b3001300c0018acc004c044dd500140122c80922b3001300a00189919192cc004c05c00a2646464b3001301a002899194c004dd6980d800cc0700066eb4c06c00922259800980f80144cc064dd6180f001112cc00400a26603601644b3001002809c4c8c8c966002604c00513232323298009bae30290019bad30290049bad30290039bad30290024888966002605c00b1300c302e00d8b20581814800981400098138009bac30250038b2048375c604800260480026eb0c08800902144c8c008c08800cdd69810001203e8b203a180d8009bac30190038b2030375c603000260300026eb0c05800e2c80a8dd6180a800980a80098089baa0028acc004cdc3a400800315980098089baa002802459012456600266e1d200600189919192cc004c05c00a2646464b3001301a002899194c004dd6980d800cc0700066eb4c06c00922259800980f80144cc064dd6180f001112cc00400a26603601644b3001002809c4c8cc8966002603c005132323259800981480144c8c8c8ca60026eb8c0b00066eb4c0b00126eb4c0b000e6eb4c0b00092222598009818802c0322c81786058002605600260540026eb0c0a000e2c8138dd71813800981380098119baa0038acc004c07000a2646464b300130290028991919194c004dd71816000cdd698160024dd69816001cdd6981600124444b3001303100580645902f0c0b0004c0ac004c0a8004dd61814001c590271bae30270013027001302337540071640848108c080dd500089801181200198110012042899180118110019bad3020002407d164074301b001375860320071640606eb8c060004c060004dd6180b001c590151bac301500130150013011375400515980099b8748020006264b300130150018998079bac30140012259800801401e264600460300066eb8c05800901545901318089baa0028acc004cdc3a401400313259800980a800c4cc03cdd6180a000912cc00400a00f13230023018003375c602c00480aa2c8098c044dd500145900f201e403c807900f201e300f37540026022003164040601c6ea800e2b300130070028992cc004c04800626464b3001300c0018acc004c044dd500140122c80922b3001300a0018acc004c044dd500140122c80922c807900f18079baa00130110018b2020300e37540071640308060c02cdd5000898011807801980680120188b20143008375401915980099b874801000a2b3001300837540190048b20128b200c40186e1d20024014600a6ea80281",
+  "hash": "1d11011a94229dce1aecaf940d6cd7ecf8685a7e9c16ab042e53cb45",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "List<konduit/types/Cheque>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Cheque"
+      }
+    },
+    "List<konduit/types/Step>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Step"
+      }
+    },
+    "List<konduit/types/Unlocked>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Unlocked"
+      }
+    },
+    "List<konduit/types/Unpend>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1types~1Unpend"
+      }
+    },
+    "aiken/crypto/Signature": {
+      "title": "Signature",
+      "dataType": "bytes"
+    },
+    "konduit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "konduit/prelude/Index": {
+      "title": "Index",
+      "dataType": "integer"
+    },
+    "konduit/types/Cheque": {
+      "title": "Cheque",
+      "anyOf": [
+        {
+          "title": "UnlockedCheque",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1ChequeBody"
+            },
+            {
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            }
+          ]
+        },
+        {
+          "title": "LockedCheque",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1ChequeBody"
+            },
+            {
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            }
+          ]
+        }
+      ]
+    },
+    "konduit/types/ChequeBody": {
+      "title": "ChequeBody",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Index"
+        },
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Timeout"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Latch"
+        }
+      ]
+    },
+    "konduit/types/Cont": {
+      "title": "Cont",
+      "anyOf": [
+        {
+          "title": "Add",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Sub",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1Squash"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Unlocked>"
+            }
+          ]
+        },
+        {
+          "title": "Close",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        },
+        {
+          "title": "Respond",
+          "dataType": "constructor",
+          "index": 3,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1Squash"
+            },
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Cheque>"
+            }
+          ]
+        },
+        {
+          "title": "Unlock",
+          "dataType": "constructor",
+          "index": 4,
+          "fields": [
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Unpend>"
+            }
+          ]
+        },
+        {
+          "title": "Expire",
+          "dataType": "constructor",
+          "index": 5,
+          "fields": [
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Unpend>"
+            }
+          ]
+        }
+      ]
+    },
+    "konduit/types/Eol": {
+      "title": "Eol",
+      "anyOf": [
+        {
+          "title": "End",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Elapse",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "konduit/types/Exclude": {
+      "title": "Exclude",
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/konduit~1prelude~1Index"
+      }
+    },
+    "konduit/types/Latch": {
+      "title": "Latch",
+      "dataType": "bytes"
+    },
+    "konduit/types/Redeemer": {
+      "title": "Redeemer",
+      "anyOf": [
+        {
+          "title": "Defer",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Main",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/List<konduit~1types~1Step>"
+            }
+          ]
+        },
+        {
+          "title": "Mutual",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    },
+    "konduit/types/Squash": {
+      "title": "Squash",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1types~1SquashBody"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1Signature"
+        }
+      ]
+    },
+    "konduit/types/SquashBody": {
+      "title": "SquashBody",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Amount"
+        },
+        {
+          "$ref": "#/definitions/konduit~1prelude~1Index"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1Exclude"
+        }
+      ]
+    },
+    "konduit/types/Step": {
+      "title": "Step",
+      "anyOf": [
+        {
+          "title": "StepCont",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1Cont"
+            }
+          ]
+        },
+        {
+          "title": "StepEol",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/konduit~1types~1Eol"
+            }
+          ]
+        }
+      ]
+    },
+    "konduit/types/Timeout": {
+      "title": "Timeout",
+      "dataType": "integer"
+    },
+    "konduit/types/Unlocked": {
+      "title": "Unlocked",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/konduit~1types~1ChequeBody"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1Signature"
+        }
+      ]
+    },
+    "konduit/types/Unpend": {
+      "title": "Unpend",
+      "dataType": "bytes"
+    }
+  }
+}
