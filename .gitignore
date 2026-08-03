@@ -16,6 +16,9 @@
 debug/
 target/
 
+# Devel process-compose
+.run
+
 # Envs
 .env
 .env.*
