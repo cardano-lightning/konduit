@@ -31,7 +31,7 @@ pub fn tx(
     let inputs = steppeds
         .inputs()
         .iter()
-        .map(|i| (i.0.clone(), Some(PlutusData::from(i.1))))
+        .map(|i| (i.0.clone(), Some(PlutusData::from(i.1.clone()))))
         .chain(fuel_inputs.iter().map(|i| (i.clone(), None)))
         .collect::<Vec<_>>();
     let outputs: Vec<_> = steppeds
