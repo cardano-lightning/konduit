@@ -5,6 +5,8 @@ use derive_more::Display;
 use itertools::{Either, EitherOrBoth, Itertools};
 use konduit_data::{Datum, Redeemer};
 use kupo_client::Match;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 #[derive(Debug, Display, Clone, PartialEq, Eq)]
 #[display("{{ block_no: {block_no}, header_hash: {header_hash}, slot_no: {slot_no} }}")]
@@ -39,7 +41,7 @@ impl From<kupo_client::Blake2b256> for BlockHeaderHash {
     }
 }
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct BlockNo(pub u64);
 
 impl From<u64> for BlockNo {
@@ -66,10 +68,14 @@ impl From<u16> for InputIndex {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct KeyHash(pub [u8; 28]);
+#[serde_as]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct KeyHash(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 28]);
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(transparent)]
 pub struct Lovelace(pub u64);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +86,7 @@ pub struct Output {
     pub script_hash: ScriptHash,
 }
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct OutputIndex(pub u16);
 
 impl From<u16> for OutputIndex {
@@ -98,7 +104,7 @@ impl From<kupo_client::Blake2b224> for ScriptHash {
     }
 }
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct SlotNo(pub u64);
 
 impl From<u64> for SlotNo {
@@ -113,8 +119,10 @@ impl SlotNo {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TransactionId(pub [u8; 32]);
+#[serde_as]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct TransactionId(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
 
 impl From<&kupo_client::Blake2b256> for TransactionId {
     fn from(hash: &kupo_client::Blake2b256) -> Self {
