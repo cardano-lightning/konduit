@@ -17,30 +17,33 @@ anyhow.workspace = true
 async-trait.workspace = true
 bln-client = { workspace = true, features = ["cli", "namespaced"] }
 cardano-connector-direct.workspace = true
-cardano-connector.workspace = true
 cardano-connector-utxorpc.workspace = true
-cardano-sdk = { workspace = true, features = ["clap"] }
+cardano-connector.workspace = true
+cardano-sdk = { workspace = true, features = ["clap", "serde"] }
 clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
 env_logger.workspace = true
-futures.workspace = true
 fx-client = { workspace = true, features = ["cli", "namespaced"] }
 hex = { workspace = true, features = ["serde"] }
 humantime.workspace = true
-konduit-data.workspace = true
+konduit-data = { workspace = true, features = ["serde"] }
+konduit-tmp.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
-postcard = { workspace = true, features = ["postcard-derive", "use-std"] }
+minicbor.workspace = true
+redb.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["base64", "hex", "json"] }
-sled.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-konduit-tmp.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
+proptest = { workspace = true, default-features = false, features = [
+  "std",
+  "bit-set",
+] }
 proptest-derive.workspace = true
 tokio.workspace = true
+tempfile = "3.27.0"

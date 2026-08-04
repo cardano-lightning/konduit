@@ -198,6 +198,9 @@ impl Receipt {
         Ok(())
     }
 
+    /// Applied squash _ought_ to be following a squash proposal.
+    /// When is a squash valid: the squash amount must at least the current squash amount
+    /// plus the total of all squashed cheques.
     pub fn apply_squash(&mut self, squash: Squash<Verified>) -> Result<(), Error> {
         let squashed: u64 = self
             .cheques()

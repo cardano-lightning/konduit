@@ -2,6 +2,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use crate::{
     Address, Credential, NetworkId, PlutusData, Signature, address::kind, pallas::ed25519,
 };
@@ -147,5 +150,20 @@ impl<'a> From<&'a VerificationKey> for &'a ed25519::PublicKey {
 impl<'a> From<&'a VerificationKey> for PlutusData<'a> {
     fn from(key: &'a VerificationKey) -> Self {
         Self::bytes(key.0)
+    }
+}
+
+// ------------------------------------------------------------ serde
+#[cfg(feature = "serde")]
+impl Serialize for VerificationKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::hex_bytes::serialize(self, serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for VerificationKey {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        crate::hex_bytes::deserialize(deserializer)
     }
 }

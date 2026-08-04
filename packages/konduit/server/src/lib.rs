@@ -1,8 +1,8 @@
 mod error;
 pub use error::*;
 
-mod channel;
-pub use channel::{Channel, ChannelError, Quote};
+pub mod channel;
+pub use channel::Channel;
 
 pub mod admin;
 

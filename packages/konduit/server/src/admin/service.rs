@@ -1,24 +1,30 @@
+use std::{collections::BTreeMap, iter, sync::Arc};
+
 use crate::{
-    admin::{SyncApi, config::Config},
-    channel::Retainer,
+    channel::{self, Retainer},
     db,
 };
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::Secret;
+use konduit_data::{Lock, Secret};
 use konduit_tmp::{ChannelParameters, Keytag};
 use konduit_tx::{
     Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
     to_verifying_key,
 };
-use std::{collections::BTreeMap, iter, sync::Arc};
+
+use super::{
+    SyncApi,
+    coiter::{CoItem, CoIter},
+    config::Config,
+};
 
 #[derive(Clone)]
 pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
     cardano: Arc<Connector>,
-    db: Arc<dyn db::Api + Send + Sync + 'static>,
+    db: Arc<db::Db>,
     network_parameters: NetworkParameters,
     channel_parameters: ChannelParameters,
     tx_preferences: AdaptorPreferences,
@@ -31,7 +37,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         config: Config,
         bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
         cardano: Arc<Connector>,
-        db: Arc<dyn db::Api + Send + Sync + 'static>,
+        db: Arc<db::Db>,
     ) -> anyhow::Result<Self> {
         let Config {
             wallet,
@@ -145,42 +151,73 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         Ok(utxos)
     }
 
+    async fn get_secrets(&self, locks: Vec<Lock>) -> Result<Vec<Secret>, anyhow::Error> {
+        let mut secrets: Vec<Secret> = Vec::new();
+        for lock in locks.into_iter() {
+            if let bln_client::types::RevealResponse {
+                secret: Some(secret),
+            } = self
+                .bln
+                .reveal(bln_client::types::RevealRequest { lock: lock.0 })
+                .await?
+            {
+                secrets.push(Secret(secret));
+            }
+        }
+        Ok(secrets)
+    }
+
     pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
         // This is a silly implementation.
-        let channels = self.db.get_all().await?;
-        for (keytag, channel) in channels.iter() {
-            if let Some(lockeds) = channel.receipt().map(|x| x.lockeds().collect::<Vec<_>>()) {
-                for locked in lockeds.iter() {
-                    if let bln_client::types::RevealResponse {
-                        secret: Some(secret),
-                    } = self
-                        .bln
-                        .reveal(bln_client::types::RevealRequest {
-                            lock: locked.lock().0,
-                        })
-                        .await?
-                    {
-                        self.db.unlock(keytag, Secret(secret)).await?;
-                    }
-                }
+        let keytags = self.db.keys()?;
+        for keytag in keytags.iter() {
+            // FIXME : Race condition here
+            let Some(channel) = self.db.get(keytag)? else {
+                return Err(anyhow::anyhow!("Channel {} vanished", keytag));
+            };
+            let Some(locks) = channel
+                .receipt()
+                .as_ref()
+                .map(|r| r.lockeds().map(|x| x.lock().to_owned()).collect::<Vec<_>>())
+            else {
+                continue;
+            };
+            let secrets = self.get_secrets(locks).await?;
+            if secrets.is_empty() {
+                continue;
             }
+            self.db.update(keytag, channel::apply_secrets(secrets))?;
         }
         Ok(())
     }
 
-    pub async fn sync(&self) -> Result<(), anyhow::Error> {
-        // FIXME :: Sync BLN
-        // At present this is not even in the admin context
+    pub async fn sync_retainers(&self) -> Result<(), anyhow::Error> {
+        // The suboptimal way.
         let snapshot = self.snapshot().await?;
-        let retainers = self.retainers(&snapshot);
-        let channels = self.db.update_retainers(retainers).await?;
-        let receipts = channels
-            .iter()
-            .filter_map(|(kt, c)| {
-                c.as_ref()
-                    .ok()
-                    .and_then(|c| c.receipt())
-                    .map(|r| (kt.clone(), r))
+        let left: Vec<Keytag> = self.db.keys()?;
+        let right = self.retainers(&snapshot);
+        for item in CoIter::new(left, right) {
+            match item {
+                CoItem::Left(k) => self.db.update(&k, channel::close)?,
+                CoItem::Right(k, v) => {
+                    self.db.insert(channel::open(k, v)?)?;
+                    None
+                }
+                CoItem::Both(k, v) => self.db.update(&k, channel::update(v))?,
+            };
+        }
+        Ok(())
+    }
+
+    pub async fn claim(&self) -> Result<(), anyhow::Error> {
+        let snapshot = self.snapshot().await?;
+        let keys: Vec<Keytag> = self.db.keys()?;
+        let receipts = keys
+            .into_iter()
+            .filter_map(|k| {
+                let channel = self.db.get(&k).ok().flatten()?;
+                let receipt = channel.receipt().as_ref()?;
+                Some((k, receipt.to_owned()))
             })
             .collect::<BTreeMap<_, _>>();
         // FIXME :: This is the fudge. We treat tip as snapshot.
@@ -204,6 +241,12 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         self.cardano.submit(&tx).await?;
         Ok(())
     }
+
+    pub async fn sync(&self) -> Result<(), anyhow::Error> {
+        self.sync_retainers().await?;
+        self.claim().await?;
+        Ok(())
+    }
 }
 
 #[async_trait(?Send)]
@@ -216,14 +259,13 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> SyncApi for Service<Co
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Channel, ChannelError, admin::config::Config, channel::Retainer, db};
-    use async_trait::async_trait;
+    use crate::admin::config::Config;
     use cardano_connector::CardanoConnector;
     use cardano_sdk::{
         Address, Credential, Hash, Input, Network, Output, PlutusScript, PlutusVersion,
         ProtocolParameters, SigningKey, Transaction, Value, address::kind, transaction::state,
     };
-    use konduit_data::{Duration, Locked, Secret, Squash};
+    use konduit_data::Duration;
     use konduit_tx::{KONDUIT_VALIDATOR, adaptor::AdaptorPreferences};
     use std::{collections::BTreeMap, sync::Arc};
 
@@ -278,36 +320,9 @@ mod tests {
         }
     }
 
-    struct FakeDb;
-
-    #[async_trait]
-    impl db::Api for FakeDb {
-        async fn update_retainers(
-            &self,
-            _retainers: BTreeMap<Keytag, Vec<Retainer>>,
-        ) -> db::Result<BTreeMap<Keytag, Result<Channel, ChannelError>>> {
-            Ok(BTreeMap::new())
-        }
-
-        async fn get_channel(&self, _keytag: &Keytag) -> db::Result<Option<Channel>> {
-            Ok(None)
-        }
-
-        async fn get_all(&self) -> db::Result<BTreeMap<Keytag, Channel>> {
-            Ok(BTreeMap::new())
-        }
-
-        async fn update_squash(&self, _keytag: &Keytag, _squash: Squash) -> db::Result<Channel> {
-            unreachable!("db should not be used during Service::new tests")
-        }
-
-        async fn append_locked(&self, _keytag: &Keytag, _locked: Locked) -> db::Result<Channel> {
-            unreachable!("db should not be used during Service::new tests")
-        }
-
-        async fn unlock(&self, _keytag: &Keytag, _secret: Secret) -> db::Result<Channel> {
-            unreachable!("db should not be used during Service::new tests")
-        }
+    fn tmp_db() -> db::Db {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        db::Db::open(file.path().to_str().unwrap()).unwrap()
     }
 
     fn test_config() -> Config {
@@ -357,7 +372,7 @@ mod tests {
             test_config(),
             Arc::new(bln_client::mock::Client::new()),
             connector,
-            Arc::new(FakeDb),
+            Arc::new(tmp_db()),
         )
         .await
         .err()
@@ -381,7 +396,7 @@ mod tests {
             test_config(),
             Arc::new(bln_client::mock::Client::new()),
             connector,
-            Arc::new(FakeDb),
+            Arc::new(tmp_db()),
         )
         .await
         .err()
@@ -403,7 +418,7 @@ mod tests {
             test_config(),
             Arc::new(bln_client::mock::Client::new()),
             connector,
-            Arc::new(FakeDb),
+            Arc::new(tmp_db()),
         )
         .await;
 

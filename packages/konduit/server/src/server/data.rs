@@ -6,7 +6,7 @@ use tokio::sync::RwLock;
 
 pub struct Data {
     bln: Arc<dyn bln_client::Api + Send + Sync>,
-    db: Arc<dyn db::Api + Send + Sync + 'static>,
+    db: Arc<db::Db>,
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<AdaptorInfo<TxHelp>>,
     admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
@@ -15,7 +15,7 @@ pub struct Data {
 impl Data {
     pub fn new(
         bln: Arc<dyn bln_client::Api + Send + Sync>,
-        db: Arc<dyn db::Api + Send + Sync + 'static>,
+        db: Arc<db::Db>,
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<AdaptorInfo<TxHelp>>,
         admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
@@ -33,7 +33,7 @@ impl Data {
         self.fx.clone()
     }
 
-    pub fn db(&self) -> Arc<dyn db::Api + Send + Sync + 'static> {
+    pub fn db(&self) -> Arc<db::Db> {
         self.db.clone()
     }
 
