@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    Lovelace,
     store::{
         StoreQueries, Thread, ThreadOutput, TransactionId,
         sqlite::codecs::{
@@ -155,7 +156,8 @@ impl<'a> StoreQueries for SqliteQueries<'a> {
         tag: &Tag,
     ) -> Result<Vec<ChannelId>> {
         let mut stmt = self.conn.prepare(
-            "SELECT transaction_id, output_index FROM channel \
+            "SELECT transaction_id, output_index \
+             FROM channel \
              WHERE add_vkey = ? AND tag = ?",
         )?;
         fn row_to_channel_id(row: &Row<'_>) -> rusqlite::Result<ChannelId> {
@@ -249,18 +251,20 @@ impl<'a> StoreQueries for SqliteQueries<'a> {
         // linked lists in a one pass.
         let mut stmt = self.conn.prepare(
             "SELECT \
-                c.datum \
-                c.output_index \
-                c.transaction_id \
-                cb.block_no \
-                cb.slot_no \
-                f.channel_transaction_id IS NOT NULL \
-                s.datum \
-                s.output_index \
-                s.redeemer \
-                s.transaction_id \
-                s.transaction_index \
-                sb.block_no \
+                c.datum, \
+                c.lovelace, \
+                c.output_index, \
+                c.transaction_id, \
+                cb.block_no, \
+                cb.slot_no, \
+                f.channel_transaction_id IS NOT NULL, \
+                s.datum, \
+                s.lovelace, \
+                s.output_index, \
+                s.redeemer, \
+                s.transaction_id, \
+                s.transaction_index, \
+                sb.block_no, \
                 sb.slot_no \
              FROM channel c \
              INNER JOIN block cb ON cb.slot_no = c.block_slot_no \
@@ -268,14 +272,15 @@ impl<'a> StoreQueries for SqliteQueries<'a> {
                 ON s.channel_transaction_id = c.transaction_id \
                AND s.channel_output_index   = c.output_index \
              LEFT JOIN block sb ON sb.slot_no = s.block_slot_no \
-             LEFT JOIN focus f \
+             LEFT OUTER JOIN focus f \
                 ON f.channel_transaction_id    = c.transaction_id \
                AND f.channel_transaction_index = c.transaction_index \
              WHERE c.add_vkey = ? AND c.tag = ? \
              ORDER BY \
-                c.block_no, c.transaction_index, c.output_index,
-                sb.block_no, s.transaction_index, s.output_index,
-             DESC",
+                cb.block_no DESC, c.transaction_index DESC, \
+                c.output_index DESC, sb.block_no DESC, \
+                s.transaction_index DESC, s.output_index DESC \
+            ",
         )?;
         let mut threads = Threads {
             focus: None,
@@ -301,69 +306,81 @@ impl<'a> StoreQueries for SqliteQueries<'a> {
                 }
             }
         }
-        let _ = stmt.query_and_then(
-            rusqlite::params![SqlVerificationKeyRef(add_vkey), SqlTagRef(tag)],
-            |row| {
-                // Let's unpack all the fields keeping the names and order from the SQL query.
-                let c_datum = row.get(0).map(|SqlDatum(d)| d)?;
-                let c_output_index = row.get(1)?;
-                let c_tx_id = row.get(2)?;
-                let cb_block_no = row.get(3)?;
-                let cb_slot_no = row.get(4)?;
-                let f_is_focused = row.get(5)?;
-                let s_datum = row.get::<_, Option<_>>(6)?.map(|SqlDatum(d)| d);
-                let s_output_index = row.get::<_, Option<OutputIndex>>(7)?;
-                let s_redeemer = row.get::<_, Option<_>>(8)?.map(|SqlRedeemer(r)| r);
-                let s_tx_id = row.get::<_, Option<TransactionId>>(9)?;
-                let sb_block_no = row.get::<_, Option<_>>(10)?;
-                let sb_slot_no = row.get::<_, Option<SlotNo>>(11)?;
-                let channel_id = ChannelId {
-                    transaction_id: c_tx_id,
-                    output_index: c_output_index,
-                };
-                if current_channel_id != Some(channel_id) {
-                    finalize_current_thread(
-                        &mut threads,
-                        &mut current_thread_initial_output,
-                        &mut current_thread_steps,
-                        current_thread_is_focused,
-                    );
-                    current_thread_steps = None;
-                    current_channel_id = Some(channel_id);
-                    current_thread_is_focused = f_is_focused;
-                    current_thread_initial_output = Some(ThreadOutput {
-                        block_no: cb_block_no,
-                        block_slot_no: cb_slot_no,
+        // We consume the result through iteration and create
+        // the threads as we go by mutating the resulting set.
+        let _ = stmt
+            .query_and_then(
+                rusqlite::params![SqlVerificationKeyRef(add_vkey), SqlTagRef(tag)],
+                |row| {
+                    // Let's unpack all the fields keeping the names and order from the SQL query.
+                    let c_datum = row.get(0).map(|SqlDatum(d)| d)?;
+                    let c_lovelace = row.get(1)?;
+                    let c_output_index = row.get(2)?;
+                    let c_tx_id = row.get(3)?;
+                    let cb_block_no = row.get(4)?;
+                    let cb_slot_no = row.get(5)?;
+                    let f_is_focused = row.get(6)?;
+                    let s_datum = row.get::<_, Option<_>>(7)?.map(|SqlDatum(d)| d);
+                    let s_lovelace = row.get::<_, Option<Lovelace>>(8)?;
+                    let s_output_index = row.get::<_, Option<OutputIndex>>(9)?;
+                    let s_redeemer = row.get::<_, Option<_>>(10)?.map(|SqlRedeemer(r)| r);
+                    let s_tx_id = row.get::<_, Option<TransactionId>>(11)?;
+                    // The `s_transaction_index` is not used in the current implementation, but we can
+                    // retrieve it for completeness.
+                    let _s_transaction_index = row.get::<_, Option<u32>>(12)?;
+                    let sb_block_no = row.get::<_, Option<_>>(13)?;
+                    let sb_slot_no = row.get::<_, Option<SlotNo>>(14)?;
+                    let channel_id = ChannelId {
                         transaction_id: c_tx_id,
                         output_index: c_output_index,
-                        datum: c_datum,
-                        step: None,
-                    });
-                }
-                current_thread_steps = s_redeemer.map(|redeemer| {
-                    (
-                        redeemer,
-                        (|| {
-                            let block_no = sb_block_no?;
-                            let block_slot_no = sb_slot_no?;
-                            let transaction_id = s_tx_id?;
-                            let output_index = s_output_index?;
-                            let datum = s_datum?;
+                    };
+                    if current_channel_id != Some(channel_id) {
+                        finalize_current_thread(
+                            &mut threads,
+                            &mut current_thread_initial_output,
+                            &mut current_thread_steps,
+                            current_thread_is_focused,
+                        );
+                        current_thread_steps = None;
+                        current_channel_id = Some(channel_id);
+                        current_thread_is_focused = f_is_focused;
+                        current_thread_initial_output = Some(ThreadOutput {
+                            block_no: cb_block_no,
+                            block_slot_no: cb_slot_no,
+                            datum: c_datum,
+                            lovelace: c_lovelace,
+                            output_index: c_output_index,
+                            step: None,
+                            transaction_id: c_tx_id,
+                        });
+                    }
+                    current_thread_steps = s_redeemer.map(|redeemer| {
+                        (
+                            redeemer,
+                            (|| {
+                                let block_no = sb_block_no?;
+                                let block_slot_no = sb_slot_no?;
+                                let datum = s_datum?;
+                                let lovelace = s_lovelace?;
+                                let output_index = s_output_index?;
+                                let transaction_id = s_tx_id?;
 
-                            Some(Box::new(ThreadOutput {
-                                block_no,
-                                block_slot_no,
-                                transaction_id,
-                                output_index,
-                                datum,
-                                step: current_thread_steps.take(),
-                            }))
-                        })(),
-                    )
-                });
-                Ok::<(), rusqlite::Error>(())
-            },
-        )?;
+                                Some(Box::new(ThreadOutput {
+                                    block_no,
+                                    block_slot_no,
+                                    datum,
+                                    lovelace,
+                                    output_index,
+                                    step: current_thread_steps.take(),
+                                    transaction_id,
+                                }))
+                            })(),
+                        )
+                    });
+                    Ok::<(), rusqlite::Error>(())
+                },
+            )?
+            .collect::<Result<Vec<()>, _>>()?;
         finalize_current_thread(
             &mut threads,
             &mut current_thread_initial_output,

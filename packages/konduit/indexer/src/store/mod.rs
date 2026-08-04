@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use cardano_sdk::VerificationKey;
 use itertools::{Either, Itertools};
 use konduit_data::{Datum, Redeemer, Tag};
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::transaction::{
@@ -87,12 +88,13 @@ pub struct ChannelRow {
     pub transaction_id: TransactionId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ThreadOutput {
     pub block_no: BlockNo,
     pub block_slot_no: SlotNo,
     pub transaction_id: TransactionId,
     pub output_index: OutputIndex,
+    pub lovelace: Lovelace,
     pub datum: Datum,
     pub step: Option<(Redeemer, Option<Box<ThreadOutput>>)>,
 }
@@ -176,7 +178,8 @@ impl IndexedTransactions {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(transparent)]
 pub struct Thread(ThreadOutput);
 
 impl Thread {
@@ -255,7 +258,7 @@ impl<'a> IntoIterator for &'a Thread {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Threads {
     pub focus: Option<Thread>,
     pub others: Vec<Thread>,

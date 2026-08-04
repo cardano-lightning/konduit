@@ -16,7 +16,7 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-cli = ["dep:clap"]
+cli = ["dep:clap", "dep:serde_json", "dep:yaml_serde"]
 
 [dependencies]
 anyhow.workspace = true
@@ -28,4 +28,8 @@ itertools.workspace = true
 konduit-data = { workspace = true, features = ["serde", "cardano_sdk"] }
 kupo-client.workspace = true
 rusqlite = { version = "0.32", features = ["bundled"] }
+serde_with.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
+yaml_serde = { workspace = true, optional = true }
