@@ -77,12 +77,8 @@ impl Indexes {
     }
 
     pub fn extend(&mut self, from: u64, until: u64) -> Result<(), IndexesError> {
-        println!("EXTEND from {from}, until {until}");
         match until.cmp(&from) {
-            Ordering::Less => {
-                println!("LESS");
-                Err(IndexesError::Order)
-            }
+            Ordering::Less => Err(IndexesError::Order),
             Ordering::Equal => Ok(()),
             Ordering::Greater => {
                 if self.0.len() + (until - from) as usize > MAX_EXCLUDE_LENGTH {
@@ -316,5 +312,81 @@ mod tests {
         let b_empty = Indexes::new(vec![]).unwrap();
         assert_eq!(a_empty.partial_cmp(&b_empty), Some(Ordering::Equal));
         assert!(a_empty == b_empty);
+    }
+    #[test]
+    fn test_extend_on_empty() {
+        let mut idx = Indexes::empty();
+        assert!(idx.extend(5, 10).is_ok());
+        assert_eq!(idx.0, vec![5, 6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn test_extend_equal_from_until_is_noop_on_empty() {
+        let mut idx = Indexes::empty();
+        assert!(idx.extend(5, 5).is_ok());
+        assert_eq!(idx.0, Vec::<u64>::new());
+    }
+
+    #[test]
+    fn test_extend_equal_from_until_is_noop_even_when_from_equals_last() {
+        // until == from short-circuits to Ok(()) before the ordering check
+        // against `last` is ever reached, even though from == last here.
+        let mut idx = Indexes::new(vec![1, 2, 3]).unwrap();
+        assert!(idx.extend(3, 3).is_ok());
+        assert_eq!(idx.0, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_extend_until_less_than_from_errors() {
+        let mut idx = Indexes::empty();
+        assert_eq!(idx.extend(10, 5), Err(IndexesError::Order));
+        assert_eq!(idx.0, Vec::<u64>::new());
+    }
+
+    #[test]
+    fn test_extend_appends_after_last() {
+        let mut idx = Indexes::new(vec![1, 2, 3]).unwrap();
+        assert!(idx.extend(4, 7).is_ok());
+        assert_eq!(idx.0, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_extend_from_equal_to_last_errors() {
+        // last (3) < from (3) is false, so this must be rejected.
+        let mut idx = Indexes::new(vec![1, 2, 3]).unwrap();
+        assert_eq!(idx.extend(3, 5), Err(IndexesError::LessThanLast));
+        assert_eq!(idx.0, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_extend_from_less_than_last_errors() {
+        let mut idx = Indexes::new(vec![1, 2, 3, 10]).unwrap();
+        assert_eq!(idx.extend(2, 5), Err(IndexesError::LessThanLast));
+        assert_eq!(idx.0, vec![1, 2, 3, 10]);
+    }
+
+    #[test]
+    fn test_extend_length_exceeded_errors() {
+        let mut idx = Indexes::empty();
+        let result = idx.extend(0, MAX_EXCLUDE_LENGTH as u64 + 1);
+        assert_eq!(result, Err(IndexesError::Length));
+        assert_eq!(idx.0, Vec::<u64>::new());
+    }
+
+    #[test]
+    fn test_extend_length_exact_boundary_ok() {
+        let mut idx = Indexes::empty();
+        let result = idx.extend(0, MAX_EXCLUDE_LENGTH as u64);
+        assert!(result.is_ok());
+        assert_eq!(idx.0.len(), MAX_EXCLUDE_LENGTH);
+    }
+
+    #[test]
+    fn test_extend_length_exceeded_with_existing_items() {
+        let mut idx = Indexes::new(vec![1]).unwrap();
+        // len is already 1, so adding MAX_EXCLUDE_LENGTH more would exceed the cap.
+        let result = idx.extend(2, 2 + MAX_EXCLUDE_LENGTH as u64);
+        assert_eq!(result, Err(IndexesError::Length));
+        assert_eq!(idx.0, vec![1]);
     }
 }

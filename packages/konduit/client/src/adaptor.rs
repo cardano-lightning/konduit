@@ -105,7 +105,6 @@ impl<T: Transport> Adaptor<T> {
     // switch between json and cbor.
     pub async fn squash(&self, squash: Squash) -> anyhow::Result<SquashStatus> {
         let headers = self.with_keytag_header();
-        // headers.push(header_policy::ContentType::from_encoder::<()>(&codec::Cbor).boxed());
 
         let res = self
             .http_client
