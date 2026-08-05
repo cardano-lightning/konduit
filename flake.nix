@@ -2,28 +2,28 @@
   description = "Konduit: A Cardano to Bitcoin Lightning Network pipe";
 
   inputs = {
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    git-hooks-nix.url = "github:cachix/git-hooks.nix";
-    git-hooks-nix.inputs.nixpkgs.follows = "nixpkgs";
-    treefmt-nix.url = "github:numtide/treefmt-nix";
-    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     aiken.url = "github:aiken-lang/aiken";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    rust-flake = {
-      url = "github:juspay/rust-flake";
-      inputs.rust-overlay.follows = "rust-overlay";
-    };
     capkgs.url = "github:input-output-hk/capkgs";
-    jailed-agents.url = "github:andersonjoseph/jailed-agents";
-    cardano-kupo.url = "github:paluh/cardano-kupo";
     cardonnay-src = {
       url = "github:IntersectMBO/cardonnay?ref=v0.3.6";
       flake = false;
     };
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    git-hooks-nix.url = "github:cachix/git-hooks.nix";
+    git-hooks-nix.inputs.nixpkgs.follows = "nixpkgs";
+    jailed-agents.url = "github:andersonjoseph/jailed-agents";
+    kupo.url = "github:paluh/kupo/konduit-kupo";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-flake = {
+      url = "github:juspay/rust-flake";
+      inputs.rust-overlay.follows = "rust-overlay";
+    };
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -52,7 +52,7 @@
             # aiken
             inputs'.aiken.packages.aiken
             # kupo
-            inputs'.cardano-kupo.packages.kupo
+            inputs'.kupo.packages.kupo
             # JS
             pkgs.yarn
             pkgs.nodejs
