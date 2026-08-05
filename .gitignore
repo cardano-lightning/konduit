@@ -19,3 +19,6 @@ target/
 # Envs
 .env
 .env.*
+
+# db
+_konduit.redb

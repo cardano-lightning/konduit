@@ -77,24 +77,31 @@ impl Indexes {
     }
 
     pub fn extend(&mut self, from: u64, until: u64) -> Result<(), IndexesError> {
-        if until < from {
-            return Err(IndexesError::Order);
-        }
-        if self.0.len() + (until - from) as usize > MAX_EXCLUDE_LENGTH {
-            return Err(IndexesError::Length);
-        }
-        let range = from..until;
-        if let Some(last) = self.0.last() {
-            match last < &from {
-                true => {
-                    let _: () = self.0.extend(range);
+        println!("EXTEND from {from}, until {until}");
+        match until.cmp(&from) {
+            Ordering::Less => {
+                println!("LESS");
+                Err(IndexesError::Order)
+            }
+            Ordering::Equal => Ok(()),
+            Ordering::Greater => {
+                if self.0.len() + (until - from) as usize > MAX_EXCLUDE_LENGTH {
+                    return Err(IndexesError::Length);
+                }
+                let range = from..until;
+                if let Some(last) = self.0.last() {
+                    match last < &from {
+                        true => {
+                            let _: () = self.0.extend(range);
+                            Ok(())
+                        }
+                        false => Err(IndexesError::LessThanLast),
+                    }
+                } else {
+                    self.0.extend(range);
                     Ok(())
                 }
-                false => Err(IndexesError::LessThanLast),
             }
-        } else {
-            self.0.extend(range);
-            Ok(())
         }
     }
 

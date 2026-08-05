@@ -23,8 +23,8 @@ pub enum ClientError<Transport, Encode, Decode> {
     Decode(#[source] Decode),
     #[error("HTTP error")]
     Http(#[source] http::Error),
-    #[error("Server returned status error: {0}")]
-    Status(http::StatusCode),
+    #[error("Server returned status error: {0}, Msg: {1:?}")]
+    Status(http::StatusCode, Option<String>),
     #[error("Builder was corrupted or already consumed")]
     BuilderCorrupted,
 }
@@ -143,7 +143,8 @@ impl<T: Transport, C> Client<T, C> {
             .map_err(ClientError::Transport)?;
 
         if !response.status().is_success() {
-            return Err(ClientError::Status(response.status()));
+            let msg = String::from_utf8(response.body().to_vec()).ok();
+            return Err(ClientError::Status(response.status(), msg));
         }
 
         self.codec

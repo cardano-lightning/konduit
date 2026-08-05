@@ -104,12 +104,15 @@ impl<T: Transport> Adaptor<T> {
     // we need to fix this elsewhere: the server, and then permit the client to
     // switch between json and cbor.
     pub async fn squash(&self, squash: Squash) -> anyhow::Result<SquashStatus> {
-        let mut headers = self.with_keytag_header();
-        headers.push(header_policy::ContentType::from_encoder::<()>(&codec::Cbor).boxed());
+        let headers = self.with_keytag_header();
+        // headers.push(header_policy::ContentType::from_encoder::<()>(&codec::Cbor).boxed());
 
-        self.http_client
+        let res = self
+            .http_client
             .post_with_headers::<Squash, SquashStatus>("/ch/squash", &squash, headers)
-            .await
-            .map_err(|e| anyhow!(e))
+            .await;
+
+        log::info!("{:?}", res);
+        res.map_err(|e| anyhow!(e))
     }
 }

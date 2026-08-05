@@ -20,8 +20,14 @@ doc = false
 required-features = ["cli"]
 
 [features]
-default = []
-cli = ["dep:clap", "dep:dotenvy", "dep:tokio"]
+default = ["cli"]
+cli = [
+  "dep:clap",
+  "dep:dotenvy",
+  "dep:tokio",
+  "http-client/reqwest",
+  "serde_json",
+]
 
 [dependencies]
 anyhow.workspace = true
@@ -37,6 +43,7 @@ web-time.workspace = true
 clap = { workspace = true, features = ["env"], optional = true }
 dotenvy = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 konduit-tmp.workspace = true
 
 [dev-dependencies]
