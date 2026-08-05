@@ -137,29 +137,28 @@ where
                             unlocked.index(),
                             current_squash_index,
                         );
-                        return Ok::<u64, anyhow::Error>(value);
+                        Ok::<u64, anyhow::Error>(value)
 
-                    }
-
-                    if !known_lock(unlocked.lock()) {
+                    } else if known_lock(unlocked.lock()) {
                         // NOTE: No error raised here, because it'll be raised below as the squash
                         // amount wouldn't match.
                         log::warn!(
                             "adaptor reported an unexpected, likely expired, unlocked: {unlocked:?}"
                         );
-                        return Ok(value);
+                        Ok(value)
+                    } else {
+                        squashed_unlockeds.push(unlocked.lock());
+                        Ok(value + unlocked.amount())
                     }
-
-                    squashed_unlockeds.push(unlocked.lock());
-
-                    Ok(value + unlocked.amount())
                 })?;
 
                 log::info!("total unlocked = {}", unlocked_value);
 
                 if st.proposal.amount() > current.amount() + unlocked_value {
                     return Err(anyhow!(
-                        "adaptor requesting to squash more than provably owed"
+                        "adaptor requesting to squash more than provably owed : {} vs {}",
+                        st.proposal.amount(),
+                        current.amount() + unlocked_value,
                     ));
                 }
 

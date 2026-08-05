@@ -10,8 +10,8 @@ use crate::SquashProposal;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("Squash cannot include a (locked) cheque.")]
-    IncludesCheque,
+    #[error("Squash cannot include a (locked) cheque. {0}")]
+    IncludesCheque(u64),
 
     #[error("Squash body was not reproduced")]
     NotReproduced,
@@ -138,7 +138,7 @@ impl Receipt {
 
     /// Appends a new locked cheque to the collection if it passes the sequential index check.
     pub fn apply_locked(&mut self, locked: Locked<Verified>) -> Result<(), Error> {
-        if locked.index() == self.max_index() + 1 {
+        if locked.index() != self.max_index() + 1 {
             return Err(Error::Input);
         }
         self.cheques.push(Cheque::from(locked));
@@ -295,7 +295,7 @@ impl Receipt {
         let mut body = self.squash.body().clone();
         for u in self.unlockeds() {
             body.squash(u.index(), u.amount())
-                .map_err(|_| Error::IncludesCheque)?
+                .map_err(|_| Error::IncludesCheque(u.index()))?
         }
         Ok(body)
     }

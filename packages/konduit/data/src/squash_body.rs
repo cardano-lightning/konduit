@@ -125,17 +125,19 @@ impl SquashBody {
                 self.amount += amount;
                 Ok(())
             }
-            Err(_) => match self.index < index {
-                false => Err(SquashBodyError::DuplicateIndex),
-                true => {
+            Err(_) => {
+                if self.index >= index {
+                    Err(SquashBodyError::DuplicateIndex)
+                } else {
+                    println!("{:?}, {:?}, {:?}", self, index, amount);
                     self.exclude
-                        .extend(self.index + 1, index - 1)
+                        .extend(self.index + 1, index)
                         .map_err(SquashBodyError::Exclude)?;
                     self.amount += amount;
                     self.index = index;
                     Ok(())
                 }
-            },
+            }
         }
     }
 

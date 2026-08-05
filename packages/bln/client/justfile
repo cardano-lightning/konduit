@@ -63,7 +63,7 @@ encode-hash hash:
 
 # Check node health (shows which node is active)
 health:
-    @just node={{node}} _request GET "/v1/getinfo" | jq '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain, block_height : .block_height}'
+    @just node={{node}} _request GET "/v1/getinfo" | jq  # '{alias: .alias, identity_pubkey: .identity_pubkey, synced: .synced_to_chain, block_height : .block_height}'
 
 # --- Invoice Commands ---
 # Decode a bolt11 invoice to see destination and amount

@@ -238,6 +238,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             &upper_bound,
         )?;
         tx.sign(&self.wallet);
+        log::warn!("tx_id : {:?}", tx.id());
         self.cardano.submit(&tx).await?;
         Ok(())
     }

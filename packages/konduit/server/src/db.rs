@@ -128,7 +128,13 @@ pub struct Db(Database);
 
 impl Db {
     pub fn open(path: &str) -> Result<Self, Error> {
-        Ok(Self(Database::create(path)?))
+        let db = Database::create(path)?;
+        let tx = db.begin_write()?;
+        {
+            let _ = tx.open_table(TABLE)?;
+        }
+        tx.commit()?;
+        Ok(Self(db))
     }
 
     /// All keys

@@ -2378,6 +2378,7 @@ dependencies = [
  "log",
  "proptest",
  "proptest-derive",
+ "serde_json",
  "tokio",
  "web-time",
 ]

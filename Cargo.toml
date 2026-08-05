@@ -109,21 +109,21 @@ wasm-bindgen-futures = "0.4.55"
 web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
 web-time = "1.1.0"
 
-bln-client = { path = "packages/bln/client" }
-bln-sdk = { path = "packages/bln/sdk" }
+bln-client = { path = "packages/bln/client", default-features = false }
+bln-sdk = { path = "packages/bln/sdk", default-features = false }
 cardano-connector = { path = "packages/cardano/connector" }
 cardano-connector-client = { path = "packages/cardano/connector-client" }
 cardano-connector-direct = { path = "packages/cardano/connector-direct" }
 cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
 cardano-sdk = { path = "packages/cardano/sdk", default-features = false }
 cobbl3 = { path = "packages/util/cobbl3", default-features = false }
-fx-client = { path = "packages/util/fx-client" }
+fx-client = { path = "packages/util/fx-client", default-features = false }
 http-client = { path = "packages/util/http-client", default-features = false }
-konduit-client = { path = "packages/konduit/client" }
+konduit-client = { path = "packages/konduit/client", default-features = false }
 konduit-data = { path = "packages/konduit/data", default-features = false }
 konduit-tmp = { path = "packages/konduit/tmp", default-features = false }
 konduit-server = { path = "packages/konduit/server" }
-konduit-tx = { path = "packages/konduit/tx" }
+konduit-tx = { path = "packages/konduit/tx", default-features = false }
 problem-details = { path = "packages/util/problem-details", default-features = false }
 problem-details-derive = { path = "packages/util/problem-details-derive" }
 

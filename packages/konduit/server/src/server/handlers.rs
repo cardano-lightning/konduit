@@ -102,17 +102,14 @@ pub async fn squash(
     };
 
     let decode_result: Result<Squash, _> = if let Some(content_type) =
-        req.headers().get("Content-Type")
+        req.headers().get("content-type")
         && content_type == "application/json"
     {
-        serde_json::from_slice::<String>(body.as_ref())
+        serde_json::from_slice::<Squash>(body.as_ref())
             .map_err(|e| cbor::decode::Error::message(e).into())
-            .and_then(|s| hex::decode(s).map_err(|e| cbor::decode::Error::message(e).into()))
-            .and_then(|bytes| decode_from_cbor(&bytes))
     } else {
         decode_from_cbor(body.as_ref())
     };
-
     let squash: Squash = match decode_result {
         Ok(squash) => squash,
         Err(err) => {
@@ -122,8 +119,8 @@ pub async fn squash(
             )));
         }
     };
-
     if let Err(err) = data.db().update(&keytag, apply_squash(squash.clone())) {
+        log::warn!("db error: {:?}", err);
         match err {
             db::Error::NotFound => {
                 // FIXME :: this should move to registration
@@ -145,14 +142,19 @@ pub async fn squash(
                 data.db().update(&keytag, apply_squash(squash.clone()))?;
             }
             db::Error::Channel(_error) => {
-                return Err(HandlerError::Other);
+                // FIXME :: this happens when squash not latest.
+                // This is weird/ not very coherent.
+                log::warn!("channel");
+                // return Err(HandlerError::Other);
             }
             db::Error::AlreadyExists => {
                 // Impossible error
+                log::warn!("already exists");
                 return Err(HandlerError::Other);
             }
             db::Error::Contended => {
                 // TODO DB busy. Try again?
+                log::warn!("contended");
                 return Err(HandlerError::Db(db::Error::Contended));
             }
             db::Error::Backend(_) => return Err(HandlerError::Db(db::Error::Contended)),
@@ -183,7 +185,6 @@ pub async fn squash(
         // Something to squash
         SquashStatus::Incomplete(proposal)
     };
-
     Ok(HttpResponse::Ok().json(response_body))
 }
 
