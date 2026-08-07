@@ -15,6 +15,7 @@ bitcoin.workspace = true
 hex.workspace = true
 lightning-invoice = { workspace = true, features = ["serde"] }
 lightning-types.workspace = true
+minicbor.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 thiserror.workspace = true

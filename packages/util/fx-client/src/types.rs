@@ -1,12 +1,17 @@
 use chrono::Utc;
+use minicbor::{Decode, Encode};
 use serde::Serialize;
 use std::fmt;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Encode, Decode)]
 pub struct State {
+    #[n(0)]
     pub created_at: i64,
+    #[n(1)]
     pub base: BaseCurrency,
+    #[n(2)]
     pub ada: f64,
+    #[n(3)]
     pub bitcoin: f64,
 }
 
@@ -67,5 +72,27 @@ impl std::str::FromStr for BaseCurrency {
             "usd" => Ok(Self::Usd),
             _ => Err(format!("'{}' is not a valid base currency", s)),
         }
+    }
+}
+
+impl<C> minicbor::Encode<C> for BaseCurrency {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.str(&self.to_string())?;
+        Ok(())
+    }
+}
+
+impl<'b, C> minicbor::Decode<'b, C> for BaseCurrency {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        d.str()?
+            .parse()
+            .map_err(|_: String| minicbor::decode::Error::message("invalid base currency"))
     }
 }

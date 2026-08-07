@@ -89,7 +89,7 @@ impl<T: Transport> Adaptor<T> {
                 &PayBody {
                     cheque_body: locked.body().to_owned(),
                     signature: locked.signature().to_owned(),
-                    invoice: invoice.to_string(),
+                    invoice: invoice.clone(),
                 },
                 self.with_keytag_header(),
             )

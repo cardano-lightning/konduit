@@ -1,13 +1,24 @@
 use bln_sdk::types::{Invoice, RouteHint};
+use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Encode, Decode)]
 #[allow(clippy::large_enum_variant)]
 pub enum QuoteBody {
-    Simple(SimpleQuote),
-    Bolt11(#[serde_as(as = "DisplayFromStr")] Invoice),
+    #[n(0)]
+    Simple(#[n(0)] SimpleQuote),
+    #[n(1)]
+    Bolt11(
+        #[serde_as(as = "DisplayFromStr")]
+        #[cbor(
+            n(0),
+            encode_with = "crate::cbor::encode_display",
+            decode_with = "crate::cbor::decode_from_str"
+        )]
+        Invoice,
+    ),
 }
 
 impl QuoteBody {
@@ -38,11 +49,14 @@ impl QuoteBody {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct SimpleQuote {
+    #[n(0)]
     pub amount_msat: u64,
     #[serde_as(as = "serde_with::hex::Hex")]
+    #[n(1)]
     pub payee: [u8; 33],
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[n(2)]
     pub route_hints: Vec<RouteHint>,
 }

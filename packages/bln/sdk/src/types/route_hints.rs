@@ -1,4 +1,5 @@
 use bitcoin::secp256k1::PublicKey;
+use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -7,6 +8,26 @@ use serde_with::serde_as;
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct RouteHint(pub Vec<RouteHintHop>);
+
+// FIXME!
+impl<C> Encode<C> for RouteHint {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        _e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        Err(minicbor::encode::Error::message("not yet implemented"))
+    }
+}
+
+impl<'b, C> Decode<'b, C> for RouteHint {
+    fn decode(
+        _d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        Err(minicbor::decode::Error::message("not yet implemented"))
+    }
+}
 
 impl From<lightning_invoice::RouteHint> for RouteHint {
     fn from(value: lightning_invoice::RouteHint) -> Self {

@@ -1,7 +1,11 @@
 use actix_cors::Cors;
-use actix_web::{App, HttpServer, middleware::Logger, web};
+use actix_web::{
+    App, HttpServer,
+    middleware::{self, Logger},
+    web,
+};
 
-use crate::server::{Data, handlers, middleware};
+use crate::server::{Data, auth, handlers};
 
 pub struct Service {
     data: Data,
@@ -32,11 +36,12 @@ impl Service {
                         .allow_any_header(),
                 )
                 .app_data(data.clone())
+                // .wrap(middleware::from_fn(content_negotiation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
                 .service(
                     // FIXME : Implement auth
                     web::scope("/ch")
-                        .wrap(middleware::KeytagAuth::new("KONDUIT"))
+                        .wrap(middleware::from_fn(auth::no_auth))
                         .route("/receipt", web::get().to(handlers::receipt))
                         .route("/squash", web::post().to(handlers::squash))
                         .route("/quote", web::post().to(handlers::quote))
