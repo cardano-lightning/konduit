@@ -49,7 +49,7 @@ pub fn tx(
         .filter_map(|u| {
             receipts
                 .get(&u.data().keytag())
-                .and_then(|receipt| u.any_sub(receipt, upper).ok())
+                .and_then(|receipt| u.any_claim(receipt, upper).ok())
         })
         .filter(|u| u.gain() >= preferences.min_single as i64)
         .collect::<Vec<_>>();
