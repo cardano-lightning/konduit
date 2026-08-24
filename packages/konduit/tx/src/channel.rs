@@ -8,7 +8,7 @@ use konduit_data::{
 use konduit_tmp::{Keytag, Receipt};
 
 use crate::{
-    Bounds, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, StepError, StepTo, Stepped, from_verifying_key,
+    Bounds, KONDUIT_VALIDATOR, StepError, StepTo, Stepped, channel_asset, from_verifying_key,
     variables::Variables,
 };
 
@@ -28,6 +28,8 @@ pub enum Error {
     ParseDatum,
     #[error("Own hash is wrong")]
     OwnHash,
+    #[error("Invalid channel value: {0}")]
+    Value(#[from] channel_asset::Error),
 }
 
 impl TryFrom<&Output> for Channel {
@@ -57,17 +59,13 @@ impl TryFrom<&Output> for Channel {
         if own_hash != <[u8; 28]>::from(KONDUIT_VALIDATOR.hash) {
             return Err(Error::OwnHash);
         }
-        let amount = debuffer_amount(output.value());
+        let amount = channel_asset::amount(&constants.asset, output.value())?;
         let variables = Variables::new(amount, stage);
         Ok(Self {
             constants,
             variables,
         })
     }
-}
-
-pub fn debuffer_amount(value: &cardano_sdk::Value<u64>) -> u64 {
-    value.lovelace().saturating_sub(MIN_ADA_BUFFER)
 }
 
 /// Data obtained from parsing a channel
@@ -114,14 +112,9 @@ impl Channel {
         self.variables.amount()
     }
 
-    /// Ada channels require min ada buffer
-    pub fn buffered_amount(&self) -> u64 {
-        self.amount() + MIN_ADA_BUFFER
-    }
-
-    /// Ada channels require min ada buffer
+    /// Channel capacity plus its required Ada reserve.
     pub fn buffered_value(&self) -> Value<u64> {
-        Value::new(self.buffered_amount())
+        channel_asset::value(&self.constants.asset, self.amount())
     }
 
     /// As datum

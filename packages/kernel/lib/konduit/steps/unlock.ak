@@ -17,10 +17,10 @@ pub fn do(
   stage_out: t.Stage,
   unpends: List<t.Unpend>,
 ) -> VerificationKey {
-  let (_tag, _add_vkey, sub_vkey, _close_period) = constants
+  let (_tag, _add_vkey, sub_vkey, _close_period, asset) = constants
   expect t.Responded(pends_amount_in, pends_in) = stage_in
   expect t.Responded(pends_amount_out, pends_out) = stage_out
-  let subbed = amount_in(value_in) - amount_out(value_out)
+  let subbed = amount_in(value_in, asset) - amount_out(value_out, asset)
   let amount = account(upper_bound, unpends, pends_in, pends_out)
   expect pends_amount_out == pends_amount_in - amount
   expect amount >= subbed

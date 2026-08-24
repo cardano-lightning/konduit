@@ -16,7 +16,11 @@ pub struct Service {
 impl Service {
     pub fn new(args: super::Args, data: super::Data) -> Self {
         let bind_address = format!("{}:{:?}", args.host, args.port);
-        Self { data, bind_address, session_check_url: args.session_check_url }
+        Self {
+            data,
+            bind_address,
+            session_check_url: args.session_check_url,
+        }
     }
 
     pub fn data(&self) -> &Data {

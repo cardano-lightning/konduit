@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 
 // FIXME
@@ -38,4 +40,8 @@ pub struct Args {
     /// ## FX
     #[command(flatten)]
     pub fx: fx_client::cli::Args,
+
+    /// Optional JSON catalog of additional channel assets
+    #[arg(long, env = crate::env::ASSET_CONFIG)]
+    pub asset_config: Option<PathBuf>,
 }

@@ -25,7 +25,7 @@ dotenvy.workspace = true
 env_logger.workspace = true
 fx-client = { workspace = true, features = ["cli", "namespaced"] }
 humantime.workspace = true
-konduit-data = { workspace = true, features = ["serde"] }
+konduit-data = { workspace = true, features = ["json"] }
 konduit-tmp.workspace = true
 konduit-tx.workspace = true
 log.workspace = true

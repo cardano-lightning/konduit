@@ -18,10 +18,13 @@ pub fn do(
   squash: t.Squash,
   cheques: List<t.Cheque>,
 ) -> VerificationKey {
-  let (tag, add_vkey, sub_vkey, _close_period) = constants
+  let (tag, add_vkey, sub_vkey, _close_period, asset) = constants
   expect t.Closed(subbed_in, useds_in, _) = stage_in
   expect t.Responded(pends_amount, pends) = stage_out
-  let subbed_out = subbed_in - amount_in(value_in) + amount_out(value_out)
+  let subbed_out = subbed_in - amount_in(value_in, asset) + amount_out(
+    value_out,
+    asset,
+  )
   let owed = account(
     upper_bound,
     add_vkey,

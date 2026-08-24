@@ -1,34 +1,20 @@
-use cardano_sdk::{Input, Output};
+use cardano_sdk::{Input, Value};
 
 use crate::{Lovelace, Utxos};
 
-/// Select utxos to cover fees and collaterals
-pub fn select(utxos: &Utxos, amount: Lovelace) -> anyhow::Result<Vec<Input>> {
-    if amount == 0 {
+/// Select wallet UTxOs covering every unit in the target value.
+pub fn select(utxos: &Utxos, target: &Value<u64>) -> anyhow::Result<Vec<Input>> {
+    if target.is_empty() {
         return Ok(vec![]);
     }
-    let mut sorted_utxos: Vec<(&Input, &Output)> = utxos.iter().collect();
-    sorted_utxos.sort_by_key(|(_, output)| std::cmp::Reverse(output.value().lovelace()));
-
-    let mut selected_inputs = Vec::new();
-    let mut total_lovelace: u64 = 0;
-
-    for (input, output) in sorted_utxos {
-        selected_inputs.push(input.clone());
-        total_lovelace = total_lovelace.saturating_add(output.value().lovelace());
-
-        if total_lovelace >= amount {
-            break;
-        }
-    }
-
-    if total_lovelace < amount {
-        return Err(anyhow::anyhow!(
-            "insufficient funds in wallet to cover the amount"
-        ));
-    }
-
-    Ok(selected_inputs)
+    let candidates = utxos.iter().collect::<Vec<_>>();
+    let selection = Value::cover(target, &candidates, |(_, output)| output.value())
+        .ok_or_else(|| anyhow::anyhow!("insufficient wallet value to cover target {target}"))?;
+    Ok(selection
+        .inputs
+        .into_iter()
+        .map(|(input, _)| (*input).clone())
+        .collect())
 }
 
 /// Select utxos to cover fees and collaterals
@@ -44,5 +30,42 @@ pub fn select_no_script(utxos: &Utxos, amount: Lovelace) -> anyhow::Result<Vec<I
         })
         .map(|x| (x.0.clone(), x.1.clone())) // FIXME :: How ought we avoid clone?
         .collect();
-    select(&utxos, amount)
+    select(&utxos, &Value::new(amount))
+}
+
+#[cfg(test)]
+mod tests {
+    use cardano_sdk::{Address, Hash, Output};
+
+    use super::*;
+
+    #[test]
+    fn token_target_selects_token_utxo() {
+        let policy = Hash::<28>::new([1; 28]);
+        let ada_input = Input::new(Hash::<32>::new([1; 32]), 0);
+        let token_input = Input::new(Hash::<32>::new([2; 32]), 0);
+        let utxos = Utxos::from([
+            (
+                ada_input,
+                Output::new(Address::default(), Value::new(5_000_000)),
+            ),
+            (
+                token_input.clone(),
+                Output::new(
+                    Address::default(),
+                    Value::new(2_000_000).with_assets([(policy, [(b"TOKEN", 10)])]),
+                ),
+            ),
+        ]);
+        let target = Value::new(3_000_000).with_assets([(policy, [(b"TOKEN", 5)])]);
+
+        let selected = select(&utxos, &target).unwrap();
+        assert!(selected.contains(&token_input));
+
+        let lovelace_only = Utxos::from([(
+            Input::new(Hash::<32>::new([3; 32]), 0),
+            Output::new(Address::default(), Value::new(10_000_000)),
+        )]);
+        assert!(select(&lovelace_only, &target).is_err());
+    }
 }

@@ -16,6 +16,7 @@ mod bounds;
 pub use bounds::Bounds;
 
 /// Various pieces of konduit channels
+mod channel_asset;
 mod open;
 pub use open::Open;
 

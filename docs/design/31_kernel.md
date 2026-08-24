@@ -23,6 +23,19 @@ single validator. Any (well-formed) UTXO at the validator address holds the
 funds and on-chain data corresponding to a channel. And conversely any (staged)
 channel corresponds to a single UTXO at tip at the validator address.
 
+## Channel asset
+
+Each channel datum fixes one `AssetId` for its full lifetime: either Ada or a
+Cardano native `(policy_id, asset_name)` pair. The validator is generic and has
+no built-in token list. It rejects a wrong or additional native asset, an
+invalid policy/name length, and values below the minimum-Ada reserve.
+
+For Ada, capacity is lovelace above the reserve. For a native asset, capacity is
+the selected token quantity; the lovelace is reserve only. A zero-capacity
+native continuation therefore contains only the reserve. Aliases, decimal
+places, fingerprints, and prices are off-chain metadata and never enter the
+datum.
+
 ## Influence
 
 The design of the Konduit Kernel draws heavily on previous work of
@@ -643,9 +656,13 @@ address, including stake part, as the corresponding input. Moreover, the
 
 ### Assets
 
-The current version of konduit supports only Ada.
-
-Input amounts are found "permissively", while output amounts are "strict".
+The fifth channel constant is its immutable `AssetId`: `Ada` or
+`Native(policy_id, asset_name)`. Both input and continuing-output amounts are
+extracted against that identity. Ada values must contain no native assets.
+Native values must contain only the selected positive token quantity, or no
+native entry for a zero-capacity continuation. Every channel value must retain
+the minimum-Ada reserve; reserve lovelace is never capacity for a native
+channel.
 
 ## Steps / BL Specific
 

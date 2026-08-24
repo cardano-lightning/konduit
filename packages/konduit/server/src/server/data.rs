@@ -5,7 +5,7 @@ use crate::{
     time::{self, now},
 };
 use bln_client::types::{Invoice, RouteHint};
-use konduit_data::{Duration, Locked, Secret, Squash};
+use konduit_data::{AssetDefinition, Duration, Locked, Pricing, Secret, Squash};
 use konduit_tmp::{
     AdaptorInfo, Keytag, Quote, QuoteBody, Receipt, SquashProposal, SquashStatus, TxHelp,
 };
@@ -39,6 +39,9 @@ pub enum Error {
 
     #[error("channel : {0}")]
     Channel(#[from] channel::Error),
+
+    #[error("FX: {0}")]
+    Fx(String),
 
     #[error("DB Contended")]
     DbContended,
@@ -100,13 +103,6 @@ impl Data {
         self.fx.clone()
     }
 
-    async fn msat_to_lovelace(&self, x: u64) -> u64 {
-        self.fx().read().await.msat_to_lovelace(x)
-    }
-
-    async fn lovelace_to_msat(&self, x: u64) -> u64 {
-        self.fx().read().await.lovelace_to_msat(x)
-    }
 
     pub fn db(&self) -> Arc<db::Db> {
         self.db.clone()
@@ -163,15 +159,24 @@ impl Data {
 
     pub async fn quote(&self, keytag: &Keytag, body: QuoteBody) -> Result<Quote, Error> {
         let channel = self.channel(keytag)?;
-        // Pre-check commitment
+        let definition = channel.asset_definition().clone();
         let amount_msat = body.amount_msat();
-        channel.can_commit(self.msat_to_lovelace(amount_msat).await + FEE_PLACEHOLDER + 1)?;
+        let min_amount = {
+            let fx = self.fx.read().await;
+            quote_amount(&fx, &definition, amount_msat).map_err(|error| Error::Fx(error.to_string()))?
+        };
+        channel.can_commit(min_amount)?;
         let bln_res = self
             .bln_quote(amount_msat, body.payee(), body.route_hints())
             .await?;
-        let amount =
-            self.msat_to_lovelace(amount_msat + bln_res.fee_msat).await + FEE_PLACEHOLDER + 1;
-        // Actual commitment
+        let quote_msat = amount_msat
+            .checked_add(bln_res.fee_msat)
+            .ok_or_else(|| Error::Fx("quote amount exceeds u64".into()))?;
+        let amount = {
+            let fx = self.fx.read().await;
+            quote_amount(&fx, &definition, quote_msat)
+                .map_err(|error| Error::Fx(error.to_string()))?
+        };
         let index = channel.can_commit(amount)?;
         let relative_timeout =
             (ADAPTOR_TIME_DELTA + QUOTE_PAY_TIME_MARGIN + bln_res.relative_timeout).as_millis()
@@ -204,6 +209,7 @@ impl Data {
 
     async fn align_commitments(
         &self,
+        definition: &AssetDefinition,
         now: Duration,
         locked: &Locked,
         invoice: &Invoice,
@@ -211,10 +217,21 @@ impl Data {
         if invoice.payment_hash != locked.lock().0 {
             return Err(CommitmentError::Lock);
         }
-        let fee_limit = self
-            .lovelace_to_msat(locked.amount() - FEE_PLACEHOLDER)
-            .await
-            .saturating_sub(invoice.amount_msat);
+        let effective_asset_amount = locked
+            .amount()
+            .checked_sub(FEE_PLACEHOLDER)
+            .ok_or(CommitmentError::Fee)?;
+        let effective_amount_msat = {
+            let fx = self.fx.read().await;
+            fx.asset_units_to_msat(
+                effective_asset_amount,
+                definition.decimals,
+                asset_usd(&fx, definition)
+                    .map_err(|error| CommitmentError::Fx(error.to_string()))?,
+            )
+            .map_err(|error| CommitmentError::Fx(error.to_string()))?
+        };
+        let fee_limit = effective_amount_msat.saturating_sub(invoice.amount_msat);
         if fee_limit < 1 {
             return Err(CommitmentError::Fee);
         }
@@ -229,9 +246,10 @@ impl Data {
     }
 
     pub async fn pay(&self, keytag: &Keytag, body: PayBody) -> Result<PayResponse, Error> {
+        let definition = self.channel(keytag)?.asset_definition().clone();
         let PayBody { locked, invoice } = body;
         let (fee_limit, rel_timeout) = self
-            .align_commitments(time::now()?, &locked, &invoice)
+            .align_commitments(&definition, time::now()?, &locked, &invoice)
             .await?;
         self.db().update(keytag, apply_locked(locked))?;
         let pay_res = self.bln_pay(invoice, fee_limit, rel_timeout).await?;
@@ -270,6 +288,28 @@ impl From<Option<[u8; 32]>> for PayResponse {
     }
 }
 
+pub(super) fn asset_usd(
+    fx: &fx_client::State,
+    definition: &AssetDefinition,
+) -> fx_client::Result<f64> {
+    match &definition.pricing {
+        Pricing::Ada => Ok(fx.ada),
+        Pricing::UsdPeg => Ok(1.0),
+        Pricing::CoinGecko { .. } => fx.asset_usd(&definition.alias),
+    }
+}
+
+pub(super) fn quote_amount(
+    fx: &fx_client::State,
+    definition: &AssetDefinition,
+    amount_msat: u64,
+) -> fx_client::Result<u64> {
+    fx.msat_to_asset_units(amount_msat, definition.decimals, asset_usd(fx, definition)?)?
+        .checked_add(FEE_PLACEHOLDER)
+        .and_then(|amount| amount.checked_add(1))
+        .ok_or_else(|| fx_client::Error::InvalidData("quote amount exceeds u64".into()))
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CommitmentError {
     #[error("lock mismatch")]
@@ -278,4 +318,6 @@ pub enum CommitmentError {
     Fee,
     #[error("no or insufficient time")]
     Time,
+    #[error("FX: {0}")]
+    Fx(String),
 }

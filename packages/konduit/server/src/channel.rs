@@ -10,7 +10,10 @@
 use std::cmp;
 
 use cardano_sdk::VerificationKey;
-use konduit_data::{Duration, Locked, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey};
+use konduit_data::{
+    AssetDefinition, AssetId, Duration, Locked, Secret, Squash, Stage, Tag, Unverified, Used,
+    VerifyingKey,
+};
 use konduit_tmp::{Keytag, Receipt, SquashProposal, from_verifying_key, receipt, to_verifying_key};
 
 use minicbor::{Decode, Encode};
@@ -38,6 +41,8 @@ pub enum Error {
     Verify,
     #[error("receipt: {0}")]
     Receipt(#[from] receipt::Error),
+    #[error("channel asset definition does not match persisted metadata")]
+    AssetDefinitionMismatch,
 }
 
 impl From<VerifyError> for Error {
@@ -76,6 +81,8 @@ pub struct Channel {
     receipt: Option<Receipt>,
     #[n(4)]
     aux: Aux,
+    #[n(5)]
+    definition: AssetDefinition,
     // /// Resourcing
     // #[n(5)]
     // bucket: Bucket,
@@ -105,14 +112,11 @@ impl Channel {
     /// TODO :: The bucket is not plumbed in.
     /// Any read or write to the channel should consume from the bucket.
     /// The specific amounts need to be configured.
-    pub fn new(
-        //config: &Config,
-        key: VerifyingKey,
-        tag: Tag,
-    ) -> Self {
+    pub fn new(key: VerifyingKey, tag: Tag, definition: AssetDefinition) -> Self {
         Self {
             key,
             tag,
+            definition,
             retainer: None,
             receipt: None,
             aux: Aux { is_active: true },
@@ -127,6 +131,7 @@ impl Channel {
 
     pub fn new_with(
         keytag: &Keytag,
+        definition: AssetDefinition,
         retainer: Option<Retainer>,
         receipt: Option<Receipt>,
         aux: Aux,
@@ -135,6 +140,7 @@ impl Channel {
         Self {
             key: to_verifying_key(key),
             tag,
+            definition,
             retainer,
             receipt,
             aux,
@@ -149,6 +155,14 @@ impl Channel {
 
     pub fn tag(&self) -> &Tag {
         &self.tag
+    }
+
+    pub fn asset(&self) -> &AssetId {
+        &self.definition.asset
+    }
+
+    pub fn asset_definition(&self) -> &AssetDefinition {
+        &self.definition
     }
 
     pub fn receipt(&self) -> &Option<Receipt> {
@@ -364,10 +378,30 @@ pub fn apply_secrets(secrets: Vec<Secret>) -> impl FnOnce(Channel) -> Result<Cha
     }
 }
 
-pub fn upsert_retainers(
+pub fn open(
+    keytag: Keytag,
+    definition: AssetDefinition,
+    retainers: Vec<Retainer>,
+) -> Result<Channel, Error> {
+    let (key, tag) = keytag.split();
+    let mut channel = Channel::new(to_verifying_key(key), tag, definition);
+    channel.apply_retainer(retainers)?;
+    Ok(channel)
+}
+
+pub fn close(mut channel: Channel) -> Result<(Channel, Option<()>), Error> {
+    channel.apply_retainer(Vec::new())?;
+    Ok((channel, None))
+}
+
+pub fn update(
+    definition: AssetDefinition,
     retainers: Vec<Retainer>,
 ) -> impl FnOnce(Channel) -> Result<Channel, Error> {
     move |mut channel| {
+        if channel.asset_definition() != &definition {
+            return Err(Error::AssetDefinitionMismatch);
+        }
         channel.apply_retainer(retainers)?;
         Ok(channel)
     }

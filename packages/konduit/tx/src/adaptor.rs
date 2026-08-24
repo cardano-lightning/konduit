@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
-use konduit_data::Duration;
+use konduit_data::{AssetId, Duration};
 use konduit_tmp::{Keytag, Receipt};
 
 use crate::{
@@ -42,7 +42,7 @@ pub fn tx(
         return Err(anyhow::anyhow!("No konduit reference found"));
     };
     let change_address = wallet.to_address(network_parameters.network_id);
-    let steppeds = utxos
+    let groups = utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
         .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
@@ -52,16 +52,32 @@ pub fn tx(
                 .and_then(|receipt| u.any_sub(receipt, upper).ok())
         })
         .filter(|u| u.gain() >= preferences.min_single as i64)
+        .fold(BTreeMap::<AssetId, Vec<_>>::new(), |mut groups, stepped| {
+            groups
+                .entry(stepped.data().channel().constants().asset.clone())
+                .or_default()
+                .push(stepped);
+            groups
+        });
+    let gain = groups
+        .values()
+        .map(|group| group.iter().map(|step| step.gain()).sum::<i64>())
+        .max()
+        .unwrap_or(0);
+    let eligible = groups
+        .into_values()
+        .filter(|group| {
+            group.iter().map(|step| step.gain()).sum::<i64>() >= preferences.min_total as i64
+        })
         .collect::<Vec<_>>();
-    let steppeds = SteppedUtxos::from(steppeds);
-
-    if steppeds.gain() < preferences.min_total as i64 {
+    if eligible.is_empty() {
         return Err(InsufficientTotalGain {
             min_total: preferences.min_total,
-            gain: steppeds.gain(),
+            gain,
         }
         .into());
     }
+    let steppeds = SteppedUtxos::from(eligible.into_iter().flatten().collect::<Vec<_>>());
 
     let opens = vec![];
 

@@ -26,6 +26,11 @@ pub struct Env {
     #[serde(rename = "KONDUIT_HOST_ADDRESS")]
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub host_address: Option<Address<kind::Shelley>>,
+
+    /// Optional JSON catalog of additional channel assets
+    #[arg(long, env = "KONDUIT_ASSET_CONFIG", global = true)]
+    #[serde(rename = "KONDUIT_ASSET_CONFIG")]
+    pub asset_config: Option<std::path::PathBuf>,
 }
 
 impl TryFrom<Env> for Config {
@@ -44,6 +49,7 @@ impl TryFrom<Env> for Config {
             connector,
             wallet: wallet.into_signing_key(),
             host_address,
+            asset_config: env.asset_config,
         })
     }
 }
@@ -67,6 +73,7 @@ impl Fill for Env {
             connector,
             wallet: Some(wallet),
             host_address: Some(host_address),
+            asset_config: self.asset_config,
         })
     }
 }

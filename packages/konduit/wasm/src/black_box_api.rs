@@ -209,9 +209,14 @@ impl Konduit {
             .collect())
     }
 
-    /// Open a channel with the given tag and initial deposit.
+    /// Open a channel with the given tag, raw asset amount, and immutable asset identity.
     #[wasm_bindgen(js_name = "openChannel")]
-    pub async fn open_channel(&self, tag: &Tag, amount: u64) -> wasm::Result<Hash32> {
+    pub async fn open_channel(
+        &self,
+        tag: &Tag,
+        amount: u64,
+        asset: &wasm::AssetId,
+    ) -> wasm::Result<Hash32> {
         let tag: core::Tag = tag.clone().into();
 
         log::debug!("open_channel: for tag = {}", tag);
@@ -225,6 +230,7 @@ impl Konduit {
             sub_vkey: adaptor_key,
             close_period,
             amount,
+            asset: asset.clone().into(),
         }];
 
         let open_tx: Hash32 = self

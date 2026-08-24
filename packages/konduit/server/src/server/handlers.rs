@@ -135,3 +135,155 @@ pub async fn pay(
     // FIXME : The return type here has diverged!!
     squash_status(mediation, keytag, data).await
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use konduit_data::{AssetCatalog, AssetDefinition, AssetId, Pricing};
+
+    use super::*;
+
+    fn fx() -> fx_client::State {
+        fx_client::State::new(
+            fx_client::BaseCurrency::Usd,
+            0.5,
+            100_000.0,
+            BTreeMap::from([("custom".into(), 2.0)]),
+        )
+    }
+
+    #[test]
+    fn quote_amount_uses_persisted_definition_pricing() {
+        let fx = fx();
+        let catalog = AssetCatalog::builtins();
+        for alias in ["usdm", "usdcx", "usda"] {
+            assert_eq!(
+                data::quote_amount(&fx, catalog.by_alias(alias).unwrap(), 100_001_000).unwrap(),
+                100_002_001
+            );
+        }
+        let custom = AssetDefinition {
+            alias: "custom".into(),
+            asset: AssetId::native([1; 28], b"CUSTOM".to_vec()).unwrap(),
+            decimals: 6,
+            pricing: Pricing::CoinGecko {
+                coin_id: "custom".into(),
+            },
+        };
+        assert_eq!(
+            data::quote_amount(&fx, &custom, 100_001_000).unwrap(),
+            50_001_501
+        );
+        assert_eq!(
+            fx.asset_units_to_msat(
+                50_000_000,
+                6,
+                data::asset_usd(&fx, &custom).unwrap(),
+            )
+                .unwrap(),
+            100_000_000
+        );
+
+        let mut missing = fx;
+        missing.assets.clear();
+        assert!(data::quote_amount(&missing, &custom, 100_000_000).is_err());
+    }
+
+    struct NoopAdmin;
+
+    #[async_trait::async_trait(?Send)]
+    impl crate::admin::SyncApi for NoopAdmin {
+        async fn sync(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn handler_data(definition: AssetDefinition) -> (web::Data<server::Data>, Keytag) {
+        use cardano_sdk::{Address, Credential, Hash, Network, VerificationKey};
+        use konduit_data::{SigningKey, Squash, SquashBody};
+        use konduit_tmp::{AdaptorInfo, ChannelParameters, TosInfo, TxHelp};
+
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let db = std::sync::Arc::new(db::Db::open(file.path().to_str().unwrap()).unwrap());
+        let signing = SigningKey::from_bytes([7; 32]);
+        let tag = konduit_data::Tag::from(b"quote-smoke".as_slice());
+        let mut channel =
+            crate::channel::Channel::new(signing.verifying_key(), tag.clone(), definition);
+        channel
+            .apply_retainer(vec![crate::channel::Retainer {
+                amount: 200_000_000,
+                subbed: 0,
+                useds: vec![],
+            }])
+            .unwrap();
+        channel
+            .apply_squash(Squash::make(&signing, &tag, SquashBody::zero()).into_unverified())
+            .unwrap();
+        let keytag = channel.keytag();
+        db.insert(channel).unwrap();
+
+        let payment = Credential::from_key(Hash::<28>::from([1; 28]));
+        let host_address = Address::new(Network::Preview.into(), payment);
+        let info = AdaptorInfo {
+            tos: TosInfo { flat_fee: 0 },
+            channel_parameters: ChannelParameters {
+                adaptor_key: VerificationKey::from([2; 32]),
+                close_period: Duration::from_secs(60),
+                tag_length: 32,
+            },
+            tx_help: TxHelp {
+                host_address,
+                validator: konduit_tx::KONDUIT_VALIDATOR.hash,
+            },
+        };
+        let data = server::Data::new(
+            std::sync::Arc::new(bln_client::mock::Client::new()),
+            db,
+            std::sync::Arc::new(tokio::sync::RwLock::new(fx())),
+            std::sync::Arc::new(info),
+            std::sync::Arc::new(NoopAdmin),
+        );
+        (web::Data::new(data), keytag)
+    }
+
+    #[actix_web::test]
+    async fn quote_handler_uses_authenticated_channel_definition() {
+        for (definition, expected) in [
+            (
+                AssetCatalog::builtins().by_alias("usdm").unwrap().clone(),
+                100_002_001,
+            ),
+            (
+                AssetDefinition {
+                    alias: "custom".into(),
+                    asset: AssetId::native([1; 28], b"CUSTOM".to_vec()).unwrap(),
+                    decimals: 6,
+                    pricing: Pricing::CoinGecko {
+                        coin_id: "custom".into(),
+                    },
+                },
+                50_001_501,
+            ),
+        ] {
+            let (data, keytag) = handler_data(definition);
+            let req = actix_web::test::TestRequest::default().to_http_request();
+            req.extensions_mut().insert(keytag);
+            let body = serde_json::from_value::<QuoteBody>(serde_json::json!({
+                "Simple": {
+                    "amount_msat": 100_000_000,
+                    "payee": "000000000000000000000000000000000000000000000000000000000000000000",
+                    "route_hints": []
+                }
+            }))
+            .unwrap();
+            let response = quote(req, data, web::Json(body)).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = actix_web::body::to_bytes(response.into_body())
+                .await
+                .unwrap();
+            let quote: Quote = serde_json::from_slice(&body).unwrap();
+            assert_eq!(quote.amount, expected);
+        }
+    }
+}

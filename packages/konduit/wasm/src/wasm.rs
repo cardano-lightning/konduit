@@ -1,5 +1,6 @@
 mod adaptor;
 mod adaptor_info;
+mod asset_id;
 mod channel_output;
 mod connector;
 mod credential;
@@ -27,6 +28,7 @@ mod wasm_proxy;
 
 pub use adaptor::*;
 pub use adaptor_info::*;
+pub use asset_id::*;
 pub use channel_output::*;
 pub use connector::*;
 pub use credential::*;

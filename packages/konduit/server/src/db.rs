@@ -1,3 +1,4 @@
+use konduit_data::AssetDefinition;
 use konduit_tmp::{Keytag, Receipt};
 use minicbor::{Decode, Encode};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
@@ -21,6 +22,8 @@ pub struct Value {
     receipt: Option<Receipt>,
     #[n(2)]
     aux: Aux,
+    #[n(3)]
+    definition: AssetDefinition,
 }
 
 impl redb::Value for Value {
@@ -56,18 +59,21 @@ impl Value {
             retainer,
             receipt,
             aux,
+            definition,
         } = self;
-        Channel::new_with(keytag, retainer, receipt, aux)
+        Channel::new_with(keytag, definition, retainer, receipt, aux)
     }
 
     pub fn from_channel(val: Channel) -> Self {
         let retainer = val.retainer().to_owned();
         let receipt = val.receipt().to_owned();
         let aux = val.aux().to_owned();
+        let definition = val.asset_definition().to_owned();
         Self {
             retainer,
             receipt,
             aux,
+            definition,
         }
     }
 }
@@ -213,4 +219,34 @@ impl Db {
 /// FIXME :: this should be upstreamed
 pub fn from_key(v: &[u8]) -> Keytag {
     Keytag::try_from(v.to_vec()).expect("illegal key")
+}
+
+#[cfg(test)]
+mod tests {
+    use konduit_data::{AssetCatalog, Tag, VerifyingKey};
+
+    use super::*;
+
+    #[test]
+    fn asset_definition_roundtrips_and_cannot_be_repriced() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let db = Db::open(file.path().to_str().unwrap()).unwrap();
+        let catalog = AssetCatalog::builtins();
+        let ada = catalog.by_alias("ada").unwrap().clone();
+        let usdm = catalog.by_alias("usdm").unwrap().clone();
+        let channel = Channel::new(
+            VerifyingKey::from_bytes([1; 32]),
+            Tag::from(b"asset-test".as_slice()),
+            ada.clone(),
+        );
+        let keytag = channel.keytag();
+        db.insert(channel).unwrap();
+
+        let recovered = db.get(&keytag).unwrap().unwrap();
+        assert_eq!(recovered.asset_definition(), &ada);
+        assert!(matches!(
+            db.update(&keytag, channel::update(usdm, vec![])),
+            Err(Error::Channel(channel::Error::AssetDefinitionMismatch))
+        ));
+    }
 }

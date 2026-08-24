@@ -48,7 +48,7 @@ impl SteppedUtxo {
     }
 
     pub fn gain(&self) -> i64 {
-        self.data().channel().buffered_amount() as i64
-            - self.data().cont_data().map_or(0, |x| x.buffered_amount()) as i64
+        self.data().channel().amount() as i64
+            - self.data().cont_data().map_or(0, |x| x.amount()) as i64
     }
 }

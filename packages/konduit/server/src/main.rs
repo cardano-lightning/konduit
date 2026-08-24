@@ -1,4 +1,5 @@
 use clap::Parser;
+use konduit_data::AssetCatalog;
 use konduit_server::{admin, args, server};
 use konduit_tmp::AdaptorInfo;
 use konduit_tx::InsufficientTotalGain;
@@ -17,13 +18,24 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let args = args::Args::parse();
+    let assets = Arc::new(AssetCatalog::load(args.asset_config.as_deref())?);
+    if args.fx.base_currency != fx_client::BaseCurrency::Usd {
+        return Err(anyhow::anyhow!(
+            "Konduit asset settlement requires --fx-base-currency usd"
+        ));
+    }
 
     // FX
     let fx_every = args.fx.every;
     let fx_config = fx_client::cli::Config::from_args(args.fx)
         .ok_or_else(|| anyhow::anyhow!("Failed to resolve FX configuration from provided flags"))?;
 
-    let fx_client = fx_config.build()?;
+    let feeds = assets
+        .coin_gecko_feeds()
+        .into_iter()
+        .map(|(key, coin_id)| fx_client::FeedRequest { key, coin_id })
+        .collect();
+    let fx_client = fx_config.build(feeds)?;
     let fx_init_state = fx_client.get().await?;
     let fx_state = Arc::new(RwLock::new(fx_init_state));
     let fx_state_clone = fx_state.clone();
@@ -49,6 +61,19 @@ async fn main() -> anyhow::Result<()> {
 
     // DB
     let db = Arc::new(args.db.build()?);
+    for keytag in db.keys()? {
+        let channel = db
+            .get(&keytag)?
+            .ok_or_else(|| anyhow::anyhow!("persisted channel {keytag} vanished during startup"))?;
+        let definition = assets
+            .by_asset(channel.asset())
+            .ok_or_else(|| anyhow::anyhow!("persisted channel asset is not configured"))?;
+        if definition != channel.asset_definition() {
+            return Err(anyhow::anyhow!(
+                "persisted channel asset definition differs from current catalog"
+            ));
+        }
+    }
 
     // BLN
     let bln = bln_client::cli::Config::from_args(args.bln)
@@ -59,7 +84,14 @@ async fn main() -> anyhow::Result<()> {
     let admin_every = args.admin.admin_every;
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(
-        admin::Service::new(admin_config, bln.clone(), cardano.clone(), db.clone()).await?,
+        admin::Service::new(
+            admin_config,
+            bln.clone(),
+            cardano.clone(),
+            db.clone(),
+            assets,
+        )
+        .await?,
     );
     let admin_for_sync = Arc::clone(&admin);
 

@@ -14,8 +14,8 @@
       "$ref": "#/definitions/Bool"
     }
   },
-  "compiledCode": "584501010029800aba2aba1aab9f9bac00148888c8c8ca60026eb4c0180066eb8c0180126eb8c01800e6eb8c0180092222598009805802c528c590090c018004c014004c010005",
-  "hash": "bf556f9cdb314d43f14da5c9892f3f17432186cec157b6a89f2f696d",
+  "compiledCode": "58a601010029800aba2aba1aab9faab9eaab9dab9a9bac00148888888c8c8ca60026eb4c0240066014003375c6012009375c6012007375c6012004911112cc004c03c0122646644b30013370e90000014566002601e6ea800e00316404115980099b874800800a264646644b30013016003802c590141bae3013001375c60260046026002601e6ea800e2c806900d18061baa00114a2601c00916403430090013008001300700101",
+  "hash": "6615073c528cc3b1c39fd96937d2ac0c434ce8bf2a42ac14b5864c78",
   "definitions": {
     "Bool": {
       "title": "Bool",
@@ -34,12 +34,39 @@
         }
       ]
     },
+    "ByteArray": {
+      "dataType": "bytes"
+    },
     "Int": {
       "dataType": "integer"
     },
     "aiken/crypto/VerificationKey": {
       "title": "VerificationKey",
       "dataType": "bytes"
+    },
+    "konduit/types/AssetId": {
+      "title": "AssetId",
+      "anyOf": [
+        {
+          "title": "Ada",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Native",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
     },
     "konduit/types/Constants": {
       "title": "Constants",
@@ -56,6 +83,9 @@
         },
         {
           "$ref": "#/definitions/Int"
+        },
+        {
+          "$ref": "#/definitions/konduit~1types~1AssetId"
         }
       ]
     },

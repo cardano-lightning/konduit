@@ -11,7 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = fx_client::cli::Config::from_args(args)
         .expect("Insufficient arguments to determine a valid FX client.");
-    let client = config.build()?;
+    let client = config.build(vec![])?;
 
     let fetch_and_print = || async {
         match client.get().await {

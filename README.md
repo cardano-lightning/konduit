@@ -8,7 +8,8 @@ This project is incubating. Expect sharp edges.
 
 ## Vision
 
-An ada holder can have the same experience as a BLN user when paying merchants.
+A Cardano asset holder can have the same experience as a BLN user when paying
+merchants.
 
 See the [design](./docs/design/) for more details.
 

@@ -86,7 +86,7 @@ For each input page there is:
 The input pages include:
 
 - Settings Cardano Connector
-- Settings Currencies - Only Ada is supported at this time.
+- Settings Currencies - select an operator-configured channel asset.
 - Settings Stake
 - Settings Locale - Date time, number format, fiat.
 - Settings ... TBC
@@ -187,29 +187,28 @@ Edit: A text field. Accept Bech32, or hex, or address with stake credentials.
 supported input formats with examples, if they attempt to put in unrecognized
 data.
 
-# Settings Currencies (TBC)
+# Settings Currencies
 
 Title: Currencies
 
-Info: This version supports only Ada channels. There is no abitility to set the
-properties of Ada. In future, other currencies can be supported. A Currency can
-be set with the following properties:
+Each channel selects one immutable asset at open: Ada or a Cardano native
+policy/name identity. Available assets come from the operator catalog. The app
+does not let a payment, add, or quote override the authenticated channel asset.
 
-- Name. UTF-8. Consumer's choice
-- PolicyId. Hexidecimal 56 characters. Aka script hash, this is the blake2b256
-  hash of the script of the currency.
-- Name. Hexidecimal, >= 64 characters. The token name.
-- Symbol. Dropdown, or paste. Single character (Emoji support?). The symbol
-  indicating character.
-- DP. Non negative integer. The number of decimal places of the currency. For
-  example, Ada has 6 as 1 Ada is 1000000 Lovelace.
-- High Fee Flag. Two non negative numeric fields, an absolute and a percentage.
-  If set, then a fee is greater than the indicated amount will be flagged on a
-  consent form.
+Display:
 
-Display: Ada fields, non editable. Add button, disabled.
+- Alias and policy/name identity
+- Decimal places used for displayed amounts
+- Pricing mode
 
-Edit: Disabled
+Aliases, decimals, and prices are off-chain metadata. Stable definitions use
+USD `1`; variable definitions require a CoinGecko ID. The validator accepts any
+well-formed configured identity, rejects extra assets, and treats minimum Ada as
+reserve rather than channel capacity.
+
+The embedded wallet must hold both the selected native asset and enough Ada for
+reserve and transaction fees. Protocol, quote, and cheque amounts remain raw
+asset units.
 
 # Settings Locale
 
@@ -239,14 +238,16 @@ configured to work.
 
 Title: Price Feeds
 
-Info: (Optional). Price Feeds source provides the current exchange rates between
-currencies: Ada, Bitcoin, Fiat _etc_. If set, prices and costs are converted. It
-is required in order to determine high fees and display costs in fiat.
+The server settles channel conversions in USD. Ada uses its configured provider
+rate, built-in and configured `usd_peg` assets resolve locally to USD `1`, and
+custom variable assets use the CoinGecko ID in the operator catalog. A missing
+configured variable-asset rate prevents quoting or paying that channel.
 
-Display: If not set, then "(None)", else URL
+Display: provider status and the latest complete rates. CoinGecko is required
+when the catalog contains variable assets.
 
-Edit: URL selector or custom text field. Note that the latter will expect to
-have one of the supported formats.
+Edit: provider configuration is operator-managed; the app does not override a
+channel's persisted pricing definition.
 
 # Settings Export
 
@@ -278,15 +279,14 @@ On-click, remove all data, and show launch page.
 
 # Embedded Wallet
 
-The embedded wallet covers collateral and funds channels. It is the default
-output address when closing channels. The help dialogue conveys the purpose of
-the embedded wallet, and that insufficient funds will impact correct functioning
-(ie less than X amount of ada and txs will fail).
+The embedded wallet supplies collateral, minimum-Ada reserves, and channel
+assets. It is the default output address when closing channels. Insufficient Ada
+or an insufficient selected native asset prevents channel transactions.
 
 Widgets:
 
-- Total Ada (in embedded wallet)
-- Total Other Currencies (TBC)
+- Total Ada
+- Totals for configured native assets held by the wallet
 - Wallet Address. Buttons: Copy, create QR, View address in Cardano Explorer (if
   set).
 - App Embedded Wallet Activity Latest Widget, with "See all" Button. Opens
@@ -394,14 +394,12 @@ Showing:
 
 # Embedded Wallet Funds Out
 
-The embedded wallet comes tx fees and funds channels. It is the default output
-address when closing channels. The Help dialogue conveys the purpose of the
-embedded wallet, and that insufficient funds will impact correct functioning (ie
-less than X amount of ada and txs will fail).
+The embedded wallet supplies transaction fees, minimum-Ada reserves, and channel
+assets. It is the default output address when closing channels. A funds-out
+transaction must leave enough value for pending channel operations.
 
-- Total Ada (in embedded wallet)
-- Total Other (TBC)
-- Input slider for funds out amount (or amounts TBC)
+- Total Ada and configured native-asset balances
+- Asset selector and raw/display-scaled amount input
 - Output Address
 - Cancel Button. On click returns to App Embedded Wallet
 - Submit Button. On click returns to App Embedded Wallet

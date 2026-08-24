@@ -5,7 +5,7 @@ use crate::{
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
-use konduit_data::{Constants, Duration, Stage, Tag};
+use konduit_data::{AssetId, Constants, Duration, Stage, Tag};
 use std::collections::BTreeMap;
 
 pub struct OpenIntent {
@@ -13,6 +13,7 @@ pub struct OpenIntent {
     pub sub_vkey: VerificationKey,
     pub close_period: Duration,
     pub amount: u64,
+    pub asset: AssetId,
 }
 
 impl OpenIntent {
@@ -22,6 +23,7 @@ impl OpenIntent {
             add_vkey: to_verifying_key(add_vkey),
             sub_vkey: to_verifying_key(self.sub_vkey),
             close_period: self.close_period,
+            asset: self.asset,
         }
     }
 }

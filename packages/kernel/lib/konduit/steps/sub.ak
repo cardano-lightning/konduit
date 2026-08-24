@@ -20,10 +20,14 @@ pub fn do(
   unlockeds: List<t.Unlocked>,
 ) -> VerificationKey {
   trace @"sub.do": @"starting sub step"
-  let (tag, add_vkey, sub_vkey, _close_period) = constants
+  let (tag, add_vkey, sub_vkey, _close_period, asset) = constants
   expect t.Opened(subbed_in, useds_in) = stage_in
   expect t.Opened(subbed_out, useds_out) = stage_out
-  expect subbed_out - subbed_in == amount_in(value_in) - amount_out(value_out)
+  expect
+    subbed_out - subbed_in == amount_in(value_in, asset) - amount_out(
+      value_out,
+      asset,
+    )
   let amount = account(
     upper_bound,
     add_vkey,

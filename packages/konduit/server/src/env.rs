@@ -11,6 +11,7 @@ pub const NETWORK: &str = "KONDUIT_NETWORK";
 
 /// # Db config
 pub const DB_PATH: &str = "KONDUIT_DB_PATH";
+pub const ASSET_CONFIG: &str = "KONDUIT_ASSET_CONFIG";
 
 /// # Server config
 pub const SERVER_HOST: &str = "KONDUIT_SERVER_HOST";

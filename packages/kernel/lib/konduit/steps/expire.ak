@@ -2,7 +2,6 @@ use aiken/builtin.{head_list, tail_list}
 use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
 use cardano/assets.{Value}
-use env
 use extra/xlist.{foldl3}
 use konduit/assets.{amount_out} as k_assets
 use konduit/prelude.{Amount, Timebound}
@@ -16,12 +15,12 @@ pub fn do(
   stage_out: t.Stage,
   unpends: List<t.Unpend>,
 ) -> VerificationKey {
-  let (_tag, add_vkey, _sub_vkey, _close_period) = constants
+  let (_tag, add_vkey, _sub_vkey, _close_period, asset) = constants
   expect t.Responded(pends_amount_in, pends_in) = stage_in
   expect t.Responded(pends_amount_out, pends_out) = stage_out
   let amount = account(lower_bound, unpends, pends_in, pends_out)
   expect pends_amount_out == pends_amount_in - amount
-  expect amount_out(value_out) >= pends_amount_out + env.min_ada_buffer
+  expect amount_out(value_out, asset) >= pends_amount_out
   add_vkey
 }
 

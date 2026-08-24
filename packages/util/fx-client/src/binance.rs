@@ -72,7 +72,12 @@ impl Api for Client {
             .get(&ada_symbol)
             .ok_or_else(|| Error::InvalidData(format!("Missing price for {}", ada_symbol)))?;
 
-        Ok(State::new(self.base.clone(), ada_price, btc_price))
+        Ok(State::new(
+            self.base,
+            ada_price,
+            btc_price,
+            Default::default(),
+        ))
     }
 }
 

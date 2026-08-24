@@ -7,7 +7,7 @@ use crate::{
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::{Lock, Secret};
+use konduit_data::{AssetCatalog, AssetDefinition, Lock, Secret};
 use konduit_tmp::{ChannelParameters, Keytag};
 use konduit_tx::{
     Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
@@ -25,6 +25,7 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
+    assets: Arc<AssetCatalog>,
     network_parameters: NetworkParameters,
     channel_parameters: ChannelParameters,
     tx_preferences: AdaptorPreferences,
@@ -38,6 +39,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
         cardano: Arc<Connector>,
         db: Arc<db::Db>,
+        assets: Arc<AssetCatalog>,
     ) -> anyhow::Result<Self> {
         let Config {
             wallet,
@@ -96,6 +98,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             bln,
             cardano,
             db,
+            assets,
             network_parameters,
             channel_parameters,
             tx_preferences,
@@ -104,7 +107,10 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         })
     }
 
-    fn retainers(&self, utxos: &BTreeMap<Input, Output>) -> BTreeMap<Keytag, Vec<Retainer>> {
+    fn retainers(
+        &self,
+        utxos: &BTreeMap<Input, Output>,
+    ) -> anyhow::Result<BTreeMap<Keytag, (AssetDefinition, Vec<Retainer>)>> {
         let close_period = self.channel_parameters.close_period;
         let tag_length = self.channel_parameters.tag_length;
         let own_vkey = VerificationKey::from(&self.wallet);
@@ -118,20 +124,35 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
                     && constants.close_period >= close_period
                     && constants.tag.len() <= tag_length
                     && channel.stage().is_opened()
-            })
-            .filter_map(|u| {
-                Retainer::try_from(u.data())
-                    .ok()
-                    .map(|r| (u.data().keytag(), r))
             });
         let mut retainers = BTreeMap::new();
-        for (keytag, retainer) in candidates {
-            retainers
-                .entry(keytag)
-                .or_insert_with(Vec::new)
-                .push(retainer);
+        for utxo in candidates {
+            let Some(definition) = self
+                .assets
+                .by_asset(&utxo.data().constants().asset)
+                .cloned()
+            else {
+                continue;
+            };
+            let Ok(retainer) = Retainer::try_from(utxo.data()) else {
+                continue;
+            };
+            let keytag = utxo.data().keytag();
+            match retainers.entry(keytag) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert((definition, vec![retainer]));
+                }
+                std::collections::btree_map::Entry::Occupied(mut entry) => {
+                    if entry.get().0.asset != definition.asset {
+                        return Err(anyhow::anyhow!(
+                            "one channel keytag resolved to different asset identities"
+                        ));
+                    }
+                    entry.get_mut().1.push(retainer);
+                }
+            }
         }
-        retainers
+        Ok(retainers)
     }
 
     /// These should be considered confirmed utxos,
@@ -195,13 +216,18 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         // The suboptimal way.
         let snapshot = self.snapshot().await?;
         let left: Vec<Keytag> = self.db.keys()?;
-        let right = self.retainers(&snapshot);
+        let right = self.retainers(&snapshot)?;
         for item in CoIter::new(left, right) {
-            let (k, v) = match item {
-                CoItem::Left(k) => (k, Vec::new()),
-                CoItem::Right(k, v) | CoItem::Both(k, v) => (k, v),
+            match item {
+                CoItem::Left(k) => self.db.update(&k, channel::close)?,
+                CoItem::Right(k, (definition, retainers)) => {
+                    self.db.insert(channel::open(k, definition, retainers)?)?;
+                    None
+                }
+                CoItem::Both(k, (definition, retainers)) => {
+                    self.db.update(&k, channel::update(definition, retainers))?
+                }
             };
-            self.db.upsert(&k, channel::upsert_retainers(v))?;
         }
         Ok(())
     }
@@ -372,6 +398,7 @@ mod tests {
             Arc::new(bln_client::mock::Client::new()),
             connector,
             Arc::new(tmp_db()),
+            Arc::new(AssetCatalog::builtins()),
         )
         .await
         .err()
@@ -396,6 +423,7 @@ mod tests {
             Arc::new(bln_client::mock::Client::new()),
             connector,
             Arc::new(tmp_db()),
+            Arc::new(AssetCatalog::builtins()),
         )
         .await
         .err()
@@ -418,6 +446,7 @@ mod tests {
             Arc::new(bln_client::mock::Client::new()),
             connector,
             Arc::new(tmp_db()),
+            Arc::new(AssetCatalog::builtins()),
         )
         .await;
 

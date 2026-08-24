@@ -69,7 +69,12 @@ impl Api for Client {
             parse_kraken_price(&resp.result, &ada_target_pair)?
         };
 
-        Ok(State::new(self.base.clone(), ada_price, btc_price))
+        Ok(State::new(
+            self.base,
+            ada_price,
+            btc_price,
+            Default::default(),
+        ))
     }
 }
 

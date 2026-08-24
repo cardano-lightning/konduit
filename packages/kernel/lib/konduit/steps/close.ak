@@ -13,12 +13,12 @@ pub fn do(
   value_out: Value,
   stage_out: t.Stage,
 ) -> VerificationKey {
-  let (_tag, add_vkey, _sub_vkey, close_period) = constants
+  let (_tag, add_vkey, _sub_vkey, close_period, asset) = constants
   expect t.Opened(subbed, useds) = stage_in
   expect t.Closed(subbed_, useds_, elapse_at) = stage_out
   expect subbed == subbed_
   expect useds == useds_
-  expect amount_in(value_in) <= amount_out(value_out)
+  expect amount_in(value_in, asset) <= amount_out(value_out, asset)
   expect Finite(upper_bound) = upper_bound
   expect upper_bound <= elapse_at - close_period
   add_vkey

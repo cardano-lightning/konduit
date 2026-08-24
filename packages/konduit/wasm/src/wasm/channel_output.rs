@@ -1,4 +1,8 @@
-use crate::{core, wasm::Tag, wasm_proxy};
+use crate::{
+    core,
+    wasm::{AssetId, Tag},
+    wasm_proxy,
+};
 use wasm_bindgen::prelude::*;
 
 wasm_proxy! {
@@ -33,6 +37,12 @@ impl ChannelOutput {
         self.constants().tag.clone().into()
     }
 
+    /// Return the channel's immutable asset identity.
+    #[wasm_bindgen(getter, js_name = "asset")]
+    pub fn _wasm_asset(&self) -> AssetId {
+        self.constants().asset.clone().into()
+    }
+
     /// Return the total amount already subbed from the channel
     #[wasm_bindgen(getter, js_name = "subbedAmount")]
     pub fn _wasm_subbed_amount(&self) -> u64 {
@@ -43,10 +53,9 @@ impl ChannelOutput {
         }
     }
 
-    /// Return the total amount deposited in the channel. Owed amount is obtained by looking at the
-    /// receipt.
+    /// Return total raw units deposited in the selected channel asset.
     #[wasm_bindgen(getter, js_name = "totalAmount")]
     pub fn _wasm_total_amount(&self) -> u64 {
-        self.amount() + self._wasm_subbed_amount() + core::MIN_ADA_BUFFER
+        self.amount() + self._wasm_subbed_amount()
     }
 }

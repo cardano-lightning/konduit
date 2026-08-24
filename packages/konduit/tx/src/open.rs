@@ -25,10 +25,6 @@ impl Open {
         self.1.as_ref()
     }
 
-    pub fn buffered_amount(&self) -> u64 {
-        self.data().buffered_amount()
-    }
-
     pub fn address(&self, network_id: NetworkId) -> Address<kind::Shelley> {
         konduit_address(network_id, self.delegation())
     }
