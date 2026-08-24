@@ -10,12 +10,13 @@ use crate::server::{Data, auth, handlers, mediation};
 pub struct Service {
     data: Data,
     bind_address: String,
+    session_check_url: String,
 }
 
 impl Service {
     pub fn new(args: super::Args, data: super::Data) -> Self {
         let bind_address = format!("{}:{:?}", args.host, args.port);
-        Self { data, bind_address }
+        Self { data, bind_address, session_check_url: args.session_check_url }
     }
 
     pub fn data(&self) -> &Data {
@@ -23,10 +24,11 @@ impl Service {
     }
 
     pub async fn run(self) -> std::io::Result<()> {
-        // FIXME :: Handle error
         let data = web::Data::new(self.data);
+        let session_check_url = self.session_check_url;
         log::info!("Starting server on http://{}...", self.bind_address);
         HttpServer::new(move || {
+            let session_check_url = session_check_url.clone();
             App::new()
                 .wrap(Logger::default())
                 .wrap(
@@ -39,13 +41,24 @@ impl Service {
                 .wrap(middleware::from_fn(mediation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
                 .service(
-                    // FIXME : Implement auth
                     web::scope("/ch")
                         .wrap(middleware::from_fn(auth::no_auth))
                         .route("/receipt", web::get().to(handlers::receipt))
-                        .route("/squash", web::post().to(handlers::squash))
-                        .route("/quote", web::post().to(handlers::quote))
-                        .route("/pay", web::post().to(handlers::pay)),
+                        .service(
+                            web::resource("/squash")
+                                .wrap(auth::LeaseAuth::new(session_check_url.clone()))
+                                .route(web::post().to(handlers::squash)),
+                        )
+                        .service(
+                            web::resource("/quote")
+                                .wrap(auth::LeaseAuth::new(session_check_url.clone()))
+                                .route(web::post().to(handlers::quote)),
+                        )
+                        .service(
+                            web::resource("/pay")
+                                .wrap(auth::LeaseAuth::new(session_check_url.clone()))
+                                .route(web::post().to(handlers::pay)),
+                        ),
                 )
                 .service(web::scope("/opt").route("/fx", web::get().to(handlers::fx)))
                 .service(

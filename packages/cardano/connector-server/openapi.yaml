@@ -111,10 +111,44 @@ paths:
         default:
           $ref: "#/components/responses/UnexpectedError"
 
+  /protocol-parameters:
+    get:
+      summary: Current protocol parameters and chain marker
+      operationId: getProtocolParameters
+      responses:
+        "200":
+          description: Current era parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolParametersResponse"
+
+  /session/claim:
+    post:
+      summary: Claim the single active writer lease
+      operationId: claimSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionClaimRequest"
+      responses:
+        "200":
+          description: Short-lived writer lease
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionClaimResponse"
+        "409":
+          description: Stale generation or conflicting writer
+
   /submit:
     post:
       summary: Submit transaction
       operationId: submitTransaction
+      parameters:
+        - $ref: "#/components/parameters/FerretSession"
       requestBody:
         required: true
         content:
@@ -150,6 +184,13 @@ components:
       schema:
         type: string
         pattern: "^[0-9a-f]{64}$"
+    FerretSession:
+      name: FERRET-SESSION
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 32
 
   responses:
     UnexpectedError:
@@ -291,11 +332,65 @@ components:
           items:
             $ref: "#/components/schemas/TxOutput"
 
+    ProtocolParametersResponse:
+      type: object
+      additionalProperties: false
+      required: [era, epoch, slot, payload]
+      properties:
+        era:
+          type: string
+        epoch:
+          type: integer
+          minimum: 0
+        slot:
+          type: integer
+          minimum: 0
+        payload:
+          type: object
+
+    SessionClaimRequest:
+      type: object
+      additionalProperties: false
+      required: [walletVerificationKeyHex, generation, backupHashHex, devicePublicKeyHex, timestamp, signatureHex]
+      properties:
+        walletVerificationKeyHex:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        generation:
+          type: integer
+          minimum: 1
+        backupHashHex:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        devicePublicKeyHex:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        timestamp:
+          type: integer
+          minimum: 0
+        signatureHex:
+          type: string
+          pattern: "^[0-9a-f]{128}$"
+
+    SessionClaimResponse:
+      type: object
+      additionalProperties: false
+      required: [lease, expiresAtEpochMillis]
+      properties:
+        lease:
+          type: string
+        expiresAtEpochMillis:
+          type: integer
+          minimum: 0
+
     SubmitRequest:
       type: object
       additionalProperties: false
-      required: [transaction]
+      required: [operation_id, transaction]
       properties:
+        operation_id:
+          type: string
+          format: uuid
         transaction:
           type: string
           description: Signed transaction CBOR encoded as hexadecimal

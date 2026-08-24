@@ -15,6 +15,7 @@ pub const DB_PATH: &str = "KONDUIT_DB_PATH";
 /// # Server config
 pub const SERVER_HOST: &str = "KONDUIT_SERVER_HOST";
 pub const SERVER_PORT: &str = "KONDUIT_SERVER_PORT";
+pub const SESSION_CHECK_URL: &str = "KONDUIT_SESSION_CHECK_URL";
 
 /// # Channel params
 pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";
