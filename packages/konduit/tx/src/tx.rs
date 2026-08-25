@@ -42,7 +42,6 @@ pub fn tx(
         .map(|i| (i.0.clone(), Some(PlutusData::from(i.1.clone()))))
         .chain(fuel_inputs.iter().map(|i| (i.clone(), None)))
         .collect::<Vec<_>>();
-    let outputs = outputs;
     let collaterals = fuel_inputs.clone();
     let specified_signatories = steppeds.specified_signatories();
     let bounds = steppeds.bounds();

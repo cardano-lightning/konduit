@@ -30,7 +30,7 @@
         {
           "always_run": false,
           "args": [],
-          "entry": "cargo-clippy -- --manifest-path Cargo.toml",
+          "entry": "cargo clippy --manifest-path Cargo.toml",
           "exclude": "^$",
           "exclude_types": [],
           "fail_fast": false,

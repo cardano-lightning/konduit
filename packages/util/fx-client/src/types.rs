@@ -82,7 +82,7 @@ fn scale(decimals: u8) -> Result<u64> {
 
 fn checked_floor(value: f64) -> Result<u64> {
     let value = value.floor();
-    if value.is_finite() && value >= 0.0 && value < 18_446_744_073_709_551_616.0 {
+    if (0.0..18_446_744_073_709_551_616.0).contains(&value) {
         Ok(value as u64)
     } else {
         Err(Error::InvalidData(

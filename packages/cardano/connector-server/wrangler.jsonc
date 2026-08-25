@@ -16,6 +16,10 @@
       {
         "name": "WALLET_SESSIONS",
         "class_name": "WalletSession"
+      },
+      {
+        "name": "L1_OPERATIONS",
+        "class_name": "L1Operation"
       }
     ]
   },
@@ -23,6 +27,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["WalletSession"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["L1Operation"]
     }
   ],
   "observability": {
@@ -38,6 +46,10 @@
           {
             "name": "WALLET_SESSIONS",
             "class_name": "WalletSession"
+          },
+          {
+            "name": "L1_OPERATIONS",
+            "class_name": "L1Operation"
           }
         ]
       },
@@ -58,6 +70,10 @@
           {
             "name": "WALLET_SESSIONS",
             "class_name": "WalletSession"
+          },
+          {
+            "name": "L1_OPERATIONS",
+            "class_name": "L1Operation"
           }
         ]
       },
