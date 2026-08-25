@@ -222,7 +222,6 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
                 CoItem::Left(k) => self.db.update(&k, channel::close)?,
                 CoItem::Right(k, (definition, retainers)) => {
                     self.db.insert(channel::open(k, definition, retainers)?)?;
-                    None
                 }
                 CoItem::Both(k, (definition, retainers)) => {
                     self.db.update(&k, channel::update(definition, retainers))?

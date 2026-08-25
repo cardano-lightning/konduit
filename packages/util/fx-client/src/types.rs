@@ -22,6 +22,7 @@ pub struct State {
     pub ada: f64,
     #[n(3)]
     pub bitcoin: f64,
+    #[n(4)]
     pub assets: BTreeMap<String, f64>,
 }
 
@@ -137,7 +138,7 @@ impl<C> minicbor::Encode<C> for BaseCurrency {
         &self,
         e: &mut minicbor::Encoder<W>,
         _ctx: &mut C,
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+    ) -> std::result::Result<(), minicbor::encode::Error<W::Error>> {
         e.str(&self.to_string())?;
         Ok(())
     }
@@ -147,7 +148,7 @@ impl<'b, C> minicbor::Decode<'b, C> for BaseCurrency {
     fn decode(
         d: &mut minicbor::Decoder<'b>,
         _ctx: &mut C,
-    ) -> Result<Self, minicbor::decode::Error> {
+    ) -> std::result::Result<Self, minicbor::decode::Error> {
         d.str()?
             .parse()
             .map_err(|_: String| minicbor::decode::Error::message("invalid base currency"))

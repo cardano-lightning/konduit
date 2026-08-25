@@ -7,6 +7,7 @@ mod possible_step;
 mod quote;
 mod quote_body;
 pub mod receipt;
+mod session;
 mod squash_proposal;
 mod squash_status;
 
@@ -18,6 +19,7 @@ pub use possible_step::PossibleStep;
 pub use quote::Quote;
 pub use quote_body::QuoteBody;
 pub use receipt::Receipt;
+pub use session::{SessionClaimRequest, SessionClaimResponse};
 pub use squash_proposal::SquashProposal;
 pub use squash_status::SquashStatus;
 

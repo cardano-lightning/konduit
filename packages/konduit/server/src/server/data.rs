@@ -62,6 +62,7 @@ impl From<db::Error> for Error {
             db::Error::Contended => Error::DbContended,
             db::Error::Backend(error) => Error::DbBackend(error),
             db::Error::NoChannel => Error::NoChannel,
+            db::Error::AlreadyExists => Error::DbBackend("entry already exists".into()),
             db::Error::Channel(error) => Error::Channel(error),
         }
     }
@@ -102,7 +103,6 @@ impl Data {
     pub fn fx(&self) -> Arc<tokio::sync::RwLock<fx_client::State>> {
         self.fx.clone()
     }
-
 
     pub fn db(&self) -> Arc<db::Db> {
         self.db.clone()
@@ -163,7 +163,8 @@ impl Data {
         let amount_msat = body.amount_msat();
         let min_amount = {
             let fx = self.fx.read().await;
-            quote_amount(&fx, &definition, amount_msat).map_err(|error| Error::Fx(error.to_string()))?
+            quote_amount(&fx, &definition, amount_msat)
+                .map_err(|error| Error::Fx(error.to_string()))?
         };
         channel.can_commit(min_amount)?;
         let bln_res = self

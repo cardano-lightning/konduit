@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use cardano_sdk::Input;
 use inquire::Select;
-use konduit_data::{Constants, Duration, Tag, VerifyingKey};
+use konduit_data::{AssetId, Constants, Duration, Tag, VerifyingKey};
 use konduit_tx2::{
     StagedTx,
     channel::Channel,
@@ -322,6 +322,7 @@ fn build_open(ctx: &Ctx) -> Result<Channel> {
         add_vkey,
         sub_vkey,
         close_period,
+        asset: AssetId::Ada,
     };
     Ok(Channel::new_open(
         None, /* TODO: delegation */

@@ -1,11 +1,12 @@
 use crate::core::{
-    AdaptorInfo, Invoice, Keytag, Locked, PayBody, Quote, QuoteBody, Receipt, Squash, SquashStatus,
-    Tag, TxHelp,
+    AdaptorInfo, Invoice, Keytag, Locked, PayBody, Quote, QuoteBody, Receipt, SessionClaimRequest,
+    SessionClaimResponse, Squash, SquashStatus, Tag, TxHelp,
 };
 use anyhow::anyhow;
 use http_client::{HeaderPolicy, Transport, codec, header_policy};
 
 const HEADER_NAME_KEYTAG: &str = "KONDUIT";
+const HEADER_NAME_SESSION: &str = "FERRET-SESSION";
 
 pub type Client<T> = http_client::Client<T, codec::Json>;
 
@@ -13,6 +14,7 @@ pub struct Adaptor<T: Transport> {
     http_client: Client<T>,
     info: AdaptorInfo<TxHelp>,
     keytag: Option<(Tag, String)>,
+    session: Option<SessionClaimResponse>,
 }
 
 /// An isomorphic Adaptor (a.k.a konduit-server) client that selectively pick a platform-compatible
@@ -28,6 +30,7 @@ impl<T: Transport> Adaptor<T> {
             http_client,
             info,
             keytag: None,
+            session: None,
         };
 
         adaptor.set_keytag(keytag);
@@ -45,11 +48,35 @@ impl<T: Transport> Adaptor<T> {
         headers
     }
 
+    fn mutation_headers(&self) -> anyhow::Result<Vec<Box<dyn HeaderPolicy>>> {
+        let lease = &self
+            .session
+            .as_ref()
+            .ok_or_else(|| anyhow!("missing FERRET-SESSION lease"))?
+            .lease;
+        let mut headers = self.with_keytag_header();
+        headers.push(header_policy::Custom::new(HEADER_NAME_SESSION, lease).boxed());
+        Ok(headers)
+    }
+
     pub fn set_keytag(&mut self, keytag: Option<&Keytag>) {
         self.keytag = keytag.map(|k| {
             let (_, tag) = k.split();
             (tag, k.to_string())
         });
+    }
+
+    pub async fn claim_session(
+        &mut self,
+        claim: &SessionClaimRequest,
+    ) -> anyhow::Result<&SessionClaimResponse> {
+        self.session = Some(
+            self.http_client
+                .post::<SessionClaimRequest, SessionClaimResponse>("/session/claim", claim)
+                .await
+                .map_err(|error| anyhow!(error))?,
+        );
+        Ok(self.session.as_ref().unwrap())
     }
 
     pub fn info(&self) -> &AdaptorInfo<TxHelp> {
@@ -76,7 +103,7 @@ impl<T: Transport> Adaptor<T> {
             .post_with_headers::<QuoteBody, Quote>(
                 "/ch/quote",
                 &QuoteBody::Bolt11(invoice.clone()),
-                self.with_keytag_header(),
+                self.mutation_headers()?,
             )
             .await
             .map_err(|e| anyhow!(e))
@@ -91,7 +118,7 @@ impl<T: Transport> Adaptor<T> {
                     signature: locked.signature().to_owned(),
                     invoice: invoice.clone(),
                 },
-                self.with_keytag_header(),
+                self.mutation_headers()?,
             )
             .await
             .map_err(|e| anyhow!(e))
@@ -104,12 +131,55 @@ impl<T: Transport> Adaptor<T> {
     // we need to fix this elsewhere: the server, and then permit the client to
     // switch between json and cbor.
     pub async fn squash(&self, squash: Squash) -> anyhow::Result<SquashStatus> {
-        let headers = self.with_keytag_header();
+        let headers = self.mutation_headers()?;
 
         let res = self
             .http_client
             .post_with_headers::<Squash, SquashStatus>("/ch/squash", &squash, headers)
             .await;
         res.map_err(|e| anyhow!(e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::{ChannelParameters, TosInfo, VerificationKey};
+    use std::convert::Infallible;
+
+    struct NoTransport;
+
+    impl Transport for NoTransport {
+        type Error = Infallible;
+
+        async fn transport(
+            &self,
+            _req: http::Request<Vec<u8>>,
+        ) -> Result<http::Response<Vec<u8>>, Self::Error> {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn mutation_without_claim_fails_locally() {
+        let adaptor = Adaptor {
+            http_client: Client::new(NoTransport, codec::Json, "http://localhost".into()),
+            info: AdaptorInfo {
+                tos: TosInfo { flat_fee: 0 },
+                channel_parameters: ChannelParameters {
+                    adaptor_key: VerificationKey::from([0; 32]),
+                    close_period: konduit_data::Duration::from_secs(0),
+                    tag_length: 0,
+                },
+                tx_help: (),
+            },
+            keytag: None,
+            session: None,
+        };
+
+        assert_eq!(
+            adaptor.mutation_headers().err().unwrap().to_string(),
+            "missing FERRET-SESSION lease"
+        );
     }
 }

@@ -111,89 +111,10 @@ paths:
         default:
           $ref: "#/components/responses/UnexpectedError"
 
-  /protocol-parameters:
-    get:
-      summary: Current protocol parameters and chain marker
-      operationId: getProtocolParameters
-      responses:
-        "200":
-          description: Current era parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProtocolParametersResponse"
-
-  /operations:
-    post:
-      summary: Submit an idempotent independent L1 transaction
-      operationId: submitL1Operation
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/L1OperationRequest"
-      responses:
-        "200":
-          description: Operation recorded or submitted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/L1OperationResponse"
-        "409":
-          description: Operation ID was already used for different transaction bytes
-        default:
-          $ref: "#/components/responses/UnexpectedError"
-
-  /operations/{operation_id}:
-    get:
-      summary: Reconcile an independent L1 operation
-      operationId: getL1Operation
-      parameters:
-        - name: operation_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Recorded operation and current chain state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/L1OperationResponse"
-        "404":
-          description: Operation not found
-        default:
-          $ref: "#/components/responses/UnexpectedError"
-
-  /session/claim:
-    post:
-      summary: Claim the single active writer lease
-      operationId: claimSession
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SessionClaimRequest"
-      responses:
-        "200":
-          description: Short-lived writer lease
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SessionClaimResponse"
-        "409":
-          description: Stale generation or conflicting writer
-
   /submit:
     post:
       summary: Submit transaction
       operationId: submitTransaction
-      parameters:
-        - $ref: "#/components/parameters/FerretSession"
       requestBody:
         required: true
         content:
@@ -229,13 +150,6 @@ components:
       schema:
         type: string
         pattern: "^[0-9a-f]{64}$"
-    FerretSession:
-      name: FERRET-SESSION
-      in: header
-      required: true
-      schema:
-        type: string
-        minLength: 32
 
   responses:
     UnexpectedError:
@@ -377,105 +291,11 @@ components:
           items:
             $ref: "#/components/schemas/TxOutput"
 
-    ProtocolParametersResponse:
-      type: object
-      additionalProperties: false
-      required: [era, epoch, slot, payload]
-      properties:
-        era:
-          type: string
-        epoch:
-          type: integer
-          minimum: 0
-        slot:
-          type: integer
-          minimum: 0
-        payload:
-          type: object
-
-    SessionClaimRequest:
-      type: object
-      additionalProperties: false
-      required:
-        [
-          walletVerificationKeyHex,
-          generation,
-          backupHashHex,
-          devicePublicKeyHex,
-          timestamp,
-          signatureHex,
-        ]
-      properties:
-        walletVerificationKeyHex:
-          type: string
-          pattern: "^[0-9a-f]{64}$"
-        generation:
-          type: integer
-          minimum: 1
-        backupHashHex:
-          type: string
-          pattern: "^[0-9a-f]{64}$"
-        devicePublicKeyHex:
-          type: string
-          pattern: "^[0-9a-f]{64}$"
-        timestamp:
-          type: integer
-          minimum: 0
-        signatureHex:
-          type: string
-          pattern: "^[0-9a-f]{128}$"
-
-    SessionClaimResponse:
-      type: object
-      additionalProperties: false
-      required: [lease, expiresAtEpochMillis]
-      properties:
-        lease:
-          type: string
-        expiresAtEpochMillis:
-          type: integer
-          minimum: 0
-
-    L1OperationRequest:
-      type: object
-      additionalProperties: false
-      required: [operation_id, expected_transaction_id, transaction]
-      properties:
-        operation_id:
-          type: string
-          format: uuid
-        expected_transaction_id:
-          type: string
-          pattern: "^[0-9a-f]{64}$"
-        transaction:
-          type: string
-          pattern: "^[0-9a-f]+$"
-          maxLength: 32768
-          description: Signed transaction CBOR encoded as hexadecimal
-
-    L1OperationResponse:
-      type: object
-      additionalProperties: false
-      required: [operation_id, transaction_id, state]
-      properties:
-        operation_id:
-          type: string
-          format: uuid
-        transaction_id:
-          type: string
-          pattern: "^[0-9a-f]{64}$"
-        state:
-          type: string
-          enum: [pending, submitted, confirmed]
-
     SubmitRequest:
       type: object
       additionalProperties: false
-      required: [operation_id, transaction]
+      required: [transaction]
       properties:
-        operation_id:
-          type: string
-          format: uuid
         transaction:
           type: string
           description: Signed transaction CBOR encoded as hexadecimal

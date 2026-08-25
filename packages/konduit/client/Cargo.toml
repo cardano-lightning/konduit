@@ -51,5 +51,4 @@ konduit-tmp.workspace = true
 env_logger.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
-proptest-derive.workspace = true
+http.workspace = true

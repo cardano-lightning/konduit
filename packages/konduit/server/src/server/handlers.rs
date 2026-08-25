@@ -1,3 +1,4 @@
+use crate::db;
 use crate::server::{
     self,
     auth::AuthKeytag,
@@ -6,10 +7,20 @@ use crate::server::{
 };
 use actix_web::{HttpResponse, ResponseError, http::StatusCode, web};
 use konduit_data::Locked;
-use konduit_tmp::{AdaptorInfo, Quote, Receipt, SquashProposal, SquashStatus, TxHelp};
-use std::ops::Deref;
+use konduit_tmp::{
+    AdaptorInfo, Quote, Receipt, SessionClaimRequest, SessionClaimResponse, SquashProposal,
+    SquashStatus, TxHelp,
+};
+use rand_core::{OsRng, RngCore};
+use std::{
+    ops::Deref,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 type Data = web::Data<server::Data>;
+
+const SESSION_TIMESTAMP_SKEW_MILLIS: u64 = 5 * 60 * 1000;
+const SESSION_LEASE_MILLIS: u64 = 2 * 60 * 1000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -17,6 +28,14 @@ pub enum Error {
     Mediation(#[from] mediation::Error),
     #[error("data: {0}")]
     Data(#[from] data::Error),
+    #[error("session timestamp outside allowed skew")]
+    InvalidSessionTimestamp,
+    #[error("invalid session signature")]
+    InvalidSessionSignature,
+    #[error("session claim conflicts with active generation")]
+    SessionConflict,
+    #[error("other")]
+    Other,
 }
 
 impl ResponseError for Error {
@@ -26,6 +45,10 @@ impl ResponseError for Error {
             Error::Mediation(mediation::Error::Backend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Data(data::Error::NoChannel) => StatusCode::NOT_FOUND,
             Error::Data(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidSessionTimestamp => StatusCode::BAD_REQUEST,
+            Error::InvalidSessionSignature => StatusCode::UNAUTHORIZED,
+            Error::SessionConflict => StatusCode::CONFLICT,
+            Error::Other => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -43,6 +66,37 @@ impl ResponseError for Error {
 
 pub async fn info(mediation: Mediation, data: Data) -> Result<Mediate<AdaptorInfo<TxHelp>>, Error> {
     Ok(Mediate(mediation.accept, data.info().deref().clone()))
+}
+
+pub async fn claim_session(
+    data: Data,
+    claim: web::Json<SessionClaimRequest>,
+) -> Result<HttpResponse, Error> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| Error::Other)?
+        .as_millis() as u64;
+    if now.abs_diff(claim.timestamp) > SESSION_TIMESTAMP_SKEW_MILLIS {
+        return Err(Error::InvalidSessionTimestamp);
+    }
+    if !claim.verify() {
+        return Err(Error::InvalidSessionSignature);
+    }
+
+    let mut token = [0; 32];
+    OsRng.fill_bytes(&mut token);
+    let expires_at_epoch_millis = now + SESSION_LEASE_MILLIS;
+    match data
+        .db()
+        .claim_lease(&claim, token, expires_at_epoch_millis)
+    {
+        Ok(()) => Ok(HttpResponse::Ok().json(SessionClaimResponse {
+            lease: hex::encode(token),
+            expires_at_epoch_millis,
+        })),
+        Err(db::LeaseClaimError::Conflict) => Err(Error::SessionConflict),
+        Err(db::LeaseClaimError::Database(error)) => Err(Error::Data(error.into())),
+    }
 }
 
 pub async fn fx(mediation: Mediation, data: Data) -> Result<Mediate<fx_client::State>, Error> {
@@ -141,7 +195,8 @@ pub async fn pay(
 mod tests {
     use std::collections::BTreeMap;
 
-    use konduit_data::{AssetCatalog, AssetDefinition, AssetId, Pricing};
+    use konduit_data::{AssetCatalog, AssetDefinition, AssetId, Duration, Pricing, Squash};
+    use konduit_tmp::Keytag;
 
     use super::*;
 
@@ -177,11 +232,7 @@ mod tests {
             50_001_501
         );
         assert_eq!(
-            fx.asset_units_to_msat(
-                50_000_000,
-                6,
-                data::asset_usd(&fx, &custom).unwrap(),
-            )
+            fx.asset_units_to_msat(50_000_000, 6, data::asset_usd(&fx, &custom).unwrap(),)
                 .unwrap(),
             100_000_000
         );
@@ -282,7 +333,7 @@ mod tests {
         for (definition, expected) in [
             (
                 AssetCatalog::builtins().by_alias("usdm").unwrap().clone(),
-                100_002_001,
+                100_003_001,
             ),
             (
                 AssetDefinition {
@@ -293,16 +344,17 @@ mod tests {
                         coin_id: "custom".into(),
                     },
                 },
-                50_001_501,
+                50_002_001,
             ),
         ] {
             let (data, keytag) = handler_data(definition);
-            let body = serde_json::from_value::<QuoteBody>(serde_json::json!({
-                "amountMsat": 100_001_000_u64,
-                "payee": vec![2_u8; 33],
-                "routeHints": [],
-            }))
-            .unwrap();
+            let body = serde_json::json!({
+                "Simple": {
+                    "amount_msat": 100_001_000_u64,
+                    "payee": hex::encode([2_u8; 33]),
+                    "route_hints": [],
+                }
+            });
             let response = quote(
                 Mediation {
                     content: mediation::MediaType::Json,

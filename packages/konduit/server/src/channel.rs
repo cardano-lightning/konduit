@@ -389,9 +389,9 @@ pub fn open(
     Ok(channel)
 }
 
-pub fn close(mut channel: Channel) -> Result<(Channel, Option<()>), Error> {
+pub fn close(mut channel: Channel) -> Result<Channel, Error> {
     channel.apply_retainer(Vec::new())?;
-    Ok((channel, None))
+    Ok(channel)
 }
 
 pub fn update(

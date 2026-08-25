@@ -8,6 +8,9 @@ use tokio::{sync::RwLock, time::interval};
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("failed to install rustls crypto provider"))?;
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
     dotenvy::dotenv().ok();

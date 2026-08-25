@@ -11,28 +11,6 @@
       "fallthrough": true
     }
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "WALLET_SESSIONS",
-        "class_name": "WalletSession"
-      },
-      {
-        "name": "L1_OPERATIONS",
-        "class_name": "L1Operation"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["WalletSession"]
-    },
-    {
-      "tag": "v2",
-      "new_sqlite_classes": ["L1Operation"]
-    }
-  ],
   "observability": {
     "enabled": true
   },
@@ -40,18 +18,6 @@
     "mainnet": {
       "vars": {
         "CORS_ORIGIN": "*"
-      },
-      "durable_objects": {
-        "bindings": [
-          {
-            "name": "WALLET_SESSIONS",
-            "class_name": "WalletSession"
-          },
-          {
-            "name": "L1_OPERATIONS",
-            "class_name": "L1Operation"
-          }
-        ]
       },
       "secrets_store_secrets": [
         {
@@ -64,18 +30,6 @@
     "preprod": {
       "vars": {
         "CORS_ORIGIN": "*"
-      },
-      "durable_objects": {
-        "bindings": [
-          {
-            "name": "WALLET_SESSIONS",
-            "class_name": "WalletSession"
-          },
-          {
-            "name": "L1_OPERATIONS",
-            "class_name": "L1Operation"
-          }
-        ]
       },
       "secrets_store_secrets": [
         {

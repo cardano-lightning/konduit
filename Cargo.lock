@@ -899,7 +899,7 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 2.0.20",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
@@ -924,7 +924,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 2.0.20",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "wasm-bindgen",
@@ -1213,7 +1213,7 @@ version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b9f2e4c67f833b660cdb0a3523065869fb35570177239812ed4c905aeff87b"
 dependencies = [
- "bitflags",
+ "bitflags 2.13.1",
  "crossterm_winapi",
  "derive_more",
  "document-features",
@@ -2390,7 +2390,7 @@ version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6654738b8024300cf062d04a1c13c10c8e2cea598ec1c47dc9b6641159429756"
 dependencies = [
- "bitflags",
+ "bitflags 2.13.1",
  "crossterm",
  "dyn-clone",
  "fuzzy-matcher",
@@ -2615,13 +2615,12 @@ dependencies = [
  "clap",
  "dotenvy",
  "env_logger",
+ "http 1.5.0",
  "http-client",
  "konduit-data",
  "konduit-tmp",
  "konduit-tx",
  "log",
- "proptest",
- "proptest-derive",
  "serde_json",
  "tokio",
  "web-time",
@@ -2696,6 +2695,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "fx-client",
+ "hex",
  "humantime",
  "konduit-data",
  "konduit-tmp",
@@ -2704,10 +2704,13 @@ dependencies = [
  "minicbor",
  "proptest",
  "proptest-derive",
+ "rand_core 0.6.4",
  "redb",
+ "rustls",
  "serde",
  "serde_json",
  "serde_with",
+ "subtle",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -2726,7 +2729,7 @@ dependencies = [
  "konduit-tx2",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 2.0.20",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing-subscriber",
@@ -2744,6 +2747,7 @@ dependencies = [
  "konduit-data",
  "minicbor",
  "serde",
+ "serde_json",
  "serde_with",
  "thiserror 2.0.20",
  "uplc",
@@ -2776,7 +2780,7 @@ dependencies = [
  "minicbor",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 2.0.20",
  "web-time",
 ]
 
@@ -3287,7 +3291,7 @@ dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "syn",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -3488,7 +3492,7 @@ checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.119",
  "version_check",
  "yansi",
 ]
