@@ -24,6 +24,7 @@ impl ResponseError for Error {
         match self {
             Error::Mediation(mediation::Error::Unmediate(_)) => StatusCode::BAD_REQUEST,
             Error::Mediation(mediation::Error::Backend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Data(data::Error::NoChannel) => StatusCode::NOT_FOUND,
             Error::Data(_) => StatusCode::BAD_REQUEST,
         }
     }
@@ -190,12 +191,12 @@ mod tests {
         assert!(data::quote_amount(&missing, &custom, 100_000_000).is_err());
     }
 
-    struct NoopAdmin;
+    struct PanicAdmin;
 
     #[async_trait::async_trait(?Send)]
-    impl crate::admin::SyncApi for NoopAdmin {
+    impl crate::admin::SyncApi for PanicAdmin {
         async fn sync(&self) -> anyhow::Result<()> {
-            Ok(())
+            panic!("unexpected admin sync")
         }
     }
 
@@ -242,9 +243,38 @@ mod tests {
             db,
             std::sync::Arc::new(tokio::sync::RwLock::new(fx())),
             std::sync::Arc::new(info),
-            std::sync::Arc::new(NoopAdmin),
+            std::sync::Arc::new(PanicAdmin),
         );
         (web::Data::new(data), keytag)
+    }
+
+    #[actix_web::test]
+    async fn squash_unknown_channel_returns_not_found_without_sync() {
+        use konduit_data::{SigningKey, SquashBody, Tag};
+
+        let (data, _) = handler_data(AssetCatalog::builtins().by_alias("usdm").unwrap().clone());
+        let signing = SigningKey::from_bytes([8; 32]);
+        let tag = Tag::from(b"unknown-squash".as_slice());
+        let keytag = Keytag::new(
+            &konduit_tmp::from_verifying_key(signing.verifying_key()),
+            &tag,
+        );
+        let unknown_squash = Squash::make(&signing, &tag, SquashBody::zero()).into_unverified();
+        let error = squash(
+            Mediation {
+                content: mediation::MediaType::Json,
+                accept: mediation::MediaType::Json,
+            },
+            AuthKeytag(keytag.clone()),
+            data.clone(),
+            web::Bytes::from(serde_json::to_vec(&unknown_squash).unwrap()),
+        )
+        .await
+        .err()
+        .unwrap();
+
+        assert_eq!(error.status_code(), StatusCode::NOT_FOUND);
+        assert!(data.db().get(&keytag).unwrap().is_none());
     }
 
     #[actix_web::test]
@@ -267,23 +297,24 @@ mod tests {
             ),
         ] {
             let (data, keytag) = handler_data(definition);
-            let req = actix_web::test::TestRequest::default().to_http_request();
-            req.extensions_mut().insert(keytag);
             let body = serde_json::from_value::<QuoteBody>(serde_json::json!({
-                "Simple": {
-                    "amount_msat": 100_000_000,
-                    "payee": "000000000000000000000000000000000000000000000000000000000000000000",
-                    "route_hints": []
-                }
+                "amountMsat": 100_001_000_u64,
+                "payee": vec![2_u8; 33],
+                "routeHints": [],
             }))
             .unwrap();
-            let response = quote(req, data, web::Json(body)).await.unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-            let body = actix_web::body::to_bytes(response.into_body())
-                .await
-                .unwrap();
-            let quote: Quote = serde_json::from_slice(&body).unwrap();
-            assert_eq!(quote.amount, expected);
+            let response = quote(
+                Mediation {
+                    content: mediation::MediaType::Json,
+                    accept: mediation::MediaType::Json,
+                },
+                AuthKeytag(keytag),
+                data,
+                web::Bytes::from(serde_json::to_vec(&body).unwrap()),
+            )
+            .await
+            .unwrap();
+            assert_eq!(response.1.amount, expected);
         }
     }
 }
