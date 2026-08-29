@@ -1,0 +1,41 @@
+[package]
+name = "konduit-prompt"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+
+[[bin]]
+name = "konduit-prompt"
+path = "src/main.rs"
+
+[dependencies]
+
+anyhow.workspace = true
+cardano-connector.workspace = true
+cardano-connector-direct.workspace = true
+cardano-sdk.workspace = true
+hex.workspace = true
+konduit-data = { workspace = true, features = ["cardano_sdk"] }
+konduit-tmp.workspace = true
+minicbor.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+web-time.workspace = true
+serde = { workspace = true }
+inquire = { workspace = true }
+toml.workspace = true
+tokio = { workspace = true, version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+] }
+konduit-session = { workspace = true, features = ["cli"] }
+konduit-tx2.workspace = true
+clap.workspace = true
+cardano-session = { workspace = true, features = ["cli", "direct-embedded"] }

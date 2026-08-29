@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Duration, Pending, Used};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Stage {
     Opened(u64, Vec<Used>),

@@ -37,6 +37,23 @@ impl Bounds {
         Self { lower, upper }
     }
 
+    pub fn five_mins() -> Self {
+        // TODO :: Either use std time, or upstream methods
+        let lower = Duration::from_secs(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                // Hack to handle blockfrost slots not aligning with current time.
+                .saturating_sub(60),
+        );
+        let upper = Duration::from_secs(lower.as_secs() + 4 * 60);
+        Bounds {
+            lower: Some(lower),
+            upper: Some(upper),
+        }
+    }
+
     pub fn twenty_mins() -> Self {
         // TODO :: Either use std time, or upstream methods
         let lower = Duration::from_secs(

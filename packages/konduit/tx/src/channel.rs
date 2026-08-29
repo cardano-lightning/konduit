@@ -320,7 +320,7 @@ impl Channel {
         Ok(Stepped::new(self, step_to, bounds))
     }
 
-    pub fn any_sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+    pub fn any_claim(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
         match self.stage() {
             Stage::Opened(_, _) => self.sub(receipt, upper),
             Stage::Closed(_, _, _) => self.respond(receipt, upper),

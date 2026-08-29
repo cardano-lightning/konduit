@@ -4,7 +4,7 @@ use crate::{Duration, Lock, Locked, VerifyState};
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Pending {
     pub amount: u64,
