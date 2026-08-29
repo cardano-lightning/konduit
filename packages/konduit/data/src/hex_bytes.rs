@@ -1,3 +1,4 @@
+#![cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serializer};
 
 pub fn serialize<T, S>(bytes: &T, serializer: S) -> Result<S::Ok, S::Error>

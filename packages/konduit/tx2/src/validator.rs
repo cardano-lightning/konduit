@@ -1,0 +1,102 @@
+use anyhow::anyhow;
+use cardano_sdk::{
+    Address, Credential, Hash, Input, NetworkId, Output, PlutusScript, PlutusVersion, address::kind,
+};
+use std::{collections::BTreeMap, sync::LazyLock};
+
+pub type Lovelace = u64;
+pub const MIN_ADA_BUFFER: Lovelace = 2_000_000;
+
+pub fn konduit_address(
+    network_id: NetworkId,
+    delegation: Option<&Credential>,
+) -> Address<kind::Shelley> {
+    match delegation {
+        Some(delegation) => Address::new(network_id, KONDUIT_VALIDATOR.to_credential())
+            .with_delegation(delegation.clone()),
+        None => Address::new(network_id, KONDUIT_VALIDATOR.to_credential()),
+    }
+}
+
+pub fn is_reference_script_output(output: &Output) -> bool {
+    output
+        .script()
+        .is_some_and(|s| Hash::<28>::from(s) == KONDUIT_VALIDATOR.hash)
+}
+
+pub fn find_reference_script(utxos: &BTreeMap<Input, Output>) -> Option<(Input, Output)> {
+    utxos
+        .iter()
+        .find(|tup| is_reference_script_output(tup.1))
+        .map(|(i, o)| (i.clone(), o.clone()))
+}
+
+// TODO: embed the whole blueprint? blueprint_json
+pub struct KonduitValidator {
+    pub hash: Hash<28>,
+    pub script: PlutusScript,
+}
+
+impl KonduitValidator {
+    pub fn to_credential(&self) -> Credential {
+        Credential::from_script(self.hash)
+    }
+}
+
+pub fn plutus_version_from_str(s: &str) -> anyhow::Result<PlutusVersion> {
+    match s {
+        "v1" => Ok(PlutusVersion::V1),
+        "v2" => Ok(PlutusVersion::V2),
+        "v3" => Ok(PlutusVersion::V3),
+        _ => Err(anyhow!(
+            "unknown plutus version version={s}; only v1, v2 and v3 are known"
+        )),
+    }
+}
+
+const VALIDATOR_NAME: &str = "konduit.konduit.spend";
+
+/// Get the validator blueprint at compile-time, and make the validator hash available on-demand.
+pub static KONDUIT_VALIDATOR: LazyLock<KonduitValidator> = LazyLock::new(|| {
+    let blueprint: BTreeMap<String, serde_json::Value> = serde_json::from_str(include_str!(
+        concat!(std::env!("CARGO_MANIFEST_DIR"), "/plutus.json")
+    ))
+    .unwrap_or_else(|e| panic!("failed to parse blueprint: {e}"));
+
+    let validator = blueprint
+        .get("validators")
+        .and_then(|value| value.as_array())
+        .and_then(|validators| {
+            validators.iter().find(|validator| {
+                validator
+                    .get("title")
+                    .and_then(|value| value.as_str())
+                    .map(|title| title == VALIDATOR_NAME)
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or_else(|| panic!("validator `{VALIDATOR_NAME}` not found in blueprint"));
+
+    let hash = validator
+        .get("hash")
+        .and_then(|value| value.as_str())
+        .and_then(|s| Hash::try_from(s).ok())
+        .unwrap_or_else(|| panic!("failed to extract validator's hash from blueprint"));
+
+    let plutus_version = blueprint
+        .get("preamble")
+        .unwrap_or_else(|| panic!("failed to extract preamble from blueprint"))
+        .get("plutusVersion")
+        .and_then(|value| value.as_str())
+        .and_then(|s| plutus_version_from_str(s).ok())
+        .unwrap_or_else(|| panic!("failed to extract plutus version from blueprint"));
+
+    // We should decode hex into Vec<u8>
+    let script_bytes = validator
+        .get("compiledCode")
+        .and_then(|value| value.as_str())
+        .and_then(|s| hex::decode(s).ok())
+        .unwrap_or_else(|| panic!("failed to extract validator's compiled code from blueprint"));
+    let script = PlutusScript::new(plutus_version, script_bytes);
+    KonduitValidator { hash, script }
+});

@@ -1,0 +1,61 @@
+[package]
+name = "cardano-wallet"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "cardano-wallet"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli", "web"]
+cli = [
+  "dep:tokio",
+  "dep:clap",
+  "dep:figment",
+  "dep:serde_json",
+  "dep:toml",
+  "cardano-sdk/serde",
+  "dep:minicbor",
+  "dep:cardano-connector-direct",
+]
+web = ["dep:console_error_panic_hook"]
+
+[dependencies]
+cardano-sdk = { workspace = true }
+cardano-connector = { workspace = true }
+cardano-connector-direct = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+hex = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"], optional = true }
+clap = { workspace = true, features = ["derive"], optional = true }
+figment = { workspace = true, features = ["toml", "env"], optional = true }
+serde_json = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+minicbor = { workspace = true, features = ["derive"], optional = true }
+anyhow.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = ["Window"] }
+serde-wasm-bindgen = { workspace = true }
+minicbor = { workspace = true, features = ["derive"] }
+console_error_panic_hook = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -1,0 +1,49 @@
+[package]
+name = "cardano-session"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "cardano-session"
+path = "./src/bin/cli.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli", "direct-embedded"]
+cli = [
+  "dep:clap",
+  "dep:tracing-subscriber",
+  "dep:anyhow",
+  "tokio/rt-multi-thread",
+  "tokio/macros",
+  "dep:toml",
+  "cardano-wallet/cli",
+  "direct-embedded",
+]
+direct-embedded = ["dep:cardano-connector-direct"]
+
+[dependencies]
+cardano-sdk = { workspace = true, features = ["serde"] }
+cardano-connector.workspace = true
+cardano-connector-direct = { workspace = true, optional = true }
+cardano-wallet = { workspace = true }
+
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
+tracing.workspace = true
+
+clap = { workspace = true, features = ["derive"], optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+
+[dev-dependencies]

@@ -1,0 +1,46 @@
+[package]
+name = "konduit-session"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+
+[[bin]]
+name = "konduit-session"
+path = "./src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli"]
+cli = [
+  "dep:clap",
+  "dep:tracing-subscriber",
+  "dep:anyhow",
+  "tokio/rt-multi-thread",
+  "tokio/macros",
+  "dep:toml",
+  "cardano-session/cli",
+  "serde_json",
+]
+
+[dependencies]
+cardano-session = { workspace = true, default-features = false }
+
+tokio = { workspace = true, features = ["time"] }
+clap = { workspace = true, features = ["derive"], optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+cardano-connector.workspace = true
+cardano-wallet.workspace = true
+serde.workspace = true
+cardano-sdk.workspace = true
+thiserror.workspace = true
+konduit-tx2.workspace = true
