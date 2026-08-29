@@ -5,7 +5,7 @@ use actix_web::{
     web,
 };
 
-use crate::server::{Data, auth, handlers};
+use crate::server::{Data, auth, handlers, mediation};
 
 pub struct Service {
     data: Data,
@@ -36,7 +36,7 @@ impl Service {
                         .allow_any_header(),
                 )
                 .app_data(data.clone())
-                // .wrap(middleware::from_fn(content_negotiation::content_negotiation))
+                .wrap(middleware::from_fn(mediation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
                 .service(
                     // FIXME : Implement auth

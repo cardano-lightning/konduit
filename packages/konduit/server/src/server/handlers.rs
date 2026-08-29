@@ -6,7 +6,7 @@ use crate::server::{
 };
 use actix_web::{HttpResponse, ResponseError, http::StatusCode, web};
 use konduit_data::Locked;
-use konduit_tmp::{AdaptorInfo, Quote, Receipt, SquashProposal, TxHelp};
+use konduit_tmp::{AdaptorInfo, Quote, Receipt, SquashProposal, SquashStatus, TxHelp};
 use std::ops::Deref;
 
 type Data = web::Data<server::Data>;
@@ -21,11 +21,22 @@ pub enum Error {
 
 impl ResponseError for Error {
     fn status_code(&self) -> StatusCode {
-        todo!()
+        match self {
+            Error::Mediation(mediation::Error::Unmediate(_)) => StatusCode::BAD_REQUEST,
+            Error::Mediation(mediation::Error::Backend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Data(_) => StatusCode::BAD_REQUEST,
+        }
     }
 
     fn error_response(&self) -> HttpResponse {
-        todo!()
+        let status = self.status_code();
+        if status.is_server_error() {
+            // don't leak internal details to the client, but keep them for yourself
+            log::error!("request failed: {self}");
+            HttpResponse::build(status).body("internal server error")
+        } else {
+            HttpResponse::build(status).body(self.to_string())
+        }
     }
 }
 
@@ -72,16 +83,23 @@ pub async fn squash_proposal(
     Ok(Mediate(mediation.accept, data.squash_proposal(&keytag)?))
 }
 
+pub async fn squash_status(
+    mediation: Mediation,
+    keytag: AuthKeytag,
+    data: Data,
+) -> Result<Mediate<SquashStatus>, Error> {
+    Ok(Mediate(mediation.accept, data.squash_status(&keytag)?))
+}
+
 pub async fn squash(
     mediation: Mediation,
     keytag: AuthKeytag,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<()>, Error> {
-    Ok(Mediate(
-        mediation.accept,
-        data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?,
-    ))
+// ) -> Result<Mediate<()>, Error> {
+) -> Result<Mediate<SquashStatus>, Error> {
+    let _ : Result<_, Error> = Ok(Mediate( mediation.accept, data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?));
+    squash_status(mediation, keytag, data).await
 }
 
 pub async fn quote(
@@ -103,7 +121,7 @@ pub async fn pay(
     keytag: AuthKeytag,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<SquashProposal>, Error> {
+) -> Result<Mediate<SquashStatus>, Error> {
     let b = konduit_tmp::PayBody::unmediate(mediation.content, &body)?;
     let locked = Locked::new(b.cheque_body, b.signature);
     let body = data::PayBody {
@@ -112,5 +130,5 @@ pub async fn pay(
     };
     let _ = data.pay(&keytag, body).await?;
     // FIXME : The return type here has diverged!!
-    squash_proposal(mediation, keytag, data).await
+    squash_status(mediation, keytag, data).await
 }

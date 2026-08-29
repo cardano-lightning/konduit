@@ -1,6 +1,12 @@
 use std::future::{Ready, ready};
 
 use actix_web::{
+    body::MessageBody,
+    dev::{ServiceRequest, ServiceResponse},
+    http::header,
+    middleware::Next,
+};
+use actix_web::{
     FromRequest, HttpMessage, HttpRequest, HttpResponse, Responder, body::BoxBody, dev::Payload,
     error::ErrorInternalServerError,
 };
@@ -80,4 +86,29 @@ impl<T: Serialize + minicbor::Encode<()>> Responder for Mediate<T> {
             },
         }
     }
+}
+
+fn parse_media_type(value: Option<&header::HeaderValue>) -> MediaType {
+    value
+        .and_then(|v| v.to_str().ok())
+        .map(|s| {
+            if s.contains("cbor") {
+                MediaType::Cbor
+            } else {
+                MediaType::Json
+            }
+        })
+        .unwrap_or_default() // Json
+}
+
+pub async fn content_negotiation(
+    req: ServiceRequest,
+    next: Next<impl MessageBody>,
+) -> Result<ServiceResponse<impl MessageBody>, actix_web::Error> {
+    let content = parse_media_type(req.headers().get(header::CONTENT_TYPE));
+    let accept = parse_media_type(req.headers().get(header::ACCEPT));
+
+    req.extensions_mut().insert(Mediation { content, accept });
+
+    next.call(req).await
 }

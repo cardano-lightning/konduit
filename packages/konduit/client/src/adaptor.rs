@@ -110,8 +110,6 @@ impl<T: Transport> Adaptor<T> {
             .http_client
             .post_with_headers::<Squash, SquashStatus>("/ch/squash", &squash, headers)
             .await;
-
-        log::info!("{:?}", res);
         res.map_err(|e| anyhow!(e))
     }
 }

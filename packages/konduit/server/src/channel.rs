@@ -36,7 +36,7 @@ pub enum Error {
     Input,
     #[error("verify failed")]
     Verify,
-    #[error("receipt {0}")]
+    #[error("receipt: {0}")]
     Receipt(#[from] receipt::Error),
 }
 

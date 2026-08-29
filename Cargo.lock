@@ -2520,6 +2520,7 @@ dependencies = [
  "cardano-sdk",
  "clap",
  "dotenvy",
+ "env_logger",
  "http-client",
  "konduit-data",
  "konduit-tmp",

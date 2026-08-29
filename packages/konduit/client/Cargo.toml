@@ -45,6 +45,7 @@ dotenvy = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 konduit-tmp.workspace = true
+env_logger.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

@@ -5,7 +5,7 @@ use crate::{
 };
 use bln_client::types::{Invoice, RouteHint};
 use konduit_data::{Duration, Locked, Secret, Squash};
-use konduit_tmp::{AdaptorInfo, Keytag, Quote, QuoteBody, Receipt, SquashProposal, TxHelp};
+use konduit_tmp::{AdaptorInfo, Keytag, Quote, QuoteBody, Receipt, SquashProposal, SquashStatus, TxHelp};
 /// Actix web server "Data" ie the context of handlers.
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -133,9 +133,12 @@ impl Data {
         Ok(self.channel(keytag)?.propose_squash()?)
     }
 
+    // FIXME :: This is permissive against stale and bad squashes
     pub fn squash(&self, keytag: &Keytag, squash: Squash) -> Result<(), Error> {
-        self.db().update(keytag, apply_squash(squash))?;
-        Ok(())
+        match self.db().update(keytag, apply_squash(squash)) {
+            Ok(()) | Err(db::Error::Channel(channel::Error::Receipt(_))) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
     }
 
     async fn bln_quote(
@@ -230,8 +233,17 @@ impl Data {
         let pay_res = self.bln_pay(invoice, fee_limit, rel_timeout).await?;
         Ok(PayResponse::from(pay_res.secret))
     }
+
+
+    // FIXME :: REMOVE THIS TEMPORARY PATCH!! 
+    pub fn squash_status(&self, keytag: &Keytag) -> Result<SquashStatus, Error> {
+        let squash_proposal = self.squash_proposal(keytag)?;
+        Ok(SquashStatus::Incomplete(squash_proposal))
+    }
 }
 
+// FIXME :: API IMPROVEMENT. SIMPLIFICATION. 
+// NEEDS TO BE DOWNSTREAMED. 
 pub struct PayBody {
     pub locked: Locked,
     pub invoice: Invoice,
