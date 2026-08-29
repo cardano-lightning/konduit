@@ -59,7 +59,7 @@ use problem_details::ProblemDetail;
 ///
 /// [`DOMAIN`]: Body::DOMAIN
 /// [`tbs_bytes`]: Body::tbs_bytes
-pub trait Body: for<'b> Encode<()> + for<'b> Decode<'b, ()> {
+pub trait Body: Encode<()> + for<'b> Decode<'b, ()> {
     /// Domain separator injected into [`Tbs`]. Override per application.
     const DOMAIN: &'static str = "COBBL3_HMAC";
 

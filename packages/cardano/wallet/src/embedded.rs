@@ -190,12 +190,12 @@ mod tests {
     struct FakeConnector {
         network: Network,
         utxos: Map<Input, Output>,
-        submitted: std::cell::RefCell<Option<Transaction<state::ReadyForSigning>>>,
+        submitted: std::sync::Mutex<Option<Transaction<state::ReadyForSigning>>>,
     }
 
     impl CardanoConnector for FakeConnector {
         fn network(&self) -> Network {
-            self.network.clone()
+            self.network
         }
 
         async fn health(&self) -> Result<String, anyhow::Error> {
@@ -220,7 +220,7 @@ mod tests {
             &self,
             tx: &Transaction<state::ReadyForSigning>,
         ) -> Result<(), anyhow::Error> {
-            *self.submitted.borrow_mut() = Some(tx.clone());
+            *self.submitted.lock().unwrap() = Some(tx.clone());
             Ok(())
         }
     }
@@ -229,7 +229,7 @@ mod tests {
         let connector = Arc::new(FakeConnector {
             network: Network::Preprod,
             utxos,
-            submitted: std::cell::RefCell::new(None),
+            submitted: std::sync::Mutex::new(None),
         });
         Embedded::new(connector, Config::default(), None)
     }
