@@ -12,7 +12,7 @@ use konduit_tx2::{
 
 use crate::{
     known_keys::KnownKeys,
-    prompt::{Candidate, prompt_many, prompt_signed, prompt_with_candidates, variant_prompt},
+    prompt::{Candidate, prompt_with_candidates, variant_prompt},
     receipt::{Keytag, Receipt, Receipts},
 };
 
@@ -304,7 +304,7 @@ fn prompt_unlock(channel: &Channel, ctx: &Ctx) -> Result<Want> {
         secrets: receipt
             .cheques
             .iter()
-            .filter_map(|u| u.as_unlocked().map(|u| u.secret().clone()))
+            .filter_map(|u| u.as_unlocked().map(|u| *u.secret()))
             .collect(),
     })
 }
@@ -354,7 +354,7 @@ fn prompt_duration(field: &str) -> Result<Duration> {
     match raw.parse::<Duration>() {
         Ok(d) => Ok(d),
         Err(e) => {
-            println!("Err {}. Try again", e.to_string());
+            println!("Err {}. Try again", e);
             prompt_duration(field)
         }
     }

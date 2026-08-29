@@ -34,7 +34,7 @@ impl KnownKeys {
     pub fn label_for_verification_key(&self, vkey: &cardano_sdk::VerificationKey) -> Option<&str> {
         self.0
             .iter()
-            .find(|(_, known)| &konduit_tmp::from_verifying_key((*known).clone()) == vkey)
+            .find(|(_, known)| &konduit_tmp::from_verifying_key(*(*known)) == vkey)
             .map(|(label, _)| label.as_str())
     }
 
@@ -60,7 +60,7 @@ impl KnownKeys {
     pub fn candidates(&self) -> Vec<Candidate<VerifyingKey>> {
         self.0
             .iter()
-            .map(|(label, vkey)| Candidate::new(label.clone(), vkey.clone()))
+            .map(|(label, vkey)| Candidate::new(label.clone(), *vkey))
             .collect()
     }
 }

@@ -11,7 +11,6 @@ use std::{collections::BTreeMap, path::Path};
 
 use anyhow::{Context, Result};
 use cardano_sdk::Hash;
-use konduit_tmp::receipt;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
