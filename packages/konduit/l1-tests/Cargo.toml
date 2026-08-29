@@ -31,3 +31,5 @@ cryptoxide.workspace = true
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 konduit-tmp.workspace = true
+toml_edit = "0.25.13"
+thiserror.workspace = true

@@ -1,22 +1,33 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
-use cardano_connector::CardanoConnector;
 use clap::{Args, Parser, Subcommand};
+mod compact_toml;
 
-// Adjust this if `config.rs` isn't a sibling module of `main.rs` — e.g. if it
-// lives in the `konduit_l1_tests` lib crate, use:
-//   use konduit_l1_tests::config::Config;
-mod config;
-use config::Config;
+mod hashing;
+pub use hashing::hash32;
+
+mod time;
+pub use time::now;
+
+pub mod account;
+pub mod adaptor;
+pub mod cardano;
+pub mod wait;
+pub mod wallet;
+
+pub mod scenario;
 
 mod show;
 use show::Show;
 
-mod strategy;
-use strategy::StepStrategy;
-mod receipt;
-mod tx;
+mod runner;
+pub use runner::Runner;
+
+mod play;
+
+mod config;
+use config::Config;
 
 #[derive(Parser, Debug)]
 #[command(name = "konduit-l1-tests", version, about, long_about = None)]
@@ -40,8 +51,8 @@ enum Command {
     Init(InitArgs),
     /// Load and display the current config.
     Show(ShowArgs),
-    /// Run the test suite.
-    Tx(TxArgs),
+    /// "Play" a scenario
+    Play(PlayArgs),
 }
 
 impl Cli {
@@ -52,17 +63,10 @@ impl Cli {
     pub async fn run(self) -> anyhow::Result<()> {
         match self.command {
             Command::Init(args) => args.run(&self.config).await,
-            Command::Show(args) => args.run(load(&self.config)?).await,
-            Command::Tx(args) => args.run(load(&self.config)?).await,
+            Command::Show(args) => args.run(Config::load(&self.config)?).await,
+            Command::Play(args) => args.run(Config::load(&self.config)?).await,
         }
     }
-}
-
-/// Reads and parses the config file at `path` into a `Config`.
-fn load(path: &Path) -> anyhow::Result<Config> {
-    let raw = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read config at {}", path.display()))?;
-    toml::from_str(&raw).with_context(|| format!("failed to parse config at {}", path.display()))
 }
 
 #[derive(Args, Debug)]
@@ -80,14 +84,7 @@ impl InitArgs {
                 config_path.display()
             );
         }
-
-        let config = Config::default();
-        let toml_str =
-            toml::to_string_pretty(&config).context("failed to serialize default config")?;
-
-        std::fs::write(config_path, toml_str)
-            .with_context(|| format!("failed to write config to {}", config_path.display()))?;
-
+        Config::default().write(config_path)?;
         println!("wrote default config to {}", config_path.display());
         Ok(())
     }
@@ -104,17 +101,22 @@ impl ShowArgs {
 }
 
 #[derive(Args, Debug)]
-struct TxArgs {
-    /// Number of rounds in the Up phase before Down is forced (total run
-    /// length is double this).
-    #[arg(long, default_value_t = 20)]
-    steps: u32,
+struct PlayArgs {
+    /// Execution offset: skip this many leading entries in
+    /// `config.scenario.txs` (their `Wait`s included) - for resuming a
+    /// run against a chain that's already partway through the scenario,
+    /// not for skipping time.
+    #[arg(long, default_value_t = 0)]
+    from: usize,
 }
 
-impl TxArgs {
+impl PlayArgs {
     pub async fn run(&self, config: Config) -> anyhow::Result<()> {
-        let mut strategy = StepStrategy::new(&config.accounts, self.steps);
-        tx::run(config, self.steps.saturating_mul(2), &mut strategy).await
+        let toml_str = compact_toml::pretty_compact_with(&config, |path| {
+            matches!(path, [a, b, ..] if a == "scenario" && b == "txs") && path.len() > 2
+        })
+        .context("failed to serialize default config")?;
+        play::run(config, self.from).await
     }
 }
 
