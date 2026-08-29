@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use cardano_sdk::Input;
 use inquire::Select;
-use konduit_data::{Constants, Duration, Tag, Unlocked, VerifyingKey};
+use konduit_data::{Constants, Duration, Tag, VerifyingKey};
 use konduit_tx2::{
     StagedTx,
     channel::Channel,
@@ -21,8 +21,6 @@ const ADD_OPEN: &str = "(open a new channel)";
 const DROP_AN_OPEN: &str = "(drop an open)";
 const REVIEW: &str = "(review staged so far)";
 const FINISH: &str = "(finish)";
-const USE_RECEIPT: &str = "(use matching receipt)";
-const PICK_MANUALLY: &str = "(pick manually)";
 
 /// Everything a `Tx` session needs. `Open` is really just another
 /// kind of `Want` (both end up staged against a `StagedTx`) but too
@@ -35,7 +33,6 @@ const PICK_MANUALLY: &str = "(pick manually)";
 /// that pair.
 #[derive(Default)]
 pub struct Ctx {
-    pub unlockeds: Vec<Candidate<Unlocked>>,
     pub known_keys: Vec<Candidate<VerifyingKey>>,
     pub receipts: Receipts,
 }
@@ -230,6 +227,7 @@ fn build_want<'a>(channel: &'a Channel, ctx: &'a Ctx) -> Result<Want> {
 /// `None` for `Sub`/`Respond` when no receipt matches this channel —
 /// `Ctx` no longer holds a squash/cheque pool to fall back to, so without
 /// a receipt there's nothing to build them from.
+#[allow(clippy::type_complexity)] // FIXME
 fn can_variant<'a>(
     can: &Can,
     channel: &'a Channel,

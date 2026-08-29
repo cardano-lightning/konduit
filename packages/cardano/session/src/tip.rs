@@ -68,6 +68,7 @@ impl Tip {
 /// serde via via TipVec
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TipVec {
+    #[allow(clippy::type_complexity)]
     utxos: Vec<(Address<Shelley>, Vec<(Input, Output)>)>,
 }
 

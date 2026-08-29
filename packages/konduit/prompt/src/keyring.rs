@@ -70,10 +70,6 @@ impl Keyring {
         )
     }
 
-    pub fn entries(&self) -> impl Iterator<Item = (&str, &SigningKey)> {
-        self.0.iter().map(|(label, key)| (label.as_str(), key))
-    }
-
     pub fn sign_tx(
         &self,
         mut tx: Transaction<ReadyForSigning>,

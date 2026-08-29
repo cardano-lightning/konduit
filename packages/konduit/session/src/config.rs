@@ -9,10 +9,11 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        #[allow(unused)]
-        let mut session = cardano_session::Config::default();
-        session.tip_cache_path = "/tmp/konduit-session-tip.json".into();
-        session.addressbook_path = "/tmp/konduit-session-addressbook.json".into();
+        let session = cardano_session::Config {
+            tip_cache_path: "/tmp/konduit-session-tip.json".into(),
+            addressbook_path: "/tmp/konduit-session-addressbook.json".into(),
+            ..Default::default()
+        };
         Self { session }
     }
 }

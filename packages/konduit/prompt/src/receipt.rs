@@ -34,16 +34,6 @@ impl Keytag {
         bytes.extend_from_slice(tag);
         Self(bytes)
     }
-
-    pub fn vkey(&self) -> Option<VerifyingKey> {
-        <[u8; 32]>::try_from(self.0.get(..32)?)
-            .ok()
-            .map(VerifyingKey::from)
-    }
-
-    pub fn tag(&self) -> &[u8] {
-        self.0.get(32..).unwrap_or(&[])
-    }
 }
 
 /// Hex string in human formats — permissive: tolerates a `0x` prefix and
@@ -94,11 +84,6 @@ pub fn load_receipts(path: &Path) -> Result<Receipts> {
     let raw =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))
-}
-
-/// Panic on fail
-pub fn decode_u8_32(s: &str) -> [u8; 32] {
-    <[u8; 32]>::try_from(hex::decode(s).unwrap()).unwrap()
 }
 
 /// FIXME! :: There is no ergonomic way to generate receipts.

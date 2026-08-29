@@ -88,10 +88,9 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
         self.cardano
             .tip()
             .addresses()
-            .into_iter()
             .filter_map(|address| self.cardano.utxos_at(address))
-            .cloned()
             .flatten()
+            .map(|(input, output)| (input.clone(), output.clone()))
             .collect()
     }
 
@@ -100,7 +99,6 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
         self.cardano
             .tip()
             .addresses()
-            .into_iter()
             .filter(|address| address.payment() == konduit_credential)
             .filter_map(|address| self.cardano.utxos_at(address))
             .flat_map(|utxos| {

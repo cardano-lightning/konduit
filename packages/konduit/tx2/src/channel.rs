@@ -427,8 +427,7 @@ impl Channel {
                 reason: "unlock requires an interval upper bound",
             });
         };
-        let lookup: BTreeMap<Lock, Secret> =
-            secrets.iter().map(|u| (Lock::from(u), *u)).collect();
+        let lookup: BTreeMap<Lock, Secret> = secrets.iter().map(|u| (Lock::from(u), *u)).collect();
         let unpend = |p: &Pending| {
             if p.timeout >= upper {
                 Unpend::Continue

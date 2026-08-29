@@ -20,10 +20,6 @@ impl KnownKeys {
         self.0.extend(entries);
     }
 
-    pub fn vkey_for(&self, label: &str) -> Option<&VerifyingKey> {
-        self.0.get(label)
-    }
-
     pub fn label_for(&self, vkey: &VerifyingKey) -> Option<&str> {
         self.0
             .iter()
@@ -49,27 +45,10 @@ impl KnownKeys {
         (!parts.is_empty()).then(|| parts.join(", "))
     }
 
-    pub fn prettify(&self, vkey: &VerifyingKey) -> String {
-        self.label_for(vkey)
-            .map(str::to_string)
-            .unwrap_or_else(|| short_hex(vkey.as_ref()))
-    }
-
-    /// Direct now — storage is already label-keyed, same as what
-    /// `Candidate` wants; no inversion needed.
     pub fn candidates(&self) -> Vec<Candidate<VerifyingKey>> {
         self.0
             .iter()
             .map(|(label, vkey)| Candidate::new(label.clone(), *vkey))
             .collect()
-    }
-}
-
-fn short_hex(bytes: &[u8]) -> String {
-    let hex = hex::encode(bytes);
-    if hex.len() > 12 {
-        format!("{}…{}", &hex[..6], &hex[hex.len() - 4..])
-    } else {
-        hex
     }
 }

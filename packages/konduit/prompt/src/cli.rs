@@ -116,7 +116,6 @@ impl Cli {
                 let ctx = Ctx {
                     known_keys: known_keys.candidates(),
                     receipts,
-                    ..Default::default()
                 };
                 crate::tx::build_staged_tx_interactively(&mut staged, &known_keys, &ctx)?;
 
