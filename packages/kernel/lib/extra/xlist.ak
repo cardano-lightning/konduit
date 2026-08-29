@@ -50,7 +50,7 @@ pub fn ordered_insert(xs: List<ByteArray>, item: ByteArray) {
       when bytearray.compare(x, item) is {
         Less -> [x, ..ordered_insert(xs, item)]
         Equal -> [x, ..xs]
-        Greater -> fail [item, x, ..xs]
+        Greater -> [item, x, ..xs]
       }
     _ -> [item]
   }
