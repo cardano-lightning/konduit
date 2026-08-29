@@ -154,7 +154,7 @@ impl Cmd {
             Cmd::Upload { script, version } => {
                 // ASSUMPTION: `PlutusScript::new(version, bytes)` - adjust
                 // if the real constructor differs.
-                let plutus_script = PlutusScript::new(version.clone(), script.0.clone());
+                let plutus_script = PlutusScript::new(*version, script.0.clone());
                 let change = wallet.change_address().await?;
                 let utxos = wallet
                     .utxos(None)
