@@ -164,7 +164,7 @@ where
                 if st.proposal.amount() > current.amount() + unlocked_value {
                     return Err(anyhow!(
                         "adaptor requesting to squash more than provably owed : {} vs {}",
-                        &st.proposal.amount(), current.amount() + unlocked_value, 
+                        st.proposal.amount(), current.amount() + unlocked_value, 
                     ));
                 }
 
