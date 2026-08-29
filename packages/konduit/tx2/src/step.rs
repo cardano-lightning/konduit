@@ -168,9 +168,9 @@ impl Will {
 
     pub fn signer(&self, constants: &Constants) -> VerifyingKey {
         if self.is_adaptor() {
-            constants.sub_vkey.clone()
+            constants.sub_vkey
         } else {
-            constants.add_vkey.clone()
+            constants.add_vkey
         }
     }
 }
