@@ -873,7 +873,6 @@ dependencies = [
  "cardano-sdk",
  "cardano-wallet",
  "clap",
- "hex",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -2570,8 +2569,6 @@ name = "konduit-prompt"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "cardano-connector",
- "cardano-connector-direct",
  "cardano-sdk",
  "cardano-session",
  "clap",
@@ -2584,10 +2581,8 @@ dependencies = [
  "minicbor",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
- "web-time",
 ]
 
 [[package]]
@@ -2632,7 +2627,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "cardano-connector",
- "cardano-connector-direct",
  "cardano-sdk",
  "cardano-session",
  "cardano-wallet",
@@ -2685,7 +2679,6 @@ dependencies = [
  "anyhow",
  "cardano-sdk",
  "hex",
- "inquire",
  "konduit-data",
  "konduit-tmp",
  "minicbor",

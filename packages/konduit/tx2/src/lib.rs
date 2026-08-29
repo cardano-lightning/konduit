@@ -24,6 +24,3 @@ pub mod validator;
 pub use validator::*;
 
 mod cbor_box;
-
-#[cfg(feature = "prompt")]
-pub mod prompt;

@@ -18,16 +18,12 @@ path = "src/main.rs"
 [dependencies]
 
 anyhow.workspace = true
-cardano-connector.workspace = true
-cardano-connector-direct.workspace = true
 cardano-sdk.workspace = true
 hex.workspace = true
 konduit-data = { workspace = true, features = ["cardano_sdk"] }
 konduit-tmp.workspace = true
 minicbor.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
-web-time.workspace = true
 serde = { workspace = true }
 inquire = { workspace = true }
 toml.workspace = true

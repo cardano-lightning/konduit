@@ -123,7 +123,7 @@ where
 
 impl<'a, B> Tbs<'a, B>
 where
-    B: for<'b> Encode<()>,
+    B: Encode<()>,
 {
     /// Encode to bytes - these are the bytes that get signed and verified.
     pub fn to_vec(&self) -> Vec<u8> {
@@ -222,7 +222,7 @@ pub struct Token<B, const N: usize = MAC_LEN> {
 /// Encodes to base64url (no padding) - the canonical header wire form.
 impl<B, const N: usize> std::fmt::Display for Token<B, N>
 where
-    B: for<'b> Encode<()>,
+    B: Encode<()>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let bytes = minicbor::to_vec(self).expect("Token encoding is infallible");

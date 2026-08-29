@@ -25,7 +25,6 @@ cli = [
   "tokio/rt-multi-thread",
   "tokio/macros",
   "dep:toml",
-  "dep:cardano-connector-direct",
   "cardano-session/cli",
   "serde_json",
 ]
@@ -40,7 +39,6 @@ anyhow = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 cardano-connector.workspace = true
-cardano-connector-direct = { workspace = true, optional = true }
 cardano-wallet.workspace = true
 serde.workspace = true
 cardano-sdk.workspace = true
