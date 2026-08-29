@@ -9,7 +9,7 @@ pub enum SquashStatus {
     Complete,
     /// Something to squash
     #[n(1)]
-    Incomplete( #[n(0)] SquashProposal),
+    Incomplete(#[n(0)] SquashProposal),
     /// Consumer not up-to-date, but nothing to squash
     #[n(2)]
     Stale(#[n(0)] SquashProposal),

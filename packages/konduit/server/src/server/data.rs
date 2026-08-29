@@ -5,7 +5,9 @@ use crate::{
 };
 use bln_client::types::{Invoice, RouteHint};
 use konduit_data::{Duration, Locked, Secret, Squash};
-use konduit_tmp::{AdaptorInfo, Keytag, Quote, QuoteBody, Receipt, SquashProposal, SquashStatus, TxHelp};
+use konduit_tmp::{
+    AdaptorInfo, Keytag, Quote, QuoteBody, Receipt, SquashProposal, SquashStatus, TxHelp,
+};
 /// Actix web server "Data" ie the context of handlers.
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -234,16 +236,15 @@ impl Data {
         Ok(PayResponse::from(pay_res.secret))
     }
 
-
-    // FIXME :: REMOVE THIS TEMPORARY PATCH!! 
+    // FIXME :: REMOVE THIS TEMPORARY PATCH!!
     pub fn squash_status(&self, keytag: &Keytag) -> Result<SquashStatus, Error> {
         let squash_proposal = self.squash_proposal(keytag)?;
         Ok(SquashStatus::Incomplete(squash_proposal))
     }
 }
 
-// FIXME :: API IMPROVEMENT. SIMPLIFICATION. 
-// NEEDS TO BE DOWNSTREAMED. 
+// FIXME :: API IMPROVEMENT. SIMPLIFICATION.
+// NEEDS TO BE DOWNSTREAMED.
 pub struct PayBody {
     pub locked: Locked,
     pub invoice: Invoice,

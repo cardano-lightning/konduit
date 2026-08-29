@@ -1,14 +1,14 @@
 use std::future::{Ready, ready};
 
 use actix_web::{
+    FromRequest, HttpMessage, HttpRequest, HttpResponse, Responder, body::BoxBody, dev::Payload,
+    error::ErrorInternalServerError,
+};
+use actix_web::{
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
     http::header,
     middleware::Next,
-};
-use actix_web::{
-    FromRequest, HttpMessage, HttpRequest, HttpResponse, Responder, body::BoxBody, dev::Payload,
-    error::ErrorInternalServerError,
 };
 use serde::Serialize;
 

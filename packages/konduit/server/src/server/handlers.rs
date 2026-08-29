@@ -96,9 +96,12 @@ pub async fn squash(
     keytag: AuthKeytag,
     data: Data,
     body: web::Bytes,
-// ) -> Result<Mediate<()>, Error> {
+    // ) -> Result<Mediate<()>, Error> {
 ) -> Result<Mediate<SquashStatus>, Error> {
-    let _ : Result<_, Error> = Ok(Mediate( mediation.accept, data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?));
+    let _: Result<_, Error> = Ok(Mediate(
+        mediation.accept,
+        data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?,
+    ));
     squash_status(mediation, keytag, data).await
 }
 
