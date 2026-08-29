@@ -13,7 +13,7 @@ const TABLE: TableDefinition<&[u8], Value> = TableDefinition::new("channels");
 // Value
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, Default)]
 pub struct Value {
     #[n(0)]
     retainer: Option<Retainer>,
@@ -78,16 +78,14 @@ impl Value {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("entry not found")]
-    NotFound,
-    #[error("entry already exists")]
-    AlreadyExists,
-    #[error("channel: {0}")]
-    Channel(#[from] channel::Error),
     #[error("transaction conflict")]
     Contended,
     #[error("backend: {0}")]
     Backend(String),
+    #[error("entry not found")]
+    NoChannel,
+    #[error("channel: {0}")]
+    Channel(#[from] channel::Error),
 }
 
 impl From<redb::DatabaseError> for Error {
@@ -159,15 +157,40 @@ impl Db {
             .map(|v| v.value().to_channel(keytag)))
     }
 
-    /// Insert a new channel. Errors if the keytag. already exists.
-    pub fn insert(&self, channel: Channel) -> Result<(), Error> {
+    /// Insert or modify a channel entry. Uses `Channel::default()` if the key does not exist.
+    pub fn upsert<F>(&self, keytag: &Keytag, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(Channel) -> Result<Channel, channel::Error>,
+    {
         let tx = self.0.begin_write()?;
         {
             let mut table = tx.open_table(TABLE)?;
-            if table.get(channel.keytag().as_ref())?.is_some() {
-                return Err(Error::AlreadyExists);
-            }
-            table.insert(channel.keytag().as_ref(), Value::from_channel(channel))?;
+            let current = table
+                .get(keytag.as_ref())?
+                .map(|guard| guard.value())
+                .unwrap_or_default()
+                .to_channel(keytag);
+            let updated = f(current)?;
+            table.insert(keytag.as_ref(), Value::from_channel(updated))?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Modify an existing entry. Fails if absent.
+    pub fn update<F>(&self, keytag: &Keytag, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(Channel) -> Result<Channel, channel::Error>,
+    {
+        let tx = self.0.begin_write()?;
+        {
+            let mut table = tx.open_table(TABLE)?;
+            let current = table
+                .get(keytag.as_ref())?
+                .map(|v| v.value().to_channel(keytag))
+                .ok_or(Error::NoChannel)?;
+            let updated = f(current)?;
+            table.insert(keytag.as_ref(), Value::from_channel(updated))?;
         }
         tx.commit()?;
         Ok(())
@@ -179,31 +202,11 @@ impl Db {
         {
             let mut table = tx.open_table(TABLE)?;
             if table.remove(keytag.as_ref())?.is_none() {
-                return Err(Error::NotFound);
+                return Err(Error::NoChannel);
             }
         }
         tx.commit()?;
         Ok(())
-    }
-
-    /// Modify an existing entry. Fails if absent.
-    pub fn update<F, T>(&self, keytag: &Keytag, f: F) -> Result<T, Error>
-    where
-        F: FnOnce(Channel) -> Result<(Channel, T), channel::Error>,
-    {
-        let tx = self.0.begin_write()?;
-        let result = {
-            let mut table = tx.open_table(TABLE)?;
-            let current = table
-                .get(keytag.as_ref())?
-                .map(|v| v.value().to_channel(keytag))
-                .ok_or(Error::NotFound)?;
-            let (updated, result) = f(current)?;
-            table.insert(keytag.as_ref(), Value::from_channel(updated))?;
-            result
-        };
-        tx.commit()?;
-        Ok(result)
     }
 }
 

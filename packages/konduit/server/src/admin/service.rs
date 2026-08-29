@@ -197,14 +197,11 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         let left: Vec<Keytag> = self.db.keys()?;
         let right = self.retainers(&snapshot);
         for item in CoIter::new(left, right) {
-            match item {
-                CoItem::Left(k) => self.db.update(&k, channel::close)?,
-                CoItem::Right(k, v) => {
-                    self.db.insert(channel::open(k, v)?)?;
-                    None
-                }
-                CoItem::Both(k, v) => self.db.update(&k, channel::update(v))?,
+            let (k, v) = match item {
+                CoItem::Left(k) => (k, Vec::new()),
+                CoItem::Right(k, v) | CoItem::Both(k, v) => (k, v),
             };
+            self.db.upsert(&k, channel::upsert_retainers(v))?;
         }
         Ok(())
     }

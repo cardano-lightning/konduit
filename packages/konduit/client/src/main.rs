@@ -14,5 +14,6 @@ fn load_env(path: &str) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     load_env(".env.consumer")?;
     load_env(".env")?;
+    env_logger::init();
     Cli::parse().run().await
 }

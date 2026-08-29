@@ -72,6 +72,9 @@ where
     /// expired.
     ///
     /// Returns unlocked cheques that have been squashed, if any.
+    ///
+    /// FIXME :: this function needs review!! Server now defaults to saying incomplete regardless.
+    /// Clients job to decide whether its incomplete.
     pub async fn sync(
         &self,
         squash: SquashStatus,
@@ -85,6 +88,10 @@ where
                 Ok(vec![])
             }
             SquashStatus::Incomplete(st) if and_confirm => {
+                if *st.current.body() == st.proposal {
+                    log::info!("ACTUALLY COMPLETE");
+                    return Ok(vec![]);
+                }
                 log::info!("squash incomplete; verifying...");
 
                 let verifying_key = to_verifying_key(self.signing_key.to_verification_key());
@@ -128,7 +135,7 @@ where
                 // currently available balance: a consumer needs to be able to rely on the cheque
                 // to timeout eventually so that it can update its own reported state.
                 //
-                // FIXME :: This is just wrong but cannot be fixed on this branch. see konduit-wire.
+                // FIXME :: This is just wrong but WILL NOT be fixed on this branch. see konduit-wire.
                 let mut squashed_unlockeds = vec![];
                 let unlocked_value = st.unlockeds.into_iter().try_fold(0, |value, unlocked| {
                     if unlocked.index() <= current_squash_index {

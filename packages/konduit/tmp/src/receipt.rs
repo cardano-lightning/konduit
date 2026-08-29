@@ -16,6 +16,9 @@ pub enum Error {
     #[error("Squash body was not reproduced")]
     NotReproduced,
 
+    #[error("squash amount less than expected")]
+    SquashAmountLess,
+
     #[error("Bad input")]
     Input,
 
@@ -207,8 +210,10 @@ impl Receipt {
             .filter(|c| squash.is_index_squashed(c.index()))
             .map(|c| c.amount())
             .sum();
-        if squash.amount() < self.squash.amount() + squashed {
-            return Err(Error::Input);
+        match squash.amount().cmp(&(self.squash.amount() + squashed)) {
+            cmp::Ordering::Less => return Err(Error::SquashAmountLess),
+            cmp::Ordering::Equal => (),
+            cmp::Ordering::Greater => (),
         }
         self.cheques
             .retain(|c| !squash.is_index_squashed(c.index()));

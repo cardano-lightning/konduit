@@ -32,3 +32,4 @@ clap = { workspace = true, features = ["derive", "env"], optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dotenvy = { workspace = true, optional = true }
 humantime = { workspace = true, optional = true }
+minicbor.workspace = true

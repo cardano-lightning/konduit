@@ -1,78 +1,63 @@
-use crate::{
-    channel::{apply_locked, apply_secrets, apply_squash},
-    db,
-    server::{self, cbor::decode_from_cbor},
+use crate::server::{
+    self,
+    auth::AuthKeytag,
+    data,
+    mediation::{self, Mediate, Mediation, Unmediate},
 };
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, http::StatusCode, web};
-use cardano_sdk::cbor;
-use konduit_data::{Duration, Locked, Secret, Squash};
-use konduit_tmp::{Keytag, PayBody, Quote, QuoteBody, SquashStatus};
-use std::{
-    ops::Deref,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use actix_web::{HttpResponse, ResponseError, http::StatusCode, web};
+use konduit_data::Locked;
+use konduit_tmp::{AdaptorInfo, Quote, Receipt, SquashProposal, SquashStatus, TxHelp};
+use std::ops::Deref;
 
 type Data = web::Data<server::Data>;
 
-const FEE_PLACEHOLDER: u64 = 1000;
-
 #[derive(Debug, thiserror::Error)]
-pub enum HandlerError {
-    #[error("Internal Network Error")]
-    Network(#[from] reqwest::Error),
-
-    #[error("LND returned: {0}")]
-    LndApi(String),
-
-    #[error("DB returned: {0}")]
-    Db(#[from] db::Error),
-
-    #[error("Other")]
-    Other,
+pub enum Error {
+    #[error("mediation: {0}")]
+    Mediation(#[from] mediation::Error),
+    #[error("data: {0}")]
+    Data(#[from] data::Error),
 }
 
-impl ResponseError for HandlerError {
+impl ResponseError for Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            HandlerError::Network(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            HandlerError::LndApi(_) => StatusCode::BAD_GATEWAY,
-            HandlerError::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            HandlerError::Other => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Mediation(mediation::Error::Unmediate(_)) => StatusCode::BAD_REQUEST,
+            Error::Mediation(mediation::Error::Backend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Data(_) => StatusCode::BAD_REQUEST,
         }
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code())
-            .json(serde_json::json!({ "error": self.to_string() }))
+        let status = self.status_code();
+        if status.is_server_error() {
+            // don't leak internal details to the client, but keep them for yourself
+            log::error!("request failed: {self}");
+            HttpResponse::build(status).body("internal server error")
+        } else {
+            HttpResponse::build(status).body(self.to_string())
+        }
     }
 }
 
-// TODO :: MOVE TO CONFIG
-/// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
-const ADAPTOR_TIME_DELTA: std::time::Duration = std::time::Duration::from_secs(40 * 10 * 60);
-/// Extra time between the "quoted" rel time and the time that might be allowed for in a
-/// "pay". I don't know why this has to be so high.
-/// LND fails for values much smaller than this.
-const QUOTE_PAY_TIME_MARGIN: std::time::Duration = std::time::Duration::from_secs(4 * 10 * 60);
-
-pub async fn info(data: Data) -> HttpResponse {
-    HttpResponse::Ok().json(data.info().deref())
+pub async fn info(mediation: Mediation, data: Data) -> Result<Mediate<AdaptorInfo<TxHelp>>, Error> {
+    Ok(Mediate(mediation.accept, data.info().deref().clone()))
 }
 
-pub async fn fx(data: Data) -> HttpResponse {
-    let fx = data.fx().read().await.clone();
-    HttpResponse::Ok().json(fx)
+pub async fn fx(mediation: Mediation, data: Data) -> Result<Mediate<fx_client::State>, Error> {
+    Ok(Mediate(mediation.accept, data.fx().read().await.clone()))
 }
 
-pub async fn show(data: Data) -> Result<HttpResponse, HandlerError> {
-    log::info!("SHOW");
-    let keys = data.db().keys()?;
-    let results = keys
-        .iter()
-        .map(|x| data.db().get(x))
-        .collect::<Result<Vec<_>, _>>()?;
+pub async fn show(_data: Data) -> Result<HttpResponse, Error> {
+    todo!()
+    // log::info!("SHOW");
+    // let keys = data.db().keys()?;
+    // let results = keys
+    //     .iter()
+    //     .map(|x| data.db().get(x))
+    //     .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(HttpResponse::Ok().json(results))
+    // Ok(HttpResponse::Ok().json(results))
 }
 
 /// Retrieve the latest receipt from the adaptor standpoint. This can be used by the consumer
@@ -82,286 +67,71 @@ pub async fn show(data: Data) -> Result<HttpResponse, HandlerError> {
 /// - the adaptor is free to send an earlier receipt, which is only to the advantage of the
 ///   consumer for they will owe the adaptor *less* money. In practice, the adaptor has no
 ///   incentives to do that.
-pub async fn receipt(req: HttpRequest, data: Data) -> Result<HttpResponse, HandlerError> {
-    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
-        return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
-    };
-    let Some(channel) = data.db().get(&keytag)? else {
-        return Ok(HttpResponse::NotFound().body(format!("no channel for keytag={}", keytag)));
-    };
-    Ok(HttpResponse::Ok().json(channel.receipt()))
+pub async fn receipt(
+    mediation: Mediation,
+    keytag: AuthKeytag,
+    data: Data,
+) -> Result<Mediate<Option<Receipt>>, Error> {
+    Ok(Mediate(mediation.accept, data.receipt(&keytag)?))
+}
+
+pub async fn squash_proposal(
+    mediation: Mediation,
+    keytag: AuthKeytag,
+    data: Data,
+) -> Result<Mediate<SquashProposal>, Error> {
+    Ok(Mediate(mediation.accept, data.squash_proposal(&keytag)?))
+}
+
+pub async fn squash_status(
+    mediation: Mediation,
+    keytag: AuthKeytag,
+    data: Data,
+) -> Result<Mediate<SquashStatus>, Error> {
+    Ok(Mediate(mediation.accept, data.squash_status(&keytag)?))
 }
 
 pub async fn squash(
-    req: HttpRequest,
+    mediation: Mediation,
+    keytag: AuthKeytag,
     data: Data,
     body: web::Bytes,
-) -> Result<HttpResponse, HandlerError> {
-    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
-        return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
-    };
-
-    let decode_result: Result<Squash, _> = if let Some(content_type) =
-        req.headers().get("content-type")
-        && content_type == "application/json"
-    {
-        serde_json::from_slice::<Squash>(body.as_ref())
-            .map_err(|e| cbor::decode::Error::message(e).into())
-    } else {
-        decode_from_cbor(body.as_ref())
-    };
-    let squash: Squash = match decode_result {
-        Ok(squash) => squash,
-        Err(err) => {
-            return Ok(HttpResponse::BadRequest().body(format!(
-                "cannot decode squash: {err}, {}",
-                hex::encode(body.as_ref())
-            )));
-        }
-    };
-    if let Err(err) = data.db().update(&keytag, apply_squash(squash.clone())) {
-        log::warn!("db error: {:?}", err);
-        match err {
-            db::Error::NotFound => {
-                // FIXME :: this should move to registration
-                log::warn!(
-                    "squash: channel {} not found locally, forcing admin sync before retrying",
-                    keytag
-                );
-
-                if let Err(err) = data.admin().sync().await {
-                    log::error!(
-                        "squash: forced admin sync failed while recovering {}: {err:#}",
-                        keytag
-                    );
-                    return Ok(HttpResponse::InternalServerError().body(format!(
-                        "failed to sync latest tip while recovering channel: {err}"
-                    )));
-                }
-
-                data.db().update(&keytag, apply_squash(squash.clone()))?;
-            }
-            db::Error::Channel(_error) => {
-                // FIXME :: this happens when squash not latest.
-                // This is weird/ not very coherent.
-                log::warn!("channel");
-                // return Err(HandlerError::Other);
-            }
-            db::Error::AlreadyExists => {
-                // Impossible error
-                log::warn!("already exists");
-                return Err(HandlerError::Other);
-            }
-            db::Error::Contended => {
-                // TODO DB busy. Try again?
-                log::warn!("contended");
-                return Err(HandlerError::Db(db::Error::Contended));
-            }
-            db::Error::Backend(_) => return Err(HandlerError::Db(db::Error::Contended)),
-        }
-    };
-
-    let Some(channel) = data.db().get(&keytag)? else {
-        // Impossible?!
-        return Err(HandlerError::Other);
-    };
-    let Some(receipt) = channel.receipt() else {
-        return Ok(HttpResponse::InternalServerError().body("Impossible result"));
-    };
-    let proposal = match receipt.propose_squash() {
-        Ok(proposal) => proposal,
-        Err(err) => {
-            return Ok(HttpResponse::InternalServerError()
-                .body(format!("Failed to resolve squash: {}", err)));
-        }
-    };
-    let response_body = if *squash.body() == proposal.proposal {
-        // Consumer up-to-date
-        SquashStatus::Complete
-    } else if proposal.proposal == *proposal.current.body() {
-        // Consumer not up-to-date, but nothing to squash
-        SquashStatus::Stale(proposal)
-    } else {
-        // Something to squash
-        SquashStatus::Incomplete(proposal)
-    };
-    Ok(HttpResponse::Ok().json(response_body))
+    // ) -> Result<Mediate<()>, Error> {
+) -> Result<Mediate<SquashStatus>, Error> {
+    let _: Result<_, Error> = Ok(Mediate(
+        mediation.accept,
+        data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?,
+    ));
+    squash_status(mediation, keytag, data).await
 }
 
 pub async fn quote(
-    req: HttpRequest,
+    mediation: Mediation,
+    keytag: AuthKeytag,
     data: Data,
-    body: web::Json<QuoteBody>,
-) -> Result<HttpResponse, HandlerError> {
-    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
-        return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
-    };
-    let fx = data.fx().read().await.clone();
-    let Some(channel) = data.db().get(&keytag)? else {
-        return Ok(HttpResponse::BadRequest().body("No channel found"));
-    };
-    let uncommitted = match channel.uncommitted() {
-        Ok(amt) => amt,
-        Err(err) => {
-            return Ok(HttpResponse::BadRequest().body(err.to_string()));
-        }
-    };
-    let Ok(index) = channel.next_index() else {
-        return Ok(HttpResponse::BadRequest().body("No next index"));
-    };
-    let request = body.into_inner();
-    let min_amount = fx.msat_to_lovelace(request.amount_msat()) + FEE_PLACEHOLDER + 1;
-    if min_amount > uncommitted {
-        return Ok(HttpResponse::BadRequest().body("Insufficient funds"));
-    }
-    let quote_request = bln_client::types::QuoteRequest {
-        amount_msat: request.amount_msat(),
-        payee: request.payee(),
-        route_hints: request.route_hints(),
-    };
-    let bln_quote = match data.bln().quote(quote_request.clone()).await {
-        Ok(y) => y,
-        Err(err) => {
-            log::info!("ERR : {:?}", err);
-            return Ok(HttpResponse::InternalServerError().body("BLN quote not available"));
-        }
-    };
-    log::info!(
-        "bln quote (hours) :{}",
-        bln_quote.relative_timeout.as_secs() / (60 * 60)
-    );
-    // FIXME :: we need to sort out the Tos
-    let amount =
-        fx.msat_to_lovelace(quote_request.amount_msat + bln_quote.fee_msat) + FEE_PLACEHOLDER + 1;
-    if amount > uncommitted {
-        return Ok(HttpResponse::BadRequest().body("Insufficient funds"));
-    }
-    let relative_timeout = (ADAPTOR_TIME_DELTA + QUOTE_PAY_TIME_MARGIN + bln_quote.relative_timeout)
-        .as_millis() as u64;
-    let response_body = Quote {
-        index,
-        amount,
-        relative_timeout,
-        routing_fee: bln_quote.fee_msat,
-    };
-    Ok(HttpResponse::Ok().json(response_body))
+    body: web::Bytes,
+) -> Result<Mediate<Quote>, Error> {
+    Ok(Mediate(
+        mediation.accept,
+        data.quote(&keytag, Unmediate::unmediate(mediation.content, &body)?)
+            .await?,
+    ))
 }
 
+// FIXME :: Remove the glue required here for historical reasons
 pub async fn pay(
-    req: HttpRequest,
+    mediation: Mediation,
+    keytag: AuthKeytag,
     data: Data,
-    body: web::Json<PayBody>,
-) -> Result<HttpResponse, HandlerError> {
-    let Some(keytag) = req.extensions().get::<Keytag>().cloned() else {
-        return Ok(HttpResponse::InternalServerError().body("Error: Middleware data not found."));
+    body: web::Bytes,
+) -> Result<Mediate<SquashStatus>, Error> {
+    let b = konduit_tmp::PayBody::unmediate(mediation.content, &body)?;
+    let locked = Locked::new(b.cheque_body, b.signature);
+    let body = data::PayBody {
+        locked,
+        invoice: b.invoice,
     };
-    let fx = data.fx().read().await.clone();
-    let body = body.into_inner();
-    let locked = Locked::new(body.cheque_body, <[u8; 64]>::from(body.signature).into());
-    let invoice = match bln_client::types::Invoice::try_from(&body.invoice) {
-        Ok(inv) => inv,
-        Err(_) => return Ok(HttpResponse::BadRequest().body("Bad invoice")),
-    };
-    // ## Compare Cardano side commitment with Bitcoin commitment.
-    // #### Lock
-    if invoice.payment_hash != locked.lock().0 {
-        return Ok(HttpResponse::BadRequest().body(format!(
-            "provided lock's secret={} does not match invoice's payment_hash={}",
-            hex::encode(locked.lock().0),
-            hex::encode(invoice.payment_hash),
-        )));
-    }
-
-    // #### Funds
-    let effective_amount_msat = fx.lovelace_to_msat(locked.amount() - FEE_PLACEHOLDER);
-    if effective_amount_msat < invoice.amount_msat {
-        return Ok(HttpResponse::BadRequest().body(format!(
-            "cheque does not cover payment: minimum required={}, effective amount={}",
-            invoice.amount_msat, effective_amount_msat
-        )));
-    }
-    let fee_limit = effective_amount_msat - invoice.amount_msat + 1;
-
-    // #### Time
-    // The cheque timeout is in posix time.
-    // We need to convert to a time delta.
-    // And then the BLN handler can convert to (relative) blocks and then block height
-    // ie absolute blocks.
-
-    let Ok(now) = now() else {
-        return Ok(HttpResponse::InternalServerError().body("System time not available"));
-    };
-
-    let relative_timeout = locked
-        .timeout()
-        .saturating_sub(now)
-        .saturating_sub(to_konduit_duration(ADAPTOR_TIME_DELTA));
-
-    if relative_timeout.is_zero() {
-        let min_timeout = (now + to_konduit_duration(ADAPTOR_TIME_DELTA)).as_secs();
-        // FIXME :: this error is kinda meaningless.
-        // The effective min acceptable timeout is attained only for routes no-one will use.
-        return Ok(HttpResponse::InternalServerError().body(format!(
-            "timeout too soon: minimum acceptable timeout={min_timeout}, provided timeout={}",
-            locked.timeout().as_secs(),
-        )));
-    };
-
-    if let Err(err) = data.db().update(&keytag, apply_locked(locked)) {
-        return Ok(HttpResponse::BadRequest().body(format!("Error handling cheque: {}", err)));
-    };
-    let pay_request = bln_client::types::PayRequest {
-        fee_limit,
-        relative_timeout: from_konduit_duration(relative_timeout),
-        invoice,
-    };
-
-    // Committing!
-    let pay_response = match data.bln().pay(pay_request).await {
-        Ok(res) => res,
-        Err(err) => {
-            // FIXME :: Handle the distinction between pre and post commitment error. error
-            return Ok(HttpResponse::BadRequest().body(format!("Routing Error: {}", err)));
-        }
-    };
-
-    // Resolving
-    if let Some(secret) = pay_response.secret {
-        data.db()
-            .update(&keytag, apply_secrets(vec![Secret(secret)]))?;
-    };
-    // TODO: Revisit the design decision. Having the squash proposal here is
-    let Some(channel) = data.db().get(&keytag)? else {
-        return Err(HandlerError::Other);
-    };
-    let Some(receipt) = channel.receipt() else {
-        return Ok(HttpResponse::InternalServerError().body("Failure to recover receipt"));
-    };
-    let proposal = match receipt.propose_squash() {
-        Ok(proposal) => proposal,
-        Err(err) => {
-            return Ok(HttpResponse::InternalServerError()
-                .body(format!("Failed to resolve squash: {}", err)));
-        }
-    };
-    let response_body = if *proposal.current.body() == proposal.proposal {
-        SquashStatus::Complete
-    } else {
-        SquashStatus::Incomplete(proposal)
-    };
-    Ok(HttpResponse::Ok().json(response_body))
-}
-
-fn now() -> Result<konduit_data::Duration, std::time::SystemTimeError> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(to_konduit_duration)
-}
-
-fn to_konduit_duration(x: std::time::Duration) -> konduit_data::Duration {
-    Duration::from_millis(x.as_millis() as u64)
-}
-
-fn from_konduit_duration(x: konduit_data::Duration) -> std::time::Duration {
-    std::time::Duration::from_millis(x.as_millis() as u64)
+    let _ = data.pay(&keytag, body).await?;
+    // FIXME : The return type here has diverged!!
+    squash_status(mediation, keytag, data).await
 }

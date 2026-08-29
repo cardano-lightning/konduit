@@ -36,7 +36,7 @@ pub enum Error {
     Input,
     #[error("verify failed")]
     Verify,
-    #[error("receipt {0}")]
+    #[error("receipt: {0}")]
     Receipt(#[from] receipt::Error),
 }
 
@@ -50,6 +50,12 @@ impl From<VerifyError> for Error {
 pub struct Aux {
     #[n(0)]
     is_active: bool,
+}
+
+impl Default for Aux {
+    fn default() -> Self {
+        Self { is_active: true }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
@@ -200,6 +206,15 @@ impl Channel {
         Ok(retainer.amount.saturating_sub(rel_committed))
     }
 
+    /// Error if cannot commit.
+    pub fn can_commit(&self, x: u64) -> Result<u64, Error> {
+        if self.uncommitted()? > x {
+            self.next_index()
+        } else {
+            Err(Error::Funds)
+        }
+    }
+
     pub fn next_index(&self) -> Result<u64, Error> {
         self.assert_active()?;
         let retainer = self.retainer.as_ref().ok_or(Error::NoRetainer)?;
@@ -312,51 +327,33 @@ impl Channel {
 //     }
 // }
 
-pub fn apply_locked(
-    locked: Locked,
-) -> impl FnOnce(Channel) -> Result<(Channel, Option<()>), Error> {
+pub fn apply_locked(locked: Locked) -> impl FnOnce(Channel) -> Result<Channel, Error> {
     move |mut channel| {
         channel.apply_locked(locked)?;
-        Ok((channel, None))
+        Ok(channel)
     }
 }
 
-pub fn apply_squash(
-    squash: Squash,
-) -> impl FnOnce(Channel) -> Result<(Channel, Option<()>), Error> {
+pub fn apply_squash(squash: Squash) -> impl FnOnce(Channel) -> Result<Channel, Error> {
     move |mut channel| {
         channel.apply_squash(squash)?;
-        Ok((channel, None))
+        Ok(channel)
     }
 }
 
-pub fn apply_secrets(
-    secrets: Vec<Secret>,
-) -> impl FnOnce(Channel) -> Result<(Channel, Option<()>), Error> {
+pub fn apply_secrets(secrets: Vec<Secret>) -> impl FnOnce(Channel) -> Result<Channel, Error> {
     move |mut channel| {
         channel.apply_secrets(secrets)?;
-        Ok((channel, None))
+        Ok(channel)
     }
 }
 
-pub fn open(keytag: Keytag, retainers: Vec<Retainer>) -> Result<Channel, Error> {
-    let (key, tag) = keytag.split();
-    let mut channel = Channel::new(to_verifying_key(key), tag);
-    channel.apply_retainer(retainers)?;
-    Ok(channel)
-}
-
-pub fn close(mut channel: Channel) -> Result<(Channel, Option<()>), Error> {
-    channel.apply_retainer(Vec::new())?;
-    Ok((channel, None))
-}
-
-pub fn update(
+pub fn upsert_retainers(
     retainers: Vec<Retainer>,
-) -> impl FnOnce(Channel) -> Result<(Channel, Option<()>), Error> {
+) -> impl FnOnce(Channel) -> Result<Channel, Error> {
     move |mut channel| {
         channel.apply_retainer(retainers)?;
-        Ok((channel, None))
+        Ok(channel)
     }
 }
 

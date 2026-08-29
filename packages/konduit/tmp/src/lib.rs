@@ -1,4 +1,5 @@
 mod adaptor_info;
+mod cbor;
 mod channel_parameters;
 mod l1_channel;
 mod pay_body;
