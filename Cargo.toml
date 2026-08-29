@@ -7,6 +7,9 @@ members = [
   "packages/cardano/connector-direct",
   "packages/cardano/connector-utxorpc",
   "packages/cardano/sdk",
+  "packages/cardano/session",
+  "packages/cardano/wallet",
+  "packages/cardano/keys",
   "packages/util/cobbl3",
   "packages/util/fx-client",
   "packages/util/http-client",
@@ -21,6 +24,11 @@ members = [
   "packages/konduit/server",
   "packages/konduit/tx",
   "packages/konduit/wasm",
+  "packages/konduit/session",
+  # "packages/konduit/l1-tests",
+  "packages/konduit/tx2",
+  "packages/konduit/prompt",
+  #"packages/konduit/receipt",
 ]
 resolver = "2"
 
@@ -62,6 +70,7 @@ cryptoxide = "0.5.1"
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
 envy = "0.4.2"
+figment = "0.10.19"
 futures = "0.3.31"
 futures-util = "0.3.31"
 getrandom = "0.2.16"
@@ -71,6 +80,7 @@ hex = "0.4.3"
 http = "1.4.2"
 humantime = "2.3.0"
 indoc = "2.0.6"
+inquire = "0.9.4"
 itertools = "0.14.0"
 js-sys = "0.3.82"
 lightning-invoice = "0.34.0"
@@ -102,15 +112,19 @@ subtle = "2.6.1"
 thiserror = "2"
 tokio = { version = "1.47.1", features = ["full"] }
 toml = "0.9.10"
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
 trait-variant = "0.1.2"
 uplc = "1.1.22"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.55"
-web-sys = { version = "0.3.85", features = ["AbortController", "AbortSignal"] }
+web-sys = "0.3.104"
 web-time = "1.1.0"
 
 bln-client = { path = "packages/bln/client", default-features = false }
 bln-sdk = { path = "packages/bln/sdk", default-features = false }
+cardano-wallet = { path = "packages/cardano/wallet", default-features = false }
+cardano-session = { path = "packages/cardano/session", default-features = false }
 cardano-connector = { path = "packages/cardano/connector" }
 cardano-connector-client = { path = "packages/cardano/connector-client" }
 cardano-connector-direct = { path = "packages/cardano/connector-direct" }
@@ -126,6 +140,8 @@ konduit-server = { path = "packages/konduit/server" }
 konduit-tx = { path = "packages/konduit/tx", default-features = false }
 problem-details = { path = "packages/util/problem-details", default-features = false }
 problem-details-derive = { path = "packages/util/problem-details-derive" }
+konduit-session = { path = "packages/konduit/session", default-features = false }
+konduit-tx2 = { path = "packages/konduit/tx2", default-features = false }
 
 [profile.wasm]
 inherits = "release"
