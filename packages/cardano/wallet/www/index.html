@@ -1,0 +1,182 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>cardano-wallet cip30 harness</title>
+    <style>
+      body {
+        font-family: monospace;
+        max-width: 640px;
+        margin: 2rem auto;
+      }
+      button {
+        margin: 0.25rem 0;
+      }
+      .ok {
+        color: green;
+      }
+      .err {
+        color: red;
+      }
+      pre {
+        background: #f0f0f0;
+        padding: 0.5rem;
+        overflow-x: auto;
+      }
+      input {
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>1. Scan</h3>
+    <button id="scan">Scan listed wallets</button>
+    <div id="wallets"></div>
+
+    <h3>2. Connect</h3>
+    <div id="connect-status"></div>
+
+    <h3>3. UTXOs</h3>
+    <button id="get-utxos" disabled>Get UTXOs</button>
+    <pre id="utxo-list"></pre>
+
+    <h3>4. Build a self-payment tx (1 ADA)</h3>
+    <button id="build-tx" disabled>Build tx</button>
+    <pre id="build-status"></pre>
+
+    <h3>5. Submit</h3>
+    <button id="sign-submit" disabled>Sign &amp; submit built tx</button>
+    <pre id="submit-status"></pre>
+
+    <script type="module">
+      import init, * as wallet from "../pkg/cardano_wallet.js";
+      await init();
+
+      let current = null;
+      let builtTxHex = null;
+
+      const shorten = (s, head = 10, tail = 6) =>
+        s.length > head + tail + 3
+          ? `${s.slice(0, head)}...${s.slice(-tail)}`
+          : s;
+
+      const setStatus = (el, ok, text) => {
+        el.className = ok ? "ok" : "err";
+        el.textContent = text;
+      };
+
+      document.getElementById("scan").onclick = () => {
+        const div = document.getElementById("wallets");
+        div.innerHTML = "";
+        const cardano = window.cardano || {};
+        const names = Object.keys(cardano).filter(
+          (k) => typeof cardano[k]?.enable === "function",
+        );
+
+        if (names.length === 0) {
+          div.textContent = "no CIP-30 wallets found on window.cardano";
+          return;
+        }
+
+        for (const name of names) {
+          const btn = document.createElement("button");
+          btn.textContent = `Connect: ${name}`;
+          btn.onclick = () => connectTo(name);
+          div.appendChild(btn);
+        }
+      };
+
+      async function connectTo(name) {
+        const status = document.getElementById("connect-status");
+        status.innerHTML = `connecting to ${name}...`;
+        try {
+          current = await wallet.connect(name);
+          const networkId = await current.networkId();
+          const address = await current.changeAddress();
+          status.innerHTML = "";
+          const ok = document.createElement("div");
+          setStatus(ok, true, `connected: ${name}`);
+          status.appendChild(ok);
+          status.appendChild(
+            document.createTextNode(`networkId: ${networkId}`),
+          );
+          status.appendChild(document.createElement("br"));
+          status.appendChild(
+            document.createTextNode(`changeAddress: ${shorten(address)}`),
+          );
+          document.getElementById("get-utxos").disabled = false;
+          document.getElementById("build-tx").disabled = false;
+        } catch (e) {
+          status.innerHTML = "";
+          setStatus(status, false, `connect failed: ${e}`);
+        }
+      }
+
+      document.getElementById("get-utxos").onclick = async () => {
+        const out = document.getElementById("utxo-list");
+        out.textContent = "loading...";
+        try {
+          const txIds = await current.getUtxos();
+          out.textContent =
+            txIds.length === 0
+              ? "(no utxos)"
+              : txIds.map((id, i) => `[${i}] ${shorten(id, 12, 8)}`).join("\n");
+        } catch (e) {
+          out.textContent = `error: ${e}`;
+        }
+      };
+
+      document.getElementById("build-tx").onclick = async () => {
+        const out = document.getElementById("build-status");
+        out.textContent = "building...";
+        try {
+          const built = await current.buildSelfPaymentTx();
+          builtTxHex = built.tx_hex;
+          document.getElementById("sign-submit").disabled = false;
+          out.textContent = `id: ${built.tx_id}`;
+        } catch (e) {
+          builtTxHex = null;
+          document.getElementById("sign-submit").disabled = true;
+          out.textContent = `error: ${e}`;
+        }
+      };
+
+      document.getElementById("sign-submit").onclick = async () => {
+        const out = document.getElementById("submit-status");
+        if (!builtTxHex) {
+          out.textContent = "build a tx first";
+          return;
+        }
+        out.textContent = "signing + submitting...";
+        try {
+          const submittedHash = await current.signAndSubmit(builtTxHex);
+          out.textContent = `submitted: ${submittedHash}\npolling for completion...`;
+          await pollForConfirmation(submittedHash, out);
+        } catch (e) {
+          out.textContent = `error: ${e}`;
+        }
+      };
+
+      async function pollForConfirmation(
+        txHash,
+        out,
+        tries = 10,
+        delayMs = 5000,
+      ) {
+        for (let i = 0; i < tries; i++) {
+          await new Promise((r) => setTimeout(r, delayMs));
+          const txIds = await current.getUtxos();
+          if (txIds.includes(txHash)) {
+            out.textContent += `\ncomplete: seen at attempt ${i + 1}/${tries}`;
+            return;
+          }
+          out.textContent += `\nstill waiting (attempt ${i + 1}/${tries})`;
+        }
+        out.textContent += `\ngave up after ${tries} attempts - not necessarily failed, wallets can take a while to refresh their UTXO set`;
+      }
+
+      window.wallet = wallet;
+      console.log("cardano-wallet loaded:", wallet);
+    </script>
+  </body>
+</html>
