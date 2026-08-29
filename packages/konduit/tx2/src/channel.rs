@@ -428,7 +428,7 @@ impl Channel {
             });
         };
         let lookup: BTreeMap<Lock, Secret> =
-            secrets.iter().map(|u| (Lock::from(u), u.clone())).collect();
+            secrets.iter().map(|u| (Lock::from(u), *u)).collect();
         let unpend = |p: &Pending| {
             if p.timeout >= upper {
                 Unpend::Continue
