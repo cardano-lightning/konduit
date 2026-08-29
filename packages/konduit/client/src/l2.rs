@@ -73,8 +73,8 @@ where
     ///
     /// Returns unlocked cheques that have been squashed, if any.
     ///
-    /// FIXME :: this function needs review!! Server now defaults to saying incomplete regardless. 
-    /// Clients job to decide whether its incomplete. 
+    /// FIXME :: this function needs review!! Server now defaults to saying incomplete regardless.
+    /// Clients job to decide whether its incomplete.
     pub async fn sync(
         &self,
         squash: SquashStatus,
@@ -164,7 +164,8 @@ where
                 if st.proposal.amount() > current.amount() + unlocked_value {
                     return Err(anyhow!(
                         "adaptor requesting to squash more than provably owed : {} vs {}",
-                        st.proposal.amount(), current.amount() + unlocked_value, 
+                        st.proposal.amount(),
+                        current.amount() + unlocked_value,
                     ));
                 }
 
