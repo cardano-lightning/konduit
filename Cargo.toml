@@ -29,6 +29,7 @@ members = [
   "packages/konduit/tx2",
   "packages/konduit/prompt",
   #"packages/konduit/receipt",
+  "packages/cln/server",
 ]
 resolver = "2"
 

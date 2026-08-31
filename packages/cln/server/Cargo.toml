@@ -1,0 +1,50 @@
+[package]
+name = "cln-server"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "cln-server"
+required-features = ["mock"]
+
+[dependencies]
+anyhow.workspace = true
+hex = { workspace = true, features = ["serde"] }
+konduit-data = { workspace = true, features = ["cardano_sdk"] }
+minicbor.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+web-time.workspace = true
+
+serde = { workspace = true }
+http-client = { workspace = true, features = [
+  "cbor",
+  "json",
+  "reqwest",
+], default-features = false }
+rand.workspace = true
+
+actix-web = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+clap = { workspace = true, optional = true, features = ["derive"] }
+toml = { workspace = true, optional = true }
+env_logger = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+
+[features]
+default = ["mock"]
+mock = [
+  "dep:actix-web",
+  "dep:tokio",
+  "dep:clap",
+  "dep:toml",
+  "dep:env_logger",
+  "dep:log",
+]
