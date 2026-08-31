@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ChequeBody, Indexes, IndexesError, Unlocked, Verified};
 
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
 pub enum SquashBodyError {
     #[error("Duplicate index")]
     DuplicateIndex,
