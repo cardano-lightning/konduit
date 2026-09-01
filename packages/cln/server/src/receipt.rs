@@ -225,27 +225,40 @@ impl Receipt {
             .filter(|c| squash.is_index_squashed(c.index()))
             .map(|c| c.amount())
             .sum();
-        match squash.amount().cmp(&(self.squash.amount() + squashed)) {
-            cmp::Ordering::Less => return Err(Error::SquashAmountLess),
-            cmp::Ordering::Equal => (),
-            cmp::Ordering::Greater => (),
+
+        // Even if the user thinkg this is too much, they did already sign it.
+        if squash.amount() < self.squash.amount() + squashed {
+            return Err(Error::SquashAmountLess);
         }
+
         self.cheques
             .retain(|c| !squash.is_index_squashed(c.index()));
         self.squash = squash;
         Ok(())
     }
 
-    /// Apply sync
     pub fn apply_sync(&mut self, their: Receipt) -> Result<(), Error> {
-        if self.squash.body() < their.squash.body() {
-            self.apply_squash(their.squash.clone())?
+        let _ = self.apply_squash(their.squash.clone());
+        // TODO:: testme
+        let mut merged: std::collections::BTreeMap<u64, Cheque<Verified>> =
+            std::collections::BTreeMap::new();
+        for cheque in self.cheques.drain(..).chain(their.cheques) {
+            merged
+                .entry(cheque.index())
+                .and_modify(|kept| {
+                    if prefer(&cheque, kept) {
+                        *kept = cheque.clone();
+                    }
+                })
+                .or_insert(cheque);
         }
-        // FIXME!!
-        // 2. Cheques: Take all of ours, + theirs: on duplicate take unlocked, and then of highest
-        //    amount. Its possible that a new commit has been made since the sync request was made.
+        self.cheques = merged.into_values().collect();
+
         // 3. Drop any now squashed.
-        // ... then apply new squash and sync again.
+        let squash = &self.squash;
+        self.cheques
+            .retain(|c| !squash.is_index_squashed(c.index()));
+
         Ok(())
     }
 
@@ -267,8 +280,9 @@ impl Receipt {
         let exclude = Indexes::new(
             self.cheques
                 .iter()
-                .map(|x| x.index())
-                .filter(|x| *x < body.index())
+                .filter(|c| !c.as_unlocked().is_some())
+                .map(|c| c.index())
+                .filter(|i| *i < body.index())
                 .collect(),
         )?;
         let body = SquashBody::new(body.amount(), body.index(), exclude)?;
@@ -282,5 +296,208 @@ impl Receipt {
         } else {
             Ok(Some(proposal))
         }
+    }
+}
+
+fn prefer(candidate: &Cheque<Verified>, kept: &Cheque<Verified>) -> bool {
+    match (
+        candidate.as_unlocked().is_some(),
+        kept.as_unlocked().is_some(),
+    ) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => candidate.amount() > kept.amount(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Signer, signer, time};
+
+    use super::*;
+    use konduit_data::{ChequeBody, Lock, Secret, SquashBody, Tag};
+
+    fn test_signer() -> Signer {
+        Signer::new(signer::Config { key: [0; 32] })
+    }
+
+    fn tag() -> Tag {
+        Tag::from(vec![0, 1, 2, 3])
+    }
+
+    fn zero_receipt(signer: &Signer, tag: &Tag) -> Receipt {
+        Receipt::new(signer.squash(tag.clone(), SquashBody::zero()))
+    }
+
+    fn with_locked(receipt: &mut Receipt, signer: &Signer, tag: &Tag, amount: u64) -> (u64, Lock) {
+        let index = receipt.max_index() + 1;
+        let secret = Secret(rand_bytes());
+        let lock = Lock::from(secret);
+        let body = ChequeBody::new(index, amount, far_future(), lock.clone());
+        let locked = signer.locked(tag.clone(), body);
+        receipt.apply_locked(locked).unwrap();
+        (index, lock)
+    }
+
+    fn with_unlocked(receipt: &mut Receipt, signer: &Signer, tag: &Tag, amount: u64) -> u64 {
+        let index = receipt.max_index() + 1;
+        let secret = Secret(rand_bytes());
+        let lock = Lock::from(secret.clone());
+        let body = ChequeBody::new(index, amount, far_future(), lock);
+        let locked = signer.locked(tag.clone(), body);
+        receipt.apply_locked(locked).unwrap();
+        receipt.apply_secret(secret).unwrap();
+        index
+    }
+
+    fn far_future() -> konduit_data::Duration {
+        time::now() + Duration::from_secs(10000000000)
+    }
+
+    /// Distinct bytes per call, no real randomness needed — a process-wide
+    /// counter is enough to guarantee every cheque in every test gets a
+    /// unique Lock/Secret, avoiding accidental collisions between cheques
+    /// that are supposed to be independent.
+    fn rand_bytes() -> [u8; 32] {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut bytes = [0u8; 32];
+        bytes[..8].copy_from_slice(&n.to_le_bytes());
+        bytes
+    }
+
+    // --- 1. squash adoption gate ---
+
+    #[test]
+    fn adopts_squash_when_theirs_is_ahead() {
+        let signer = test_signer();
+        let tag = tag();
+        let mut ours = zero_receipt(&signer, &tag);
+        with_unlocked(&mut ours, &signer, &tag, 100);
+
+        let body = ours.propose_squash_body().unwrap();
+        let mut theirs = zero_receipt(&signer, &tag);
+        theirs
+            .apply_squash(signer.squash(tag.clone(), body.clone()))
+            .unwrap();
+
+        ours.apply_sync(theirs).unwrap();
+        assert_eq!(ours.squash.body(), &body);
+    }
+
+    #[test]
+    fn ignores_squash_when_theirs_is_behind_or_equal() {
+        let signer = test_signer();
+        let tag = tag();
+        let mut ours = zero_receipt(&signer, &tag);
+        with_unlocked(&mut ours, &signer, &tag, 100);
+        let ours_body = ours.propose_squash_body().unwrap();
+        ours.apply_squash(signer.squash(tag.clone(), ours_body.clone()))
+            .unwrap();
+
+        let theirs = zero_receipt(&signer, &tag); // still at zero — behind ours
+        ours.apply_sync(theirs).unwrap();
+        assert_eq!(ours.squash.body(), &ours_body); // unchanged
+    }
+
+    // --- 2. cheque merge ---
+
+    #[test]
+    fn keeps_cheque_only_we_have() {
+        let signer = test_signer();
+        let tag = tag();
+        let mut ours = zero_receipt(&signer, &tag);
+        let (idx, _) = with_locked(&mut ours, &signer, &tag, 100);
+
+        let theirs = zero_receipt(&signer, &tag); // no cheques
+        ours.apply_sync(theirs).unwrap();
+
+        assert_eq!(
+            ours.cheques.iter().map(|c| c.index()).collect::<Vec<_>>(),
+            vec![idx]
+        );
+    }
+
+    #[test]
+    fn adopts_cheque_only_they_have() {
+        let signer = test_signer();
+        let tag = tag();
+        let mut ours = zero_receipt(&signer, &tag); // no cheques
+
+        let mut theirs = zero_receipt(&signer, &tag);
+        let (idx, _) = with_locked(&mut theirs, &signer, &tag, 200);
+
+        ours.apply_sync(theirs).unwrap();
+        assert_eq!(
+            ours.cheques.iter().map(|c| c.index()).collect::<Vec<_>>(),
+            vec![idx]
+        );
+    }
+
+    #[test]
+    fn unlocked_beats_locked_at_same_index() {
+        let signer = test_signer();
+        let tag = tag();
+
+        // Both receipts start fresh and call the helper once, so they
+        // land on the same index independently — no need to hand-pick one.
+        let mut ours = zero_receipt(&signer, &tag);
+        let (idx, _) = with_locked(&mut ours, &signer, &tag, 999); // stale, still locked on our side
+
+        let mut theirs = zero_receipt(&signer, &tag);
+        let their_idx = with_unlocked(&mut theirs, &signer, &tag, 999); // they've revealed it
+        assert_eq!(idx, their_idx);
+
+        ours.apply_sync(theirs).unwrap();
+        let kept = ours.cheques.iter().find(|c| c.index() == idx).unwrap();
+        assert!(kept.as_unlocked().is_some());
+    }
+
+    #[test]
+    fn higher_amount_wins_when_both_same_lock_state() {
+        let signer = test_signer();
+        let tag = tag();
+
+        let mut ours = zero_receipt(&signer, &tag);
+        let (idx, _) = with_locked(&mut ours, &signer, &tag, 100);
+
+        let mut theirs = zero_receipt(&signer, &tag);
+        let their_idx = with_locked(&mut theirs, &signer, &tag, 150).0; // a later, larger commit
+        assert_eq!(idx, their_idx);
+
+        ours.apply_sync(theirs).unwrap();
+        let kept = ours.cheques.iter().find(|c| c.index() == idx).unwrap();
+        assert_eq!(kept.amount(), 150);
+    }
+
+    // --- 3. pruning after squash adoption ---
+
+    #[test]
+    fn drops_cheques_covered_by_adopted_squash() {
+        let signer = test_signer();
+        let tag = tag();
+
+        let mut ours = zero_receipt(&signer, &tag);
+        let idx0 = with_unlocked(&mut ours, &signer, &tag, 100);
+        let (idx1, _) = with_locked(&mut ours, &signer, &tag, 50); // stays live: not squashed by peer
+
+        // Peer independently reaches the same state (same call order ->
+        // same indices), then squashes just the unlocked one.
+        let mut theirs = zero_receipt(&signer, &tag);
+        let their_idx0 = with_unlocked(&mut theirs, &signer, &tag, 100);
+        let (their_idx1, _) = with_locked(&mut theirs, &signer, &tag, 50);
+        assert_eq!((idx0, idx1), (their_idx0, their_idx1));
+
+        let body = theirs.propose_squash_body().unwrap();
+        theirs
+            .apply_squash(signer.squash(tag.clone(), body))
+            .unwrap();
+
+        ours.apply_sync(theirs).unwrap();
+
+        let indexes: Vec<_> = ours.cheques.iter().map(|c| c.index()).collect();
+        assert!(!indexes.contains(&idx0), "squashed cheque should be pruned");
+        assert!(indexes.contains(&idx1), "excluded cheque should survive");
     }
 }

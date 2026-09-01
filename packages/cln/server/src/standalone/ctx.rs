@@ -1,4 +1,9 @@
-use crate::wire::{self, auth::Keytag};
+use std::collections::BTreeMap;
+
+use crate::{
+    receipt::WireReceipt,
+    wire::{self, auth::Keytag},
+};
 use konduit_data::VerifyingKey;
 
 #[derive(Debug, thiserror::Error)]
@@ -72,5 +77,18 @@ impl Ctx {
         self.inbounds.apply_sync(keytag, req.receipt)?;
         let receipt = self.inbounds.wire_receipt(keytag)?;
         Ok(wire::sync::Response { receipt })
+    }
+
+    pub fn receipts(&self) -> BTreeMap<Keytag, Option<WireReceipt>> {
+        self.inbounds
+            .keytags()
+            .iter()
+            .map(|kt| {
+                (
+                    kt.clone(),
+                    self.inbounds.wire_receipt(&kt).ok().map(WireReceipt::from),
+                )
+            })
+            .collect()
     }
 }

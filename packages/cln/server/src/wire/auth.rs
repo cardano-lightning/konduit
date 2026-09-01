@@ -16,7 +16,7 @@ const KEY_LEN: usize = 32;
 
 /// Keytag is the simplest possible example.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
-pub struct Keytag(Vec<u8>);
+pub struct Keytag(#[serde(with = "hex::serde")] Vec<u8>);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

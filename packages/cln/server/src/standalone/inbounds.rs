@@ -88,4 +88,8 @@ impl Inbounds {
             .ok_or(Error::NotFound)?
             .wire_receipt()?)
     }
+
+    pub fn keytags(&self) -> Vec<Keytag> {
+        self.inbounds().keys().cloned().collect()
+    }
 }

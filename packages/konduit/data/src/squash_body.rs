@@ -129,7 +129,6 @@ impl SquashBody {
                 if self.index >= index {
                     Err(SquashBodyError::DuplicateIndex)
                 } else {
-                    println!("{:?}, {:?}, {:?}", self, index, amount);
                     self.exclude
                         .extend(self.index + 1, index)
                         .map_err(SquashBodyError::Exclude)?;

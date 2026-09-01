@@ -1,14 +1,14 @@
 use actix_web::{App, HttpResponse, HttpServer, ResponseError, middleware::from_fn, web};
 use clap::{Parser, Subcommand};
 use cln_server::{
-    mock::{self, Ctx, init_config, keytag::auth, load_config},
-    wire::{self, auth::Keytag},
+    standalone::{self, Ctx, init_config, keytag::auth, load_config},
+    wire::{self, auth::Keytag, sync::Receipt as WireReceipt},
 };
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
-struct ApiError(mock::ctx::Error);
-impl From<mock::ctx::Error> for ApiError {
-    fn from(err: mock::ctx::Error) -> Self {
+struct ApiError(standalone::ctx::Error);
+impl From<standalone::ctx::Error> for ApiError {
+    fn from(err: standalone::ctx::Error) -> Self {
         Self(err)
     }
 }
@@ -24,7 +24,6 @@ impl std::fmt::Display for ApiError {
 }
 impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
-        log::warn!("{}", self.0);
         HttpResponse::BadRequest().json(serde_json::json!({ "error": self.0.to_string() }))
     }
 }
@@ -45,16 +44,15 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
-    Run {
-        #[arg(long, default_value = "127.0.0.1:2567")]
-        listen: String,
-        #[arg(long, default_value_t = 30)]
-        sync_interval_secs: u64,
-    },
+    Run,
 }
 
 async fn healthz() -> HttpResponse {
     HttpResponse::Ok().finish()
+}
+
+async fn show(ctx: web::Data<Ctx>) -> ApiResult<BTreeMap<Keytag, Option<WireReceipt>>> {
+    Ok(web::Json(ctx.receipts()))
 }
 
 async fn payme(
@@ -102,17 +100,20 @@ fn spawn_periodic_sync(ctx: web::Data<Ctx>, interval: std::time::Duration) {
     });
 }
 
-async fn run(config: PathBuf, listen: String, sync_interval_secs: u64) -> anyhow::Result<()> {
-    let ctx = web::Data::new(Ctx::init(load_config(&config)?).map_err(anyhow::Error::from)?);
+async fn run(config: PathBuf) -> anyhow::Result<()> {
+    let config = load_config(&config)?;
+    let server = config.server.clone();
+    let ctx = web::Data::new(Ctx::init(config).map_err(anyhow::Error::from)?);
     spawn_periodic_sync(
         ctx.clone(),
-        std::time::Duration::from_secs(sync_interval_secs),
+        std::time::Duration::from_secs(server.sync_interval_secs),
     );
-    log::info!("listening on {listen}");
+    log::info!("listening on {}", server.listen);
     HttpServer::new(move || {
         App::new()
             .app_data(ctx.clone())
             .route("/healthz", web::get().to(healthz))
+            .route("/show", web::get().to(show))
             .route(wire::payme::PATH, web::post().to(payme))
             .service(
                 web::scope("")
@@ -122,7 +123,7 @@ async fn run(config: PathBuf, listen: String, sync_interval_secs: u64) -> anyhow
                     .route(wire::sync::PATH, web::post().to(sync)),
             )
     })
-    .bind(&listen)?
+    .bind(&server.listen)?
     .run()
     .await?;
     Ok(())
@@ -134,9 +135,6 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Cmd::Init { force } => init_config(&cli.config, force),
-        Cmd::Run {
-            listen,
-            sync_interval_secs,
-        } => run(cli.config, listen, sync_interval_secs).await,
+        Cmd::Run {} => run(cli.config).await,
     }
 }

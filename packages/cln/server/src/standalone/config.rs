@@ -3,8 +3,24 @@ use std::path::PathBuf;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfig {
+    pub listen: String,
+    pub sync_interval_secs: u64,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            listen: "127.0.0.1:2567".to_string(),
+            sync_interval_secs: 5,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
+    pub server: ServerConfig,
     pub inbound: super::inbounds::Config,
     pub outbound: crate::Config,
 }
