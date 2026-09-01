@@ -5,7 +5,7 @@ use std::{cmp::Ordering, fmt, str};
 
 use crate::{MAX_EXCLUDE_LENGTH, ParseError};
 
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum IndexesError {
     #[error("Exceeds max allowed length")]
     Length,
