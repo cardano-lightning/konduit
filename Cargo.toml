@@ -126,6 +126,7 @@ bln-client = { path = "packages/bln/client", default-features = false }
 bln-sdk = { path = "packages/bln/sdk", default-features = false }
 cardano-wallet = { path = "packages/cardano/wallet", default-features = false }
 cardano-session = { path = "packages/cardano/session", default-features = false }
+cardano-keys = { path = "packages/cardano/keys", default-features = false }
 cardano-connector = { path = "packages/cardano/connector" }
 cardano-connector-client = { path = "packages/cardano/connector-client" }
 cardano-connector-direct = { path = "packages/cardano/connector-direct" }

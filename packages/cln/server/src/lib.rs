@@ -28,5 +28,5 @@ pub mod random;
 
 pub mod time;
 
-#[cfg(feature = "mock")]
-pub mod mock;
+#[cfg(feature = "standalone")]
+pub mod standalone;

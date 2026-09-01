@@ -57,9 +57,23 @@ pub enum Error {
     Receipt(#[from] receipt::Error),
 }
 
-impl<T, E, D> From<http_client::ClientError<T, E, D>> for Error {
+impl<T, E, D> From<http_client::ClientError<T, E, D>> for Error
+where
+    T: std::fmt::Display,
+    E: std::fmt::Display,
+    D: std::fmt::Display,
+{
     fn from(value: http_client::ClientError<T, E, D>) -> Self {
-        Self::Transport(value.to_string())
+        use http_client::ClientError::*;
+        let detail = match &value {
+            Transport(e) => format!("transport: {e}"),
+            Encode(e) => format!("encode: {e}"),
+            Decode(e) => format!("decode: {e}"),
+            Http(e) => format!("http (request build): {e}"),
+            Status(code, msg) => format!("status {code}: {msg:?}"),
+            BuilderCorrupted => "builder corrupted".to_string(),
+        };
+        Self::Transport(detail)
     }
 }
 
@@ -132,10 +146,6 @@ impl Channel {
         http_client::header_policy::Custom::new(wire::auth::HEADER, &self.auth).boxed()
     }
 
-    pub async fn payme(&self, req: &wire::payme::Request) -> Result<wire::payme::Response, Error> {
-        self.client.payme(req, self.auth_header()).await
-    }
-
     pub async fn quote(&self, req: &wire::quote::Request) -> Result<wire::quote::Response, Error> {
         self.client.quote(req, self.auth_header()).await
     }
@@ -186,14 +196,6 @@ impl Client {
             Client::Cbor(c) => c.post_with_headers::<Req, Res>(path, req, headers).await?,
         };
         Ok(res)
-    }
-
-    pub async fn payme(
-        &self,
-        req: &wire::payme::Request,
-        auth: Box<dyn http_client::HeaderPolicy>,
-    ) -> Result<wire::payme::Response, Error> {
-        self.post(wire::payme::PATH, req, auth).await
     }
 
     pub async fn quote(

@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, sync::Mutex};
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct Config {
     #[n(0)]
-    default_timeout: Duration,
+    pub default_timeout: Duration,
 }
 
 impl Default for Config {

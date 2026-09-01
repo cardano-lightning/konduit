@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(with = "hex::serde")]
-    key: [u8; 32],
+    pub key: [u8; 32],
 }
 
 pub struct Signer {

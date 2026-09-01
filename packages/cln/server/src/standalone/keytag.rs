@@ -1,4 +1,6 @@
 use crate::wire::auth::{HEADER, Keytag};
+
+#[cfg(feature = "server")]
 use actix_web::{
     Error as ActixError, HttpMessage,
     body::MessageBody,
@@ -7,6 +9,7 @@ use actix_web::{
     middleware::Next,
 };
 
+#[cfg(feature = "server")]
 pub async fn auth(
     req: ServiceRequest,
     next: Next<impl MessageBody>,
@@ -23,7 +26,7 @@ pub async fn auth(
     next.call(req).await
 }
 
-#[cfg(feature = "mock")]
+#[cfg(feature = "server")]
 impl actix_web::FromRequest for Keytag {
     type Error = actix_web::Error;
     type Future = std::future::Ready<Result<Self, Self::Error>>;

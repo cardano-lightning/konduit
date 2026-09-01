@@ -1042,6 +1042,7 @@ dependencies = [
  "log",
  "minicbor",
  "rand 0.6.5",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

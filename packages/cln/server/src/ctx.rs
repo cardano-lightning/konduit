@@ -64,8 +64,6 @@ impl Ctx {
         let me = signer.verifying_key();
         let mut channels = Channels::new();
         for channel_config in config.channels.channels.iter() {
-            let keytag = Keytag::from((&me, &channel_config.tag)).to_hex();
-            log::warn!("KEYTAG :: {}", keytag);
             let receipt =
                 Receipt::new(signer.squash(channel_config.tag.clone(), SquashBody::zero()));
             channels.insert(
@@ -222,19 +220,19 @@ impl Ctx {
     pub async fn sync(&self) -> Vec<(VerifyingKey, Result<(), Error>)> {
         let mut results = Vec::new();
         for (key, channel) in self.channels.iter() {
-            let result = self.sync_channel(key, channel).await;
+            let result = self.sync_channel(channel).await;
             results.push((key.clone(), result));
         }
         results
     }
 
-    async fn sync_channel(&self, key: &VerifyingKey, channel: &Arc<Channel>) -> Result<(), Error> {
+    async fn sync_channel(&self, channel: &Arc<Channel>) -> Result<(), Error> {
         let req = wire::sync::Request {
             receipt: channel.wire_receipt(),
         };
         let their_wire = channel.sync(&req).await?.receipt;
-        let their =
-            Receipt::try_verify(their_wire, key, channel.tag()).map_err(|_| Error::BadReceipt)?;
+        let their = Receipt::try_verify(their_wire, &self.signer.verifying_key(), channel.tag())
+            .map_err(|_| Error::BadReceipt)?;
         channel.apply_sync(their)?;
         channel.apply_timeout(now().saturating_sub(Duration::from_secs(120)))?;
         if let Some(body) = channel.maybe_propose_squash_body()? {
