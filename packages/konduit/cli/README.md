@@ -128,6 +128,18 @@ This release is a clean validator/database cutover:
 
 Old and new validators must not run concurrently.
 
+`KONDUIT_HOST_ADDRESS` is both the deployment destination and the address that
+the server queries at startup. It does not need to be controlled by the admin
+wallet. Deploying to a new host does not spend or remove reference scripts at
+previous host addresses.
+
+Current mainnet deployment (2026-09-02):
+
+- host: `addr1vy9z4llh8hxdwc54c0xlfgeza39vqm3zua4zva4elp0quqcxa7mjc`
+- output: `e40cd245f1cc4b8f8be7f7e676df94f8f70ae5cd6e205ad5820a6f7d1eed66c3#0`
+- Plutus version: V3
+- script hash: `2790f3743fe062f855f7c8568ff13a9f93f2a97ccd7868270a2e7d6c`
+
 > [!TIP]
 >
 > It is ergonomic to execute commands "as" different users simultaneously. For
@@ -167,24 +179,29 @@ For Blockfrost-based local testing, use
 cases, `setup` output is sensitive and should be treated as local-dev bootstrap
 material, not production deployment guidance.
 
-Show wallet details
+Confirm the parsed network and host before submitting:
 
 ```sh
 admin show config
+admin show tip --verbose
 ```
 
-Out of band: fund the wallet from external funds
-
-"Deploy" script, ie submit tx with script in reference script of output.
+Fund the admin wallet out of band, then deploy the reference script:
 
 ```sh
 admin tx deploy
 ```
 
-See the result
+Do not use `--spend-all` to clean up an unrelated previous host. Deployment
+inputs come from the admin wallet payment credential; outputs at another
+credential require that credential's signing key.
+
+After confirmation, require `admin show tip --verbose` to report the deployment
+transaction output, `script ver: v3`, and the script hash embedded by
+`konduit-tx`:
 
 ```sh
-admin show tip
+admin show tip --verbose
 ```
 
 #### Setup Consumer and adaptor

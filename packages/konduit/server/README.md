@@ -26,6 +26,15 @@ Tx building assistance:
 
 - Script Host - Address - Address to query to find reference script
 
+Set `KONDUIT_HOST_ADDRESS` to the exact address used by
+`konduit-cli admin tx deploy`. Startup accepts only a V3 reference script whose
+hash matches the `konduit-tx` validator embedded in the server binary; a script
+at another address or with an older hash is ignored. Verify the configured
+network, host, output, version, and hash with `konduit-cli admin show config`
+and `konduit-cli admin show tip --verbose` before starting the service. The
+[CLI deployment guide](../cli/README.md#admin-deploy) records the current
+mainnet deployment.
+
 Fee:
 
 - Any - Fee is purely infomational and it is not safety critical. We know that

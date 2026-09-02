@@ -219,12 +219,23 @@ Admin endpoints should not be proxied publicly.
 
 Deployment workflow:
 
-1. pull and inspect desired source revision
+1. pull and inspect the desired source revision
 2. build from a pinned commit SHA
 3. run targeted verification
-4. install new binary / config
-5. restart service
-6. confirm health before considering rollout complete
+4. install the new binary and config
+5. use `konduit-cli admin show config` to verify the Cardano network and
+   `KONDUIT_HOST_ADDRESS`
+6. use `konduit-cli admin show tip --verbose` to verify the reference-script
+   output, Plutus version, and hash
+7. if the configured host has no matching script, run
+   `konduit-cli admin tx deploy`, wait for confirmation, and repeat the verbose
+   tip check
+8. restart `konduit.service`
+9. confirm startup selected the reference script and the service is healthy
+
+Changing the host does not require spending a script at the previous host.
+Deployment inputs come from the admin wallet; an output controlled by another
+payment credential cannot be removed without that credential's signing key.
 
 Rollback workflow:
 
