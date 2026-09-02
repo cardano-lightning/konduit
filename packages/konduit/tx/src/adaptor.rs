@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
@@ -42,29 +42,30 @@ pub fn tx(
         return Err(anyhow::anyhow!("No konduit reference found"));
     };
     let change_address = wallet.to_address(network_parameters.network_id);
-    let receipt_assets = utxos
+    let mut receipt_assets = BTreeMap::new();
+    let mut skip = BTreeSet::new();
+    for u in utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
         .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
         .filter(|u| receipts.contains_key(&u.data().keytag()))
-        .try_fold(BTreeMap::new(), |mut expected, u| {
-            let keytag = u.data().keytag();
-            let asset = u.data().constants().asset.clone();
-            if expected
-                .get(&keytag)
-                .is_some_and(|expected| expected != &asset)
-            {
-                return Err(anyhow::anyhow!(
-                    "receipt keytag is shared by channels with different assets"
-                ));
-            }
-            expected.insert(keytag, asset);
-            Ok(expected)
-        })?;
+    {
+        let keytag = u.data().keytag();
+        let asset = u.data().constants().asset.clone();
+        if receipt_assets
+            .get(&keytag)
+            .is_some_and(|expected| expected != &asset)
+        {
+            skip.insert(keytag);
+            continue;
+        }
+        receipt_assets.insert(keytag, asset);
+    }
     let groups = utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
         .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
+        .filter(|u| !skip.contains(&u.data().keytag()))
         .filter_map(|u| {
             let keytag = u.data().keytag();
             if receipt_assets.get(&keytag) != Some(&u.data().constants().asset) {

@@ -132,7 +132,7 @@ impl Cmd {
             record_asset(&mut open_assets, open.tag.clone(), open.asset.clone())?;
         }
 
-        let channel_assets = if add.is_empty() {
+        let channel_assets = if opens.is_empty() && add.is_empty() {
             BTreeMap::new()
         } else {
             client

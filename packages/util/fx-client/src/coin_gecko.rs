@@ -71,10 +71,16 @@ fn state_from_coins(
     };
     let bitcoin = price("bitcoin")?;
     let ada = price("cardano")?;
-    let assets = feeds
-        .iter()
-        .map(|feed| Ok((feed.key.clone(), price(&feed.coin_id)?)))
-        .collect::<crate::Result<BTreeMap<_, _>>>()?;
+    let mut assets = BTreeMap::new();
+    for feed in feeds {
+        if assets.contains_key(&feed.key) {
+            return Err(Error::InvalidData(format!(
+                "duplicate CoinGecko feed key {}",
+                feed.key
+            )));
+        }
+        assets.insert(feed.key.clone(), price(&feed.coin_id)?);
+    }
     Ok(State::new(base, ada, bitcoin, assets))
 }
 

@@ -101,7 +101,7 @@ impl Cli {
                 print_json(&serde_json::json!({ "id": id.to_string() }))
             }
             Cmd::Channels => {
-                let channels: Vec<(Input, Channel)> = session.channels().into_iter().collect();
+                let channels: Vec<(Input, Channel)> = session.channels()?.into_iter().collect();
                 print_json(&channels)
             }
         };

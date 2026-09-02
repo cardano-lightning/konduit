@@ -14,9 +14,9 @@ impl Adaptor {
     }
 
     #[wasm_bindgen(js_name = "claimSession")]
-    pub async fn claim_session(&mut self, claim: &str) -> wasm::Result<()> {
+    pub async fn claim_session(&mut self, claim: &str) -> wasm::Result<String> {
         let claim = serde_json::from_str(claim).map_err(anyhow::Error::from)?;
-        self.0.claim_session(&claim).await?;
-        Ok(())
+        let response = self.0.claim_session(&claim).await?;
+        serde_json::to_string(response).map_err(|error| anyhow::Error::from(error).into())
     }
 }

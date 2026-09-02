@@ -168,6 +168,14 @@ impl Konduit {
         self.adaptor = Ok(adaptor.into());
     }
 
+    /// Claim a FERRET-SESSION lease. Returns JSON `{ lease, expiresAtEpochMillis }`.
+    #[wasm_bindgen(js_name = "claimSession")]
+    pub async fn claim_session(&mut self, claim: &str) -> wasm::Result<String> {
+        let claim = serde_json::from_str(claim).map_err(anyhow::Error::from)?;
+        let response = self.adaptor.as_mut()?.claim_session(&claim).await?;
+        serde_json::to_string(response).map_err(|error| anyhow!(error).into())
+    }
+
     /// Recover a previously known tag, if any.
     #[wasm_bindgen(js_name = "setChannelTag")]
     pub fn set_channel_tag(&mut self, tag: &Tag) -> wasm::Result<()> {

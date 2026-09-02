@@ -1,3 +1,4 @@
+use cardano_sdk::Hash;
 use konduit_data::AssetDefinition;
 use konduit_tmp::{Keytag, Receipt, SessionClaimRequest};
 use minicbor::{Decode, Encode};
@@ -282,17 +283,19 @@ impl Db {
         let tx = self.0.begin_write().map_err(Error::from)?;
         {
             let channels = tx.open_table(TABLE).map_err(Error::from)?;
-            let mut has_channel = false;
-            for entry in channels.iter().map_err(Error::from)? {
-                let (key, _) = entry.map_err(Error::from)?;
-                if key
-                    .value()
-                    .starts_with(claim.wallet_verification_key_hex.as_slice())
-                {
-                    has_channel = true;
-                    break;
-                }
-            }
+            let wallet = claim.wallet_verification_key_hex;
+            let has_channel = match next_wallet_prefix(&wallet) {
+                Some(end) => channels
+                    .range(wallet.as_slice()..end.as_slice())
+                    .map_err(Error::from)?
+                    .next()
+                    .is_some(),
+                None => channels
+                    .range(wallet.as_slice()..)
+                    .map_err(Error::from)?
+                    .next()
+                    .is_some(),
+            };
             if !has_channel {
                 return Err(LeaseClaimError::UnknownWallet);
             }
@@ -310,14 +313,9 @@ impl Db {
                 if claim.generation < current.generation
                     || (claim.generation == current.generation && !same_identity)
                     || (claim.generation == current.generation
-                        && claim.timestamp < current.last_claim_timestamp.unwrap_or(0))
+                        && claim.timestamp <= current.last_claim_timestamp.unwrap_or(0))
                 {
                     return Err(LeaseClaimError::Conflict);
-                }
-                if claim.generation == current.generation
-                    && claim.timestamp == current.last_claim_timestamp.unwrap_or(0)
-                {
-                    return Ok((current.token, current.expires_at_epoch_millis));
                 }
             }
             leases
@@ -327,7 +325,7 @@ impl Db {
                         generation: claim.generation,
                         backup_hash: claim.backup_hash_hex,
                         device_public_key: claim.device_public_key_hex,
-                        token,
+                        token: hash_token(&token),
                         expires_at_epoch_millis,
                         last_claim_timestamp: Some(claim.timestamp),
                     },
@@ -368,7 +366,7 @@ impl Db {
                 .map(|value| {
                     let lease = value.value();
                     lease.expires_at_epoch_millis > now_epoch_millis
-                        && bool::from(lease.token.ct_eq(token))
+                        && bool::from(lease.token.ct_eq(&hash_token(token)))
                 })
                 .unwrap_or(false)
         };
@@ -396,15 +394,28 @@ impl Db {
             .map(|value| {
                 let lease = value.value();
                 lease.expires_at_epoch_millis > now_epoch_millis
-                    && bool::from(lease.token.ct_eq(token))
+                    && bool::from(lease.token.ct_eq(&hash_token(token)))
             })
             .unwrap_or(false))
     }
 }
 
-/// FIXME :: this should be upstreamed
-pub fn from_key(v: &[u8]) -> Keytag {
-    Keytag::try_from(v.to_vec()).expect("illegal key")
+fn hash_token(token: &[u8; 32]) -> [u8; 32] {
+    Hash::<32>::new(token).into()
+}
+
+fn next_wallet_prefix(prefix: &[u8; 32]) -> Option<[u8; 32]> {
+    let mut end = *prefix;
+    for i in (0..32).rev() {
+        if end[i] != 0xff {
+            end[i] += 1;
+            for byte in end.iter_mut().skip(i + 1) {
+                *byte = 0;
+            }
+            return Some(end);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -490,12 +501,14 @@ mod tests {
     }
 
     #[test]
-    fn exact_claim_retry_keeps_its_lease() {
+    fn exact_claim_retry_conflicts() {
         let (_file, db) = lease_db();
         let claim = claim(1, 1);
-        let first = db.claim_lease(&claim, [4; 32], 100).unwrap();
-        let retry = db.claim_lease(&claim, [5; 32], 200).unwrap();
-        assert_eq!(retry, first);
+        db.claim_lease(&claim, [4; 32], 100).unwrap();
+        assert!(matches!(
+            db.claim_lease(&claim, [5; 32], 200),
+            Err(LeaseClaimError::Conflict)
+        ));
     }
 
     #[test]

@@ -12,7 +12,7 @@ pub struct FeedRequest {
     pub coin_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Encode, Decode)]
+#[derive(Debug, Clone, Serialize, Encode)]
 pub struct State {
     #[n(0)]
     pub created_at: i64,
@@ -62,6 +62,29 @@ impl State {
         let asset = valid_price(asset_usd, "asset")?;
         let scale = scale(decimals)?;
         checked_floor(amount as f64 * 100_000_000_000.0 * asset / (bitcoin * scale as f64))
+    }
+}
+
+impl<'b, C> minicbor::Decode<'b, C> for State {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        ctx: &mut C,
+    ) -> std::result::Result<Self, minicbor::decode::Error> {
+        let len = d.array()?.unwrap_or(5);
+        if len < 4 {
+            return Err(minicbor::decode::Error::message("State array too short"));
+        }
+        Ok(Self {
+            created_at: minicbor::Decode::decode(d, ctx)?,
+            base: minicbor::Decode::decode(d, ctx)?,
+            ada: minicbor::Decode::decode(d, ctx)?,
+            bitcoin: minicbor::Decode::decode(d, ctx)?,
+            assets: if len >= 5 {
+                minicbor::Decode::decode(d, ctx)?
+            } else {
+                BTreeMap::new()
+            },
+        })
     }
 }
 

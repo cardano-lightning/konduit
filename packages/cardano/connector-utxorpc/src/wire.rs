@@ -98,7 +98,7 @@ fn mapped_from_minted(
                 Some(PseudoDatumOption::Hash(hash)) => (Some(*hash), None),
                 Some(MintedDatumOption::Data(data)) => {
                     let raw = data.raw_cbor();
-                    (None, Some(raw.to_vec()))
+                    (Some(Hash::<32>::new(raw).into()), Some(raw.to_vec()))
                 }
                 None => (None, None),
             };
@@ -163,6 +163,9 @@ fn mapped_from_parsed(
                 return Err(anyhow!("inline datum exceeds size bound"));
             }
             datum_inline = Some(datum.original_cbor.to_vec());
+            if datum.hash.is_empty() {
+                datum_hash = Some(Hash::<32>::new(datum.original_cbor.as_ref()).into());
+            }
         }
         if !datum.hash.is_empty() {
             datum_hash = Some(bytes32(datum.hash.as_ref(), "datum hash")?);
@@ -194,7 +197,7 @@ fn finish(
     amount: Vec<MappedAsset>,
     datum_hash: Option<[u8; 32]>,
     datum_inline: Option<Vec<u8>>,
-    script: Option<([u8; 28], Vec<u8>, u8)>,
+    script: Option<([u8; 28], Option<Vec<u8>>, Option<u8>)>,
 ) -> anyhow::Result<MappedUtxo> {
     if datum_inline
         .as_ref()
@@ -205,10 +208,13 @@ fn finish(
     let address = Address::<kind::Any>::try_from(address_bytes)?.to_string();
     let (reference_script_hash, reference_script, reference_script_version) = match script {
         Some((hash, bytes, version)) => {
-            if bytes.len() > MAX_SCRIPT_BYTES {
+            if bytes
+                .as_ref()
+                .is_some_and(|bytes| bytes.len() > MAX_SCRIPT_BYTES)
+            {
                 return Err(anyhow!("reference script exceeds size bound"));
             }
-            (Some(hash), Some(bytes), Some(version))
+            (Some(hash), bytes, version)
         }
         None => (None, None, None),
     };
@@ -285,23 +291,25 @@ fn policy_unit(policy: &[u8]) -> anyhow::Result<String> {
     Ok(hex::encode(policy))
 }
 
-fn map_minted_script(script: MintedScriptRef<'_>) -> anyhow::Result<([u8; 28], Vec<u8>, u8)> {
+fn map_minted_script(
+    script: MintedScriptRef<'_>,
+) -> anyhow::Result<([u8; 28], Option<Vec<u8>>, Option<u8>)> {
     match script {
         PseudoScript::NativeScript(script) => {
             let cbor = script.raw_cbor().to_vec();
-            Ok((script_hash(0, &cbor), cbor, 0))
+            Ok((script_hash(0, &cbor), None, None))
         }
         PseudoScript::PlutusV1Script(PlutusScript(bytes)) => {
             let cbor = bytes.to_vec();
-            Ok((script_hash(1, &cbor), cbor, 1))
+            Ok((script_hash(1, &cbor), Some(cbor), Some(1)))
         }
         PseudoScript::PlutusV2Script(PlutusScript(bytes)) => {
             let cbor = bytes.to_vec();
-            Ok((script_hash(2, &cbor), cbor, 2))
+            Ok((script_hash(2, &cbor), Some(cbor), Some(2)))
         }
         PseudoScript::PlutusV3Script(PlutusScript(bytes)) => {
             let cbor = bytes.to_vec();
-            Ok((script_hash(3, &cbor), cbor, 3))
+            Ok((script_hash(3, &cbor), Some(cbor), Some(3)))
         }
     }
 }
@@ -387,11 +395,8 @@ mod tests {
         .expect("native script utxo");
 
         assert_eq!(mapped.output_index, 7);
-        assert_eq!(mapped.reference_script_version, Some(0));
-        assert_eq!(
-            mapped.reference_script.as_deref(),
-            Some(script_cbor.as_slice())
-        );
+        assert_eq!(mapped.reference_script_version, None);
+        assert_eq!(mapped.reference_script, None);
         assert_eq!(
             mapped.reference_script_hash,
             Some(script_hash(0, &script_cbor))

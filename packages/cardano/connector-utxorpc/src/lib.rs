@@ -25,6 +25,7 @@ pub enum SubmitCbor {
     AlreadyKnown,
     InputsSpent,
     Indeterminate,
+    Rejected,
 }
 
 impl SubmitCbor {
@@ -32,10 +33,7 @@ impl SubmitCbor {
         let message = message.to_ascii_lowercase();
         if message.contains("input") && message.contains("spent") {
             Self::InputsSpent
-        } else if message.contains("already")
-            || message.contains("duplicate")
-            || message.contains("known")
-        {
+        } else if message.contains("already known") || message.contains("duplicate") {
             Self::AlreadyKnown
         } else {
             Self::Indeterminate
@@ -169,10 +167,11 @@ impl UtxoRpc {
         hash: &[u8],
     ) -> anyhow::Result<Option<utxorpc::ChainTx<utxorpc::spec::cardano::Tx>>> {
         let mut query = self.query.lock().await;
-        dolos(query.read_tx(hash.to_vec().into()))
-            .await?
-            .map_err(|error| anyhow!(error))
-            .context("failed to read transaction from UTxO RPC")
+        match dolos(query.read_tx(hash.to_vec().into())).await? {
+            Ok(tx) => Ok(tx),
+            Err(error) if grpc_status_is(&error, "NotFound") => Ok(None),
+            Err(error) => Err(anyhow!(error)).context("failed to read transaction from UTxO RPC"),
+        }
     }
 
     pub async fn submit_cbor(&self, tx: &[u8]) -> anyhow::Result<SubmitCbor> {
@@ -184,6 +183,12 @@ impl UtxoRpc {
                     .try_into()
                     .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
                 Ok(SubmitCbor::Accepted(hash))
+            }
+            Err(utxorpc::Error::GrpcError(status))
+                if grpc_debug_is(&status, "InvalidArgument")
+                    || grpc_debug_is(&status, "FailedPrecondition") =>
+            {
+                Ok(SubmitCbor::Rejected)
             }
             Err(utxorpc::Error::GrpcError(status)) => {
                 Ok(SubmitCbor::from_status_message(status.message()))
@@ -255,6 +260,14 @@ fn next_start_token(page: &utxorpc::UtxoPage<utxorpc::Cardano>) -> Option<String
 
 fn submit_error(endpoint: &str, error: utxorpc::Error) -> anyhow::Error {
     anyhow!(error).context(format!("failed to submit transaction via {endpoint}"))
+}
+
+fn grpc_status_is(error: &utxorpc::Error, code: &str) -> bool {
+    matches!(error, utxorpc::Error::GrpcError(status) if grpc_debug_is(status, code))
+}
+
+fn grpc_debug_is(status: &impl std::fmt::Debug, code: &str) -> bool {
+    format!("{status:?}").contains(code)
 }
 
 pub async fn live_network(endpoint: &str) -> anyhow::Result<Network> {
@@ -516,6 +529,10 @@ mod tests {
         assert_eq!(
             SubmitCbor::from_status_message("transaction already known"),
             SubmitCbor::AlreadyKnown
+        );
+        assert_eq!(
+            SubmitCbor::from_status_message("unknown transaction"),
+            SubmitCbor::Indeterminate
         );
     }
 

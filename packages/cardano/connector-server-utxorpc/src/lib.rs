@@ -72,17 +72,32 @@ pub async fn reconcile_loop<L: Ledger>(ledger: std::sync::Arc<L>, ops: std::sync
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {
         interval.tick().await;
-        let Ok(ids) = ops.pending_ids().await else {
-            continue;
+        let ids = match ops.pending_ids().await {
+            Ok(ids) => ids,
+            Err(error) => {
+                log::error!("reconcile pending_ids failed: {error}");
+                continue;
+            }
         };
-        let Ok((height, slot)) = ledger.tip().await else {
-            continue;
+        let (height, slot) = match ledger.tip().await {
+            Ok(tip) => tip,
+            Err(error) => {
+                log::error!("reconcile tip failed: {error}");
+                continue;
+            }
         };
         for id in ids {
-            if let Ok(Some(mut record)) = ops.get(id).await {
-                let _ = ops
-                    .reconcile_one(ledger.as_ref(), id, &mut record, height, slot, true)
-                    .await;
+            match ops.get(id).await {
+                Ok(Some(mut record)) => {
+                    if let Err(error) = ops
+                        .reconcile_one(ledger.as_ref(), id, &mut record, height, slot, true)
+                        .await
+                    {
+                        log::error!("reconcile_one failed: {error}");
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => log::error!("reconcile get failed: {error}"),
             }
         }
     }

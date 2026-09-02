@@ -92,6 +92,7 @@ fn wallet_target<'a>(
     }
 
     let mut target_assets = BTreeMap::<Hash<28>, BTreeMap<Vec<u8>, u64>>::new();
+    let mut change_assets = BTreeMap::<Hash<28>, BTreeMap<Vec<u8>, u64>>::new();
     for ((policy, name), quantity) in assets {
         if quantity > 0 {
             target_assets.entry(policy).or_default().insert(
@@ -99,9 +100,21 @@ fn wallet_target<'a>(
                 u64::try_from(quantity)
                     .map_err(|_| anyhow::anyhow!("wallet target asset overflow"))?,
             );
+        } else if quantity < 0 {
+            change_assets.entry(policy).or_default().insert(
+                name,
+                u64::try_from(-quantity)
+                    .map_err(|_| anyhow::anyhow!("wallet change asset overflow"))?,
+            );
         }
     }
     let mut target = Value::new(0).with_assets(target_assets);
+    let change = Value::new(0).with_assets(change_assets);
+    let change_min = if change.assets().iter().any(|(_, names)| !names.is_empty()) {
+        i128::from(Output::new(Address::default(), change).min_acceptable_value())
+    } else {
+        0
+    };
     let lovelace = cmp::max(
         i128::from(FEE_BUFFER),
         i128::from(FEE_BUFFER)
@@ -110,7 +123,8 @@ fn wallet_target<'a>(
     )
     .max(i128::from(
         Output::new(Address::default(), target.clone()).min_acceptable_value(),
-    ));
+    ))
+    .max(change_min);
     let lovelace =
         u64::try_from(lovelace).map_err(|_| anyhow::anyhow!("wallet target lovelace overflow"))?;
     target.with_lovelace(lovelace);

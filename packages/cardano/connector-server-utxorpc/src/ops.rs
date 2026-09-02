@@ -4,7 +4,7 @@ use crate::tx::SignedTx;
 use crate::wire::OperationResponse;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -79,6 +79,7 @@ impl OperationKey {
 
 pub struct OpsStore {
     db: Arc<Database>,
+    path: PathBuf,
     max_pending: usize,
     max_bytes: u64,
     inflight: AtomicUsize,
@@ -101,6 +102,7 @@ impl OpsStore {
         }
         Ok(Self {
             db,
+            path: path.to_path_buf(),
             max_pending,
             max_bytes,
             inflight: AtomicUsize::new(0),
@@ -163,10 +165,20 @@ impl OpsStore {
         uuid: String,
     ) -> Result<Record, ApiError> {
         let db = self.db.clone();
+        let path = self.path.clone();
         let max_pending = self.max_pending;
         let max_bytes = self.max_bytes;
         tokio::task::spawn_blocking(move || {
-            Self::persist_new_blocking(&db, max_pending, max_bytes, key, txid, &signed, &uuid)
+            Self::persist_new_blocking(
+                &db,
+                &path,
+                max_pending,
+                max_bytes,
+                key,
+                txid,
+                &signed,
+                &uuid,
+            )
         })
         .await
         .map_err(|_| ApiError::unavailable())?
@@ -174,6 +186,7 @@ impl OpsStore {
 
     fn persist_new_blocking(
         db: &Database,
+        path: &Path,
         max_pending: usize,
         max_bytes: u64,
         key: OperationKey,
@@ -181,7 +194,7 @@ impl OpsStore {
         signed: &SignedTx,
         uuid: &str,
     ) -> Result<Record, ApiError> {
-        if Self::file_len()? > max_bytes {
+        if Self::file_len(path)? > max_bytes {
             return Err(ApiError::too_many());
         }
         let digest = hex::encode(signed.digest);
@@ -298,7 +311,13 @@ impl OpsStore {
                 let current: Record =
                     serde_json::from_slice(existing.value()).map_err(|_| ApiError::unexpected())?;
                 if current.state == InternalState::Settled
-                    || current.state.rank() > record.state.rank()
+                    || current.state == InternalState::Rejected
+                    || (current.state.rank() > record.state.rank()
+                        && !(record.state == InternalState::Prepared
+                            && matches!(
+                                current.state,
+                                InternalState::Accepted | InternalState::Confirmed
+                            )))
                 {
                     return Ok(());
                 }
@@ -374,14 +393,20 @@ impl OpsStore {
                     record.inclusion_height = None;
                     record.state = InternalState::Prepared;
                     self.put(key, record.clone()).await?;
+                }
+                if record.state == InternalState::Accepted {
                     return Ok(0);
                 }
-                if submit && record.cbor.is_some() && record.state.is_pending() {
-                    if record.state == InternalState::Prepared {
-                        let Some(claimed) = self.claim_submit(key).await? else {
-                            return Ok(0);
-                        };
-                        *record = claimed;
+                if submit && record.cbor.is_some() {
+                    match record.state {
+                        InternalState::Prepared => {
+                            let Some(claimed) = self.claim_submit(key).await? else {
+                                return Ok(0);
+                            };
+                            *record = claimed;
+                        }
+                        InternalState::Submitting => {}
+                        _ => return Ok(0),
                     }
                     let Some(cbor_hex) = record.cbor.as_ref() else {
                         return Ok(0);
@@ -392,6 +417,10 @@ impl OpsStore {
                             record.state = InternalState::Accepted;
                         }
                         SubmitResult::Accepted(_) => return Err(ApiError::unavailable()),
+                        SubmitResult::Rejected => {
+                            record.state = InternalState::Rejected;
+                            record.cbor = None;
+                        }
                         SubmitResult::AlreadyKnown
                         | SubmitResult::InputsSpent
                         | SubmitResult::Indeterminate => {}
@@ -444,9 +473,12 @@ impl OpsStore {
         Ok(count)
     }
 
-    fn file_len() -> Result<u64, ApiError> {
-        Ok(0)
-        // ponytail: redb 4 has no cheap size API here; admission uses pending count. Add file metadata if disk pressure shows up.
+    fn file_len(path: &Path) -> Result<u64, ApiError> {
+        match std::fs::metadata(path) {
+            Ok(meta) => Ok(meta.len()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(0),
+            Err(_) => Err(ApiError::unavailable()),
+        }
     }
 }
 

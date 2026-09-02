@@ -18,6 +18,7 @@ pub enum SubmitResult {
     AlreadyKnown,
     InputsSpent,
     Indeterminate,
+    Rejected,
 }
 
 #[async_trait]
@@ -116,6 +117,7 @@ impl Ledger for DolosLedger {
                 SubmitCbor::AlreadyKnown => SubmitResult::AlreadyKnown,
                 SubmitCbor::InputsSpent => SubmitResult::InputsSpent,
                 SubmitCbor::Indeterminate => SubmitResult::Indeterminate,
+                SubmitCbor::Rejected => SubmitResult::Rejected,
             },
         )
     }
@@ -173,15 +175,23 @@ impl History for KoiosHistory {
     async fn ping(&self) -> Result<(), ApiError> {
         let response = self
             .client
-            .get(format!("{}/tip", self.base))
+            .get(format!("{}/genesis", self.base))
             .send()
             .await
             .map_err(|_| ApiError::unavailable())?;
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            Err(ApiError::unavailable())
+        if !response.status().is_success() {
+            return Err(ApiError::unavailable());
         }
+        let genesis: Vec<KoiosGenesis> =
+            response.json().await.map_err(|_| ApiError::unavailable())?;
+        let magic = genesis
+            .first()
+            .and_then(|row| row.networkmagic)
+            .ok_or_else(ApiError::unavailable)?;
+        if magic != 764824073 {
+            return Err(ApiError::unavailable());
+        }
+        Ok(())
     }
 
     async fn address_history(
@@ -214,7 +224,8 @@ impl History for KoiosHistory {
                             "_tx_hashes": chunk,
                             "_inputs": true,
                             "_assets": true,
-                            "_scripts": true
+                            "_scripts": true,
+                            "_bytecode": true
                         }),
                     )
                     .await?;
@@ -248,7 +259,8 @@ impl History for KoiosHistory {
                     "_tx_hashes": [txid],
                     "_inputs": true,
                     "_assets": true,
-                    "_scripts": true
+                    "_scripts": true,
+                    "_bytecode": true
                 }),
             )
             .await?;
@@ -257,6 +269,12 @@ impl History for KoiosHistory {
             None => Ok(None),
         }
     }
+}
+
+#[derive(Deserialize)]
+struct KoiosGenesis {
+    #[serde(default)]
+    networkmagic: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -399,16 +417,22 @@ fn map_tx(info: TxInfo, tip_height: u64) -> Result<Option<TransactionSummary>, A
         timestamp: info.tx_timestamp.unwrap_or(0),
         invalid_before: json_u64(info.invalid_before),
         invalid_after: json_u64(info.invalid_after),
-        inputs: inputs.into_iter().filter_map(map_input).collect(),
-        outputs: outputs.into_iter().filter_map(map_output).collect(),
+        inputs: inputs
+            .into_iter()
+            .map(map_input)
+            .collect::<Result<Vec<_>, _>>()?,
+        outputs: outputs
+            .into_iter()
+            .map(map_output)
+            .collect::<Result<Vec<_>, _>>()?,
     }))
 }
 
-fn map_input(io: KoiosIo) -> Option<TxInput> {
+fn map_input(io: KoiosIo) -> Result<TxInput, ApiError> {
     let output = map_output(io.clone())?;
-    Some(TxInput {
-        transaction_id: io.tx_hash?,
-        output_index: io.tx_index?,
+    Ok(TxInput {
+        transaction_id: io.tx_hash.ok_or_else(ApiError::unavailable)?,
+        output_index: io.tx_index.ok_or_else(ApiError::unavailable)?,
         address: output.address,
         consumed_by: None,
         value: output.value,
@@ -418,8 +442,11 @@ fn map_input(io: KoiosIo) -> Option<TxInput> {
     })
 }
 
-fn map_output(io: KoiosIo) -> Option<TxOutput> {
-    let address = io.payment_addr.and_then(|addr| addr.bech32)?;
+fn map_output(io: KoiosIo) -> Result<TxOutput, ApiError> {
+    let address = io
+        .payment_addr
+        .and_then(|addr| addr.bech32)
+        .ok_or_else(ApiError::unavailable)?;
     let mut value = Vec::new();
     if let Some(lovelace) = io.value {
         value.push(AssetObject {
@@ -437,7 +464,7 @@ fn map_output(io: KoiosIo) -> Option<TxOutput> {
             quantity: asset.quantity,
         });
     }
-    Some(TxOutput {
+    Ok(TxOutput {
         address,
         consumed_by: None,
         value,

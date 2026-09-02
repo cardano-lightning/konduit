@@ -4,13 +4,15 @@ use crate::providers::{History, Ledger, parse_mainnet_address};
 use crate::tx::{decode_signed_tx, parse_lowercase_hex, parse_tx_id, parse_uuid};
 use crate::wire::{
     BalanceResponse, CreateOperationRequest, HealthResponse, NetworkResponse,
-    ProtocolParametersResponse, SubmitRequest, SubmitResponse, Utxo,
+    ProtocolParametersResponse, SubmitRequest, SubmitResponse, TransactionSummary, Utxo,
 };
 use actix_cors::Cors;
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer,
+    error::JsonPayloadError,
+    http::StatusCode,
     middleware::Logger,
-    web::{self, Data, Json, JsonConfig, Path},
+    web::{self, Bytes, Data, JsonConfig, Path, PayloadConfig},
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -58,17 +60,15 @@ pub struct AppState<L, H> {
 
 impl<L: Ledger, H: History> AppState<L, H> {
     fn rate_limit(&self, req: &HttpRequest) -> Result<(), ApiError> {
-        let forwarded = std::env::var_os("CONNECTOR_TRUST_PROXY").and_then(|_| {
+        let forwarded = if trust_proxy() {
             req.headers()
-                .get("x-forwarded-for")?
-                .to_str()
-                .ok()?
-                .split(',')
-                .next()?
-                .trim()
-                .parse()
-                .ok()
-        });
+                .get("x-forwarded-for")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.split(',').next())
+                .and_then(|value| value.trim().parse().ok())
+        } else {
+            None
+        };
         let ip = forwarded
             .or_else(|| req.peer_addr().map(|addr| addr.ip()))
             .unwrap_or(IpAddr::from([0, 0, 0, 0]));
@@ -88,6 +88,13 @@ impl<L: Ledger, H: History> AppState<L, H> {
         entry.push(now);
         Ok(())
     }
+}
+
+fn trust_proxy() -> bool {
+    matches!(
+        std::env::var("CONNECTOR_TRUST_PROXY").as_deref(),
+        Ok("1" | "true" | "TRUE" | "yes" | "YES")
+    )
 }
 
 fn json_bounded<T: Serialize>(value: &T) -> Result<HttpResponse, ApiError> {
@@ -117,6 +124,7 @@ async fn health<L: Ledger, H: History>(
 ) -> Result<HttpResponse, ApiError> {
     state.ledger.ready().await?;
     state.history.ping().await?;
+    state.ops.pending_ids().await?;
     json_bounded(&HealthResponse { status: "ok" })
 }
 
@@ -171,11 +179,17 @@ async fn transactions<L: Ledger, H: History>(
 ) -> Result<HttpResponse, ApiError> {
     let address = parse_mainnet_address(&path)?;
     let (height, _) = state.ledger.tip().await?;
-    let txs = state
+    let mut txs = state
         .history
         .address_history(&address.to_string(), height)
         .await?;
-    json_bounded(&txs)
+    let mut out = Vec::new();
+    for tx in txs.drain(..) {
+        if let Some(tx) = confirm_canonical(state.ledger.as_ref(), tx, height).await? {
+            out.push(tx);
+        }
+    }
+    json_bounded(&out)
 }
 
 async fn transaction<L: Ledger, H: History>(
@@ -186,16 +200,21 @@ async fn transaction<L: Ledger, H: History>(
     parse_tx_id(&id).map_err(|_| ApiError::bad_request())?;
     let (height, _) = state.ledger.tip().await?;
     let tx = state.history.transaction(&id, height).await?;
+    let tx = match tx {
+        Some(tx) => confirm_canonical(state.ledger.as_ref(), tx, height).await?,
+        None => None,
+    };
     json_bounded(&tx)
 }
 
 async fn submit<L: Ledger, H: History>(
     req: HttpRequest,
     state: Data<AppState<L, H>>,
-    body: Json<SubmitRequest>,
+    body: Bytes,
 ) -> Result<HttpResponse, ApiError> {
     state.rate_limit(&req)?;
-    let _guard = state.ops.admit_write()?;
+    let body: crate::wire::SubmitRequest =
+        serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
     let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
     let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
     let max = state.ledger.max_tx_size().await?;
@@ -221,10 +240,11 @@ async fn submit<L: Ledger, H: History>(
 async fn create_operation<L: Ledger, H: History>(
     req: HttpRequest,
     state: Data<AppState<L, H>>,
-    body: Json<CreateOperationRequest>,
+    body: Bytes,
 ) -> Result<HttpResponse, ApiError> {
     state.rate_limit(&req)?;
-    let _guard = state.ops.admit_write()?;
+    let body: crate::wire::CreateOperationRequest =
+        serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
     let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
     let expected =
         parse_tx_id(&body.expected_transaction_id).map_err(|_| ApiError::bad_request())?;
@@ -264,15 +284,35 @@ async fn get_operation<L: Ledger, H: History>(
     json_bounded(&OpsStore::response(&record, depth))
 }
 
+async fn confirm_canonical<L: Ledger>(
+    ledger: &L,
+    mut tx: TransactionSummary,
+    tip_height: u64,
+) -> Result<Option<TransactionSummary>, ApiError> {
+    let id = parse_tx_id(&tx.id).map_err(|_| ApiError::unavailable())?;
+    let Some(presence) = ledger.read_tx(&id).await? else {
+        return Ok(None);
+    };
+    tx.depth = tip_height.saturating_sub(presence.height);
+    Ok(Some(tx))
+}
 async fn submit_record<L: Ledger, H: History>(
     state: &AppState<L, H>,
     key: crate::ops::OperationKey,
     mut record: Record,
 ) -> Result<(u64, Record), ApiError> {
     let (height, slot) = state.ledger.tip().await?;
+    let submit = record.state == InternalState::Prepared;
     let depth = state
         .ops
-        .reconcile_one(state.ledger.as_ref(), key, &mut record, height, slot, true)
+        .reconcile_one(
+            state.ledger.as_ref(),
+            key,
+            &mut record,
+            height,
+            slot,
+            submit,
+        )
         .await?;
     Ok((depth, record))
 }
@@ -330,10 +370,22 @@ where
     };
     App::new()
         .app_data(state)
+        .app_data(PayloadConfig::default().limit(MAX_JSON))
         .app_data(
             JsonConfig::default()
                 .limit(MAX_JSON)
-                .error_handler(|_, _| ApiError::bad_request().into()),
+                .error_handler(|err, _| {
+                    let overflow = matches!(
+                        err,
+                        JsonPayloadError::Overflow { .. }
+                            | JsonPayloadError::OverflowKnownLength { .. }
+                    );
+                    if overflow {
+                        ApiError::payload().into()
+                    } else {
+                        ApiError::bad_request().into()
+                    }
+                }),
         )
         .wrap(Logger::new("%s %b %D"))
         .wrap(cors)

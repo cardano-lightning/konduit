@@ -2,19 +2,37 @@ use cardano_sdk::{Input, Value};
 
 use crate::{Lovelace, Utxos};
 
-/// Select wallet UTxOs covering every unit in the target value.
 pub fn select(utxos: &Utxos, target: &Value<u64>) -> anyhow::Result<Vec<Input>> {
     if target.is_empty() {
         return Ok(vec![]);
     }
     let candidates = utxos.iter().collect::<Vec<_>>();
-    let selection = Value::cover(target, &candidates, |(_, output)| output.value())
+    let clean: Vec<_> = candidates
+        .iter()
+        .copied()
+        .filter(|(_, output)| !has_unrelated_tokens(output.value(), target))
+        .collect();
+    let selection = Value::cover(target, &clean, |(_, output)| output.value())
+        .or_else(|| Value::cover(target, &candidates, |(_, output)| output.value()))
         .ok_or_else(|| anyhow::anyhow!("insufficient wallet value to cover target {target}"))?;
     Ok(selection
         .inputs
         .into_iter()
         .map(|(input, _)| (*input).clone())
         .collect())
+}
+
+fn has_unrelated_tokens(value: &Value<u64>, target: &Value<u64>) -> bool {
+    value.assets().iter().any(|(policy, names)| {
+        names.iter().any(|(name, quantity)| {
+            *quantity > 0
+                && target
+                    .assets()
+                    .get(policy)
+                    .and_then(|names| names.get(name))
+                    .is_none()
+        })
+    })
 }
 
 /// Select utxos to cover fees and collaterals

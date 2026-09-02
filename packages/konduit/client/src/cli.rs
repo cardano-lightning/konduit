@@ -4,13 +4,14 @@ use cardano_sdk::{Address, VerificationKey, address::kind::Shelley};
 use clap::Parser;
 use http_client::{codec, transport};
 use konduit_data::{Duration, Lock, SquashBody};
-use konduit_tmp::{Keytag, TxHelp};
+use konduit_tmp::{Keytag, SessionClaimRequest, TxHelp};
 use konduit_tx::consumer::{Intent, OpenIntent};
 use serde_json::json;
 use std::{
     collections::BTreeMap,
     io::{self, Write},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
     Adaptor,
@@ -273,7 +274,15 @@ impl Cli {
         let vk = self.signing_key.to_verification_key();
         let keytag = Keytag::new(&vk, &self.tag);
         let server_client = client_json(server_url);
-        let adaptor = Adaptor::new(server_client, Some(&keytag)).await?;
+        let mut adaptor = Adaptor::new(server_client, Some(&keytag)).await?;
+        if matches!(
+            args.cmd,
+            L2Cmd::Quote { .. } | L2Cmd::Pay { .. } | L2Cmd::Squash
+        ) {
+            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
+            let claim = SessionClaimRequest::signed(&self.signing_key, 1, [0; 32], vk.into(), now);
+            adaptor.claim_session(&claim).await?;
+        }
         let l2 = l2::Client::new(&adaptor, &self.signing_key);
 
         match &args.cmd {

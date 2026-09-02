@@ -22,7 +22,7 @@ pub fn do(
   expect t.Closed(subbed_in, useds_in, _) = stage_in
   expect t.Responded(pends_amount, pends) = stage_out
   expect preserve_lovelace(value_in, value_out, asset)
-  let subbed_out = subbed_in - amount_in(value_in, asset) + amount_out(
+  let subbed_out = subbed_in + amount_in(value_in, asset) - amount_out(
     value_out,
     asset,
   )

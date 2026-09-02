@@ -46,6 +46,7 @@ impl ResponseError for Error {
             Error::Data(data::Error::NoChannel) => StatusCode::NOT_FOUND,
             Error::Data(data::Error::LeaseInvalid) => StatusCode::UNAUTHORIZED,
             Error::Data(data::Error::DbContended) => StatusCode::SERVICE_UNAVAILABLE,
+            Error::Data(data::Error::FxUnavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Error::Data(data::Error::DbBackend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Data(_) => StatusCode::BAD_REQUEST,
             Error::InvalidSessionTimestamp => StatusCode::BAD_REQUEST,
@@ -237,7 +238,7 @@ mod tests {
         };
         assert_eq!(
             data::quote_amount(&fx, &custom, 100_001_000).unwrap(),
-            50_001_501
+            50_001_001
         );
         assert_eq!(
             fx.asset_units_to_msat(50_000_000, 6, data::asset_usd(&fx, &custom).unwrap(),)
@@ -353,7 +354,7 @@ mod tests {
                         coin_id: "custom".into(),
                     },
                 },
-                50_002_001,
+                50_001_501,
             ),
         ] {
             let (data, keytag) = handler_data(definition);

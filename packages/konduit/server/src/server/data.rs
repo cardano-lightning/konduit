@@ -13,8 +13,7 @@ use konduit_tmp::{
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-// TODO :: MOVE TO CONFIG
-const FEE_PLACEHOLDER: u64 = 1000;
+const FEE_PLACEHOLDER_MSAT: u64 = 1000;
 /// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
 const ADAPTOR_TIME_DELTA: std::time::Duration = std::time::Duration::from_secs(40 * 10 * 60);
 /// Extra time between the "quoted" rel time and the time that might be allowed for in a
@@ -42,6 +41,9 @@ pub enum Error {
 
     #[error("FX: {0}")]
     Fx(String),
+
+    #[error("FX unavailable: {0}")]
+    FxUnavailable(String),
 
     #[error("DB Contended")]
     DbContended,
@@ -177,8 +179,7 @@ impl Data {
         let amount_msat = body.amount_msat();
         let min_amount = {
             let fx = self.fx.read().await;
-            quote_amount(&fx, &definition, amount_msat)
-                .map_err(|error| Error::Fx(error.to_string()))?
+            quote_amount(&fx, &definition, amount_msat)?
         };
         channel.can_commit(min_amount)?;
         let bln_res = self
@@ -189,8 +190,7 @@ impl Data {
             .ok_or_else(|| Error::Fx("quote amount exceeds u64".into()))?;
         let amount = {
             let fx = self.fx.read().await;
-            quote_amount(&fx, &definition, quote_msat)
-                .map_err(|error| Error::Fx(error.to_string()))?
+            quote_amount(&fx, &definition, quote_msat)?
         };
         let index = channel.can_commit(amount)?;
         let relative_timeout =
@@ -232,9 +232,18 @@ impl Data {
         if invoice.payment_hash != locked.lock().0 {
             return Err(CommitmentError::Lock);
         }
+        let fee = {
+            let fx = self.fx.read().await;
+            let usd = asset_usd(&fx, definition)
+                .map_err(|error| CommitmentError::Fx(error.to_string()))?;
+            fx.msat_to_asset_units(FEE_PLACEHOLDER_MSAT, definition.decimals, usd)
+                .map_err(|error| CommitmentError::Fx(error.to_string()))?
+                .checked_add(1)
+                .ok_or(CommitmentError::Fee)?
+        };
         let effective_asset_amount = locked
             .amount()
-            .checked_sub(FEE_PLACEHOLDER)
+            .checked_sub(fee)
             .ok_or(CommitmentError::Fee)?;
         let effective_amount_msat = {
             let fx = self.fx.read().await;
@@ -328,11 +337,29 @@ pub(super) fn quote_amount(
     fx: &fx_client::State,
     definition: &AssetDefinition,
     amount_msat: u64,
-) -> fx_client::Result<u64> {
-    fx.msat_to_asset_units(amount_msat, definition.decimals, asset_usd(fx, definition)?)?
-        .checked_add(FEE_PLACEHOLDER)
+) -> Result<u64, Error> {
+    let usd = asset_usd(fx, definition).map_err(fx_error)?;
+    let units = fx
+        .msat_to_asset_units(amount_msat, definition.decimals, usd)
+        .map_err(fx_error)?;
+    let fee = fx
+        .msat_to_asset_units(FEE_PLACEHOLDER_MSAT, definition.decimals, usd)
+        .map_err(fx_error)?;
+    units
+        .checked_add(fee)
         .and_then(|amount| amount.checked_add(1))
-        .ok_or_else(|| fx_client::Error::InvalidData("quote amount exceeds u64".into()))
+        .ok_or_else(|| Error::Fx("quote amount exceeds u64".into()))
+}
+
+fn fx_error(error: fx_client::Error) -> Error {
+    match error {
+        fx_client::Error::InvalidData(message)
+            if message.contains("missing") || message.contains("price") =>
+        {
+            Error::FxUnavailable(message)
+        }
+        other => Error::Fx(other.to_string()),
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
