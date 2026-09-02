@@ -1,8 +1,8 @@
 use std::{cmp, collections::BTreeMap};
 
 use cardano_sdk::{
-    Address, ChangeStrategy, Hash, PlutusData, SlotBound, Transaction, Value, address::kind,
-    transaction::state::ReadyForSigning,
+    Address, ChangeStrategy, Hash, Output, PlutusData, SlotBound, Transaction, Value,
+    address::kind, transaction::state::ReadyForSigning,
 };
 use konduit_data::Duration;
 
@@ -91,14 +91,6 @@ fn wallet_target<'a>(
         accumulate(&mut lovelace, &mut assets, value, 1)?;
     }
 
-    let lovelace = cmp::max(
-        i128::from(FEE_BUFFER),
-        i128::from(FEE_BUFFER)
-            .checked_add(lovelace)
-            .ok_or_else(|| anyhow::anyhow!("wallet target lovelace overflow"))?,
-    );
-    let lovelace =
-        u64::try_from(lovelace).map_err(|_| anyhow::anyhow!("wallet target lovelace overflow"))?;
     let mut target_assets = BTreeMap::<Hash<28>, BTreeMap<Vec<u8>, u64>>::new();
     for ((policy, name), quantity) in assets {
         if quantity > 0 {
@@ -109,7 +101,20 @@ fn wallet_target<'a>(
             );
         }
     }
-    Ok(Value::new(lovelace).with_assets(target_assets))
+    let mut target = Value::new(0).with_assets(target_assets);
+    let lovelace = cmp::max(
+        i128::from(FEE_BUFFER),
+        i128::from(FEE_BUFFER)
+            .checked_add(lovelace)
+            .ok_or_else(|| anyhow::anyhow!("wallet target lovelace overflow"))?,
+    )
+    .max(i128::from(
+        Output::new(Address::default(), target.clone()).min_acceptable_value(),
+    ));
+    let lovelace =
+        u64::try_from(lovelace).map_err(|_| anyhow::anyhow!("wallet target lovelace overflow"))?;
+    target.with_lovelace(lovelace);
+    Ok(target)
 }
 
 fn accumulate(
@@ -149,5 +154,15 @@ mod tests {
         let target = wallet_target([].into_iter(), [&open].into_iter()).unwrap();
         assert_eq!(target.lovelace(), FEE_BUFFER + 2_000_000);
         assert_eq!(target.assets()[&policy][b"TOKEN".as_slice()], 25);
+    }
+
+    #[test]
+    fn wallet_target_covers_token_change_minimum_ada() {
+        let open = Value::new(0)
+            .with_assets((0..32).map(|policy| (Hash::<28>::new([policy; 28]), [(b"TOKEN", 1)])));
+        let target = wallet_target([].into_iter(), [&open].into_iter()).unwrap();
+        let minimum = Output::new(Address::default(), target.clone()).min_acceptable_value();
+        assert!(minimum > FEE_BUFFER);
+        assert_eq!(target.lovelace(), minimum);
     }
 }

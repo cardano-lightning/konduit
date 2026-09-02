@@ -13,8 +13,7 @@ pub struct SignedTx {
 }
 
 pub fn decode_signed_tx(bytes: &[u8]) -> anyhow::Result<SignedTx> {
-    let hash = tx_body_hash(bytes)?;
-    let ttl = tx_ttl(bytes);
+    let (hash, ttl) = tx_details(bytes)?;
     let digest = Sha256::digest(bytes);
     Ok(SignedTx {
         hash,
@@ -24,24 +23,26 @@ pub fn decode_signed_tx(bytes: &[u8]) -> anyhow::Result<SignedTx> {
     })
 }
 
-fn tx_body_hash(bytes: &[u8]) -> anyhow::Result<[u8; 32]> {
-    if let Ok(tx) = minicbor::decode::<conway::MintedTx<'_>>(bytes) {
-        return Ok(*Hasher::<256>::hash(tx.transaction_body.raw_cbor()));
+fn tx_details(bytes: &[u8]) -> anyhow::Result<([u8; 32], Option<u64>)> {
+    let mut decoder = minicbor::Decoder::new(bytes);
+    if let Ok(tx) = decoder.decode::<conway::MintedTx<'_>>()
+        && decoder.position() == bytes.len()
+    {
+        return Ok((
+            *Hasher::<256>::hash(tx.transaction_body.raw_cbor()),
+            tx.transaction_body.ttl,
+        ));
     }
-    if let Ok(tx) = minicbor::decode::<babbage::MintedTx<'_>>(bytes) {
-        return Ok(*Hasher::<256>::hash(tx.transaction_body.raw_cbor()));
+    let mut decoder = minicbor::Decoder::new(bytes);
+    if let Ok(tx) = decoder.decode::<babbage::MintedTx<'_>>()
+        && decoder.position() == bytes.len()
+    {
+        return Ok((
+            *Hasher::<256>::hash(tx.transaction_body.raw_cbor()),
+            tx.transaction_body.ttl,
+        ));
     }
     Err(anyhow!("unable to decode signed transaction CBOR")).context("invalid transaction")
-}
-
-fn tx_ttl(bytes: &[u8]) -> Option<u64> {
-    if let Ok(tx) = minicbor::decode::<conway::MintedTx<'_>>(bytes) {
-        return tx.transaction_body.ttl;
-    }
-    if let Ok(tx) = minicbor::decode::<babbage::MintedTx<'_>>(bytes) {
-        return tx.transaction_body.ttl;
-    }
-    None
 }
 
 pub fn parse_lowercase_hex(input: &str) -> anyhow::Result<Vec<u8>> {
@@ -90,7 +91,9 @@ pub fn parse_uuid(input: &str) -> anyhow::Result<[u8; 16]> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_uuid;
+    use super::{decode_signed_tx, parse_uuid};
+
+    const TX: &str = "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a001092a803d818558203525101010023259800a518a4d136564004ae69a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a00a208bb021a00029755a0f5f6";
 
     #[test]
     fn parse_uuid_canonical() {
@@ -102,5 +105,13 @@ mod tests {
     #[test]
     fn parse_uuid_rejects_shape() {
         assert!(parse_uuid("550e8400e29b41d4a716446655440000").is_err());
+    }
+
+    #[test]
+    fn rejects_trailing_cbor() {
+        let mut bytes = hex::decode(TX).unwrap();
+        assert!(decode_signed_tx(&bytes).is_ok());
+        bytes.push(0);
+        assert!(decode_signed_tx(&bytes).is_err());
     }
 }

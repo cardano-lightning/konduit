@@ -77,6 +77,17 @@ impl SteppedUtxos {
     }
 
     pub fn gain(&self) -> i64 {
-        self.0.iter().map(|x| x.gain()).sum::<i64>()
+        let gain = self.gain_i128();
+        i64::try_from(gain).unwrap_or(if gain.is_negative() {
+            i64::MIN
+        } else {
+            i64::MAX
+        })
+    }
+
+    pub(crate) fn gain_i128(&self) -> i128 {
+        self.0
+            .iter()
+            .fold(0, |gain, stepped| gain.saturating_add(stepped.gain_i128()))
     }
 }

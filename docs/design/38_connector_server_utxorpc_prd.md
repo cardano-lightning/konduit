@@ -190,20 +190,20 @@ requirement.
 The first release must preserve the existing Cloudflare connector API and add
 the durable operation endpoints required by Ferret:
 
-| Method | Path                         | Source                                                       |
-| ------ | ---------------------------- | ------------------------------------------------------------ |
-| `GET`  | `/`                          | generated API documentation                                  |
-| `GET`  | `/openapi.yaml`              | checked-in OpenAPI document                                  |
-| `GET`  | `/health`                    | Dolos, Koios, and local database readiness                   |
-| `GET`  | `/network`                   | fixed Mainnet identity verified against Dolos                |
-| `GET`  | `/protocol-parameters`       | Dolos                                                        |
-| `GET`  | `/balance/{address}`         | Dolos                                                        |
-| `GET`  | `/utxos_at/{address}`        | Dolos                                                        |
-| `GET`  | `/transaction/{id}`          | bounded Koios transaction hydration mapped against Dolos tip |
-| `GET`  | `/transactions/{address}`    | bounded Koios history mapped against Dolos tip               |
-| `POST` | `/submit`                    | legacy compatibility submission through Dolos                |
-| `POST` | `/operations`                | redb and Dolos submission                                    |
-| `GET`  | `/operations/{operation_id}` | redb and Dolos reconciliation                                |
+| Method | Path                         | Source                                        |
+| ------ | ---------------------------- | --------------------------------------------- |
+| `GET`  | `/`                          | generated API documentation                   |
+| `GET`  | `/openapi.yaml`              | checked-in OpenAPI document                   |
+| `GET`  | `/health`                    | Dolos, Koios, and local database readiness    |
+| `GET`  | `/network`                   | fixed Mainnet identity verified against Dolos |
+| `GET`  | `/protocol-parameters`       | Dolos                                         |
+| `GET`  | `/balance/{address}`         | Dolos                                         |
+| `GET`  | `/utxos_at/{address}`        | Dolos                                         |
+| `GET`  | `/transaction/{id}`          | Koios candidate cross-checked through Dolos   |
+| `GET`  | `/transactions/{address}`    | Koios candidates cross-checked through Dolos  |
+| `POST` | `/submit`                    | legacy compatibility submission through Dolos |
+| `POST` | `/operations`                | redb and Dolos submission                     |
+| `GET`  | `/operations/{operation_id}` | redb and Dolos reconciliation                 |
 
 The OpenAPI document must use `additionalProperties: false` and match Ferret's
 snake_case field names, lowercase-hex rules, decimal-string quantities, bounds,
@@ -230,6 +230,7 @@ with HTTP 200 only when:
 - the operation database opened successfully
 - Dolos is reachable
 - Dolos reports Mainnet
+- Koios reports Mainnet matching Dolos
 - a fresh ledger point is available
 - all required protocol parameters are available and representable
 - the Koios transaction lookup and history dependency is reachable
@@ -301,7 +302,9 @@ mandatory and verified before channel transaction construction is enabled.
 - return a reference-script hash for native and Plutus reference scripts
 - reject duplicate assets, invalid quantities, malformed hashes, and oversized
   fields
-- return complete results when an address contains more than 100 UTxOs
+- return no more than 100 UTxOs; this unpaginated route returns a bounded
+  non-2xx response when the count or serialized response would exceed Ferret's
+  1 MiB response limit
 
 The server must map directly from the UTxO RPC provider structures needed by the
 wire contract. It must not force the response through `cardano_sdk::Output`,
@@ -315,6 +318,8 @@ An unsupported output must fail explicitly rather than disappear silently.
 
 - request the newest 100 transaction hashes from Koios `/address_txs`
 - hydrate hashes in bounded batches through `/tx_info`
+- cross-check every Koios row against Dolos `ReadTx` and canonical chain data;
+  never return a Koios-only inclusion
 - deduplicate transaction hashes
 - map block transaction index, timestamp, validity interval, inputs, outputs,
   assets, datum metadata, and reference-script hashes
@@ -329,6 +334,9 @@ An unsupported output must fail explicitly rather than disappear silently.
 
 Koios timeout, throttling, schema drift, or unavailability must return 503. The
 service must not switch any other endpoint to Koios.
+
+The complete `/transactions/{address}` route deadline must be less than
+Ferret's 20-second request timeout.
 
 ## Transaction by ID
 
@@ -382,11 +390,13 @@ Depth must be non-negative. A returned `transaction_id`, when present, must equa
 
 Before persistence or submission, the server must:
 
+- enforce an HTTP body limit before JSON parsing or hex decoding
 - decode the signed CBOR
 - compute the Cardano transaction body hash
 - require the computed hash to equal `expected_transaction_id`
 - reject CBOR larger than the live Cardano `max_tx_size`
-- extract the transaction validity upper bound for recovery and expiry handling
+- require a bounded transaction validity upper bound (TTL), and reject when the
+  current tip slot is greater than or equal to it
 
 ## Persistent Schema
 
@@ -402,7 +412,7 @@ An operation record must retain:
 - operation ID
 - expected transaction ID
 - signed-CBOR digest
-- signed CBOR until confirmation or expiry
+- signed CBOR until the operation is settled or rejected
 - validity upper bound
 - internal state
 - attempt timestamps and bounded retry metadata
@@ -434,17 +444,19 @@ submission are not proof of rejection. The server must keep the operation
 pending until chain evidence or the transaction validity bound resolves it.
 
 The server may resubmit only the identical persisted CBOR. It must retain that
-CBOR until confirmation or expiry.
+CBOR until the operation is settled or rejected.
 
 State mapping:
 
 - internal `prepared` or `submitting` maps to public `pending`
 - successful Dolos submission returning the expected hash maps to `accepted`
+- a definitive Dolos `SubmitTx` rejection maps to `rejected`
 - canonical inclusion with depth below 5 remains `accepted` or `pending`
 - depth at least 5 maps to `confirmed`
 - depth at least 2160 maps to `settled`
 - rollback before settlement returns the operation to `pending`
 - canonical absence through the transaction validity bound maps to `rejected`
+- `settled` is terminal and never returns to `prepared` or `pending`
 
 `GET /operations/{id}` may refresh and persist status from Dolos. It must never
 create or submit an operation.

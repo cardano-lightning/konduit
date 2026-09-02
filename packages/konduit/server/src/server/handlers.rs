@@ -1,7 +1,7 @@
 use crate::db;
 use crate::server::{
     self,
-    auth::AuthKeytag,
+    auth::{AuthKeytag, LeaseToken},
     data,
     mediation::{self, Mediate, Mediation, Unmediate},
 };
@@ -44,6 +44,9 @@ impl ResponseError for Error {
             Error::Mediation(mediation::Error::Unmediate(_)) => StatusCode::BAD_REQUEST,
             Error::Mediation(mediation::Error::Backend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Data(data::Error::NoChannel) => StatusCode::NOT_FOUND,
+            Error::Data(data::Error::LeaseInvalid) => StatusCode::UNAUTHORIZED,
+            Error::Data(data::Error::DbContended) => StatusCode::SERVICE_UNAVAILABLE,
+            Error::Data(data::Error::DbBackend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Data(_) => StatusCode::BAD_REQUEST,
             Error::InvalidSessionTimestamp => StatusCode::BAD_REQUEST,
             Error::InvalidSessionSignature => StatusCode::UNAUTHORIZED,
@@ -90,11 +93,12 @@ pub async fn claim_session(
         .db()
         .claim_lease(&claim, token, expires_at_epoch_millis)
     {
-        Ok(()) => Ok(HttpResponse::Ok().json(SessionClaimResponse {
+        Ok((token, expires_at_epoch_millis)) => Ok(HttpResponse::Ok().json(SessionClaimResponse {
             lease: hex::encode(token),
             expires_at_epoch_millis,
         })),
         Err(db::LeaseClaimError::Conflict) => Err(Error::SessionConflict),
+        Err(db::LeaseClaimError::UnknownWallet) => Err(Error::Data(data::Error::NoChannel)),
         Err(db::LeaseClaimError::Database(error)) => Err(Error::Data(error.into())),
     }
 }
@@ -149,13 +153,17 @@ pub async fn squash_status(
 pub async fn squash(
     mediation: Mediation,
     keytag: AuthKeytag,
+    lease: LeaseToken,
     data: Data,
     body: web::Bytes,
-    // ) -> Result<Mediate<()>, Error> {
 ) -> Result<Mediate<SquashStatus>, Error> {
     let _: Result<_, Error> = Ok(Mediate(
         mediation.accept,
-        data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?,
+        data.squash(
+            &keytag,
+            &lease.0,
+            Unmediate::unmediate(mediation.content, &body)?,
+        )?,
     ));
     squash_status(mediation, keytag, data).await
 }
@@ -177,6 +185,7 @@ pub async fn quote(
 pub async fn pay(
     mediation: Mediation,
     keytag: AuthKeytag,
+    lease: LeaseToken,
     data: Data,
     body: web::Bytes,
 ) -> Result<Mediate<SquashStatus>, Error> {
@@ -186,8 +195,7 @@ pub async fn pay(
         locked,
         invoice: b.invoice,
     };
-    let _ = data.pay(&keytag, body).await?;
-    // FIXME : The return type here has diverged!!
+    let _ = data.pay(&keytag, &lease.0, body).await?;
     squash_status(mediation, keytag, data).await
 }
 
@@ -317,6 +325,7 @@ mod tests {
                 accept: mediation::MediaType::Json,
             },
             AuthKeytag(keytag.clone()),
+            LeaseToken([0; 32]),
             data.clone(),
             web::Bytes::from(serde_json::to_vec(&unknown_squash).unwrap()),
         )

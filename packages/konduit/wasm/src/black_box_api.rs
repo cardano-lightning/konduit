@@ -248,9 +248,9 @@ impl Konduit {
         Ok(open_tx)
     }
 
-    /// Add funds to an existing channel.
+    /// Add raw asset funds to an existing channel.
     #[wasm_bindgen(js_name = "addToChannel")]
-    pub async fn add_to_channel(&self, amount: u64) -> wasm::Result<Hash32> {
+    pub async fn add_to_channel(&self, amount: u64, asset: &wasm::AssetId) -> wasm::Result<Hash32> {
         let tag: core::Tag = self
             .adaptor
             .as_ref()?
@@ -267,7 +267,13 @@ impl Konduit {
                 self.wallet.signing_key(),
                 self.wallet.stake_credential().as_ref(),
                 vec![],
-                From::from([(tag, core::consumer::Intent::Add(amount))]),
+                From::from([(
+                    tag,
+                    core::consumer::Intent::Add {
+                        amount,
+                        asset: asset.clone().into(),
+                    },
+                )]),
                 &self.script_deployment_address.clone(),
             )
             .await?

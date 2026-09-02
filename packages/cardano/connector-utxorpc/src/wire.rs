@@ -74,18 +74,20 @@ fn mapped_from_minted(
 ) -> anyhow::Result<MappedUtxo> {
     match minted {
         PseudoTransactionOutput::Legacy(legacy) => {
-            let quantity = match legacy.amount {
-                pallas_primitives::alonzo::Value::Coin(coin)
-                | pallas_primitives::alonzo::Value::Multiasset(coin, _) => coin,
+            let amount = match legacy.amount {
+                pallas_primitives::alonzo::Value::Coin(coin) => vec![MappedAsset {
+                    unit: "lovelace".to_string(),
+                    quantity: coin,
+                }],
+                pallas_primitives::alonzo::Value::Multiasset(coin, assets) => {
+                    map_legacy_value(coin, &assets)?
+                }
             };
             finish(
                 transaction_id,
                 output_index,
                 legacy.address.as_ref(),
-                vec![MappedAsset {
-                    unit: "lovelace".to_string(),
-                    quantity,
-                }],
+                amount,
                 legacy.datum_hash.map(|hash| *hash),
                 None,
                 None,
@@ -134,7 +136,7 @@ fn mapped_from_parsed(
     let mut seen = BTreeSet::from(["lovelace".to_string()]);
 
     for multiasset in parsed.assets {
-        let policy = hex::encode(multiasset.policy_id.as_ref());
+        let policy = policy_unit(multiasset.policy_id.as_ref())?;
         for asset in multiasset.assets {
             let quantity = match &asset.quantity {
                 Some(cardano::asset::Quantity::OutputCoin(quantity)) => {
@@ -235,7 +237,7 @@ fn map_value(value: &Value) -> anyhow::Result<Vec<MappedAsset>> {
     let mut seen = BTreeSet::from(["lovelace".to_string()]);
     if let Some(assets) = assets {
         for (policy, names) in assets.iter() {
-            let policy = hex::encode(policy.as_ref());
+            let policy = policy_unit(policy.as_ref())?;
             for (name, quantity) in names.iter() {
                 let unit = format!("{policy}{}", hex::encode(name.to_vec()));
                 if !seen.insert(unit.clone()) {
@@ -249,6 +251,38 @@ fn map_value(value: &Value) -> anyhow::Result<Vec<MappedAsset>> {
         }
     }
     Ok(out)
+}
+
+fn map_legacy_value(
+    lovelace: u64,
+    assets: &pallas_primitives::alonzo::Multiasset<u64>,
+) -> anyhow::Result<Vec<MappedAsset>> {
+    let mut out = vec![MappedAsset {
+        unit: "lovelace".to_string(),
+        quantity: lovelace,
+    }];
+    let mut seen = BTreeSet::from(["lovelace".to_string()]);
+    for (policy, names) in assets.iter() {
+        let policy = policy_unit(policy.as_ref())?;
+        for (name, quantity) in names.iter() {
+            let unit = format!("{policy}{}", hex::encode(name.to_vec()));
+            if !seen.insert(unit.clone()) {
+                return Err(anyhow!("duplicate asset unit {unit}"));
+            }
+            out.push(MappedAsset {
+                unit,
+                quantity: *quantity,
+            });
+        }
+    }
+    Ok(out)
+}
+
+fn policy_unit(policy: &[u8]) -> anyhow::Result<String> {
+    if policy.len() != 28 {
+        return Err(anyhow!("unexpected policy id length: {}", policy.len()));
+    }
+    Ok(hex::encode(policy))
 }
 
 fn map_minted_script(script: MintedScriptRef<'_>) -> anyhow::Result<([u8; 28], Vec<u8>, u8)> {
@@ -318,8 +352,10 @@ mod tests {
     use super::*;
     use cardano_sdk::{address, cbor::ToCbor, key_credential};
     use pallas_codec::utils::CborWrap;
-    use pallas_primitives::conway::{
-        NativeScript, PostAlonzoTransactionOutput, ScriptRef, TransactionOutput,
+    use pallas_primitives::{
+        KeyValuePairs,
+        alonzo::{TransactionOutput as LegacyTransactionOutput, Value as LegacyValue},
+        conway::{NativeScript, PostAlonzoTransactionOutput, ScriptRef, TransactionOutput},
     };
     use utxorpc::{ChainUtxo, NativeBytes};
 
@@ -361,6 +397,44 @@ mod tests {
             Some(script_hash(0, &script_cbor))
         );
         assert_eq!(mapped.value[0].quantity, 5_000_000);
+    }
+
+    #[test]
+    fn legacy_multiasset_output_keeps_tokens() {
+        let output = LegacyTransactionOutput {
+            address: addr_bytes().into(),
+            amount: LegacyValue::Multiasset(
+                5_000_000,
+                KeyValuePairs::from(vec![(
+                    [0xab; 28].into(),
+                    KeyValuePairs::from(vec![(vec![0xcd].into(), 42)]),
+                )]),
+            ),
+            datum_hash: None,
+        };
+        let mapped = map_wire_utxo(ChainUtxo {
+            parsed: None,
+            native: NativeBytes::from(output.to_cbor()),
+            txo_ref: Some(query::TxoRef {
+                hash: vec![0x11; 32].into(),
+                index: 0,
+            }),
+        })
+        .expect("legacy multiasset utxo");
+
+        assert_eq!(
+            mapped.value,
+            vec![
+                MappedAsset {
+                    unit: "lovelace".to_string(),
+                    quantity: 5_000_000,
+                },
+                MappedAsset {
+                    unit: format!("{}cd", "ab".repeat(28)),
+                    quantity: 42,
+                },
+            ]
+        );
     }
 
     #[test]
@@ -413,6 +487,32 @@ mod tests {
         })
         .expect_err("native proto without bytes");
         assert!(error.to_string().contains("native reference script"));
+    }
+
+    #[test]
+    fn parsed_output_rejects_short_policy_id() {
+        let error = map_wire_utxo(ChainUtxo {
+            parsed: Some(cardano::TxOutput {
+                address: addr_bytes().into(),
+                coin: Some(cardano::BigInt {
+                    big_int: Some(cardano::big_int::BigInt::Int(1)),
+                }),
+                assets: vec![cardano::Multiasset {
+                    policy_id: vec![0; 27].into(),
+                    assets: Vec::new(),
+                    redeemer: None,
+                }],
+                ..Default::default()
+            }),
+            native: NativeBytes::new(),
+            txo_ref: Some(query::TxoRef {
+                hash: vec![0x11; 32].into(),
+                index: 0,
+            }),
+        })
+        .expect_err("short policy id");
+
+        assert!(error.to_string().contains("unexpected policy id length"));
     }
 
     #[test]

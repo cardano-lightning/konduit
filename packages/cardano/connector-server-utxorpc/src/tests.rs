@@ -1,4 +1,4 @@
-use crate::http::{AppState, Limits, app};
+use crate::http::{AppState, Limits, app, legacy_uuid};
 use crate::ops::{InternalState, OpsStore, finality};
 use crate::providers::{History, Ledger, SubmitResult, TxPresence};
 use crate::tx::{SignedTx, parse_uuid};
@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use cardano_connector_utxorpc::BloxbeanPayload;
 use cardano_sdk::{Address, address::kind};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 const MAINNET_ADDR: &str = "addr1vy2q4s9vxk3q8l0xq0l0xq0l0xq0l0xq0l0xq0l0xq0l0xq0l0xq0l0";
 
@@ -141,9 +141,9 @@ fn now_nonce() -> u64 {
 
 fn state(ledger: FakeLedger, history: FakeHistory) -> Data<AppState<FakeLedger, FakeHistory>> {
     Data::new(AppState {
-        ledger,
-        history,
-        ops: tmp_db(),
+        ledger: Arc::new(ledger),
+        history: Arc::new(history),
+        ops: Arc::new(tmp_db()),
         limits: Limits {
             rate_per_minute: 1_000,
         },
@@ -318,11 +318,11 @@ async fn openapi_is_served() {
     assert!(std::str::from_utf8(&body).unwrap().contains("mainnet"));
 }
 
-#[test]
-fn operation_conflict_and_idempotency() {
+#[actix_web::test]
+async fn operation_conflict_and_idempotency() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440000";
-    let op = parse_uuid(uuid).unwrap();
+    let op = OpsStore::client_key(&parse_uuid(uuid).unwrap());
     let txid = [1u8; 32];
     let signed = SignedTx {
         hash: txid,
@@ -330,30 +330,43 @@ fn operation_conflict_and_idempotency() {
         ttl: Some(10),
         bytes: vec![1, 2, 3],
     };
-    let first = store.persist_new(&op, &txid, &signed, uuid).unwrap();
-    let again = store.persist_new(&op, &txid, &signed, uuid).unwrap();
+    let first = store
+        .persist_new(op, txid, signed.clone(), uuid.to_owned())
+        .await
+        .unwrap();
+    let again = store
+        .persist_new(op, txid, signed.clone(), uuid.to_owned())
+        .await
+        .unwrap();
     assert_eq!(first.digest, again.digest);
     let mut other = signed.clone();
     other.digest = [9u8; 32];
-    assert!(store.persist_new(&op, &txid, &other, uuid).is_err());
-    let other_op = parse_uuid("550e8400-e29b-41d4-a716-446655440001").unwrap();
+    assert!(
+        store
+            .persist_new(op, txid, other, uuid.to_owned())
+            .await
+            .is_err()
+    );
+    let other_op =
+        OpsStore::client_key(&parse_uuid("550e8400-e29b-41d4-a716-446655440001").unwrap());
     assert!(
         store
             .persist_new(
-                &other_op,
-                &txid,
-                &signed,
-                "550e8400-e29b-41d4-a716-446655440001"
+                other_op,
+                txid,
+                signed,
+                "550e8400-e29b-41d4-a716-446655440001".to_owned()
             )
+            .await
             .is_err()
     );
 }
 
-#[test]
-fn crash_before_submit_stays_prepared() {
+#[actix_web::test]
+async fn claim_submit_is_exclusive() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440002";
-    let op = parse_uuid(uuid).unwrap();
+    let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
     let txid = [3u8; 32];
     let signed = SignedTx {
         hash: txid,
@@ -361,11 +374,75 @@ fn crash_before_submit_stays_prepared() {
         ttl: Some(99),
         bytes: vec![9, 9, 9],
     };
-    let record = store.persist_new(&op, &txid, &signed, uuid).unwrap();
-    assert_eq!(record.state, InternalState::Prepared);
-    let loaded = store.get(&op).unwrap().unwrap();
-    assert_eq!(loaded.state, InternalState::Prepared);
-    assert!(loaded.cbor.is_some());
+    store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    assert!(store.claim_submit(key).await.unwrap().is_some());
+    assert!(store.claim_submit(key).await.unwrap().is_none());
+}
+
+#[actix_web::test]
+async fn confirmed_keeps_cbor() {
+    let store = tmp_db();
+    let uuid = "550e8400-e29b-41d4-a716-446655440003";
+    let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
+    let txid = [5u8; 32];
+    let signed = SignedTx {
+        hash: txid,
+        digest: [6u8; 32],
+        ttl: Some(99),
+        bytes: vec![9, 9, 9],
+    };
+    let mut record = store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    let mut txs = HashMap::new();
+    txs.insert(txid, TxPresence { height: 95 });
+    let ledger = FakeLedger {
+        txs,
+        ..default_ledger()
+    };
+    store
+        .reconcile_one(&ledger, key, &mut record, 100, 50_000, false)
+        .await
+        .unwrap();
+    assert_eq!(record.state, InternalState::Confirmed);
+    assert!(record.cbor.is_some());
+}
+
+#[actix_web::test]
+async fn settled_is_not_reset() {
+    let store = tmp_db();
+    let uuid = "550e8400-e29b-41d4-a716-446655440004";
+    let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
+    let txid = [7u8; 32];
+    let signed = SignedTx {
+        hash: txid,
+        digest: [8u8; 32],
+        ttl: Some(99),
+        bytes: vec![9, 9, 9],
+    };
+    let mut record = store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    record.state = InternalState::Settled;
+    record.cbor = None;
+    store.put(key, record.clone()).await.unwrap();
+    store
+        .reconcile_one(&default_ledger(), key, &mut record, 100, 50_000, true)
+        .await
+        .unwrap();
+    assert_eq!(record.state, InternalState::Settled);
+}
+#[test]
+fn legacy_submit_uuid_is_canonical() {
+    let hash: [u8; 32] = std::array::from_fn(|index| index as u8);
+    let uuid = legacy_uuid(&hash);
+    assert_eq!(uuid, "00010203-0405-0607-0809-0a0b0c0d0e0f");
+    assert_eq!(parse_uuid(&uuid).unwrap(), hash[..16]);
 }
 
 #[test]

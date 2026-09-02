@@ -1,5 +1,5 @@
 use cardano_sdk::{Signature, SigningKey, VerificationKey};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_with::{hex::Hex, serde_as};
 
 #[serde_as]
@@ -8,6 +8,7 @@ use serde_with::{hex::Hex, serde_as};
 pub struct SessionClaimRequest {
     #[serde_as(as = "Hex")]
     pub wallet_verification_key_hex: [u8; 32],
+    #[serde(deserialize_with = "deserialize_generation")]
     pub generation: u64,
     #[serde_as(as = "Hex")]
     pub backup_hash_hex: [u8; 32],
@@ -36,6 +37,7 @@ impl SessionClaimRequest {
         device_public_key: [u8; 32],
         timestamp: u64,
     ) -> Self {
+        assert!(generation > 0, "session generation must be at least 1");
         let mut claim = Self {
             wallet_verification_key_hex: signing_key.to_verification_key().into(),
             generation,
@@ -49,11 +51,22 @@ impl SessionClaimRequest {
     }
 
     pub fn verify(&self) -> bool {
-        VerificationKey::from(self.wallet_verification_key_hex).verify(
-            self.message().as_bytes(),
-            &Signature::from(self.signature_hex),
-        )
+        self.generation > 0
+            && VerificationKey::from(self.wallet_verification_key_hex).verify(
+                self.message().as_bytes(),
+                &Signature::from(self.signature_hex),
+            )
     }
+}
+
+fn deserialize_generation<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let generation = u64::deserialize(deserializer)?;
+    (generation > 0)
+        .then_some(generation)
+        .ok_or_else(|| de::Error::custom("session generation must be at least 1"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,5 +128,18 @@ mod tests {
             invalid[field] = json!(value);
             assert!(serde_json::from_value::<SessionClaimRequest>(invalid).is_err());
         }
+    }
+
+    #[test]
+    fn zero_generation_is_rejected() {
+        let mut invalid = serde_json::to_value(claim()).unwrap();
+        invalid["generation"] = json!(0);
+        assert!(serde_json::from_value::<SessionClaimRequest>(invalid).is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "session generation must be at least 1")]
+    fn signed_rejects_zero_generation() {
+        SessionClaimRequest::signed(&SigningKey::from([7; 32]), 0, [0; 32], [0; 32], 0);
     }
 }

@@ -61,6 +61,30 @@ impl From<AuthKeytag> for Keytag {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LeaseToken(pub [u8; 32]);
+
+impl FromRequest for LeaseToken {
+    type Error = Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        ready(
+            req.extensions()
+                .get::<LeaseToken>()
+                .copied()
+                .ok_or_else(|| actix_web::error::ErrorUnauthorized("missing FERRET-SESSION lease")),
+        )
+    }
+}
+
+fn wallet_key(keytag: &Keytag) -> Option<[u8; 32]> {
+    keytag
+        .as_ref()
+        .get(..32)
+        .and_then(|bytes| bytes.try_into().ok())
+}
+
 impl FromRequest for AuthKeytag {
     type Error = Error;
     type Future = Ready<Result<Self, Self::Error>>;
@@ -136,10 +160,7 @@ where
                 let mut token = [0; 32];
                 hex::decode_to_slice(value, &mut token).ok().map(|_| token)
             });
-        let wallet_key = req.extensions().get::<Keytag>().map(|keytag| {
-            let (verification_key, _) = keytag.split();
-            <[u8; 32]>::from(verification_key)
-        });
+        let wallet_key = req.extensions().get::<Keytag>().and_then(wallet_key);
         let db = self.db.clone();
         let service = self.service.clone();
 
@@ -149,16 +170,29 @@ where
                     "missing or malformed FERRET-SESSION lease",
                 ));
             };
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(actix_web::error::ErrorInternalServerError)?
-                .as_millis() as u64;
+            let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(now) => now.as_millis() as u64,
+                Err(error) => {
+                    log::error!("lease validation clock failed: {error}");
+                    return Err(actix_web::error::ErrorInternalServerError(
+                        "internal server error",
+                    ));
+                }
+            };
             match db.validate_lease(&wallet_key, &token, now) {
-                Ok(true) => service.call(req).await,
+                Ok(true) => {
+                    req.extensions_mut().insert(LeaseToken(token));
+                    service.call(req).await
+                }
                 Ok(false) => Err(actix_web::error::ErrorUnauthorized(
                     "stale FERRET-SESSION lease",
                 )),
-                Err(error) => Err(actix_web::error::ErrorInternalServerError(error)),
+                Err(error) => {
+                    log::error!("lease validation failed: {error}");
+                    Err(actix_web::error::ErrorInternalServerError(
+                        "internal server error",
+                    ))
+                }
             }
         })
     }
@@ -169,7 +203,7 @@ mod tests {
     use super::*;
     use actix_web::{App, HttpResponse, http::StatusCode, middleware, test, web};
     use cardano_sdk::SigningKey;
-    use konduit_data::Tag;
+    use konduit_data::{AssetCatalog, Tag};
     use konduit_tmp::SessionClaimRequest;
 
     #[actix_web::test]
@@ -179,9 +213,19 @@ mod tests {
         let wallet_a = SigningKey::from([1; 32]);
         let wallet_b = SigningKey::from([2; 32]);
         let tag = Tag::from(b"lease-test".as_slice());
-        let keytag_a = Keytag::new(&wallet_a.to_verification_key(), &tag).to_string();
+        let keytag_a = Keytag::new(&wallet_a.to_verification_key(), &tag);
+        let keytag_a_header = keytag_a.to_string();
         let keytag_b = Keytag::new(&wallet_b.to_verification_key(), &tag).to_string();
-        let claim = SessionClaimRequest::signed(&wallet_a, 1, [7; 32], [8; 32], 0);
+        db.insert(
+            crate::channel::open(
+                keytag_a.clone(),
+                AssetCatalog::builtins().by_alias("ada").unwrap().clone(),
+                vec![],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let claim = SessionClaimRequest::signed(&wallet_a, 1, [7; 32], [8; 32], 1);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -207,11 +251,11 @@ mod tests {
         for request in [
             test::TestRequest::post()
                 .uri("/ch/protected")
-                .insert_header(("KONDUIT", keytag_a.clone()))
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
                 .to_request(),
             test::TestRequest::post()
                 .uri("/ch/protected")
-                .insert_header(("KONDUIT", keytag_a.clone()))
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
                 .insert_header(("FERRET-SESSION", "not-hex"))
                 .to_request(),
         ] {
@@ -227,7 +271,7 @@ mod tests {
             &app,
             test::TestRequest::post()
                 .uri("/ch/protected")
-                .insert_header(("KONDUIT", keytag_a.clone()))
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
                 .insert_header(("FERRET-SESSION", hex::encode([3; 32])))
                 .to_request(),
         )
@@ -238,6 +282,7 @@ mod tests {
             StatusCode::UNAUTHORIZED
         );
 
+        let claim = SessionClaimRequest::signed(&wallet_a, 1, [7; 32], [8; 32], 2);
         db.claim_lease(&claim, [4; 32], now + 60_000).unwrap();
         let error = test::try_call_service(
             &app,
@@ -258,19 +303,20 @@ mod tests {
             &app,
             test::TestRequest::post()
                 .uri("/ch/protected")
-                .insert_header(("KONDUIT", keytag_a.clone()))
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
                 .insert_header(("FERRET-SESSION", hex::encode([4; 32])))
                 .to_request(),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
 
+        let claim = SessionClaimRequest::signed(&wallet_a, 1, [7; 32], [8; 32], 3);
         db.claim_lease(&claim, [5; 32], now + 60_000).unwrap();
         let error = test::try_call_service(
             &app,
             test::TestRequest::post()
                 .uri("/ch/protected")
-                .insert_header(("KONDUIT", keytag_a.clone()))
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
                 .insert_header(("FERRET-SESSION", hex::encode([4; 32])))
                 .to_request(),
         )
@@ -285,7 +331,7 @@ mod tests {
             &app,
             test::TestRequest::get()
                 .uri("/ch/receipt")
-                .insert_header(("KONDUIT", keytag_a))
+                .insert_header(("KONDUIT", keytag_a_header))
                 .to_request(),
         )
         .await;

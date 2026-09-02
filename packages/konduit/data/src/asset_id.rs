@@ -7,10 +7,13 @@ pub enum AssetError {
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub enum AssetId {
     Ada,
-    Native {
-        policy_id: [u8; 28],
-        asset_name: Vec<u8>,
-    },
+    Native(NativeAsset),
+}
+
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct NativeAsset {
+    policy_id: [u8; 28],
+    asset_name: Vec<u8>,
 }
 
 impl AssetId {
@@ -18,10 +21,24 @@ impl AssetId {
         if asset_name.len() > 32 {
             return Err(AssetError::AssetNameTooLong);
         }
-        Ok(Self::Native {
+        Ok(Self::Native(NativeAsset {
             policy_id,
             asset_name,
-        })
+        }))
+    }
+
+    pub fn policy_id(&self) -> Option<&[u8; 28]> {
+        let Self::Native(native) = self else {
+            return None;
+        };
+        Some(&native.policy_id)
+    }
+
+    pub fn asset_name(&self) -> Option<&[u8]> {
+        let Self::Native(native) = self else {
+            return None;
+        };
+        Some(&native.asset_name)
     }
 }
 
@@ -36,10 +53,10 @@ impl<C> minicbor::Encode<C> for AssetId {
                 e.tag(minicbor::data::Tag::new(121))?;
                 e.array(0)?;
             }
-            Self::Native {
+            Self::Native(NativeAsset {
                 policy_id,
                 asset_name,
-            } => {
+            }) => {
                 e.tag(minicbor::data::Tag::new(122))?;
                 e.begin_array()?
                     .bytes(policy_id)?
@@ -129,10 +146,10 @@ mod via_serde {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             match self {
                 AssetId::Ada => Ref::Ada.serialize(serializer),
-                AssetId::Native {
+                AssetId::Native(NativeAsset {
                     policy_id,
                     asset_name,
-                } => Ref::Native {
+                }) => Ref::Native {
                     policy_id: hex::encode(policy_id),
                     asset_name: hex::encode(asset_name),
                 }
@@ -214,10 +231,10 @@ mod via_plutus_data {
         fn from(value: AssetId) -> Self {
             match value {
                 AssetId::Ada => constr!(0),
-                AssetId::Native {
+                AssetId::Native(NativeAsset {
                     policy_id,
                     asset_name,
-                } => constr!(
+                }) => constr!(
                     1,
                     PlutusData::bytes(policy_id),
                     PlutusData::bytes(asset_name)
@@ -258,6 +275,41 @@ mod tests {
             AssetId::native([0; 28], vec![0; 33]),
             Err(AssetError::AssetNameTooLong)
         );
+    }
+
+    #[test]
+    fn cbor_rejects_long_asset_names() {
+        let mut encoder = minicbor::Encoder::new(Vec::new());
+        encoder
+            .tag(minicbor::data::Tag::new(122))
+            .unwrap()
+            .array(2)
+            .unwrap()
+            .bytes(&[0; 28])
+            .unwrap()
+            .bytes(&[0; 33])
+            .unwrap();
+        assert!(minicbor::decode::<AssetId>(&encoder.into_writer()).is_err());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn serde_rejects_long_asset_names() {
+        let json = format!(
+            r#"{{"kind":"native","policy_id":"{}","asset_name":"{}"}}"#,
+            "00".repeat(28),
+            "00".repeat(33),
+        );
+        assert!(serde_json::from_str::<AssetId>(&json).is_err());
+    }
+
+    #[cfg(feature = "cardano_sdk")]
+    #[test]
+    fn plutus_rejects_long_asset_names() {
+        use cardano_sdk::{PlutusData, constr};
+
+        let data = constr!(1, PlutusData::bytes([0; 28]), PlutusData::bytes([0; 33]));
+        assert!(AssetId::try_from(&data).is_err());
     }
 
     #[cfg(feature = "proptest")]

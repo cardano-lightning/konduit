@@ -15,7 +15,7 @@
 # Rust
 debug/
 target/
-rust/
+/rust/
 
 # Envs
 .env

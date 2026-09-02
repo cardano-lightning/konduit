@@ -1,5 +1,5 @@
 use crate::error::ApiError;
-use crate::ops::{OpsStore, Record};
+use crate::ops::{InternalState, OpsStore, Record};
 use crate::providers::{History, Ledger, parse_mainnet_address};
 use crate::tx::{decode_signed_tx, parse_lowercase_hex, parse_tx_id, parse_uuid};
 use crate::wire::{
@@ -10,12 +10,12 @@ use actix_cors::Cors;
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer,
     middleware::Logger,
-    web::{self, Data, Json, Path},
+    web::{self, Data, Json, JsonConfig, Path},
 };
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub const OPENAPI_YAML: &str = include_str!("../openapi.yaml");
@@ -33,28 +33,55 @@ const DOCS_HTML: &str = r#"<!doctype html>
 </html>
 "#;
 
+pub(crate) fn legacy_uuid(hash: &[u8; 32]) -> String {
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{}",
+        u32::from_be_bytes(hash[..4].try_into().unwrap()),
+        u16::from_be_bytes(hash[4..6].try_into().unwrap()),
+        u16::from_be_bytes(hash[6..8].try_into().unwrap()),
+        u16::from_be_bytes(hash[8..10].try_into().unwrap()),
+        hex::encode(&hash[10..16]),
+    )
+}
+
 pub struct Limits {
     pub rate_per_minute: usize,
 }
 
 pub struct AppState<L, H> {
-    pub ledger: L,
-    pub history: H,
-    pub ops: OpsStore,
+    pub ledger: Arc<L>,
+    pub history: Arc<H>,
+    pub ops: Arc<OpsStore>,
     pub limits: Limits,
     pub hits: Mutex<HashMap<IpAddr, Vec<Instant>>>,
 }
 
 impl<L: Ledger, H: History> AppState<L, H> {
     fn rate_limit(&self, req: &HttpRequest) -> Result<(), ApiError> {
-        let ip = req
-            .peer_addr()
-            .map(|addr| addr.ip())
+        let forwarded = std::env::var_os("CONNECTOR_TRUST_PROXY").and_then(|_| {
+            req.headers()
+                .get("x-forwarded-for")?
+                .to_str()
+                .ok()?
+                .split(',')
+                .next()?
+                .trim()
+                .parse()
+                .ok()
+        });
+        let ip = forwarded
+            .or_else(|| req.peer_addr().map(|addr| addr.ip()))
             .unwrap_or(IpAddr::from([0, 0, 0, 0]));
         let mut hits = self.hits.lock().map_err(|_| ApiError::unexpected())?;
         let now = Instant::now();
+        hits.retain(|_, entry| {
+            entry.retain(|at| now.duration_since(*at) < Duration::from_secs(60));
+            !entry.is_empty()
+        });
+        if !hits.contains_key(&ip) && hits.len() >= 10_000 {
+            return Err(ApiError::too_many());
+        }
         let entry = hits.entry(ip).or_default();
-        entry.retain(|at| now.duration_since(*at) < Duration::from_secs(60));
         if entry.len() >= self.limits.rate_per_minute {
             return Err(ApiError::too_many());
         }
@@ -175,16 +202,17 @@ async fn submit<L: Ledger, H: History>(
     if signed.bytes.len() as u64 > max {
         return Err(ApiError::bad_request());
     }
-    let uuid = format!(
-        "00000000-0000-0000-0000-{}",
-        hex::encode(&signed.hash[8..16])
-    );
-    // ponytail: legacy submit keys off txid via synthetic UUID; dedicated ops API uses client UUIDs
+    let uuid = legacy_uuid(&signed.hash);
     let op_id = parse_uuid(&uuid).map_err(|_| ApiError::unexpected())?;
+    let key = OpsStore::legacy_key(&op_id);
     let record = state
         .ops
-        .persist_new(&op_id, &signed.hash, &signed, &uuid)?;
-    submit_record(&state, &op_id, record).await?;
+        .persist_new(key, signed.hash, signed.clone(), uuid)
+        .await?;
+    let (_, record) = submit_record(&state, key, record).await?;
+    if record.state == InternalState::Rejected {
+        return Err(ApiError::bad_request());
+    }
     json_bounded(&SubmitResponse {
         transaction_id: hex::encode(signed.hash),
     })
@@ -209,10 +237,15 @@ async fn create_operation<L: Ledger, H: History>(
     if signed.bytes.len() as u64 > max {
         return Err(ApiError::bad_request());
     }
+    let key = OpsStore::client_key(&op_id);
     let record = state
         .ops
-        .persist_new(&op_id, &expected, &signed, &body.operation_id)?;
-    let (depth, record) = submit_record(&state, &op_id, record).await?;
+        .persist_new(key, expected, signed, body.operation_id.clone())
+        .await?;
+    let (depth, record) = submit_record(&state, key, record).await?;
+    if record.state == InternalState::Rejected {
+        return Err(ApiError::bad_request());
+    }
     json_bounded(&OpsStore::response(&record, depth))
 }
 
@@ -221,24 +254,25 @@ async fn get_operation<L: Ledger, H: History>(
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let op_id = parse_uuid(&path).map_err(|_| ApiError::bad_request())?;
-    let mut record = state.ops.get(&op_id)?.ok_or_else(ApiError::not_found)?;
+    let key = OpsStore::client_key(&op_id);
+    let mut record = state.ops.get(key).await?.ok_or_else(ApiError::not_found)?;
     let (height, slot) = state.ledger.tip().await?;
     let depth = state
         .ops
-        .reconcile_one(&state.ledger, &op_id, &mut record, height, slot, false)
+        .reconcile_one(state.ledger.as_ref(), key, &mut record, height, slot, false)
         .await?;
     json_bounded(&OpsStore::response(&record, depth))
 }
 
 async fn submit_record<L: Ledger, H: History>(
     state: &AppState<L, H>,
-    op_id: &[u8; 16],
+    key: crate::ops::OperationKey,
     mut record: Record,
 ) -> Result<(u64, Record), ApiError> {
     let (height, slot) = state.ledger.tip().await?;
     let depth = state
         .ops
-        .reconcile_one(&state.ledger, op_id, &mut record, height, slot, true)
+        .reconcile_one(state.ledger.as_ref(), key, &mut record, height, slot, true)
         .await?;
     Ok((depth, record))
 }
@@ -286,15 +320,23 @@ where
     L: Ledger + 'static,
     H: History + 'static,
 {
+    let cors = if let Ok(origin) = std::env::var("CONNECTOR_CORS_ORIGIN") {
+        Cors::default()
+            .allowed_origin(&origin)
+            .allow_any_method()
+            .allow_any_header()
+    } else {
+        Cors::default()
+    };
     App::new()
         .app_data(state)
-        .wrap(Logger::default())
-        .wrap(
-            Cors::default()
-                .allow_any_origin()
-                .allow_any_method()
-                .allow_any_header(),
+        .app_data(
+            JsonConfig::default()
+                .limit(MAX_JSON)
+                .error_handler(|_, _| ApiError::bad_request().into()),
         )
+        .wrap(Logger::new("%s %b %D"))
+        .wrap(cors)
         .configure(config::<L, H>)
 }
 

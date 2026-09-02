@@ -4,7 +4,7 @@ use aiken/interval.{Finite}
 use aiken/primitive/bytearray
 use cardano/assets.{Value}
 use extra/xlist.{foldl3}
-use konduit/assets.{amount_in, amount_out} as k_assets
+use konduit/assets.{amount_in, amount_out, preserve_lovelace} as k_assets
 use konduit/prelude.{Amount, Timebound}
 use konduit/types as t
 
@@ -20,6 +20,7 @@ pub fn do(
   let (_tag, _add_vkey, sub_vkey, _close_period, asset) = constants
   expect t.Responded(pends_amount_in, pends_in) = stage_in
   expect t.Responded(pends_amount_out, pends_out) = stage_out
+  expect preserve_lovelace(value_in, value_out, asset)
   let subbed = amount_in(value_in, asset) - amount_out(value_out, asset)
   let amount = account(upper_bound, unpends, pends_in, pends_out)
   expect pends_amount_out == pends_amount_in - amount

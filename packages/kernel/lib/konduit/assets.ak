@@ -13,6 +13,27 @@ pub fn amount_out(value: Value, asset: AssetId) -> Amount {
   amount(value, asset)
 }
 
+fn lovelace(value: Value) -> Int {
+  expect [Pair(ada_policy, ada_assets), ..] = value
+    |> to_dict
+    |> to_pairs
+  expect ada_policy == #""
+  expect [Pair(ada_name, lovelace)] = ada_assets |> to_pairs
+  expect ada_name == #""
+  lovelace
+}
+
+pub fn preserve_lovelace(
+  value_in: Value,
+  value_out: Value,
+  asset: AssetId,
+) -> Bool {
+  when asset is {
+    Ada -> True
+    Native(_, _) -> lovelace(value_in) == lovelace(value_out)
+  }
+}
+
 fn amount(value: Value, asset: AssetId) -> Amount {
   expect [Pair(ada_policy, ada_assets), ..native_assets] = value
     |> to_dict
@@ -21,7 +42,6 @@ fn amount(value: Value, asset: AssetId) -> Amount {
   expect [Pair(ada_name, lovelace)] = ada_assets |> to_pairs
   expect ada_name == #""
   expect lovelace >= env.min_ada_buffer
-
   when asset is {
     Ada -> {
       expect native_assets == []
@@ -114,4 +134,20 @@ test insufficient_reserve_fails() fail {
 
 test extra_asset_in_ada_fails() fail {
   amount_out(native_value(1), Ada) == 0
+}
+
+test native_extra_lovelace_is_preserved() {
+  let asset = Native(test_policy, test_name)
+  let value = assets.from_lovelace(env.min_ada_buffer + 1)
+    |> assets.add(test_policy, test_name, 1)
+  preserve_lovelace(value, value, asset)
+}
+
+test native_extra_lovelace_cannot_be_siphoned() fail {
+  let asset = Native(test_policy, test_name)
+  let value_in = assets.from_lovelace(env.min_ada_buffer + 1)
+    |> assets.add(test_policy, test_name, 1)
+  let value_out = assets.from_lovelace(env.min_ada_buffer)
+    |> assets.add(test_policy, test_name, 1)
+  preserve_lovelace(value_in, value_out, asset)
 }

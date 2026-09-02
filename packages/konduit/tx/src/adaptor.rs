@@ -14,7 +14,7 @@ use crate::{
 #[error("insufficient total gain: preferences.min_total = {min_total}, gain = {gain}")]
 pub struct InsufficientTotalGain {
     pub min_total: u64,
-    pub gain: i64,
+    pub gain: i128,
 }
 
 #[derive(Debug, Clone)]
@@ -42,16 +42,39 @@ pub fn tx(
         return Err(anyhow::anyhow!("No konduit reference found"));
     };
     let change_address = wallet.to_address(network_parameters.network_id);
+    let receipt_assets = utxos
+        .iter()
+        .filter_map(|u| ChannelUtxo::try_from(u).ok())
+        .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
+        .filter(|u| receipts.contains_key(&u.data().keytag()))
+        .try_fold(BTreeMap::new(), |mut expected, u| {
+            let keytag = u.data().keytag();
+            let asset = u.data().constants().asset.clone();
+            if expected
+                .get(&keytag)
+                .is_some_and(|expected| expected != &asset)
+            {
+                return Err(anyhow::anyhow!(
+                    "receipt keytag is shared by channels with different assets"
+                ));
+            }
+            expected.insert(keytag, asset);
+            Ok(expected)
+        })?;
     let groups = utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
         .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
         .filter_map(|u| {
+            let keytag = u.data().keytag();
+            if receipt_assets.get(&keytag) != Some(&u.data().constants().asset) {
+                return None;
+            }
             receipts
-                .get(&u.data().keytag())
+                .get(&keytag)
                 .and_then(|receipt| u.any_sub(receipt, upper).ok())
         })
-        .filter(|u| u.gain() >= preferences.min_single as i64)
+        .filter(|u| u.gain_i128() >= i128::from(preferences.min_single))
         .fold(BTreeMap::<AssetId, Vec<_>>::new(), |mut groups, stepped| {
             groups
                 .entry(stepped.data().channel().constants().asset.clone())
@@ -61,13 +84,14 @@ pub fn tx(
         });
     let gain = groups
         .values()
-        .map(|group| group.iter().map(|step| step.gain()).sum::<i64>())
+        .map(|group| group.iter().map(|step| step.gain_i128()).sum::<i128>())
         .max()
         .unwrap_or(0);
     let eligible = groups
         .into_values()
         .filter(|group| {
-            group.iter().map(|step| step.gain()).sum::<i64>() >= preferences.min_total as i64
+            group.iter().map(|step| step.gain_i128()).sum::<i128>()
+                >= i128::from(preferences.min_total)
         })
         .collect::<Vec<_>>();
     if eligible.is_empty() {

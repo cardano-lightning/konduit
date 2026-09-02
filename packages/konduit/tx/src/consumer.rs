@@ -29,7 +29,7 @@ impl OpenIntent {
 }
 
 pub enum Intent {
-    Add(u64),
+    Add { amount: u64, asset: AssetId },
     Close,
 }
 
@@ -53,7 +53,10 @@ pub fn tx(
     let steppeds = consumer_channels
         .filter_map(|u| match u.data().stage() {
             Stage::Opened(_, _) => match intents.get(&u.data().constants().tag)? {
-                Intent::Add(amount) => u.add(*amount).ok(),
+                Intent::Add { amount, asset } if asset == &u.data().constants().asset => {
+                    u.add(*amount).ok()
+                }
+                Intent::Add { .. } => None,
                 Intent::Close => u
                     .close(&bounds.upper.expect("Must have upper bound for close"))
                     .ok(),

@@ -67,6 +67,8 @@ struct LeaseValue {
     token: [u8; 32],
     #[n(4)]
     expires_at_epoch_millis: u64,
+    #[n(5)]
+    last_claim_timestamp: Option<u64>,
 }
 
 impl redb::Value for LeaseValue {
@@ -135,6 +137,8 @@ pub enum Error {
     NoChannel,
     #[error("entry already exists")]
     AlreadyExists,
+    #[error("channel lease is invalid")]
+    LeaseInvalid,
     #[error("channel: {0}")]
     Channel(#[from] channel::Error),
 }
@@ -173,6 +177,8 @@ impl From<redb::CommitError> for Error {
 pub enum LeaseClaimError {
     #[error("lease claim conflicts with active generation")]
     Conflict,
+    #[error("no channel for wallet")]
+    UnknownWallet,
     #[error(transparent)]
     Database(#[from] Error),
 }
@@ -268,24 +274,53 @@ impl Db {
         claim: &SessionClaimRequest,
         token: [u8; 32],
         expires_at_epoch_millis: u64,
-    ) -> Result<(), LeaseClaimError> {
+    ) -> Result<([u8; 32], u64), LeaseClaimError> {
+        if claim.generation == 0 {
+            return Err(LeaseClaimError::Conflict);
+        }
+
         let tx = self.0.begin_write().map_err(Error::from)?;
         {
-            let mut table = tx.open_table(LEASES).map_err(Error::from)?;
-            if let Some(current) = table
+            let channels = tx.open_table(TABLE).map_err(Error::from)?;
+            let mut has_channel = false;
+            for entry in channels.iter().map_err(Error::from)? {
+                let (key, _) = entry.map_err(Error::from)?;
+                if key
+                    .value()
+                    .starts_with(claim.wallet_verification_key_hex.as_slice())
+                {
+                    has_channel = true;
+                    break;
+                }
+            }
+            if !has_channel {
+                return Err(LeaseClaimError::UnknownWallet);
+            }
+        }
+
+        {
+            let mut leases = tx.open_table(LEASES).map_err(Error::from)?;
+            if let Some(current) = leases
                 .get(claim.wallet_verification_key_hex.as_slice())
                 .map_err(Error::from)?
                 .map(|value| value.value())
             {
+                let same_identity = claim.backup_hash_hex == current.backup_hash
+                    && claim.device_public_key_hex == current.device_public_key;
                 if claim.generation < current.generation
+                    || (claim.generation == current.generation && !same_identity)
                     || (claim.generation == current.generation
-                        && (claim.backup_hash_hex != current.backup_hash
-                            || claim.device_public_key_hex != current.device_public_key))
+                        && claim.timestamp < current.last_claim_timestamp.unwrap_or(0))
                 {
                     return Err(LeaseClaimError::Conflict);
                 }
+                if claim.generation == current.generation
+                    && claim.timestamp == current.last_claim_timestamp.unwrap_or(0)
+                {
+                    return Ok((current.token, current.expires_at_epoch_millis));
+                }
             }
-            table
+            leases
                 .insert(
                     claim.wallet_verification_key_hex.as_slice(),
                     LeaseValue {
@@ -294,11 +329,57 @@ impl Db {
                         device_public_key: claim.device_public_key_hex,
                         token,
                         expires_at_epoch_millis,
+                        last_claim_timestamp: Some(claim.timestamp),
                     },
                 )
                 .map_err(Error::from)?;
         }
         tx.commit().map_err(Error::from)?;
+        Ok((token, expires_at_epoch_millis))
+    }
+
+    pub fn update_with_lease<F>(
+        &self,
+        keytag: &Keytag,
+        token: &[u8; 32],
+        now_epoch_millis: u64,
+        f: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(Channel) -> Result<Channel, channel::Error>,
+    {
+        let wallet_key: [u8; 32] = keytag
+            .as_ref()
+            .get(..32)
+            .and_then(|key| key.try_into().ok())
+            .ok_or(Error::LeaseInvalid)?;
+        let tx = self.0.begin_write()?;
+        let current = {
+            let table = tx.open_table(TABLE)?;
+            table
+                .get(keytag.as_ref())?
+                .map(|value| value.value().to_channel(keytag))
+                .ok_or(Error::NoChannel)?
+        };
+        let lease_valid = {
+            let leases = tx.open_table(LEASES)?;
+            leases
+                .get(wallet_key.as_slice())?
+                .map(|value| {
+                    let lease = value.value();
+                    lease.expires_at_epoch_millis > now_epoch_millis
+                        && bool::from(lease.token.ct_eq(token))
+                })
+                .unwrap_or(false)
+        };
+        if !lease_valid {
+            return Err(Error::LeaseInvalid);
+        }
+        {
+            let mut table = tx.open_table(TABLE)?;
+            table.insert(keytag.as_ref(), Value::from_channel(f(current)?))?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -359,17 +440,37 @@ mod tests {
     fn lease_db() -> (tempfile::NamedTempFile, Db) {
         let file = tempfile::NamedTempFile::new().unwrap();
         let db = Db::open(file.path().to_str().unwrap()).unwrap();
+        let wallet = SigningKey::from([1; 32]);
+        let keytag = Keytag::new(
+            &wallet.to_verification_key(),
+            &Tag::from(b"lease-test".as_slice()),
+        );
+        db.insert(
+            channel::open(
+                keytag,
+                AssetCatalog::builtins().by_alias("ada").unwrap().clone(),
+                vec![],
+            )
+            .unwrap(),
+        )
+        .unwrap();
         (file, db)
     }
 
-    fn claim(generation: u64) -> SessionClaimRequest {
-        SessionClaimRequest::signed(&SigningKey::from([1; 32]), generation, [2; 32], [3; 32], 0)
+    fn claim(generation: u64, timestamp: u64) -> SessionClaimRequest {
+        SessionClaimRequest::signed(
+            &SigningKey::from([1; 32]),
+            generation,
+            [2; 32],
+            [3; 32],
+            timestamp,
+        )
     }
 
     #[test]
     fn first_lease_claim_succeeds() {
         let (_file, db) = lease_db();
-        let claim = claim(1);
+        let claim = claim(1, 1);
         db.claim_lease(&claim, [4; 32], 100).unwrap();
         assert!(
             db.validate_lease(&claim.wallet_verification_key_hex, &[4; 32], 99)
@@ -378,31 +479,68 @@ mod tests {
     }
 
     #[test]
-    fn same_generation_and_identity_refreshes() {
+    fn same_generation_requires_newer_timestamp() {
         let (_file, db) = lease_db();
-        let claim = claim(1);
-        db.claim_lease(&claim, [4; 32], 100).unwrap();
-        db.claim_lease(&claim, [5; 32], 200).unwrap();
-        assert!(
-            db.validate_lease(&claim.wallet_verification_key_hex, &[5; 32], 150)
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn lower_generation_conflicts() {
-        let (_file, db) = lease_db();
-        db.claim_lease(&claim(2), [4; 32], 100).unwrap();
+        let newer = claim(1, 2);
+        db.claim_lease(&newer, [4; 32], 100).unwrap();
         assert!(matches!(
-            db.claim_lease(&claim(1), [5; 32], 200),
+            db.claim_lease(&claim(1, 1), [5; 32], 200),
             Err(LeaseClaimError::Conflict)
         ));
     }
 
     #[test]
+    fn exact_claim_retry_keeps_its_lease() {
+        let (_file, db) = lease_db();
+        let claim = claim(1, 1);
+        let first = db.claim_lease(&claim, [4; 32], 100).unwrap();
+        let retry = db.claim_lease(&claim, [5; 32], 200).unwrap();
+        assert_eq!(retry, first);
+    }
+
+    #[test]
+    fn zero_generation_conflicts() {
+        let (_file, db) = lease_db();
+        let mut claim = claim(1, 1);
+        claim.generation = 0;
+        assert!(matches!(
+            db.claim_lease(&claim, [4; 32], 100),
+            Err(LeaseClaimError::Conflict)
+        ));
+    }
+
+    #[test]
+    fn unknown_wallet_does_not_create_lease() {
+        let (_file, db) = lease_db();
+        let claim = SessionClaimRequest::signed(&SigningKey::from([9; 32]), 1, [2; 32], [3; 32], 1);
+        assert!(matches!(
+            db.claim_lease(&claim, [4; 32], 100),
+            Err(LeaseClaimError::UnknownWallet)
+        ));
+        assert!(
+            !db.validate_lease(&claim.wallet_verification_key_hex, &[4; 32], 99)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn fenced_update_rejects_stale_lease() {
+        let (_file, db) = lease_db();
+        let claim = claim(1, 1);
+        db.claim_lease(&claim, [4; 32], 100).unwrap();
+        let keytag = db.keys().unwrap().pop().unwrap();
+        assert!(matches!(
+            db.update_with_lease(&keytag, &[5; 32], 99, |channel| Ok(channel)),
+            Err(Error::LeaseInvalid)
+        ));
+        db.update_with_lease(&keytag, &[4; 32], 99, |channel| Ok(channel))
+            .unwrap();
+    }
+
+    #[test]
     fn equal_generation_with_different_device_conflicts() {
         let (_file, db) = lease_db();
-        let claim = claim(1);
+        let claim = claim(1, 1);
         db.claim_lease(&claim, [4; 32], 100).unwrap();
         let mut changed = claim;
         changed.device_public_key_hex[0] ^= 1;
@@ -415,8 +553,8 @@ mod tests {
     #[test]
     fn higher_generation_replaces_lease() {
         let (_file, db) = lease_db();
-        let old = claim(1);
-        let new = claim(2);
+        let old = claim(1, 1);
+        let new = claim(2, 1);
         db.claim_lease(&old, [4; 32], 100).unwrap();
         db.claim_lease(&new, [5; 32], 200).unwrap();
         assert!(
@@ -426,21 +564,9 @@ mod tests {
     }
 
     #[test]
-    fn old_token_is_rejected_after_refresh() {
-        let (_file, db) = lease_db();
-        let claim = claim(1);
-        db.claim_lease(&claim, [4; 32], 100).unwrap();
-        db.claim_lease(&claim, [5; 32], 200).unwrap();
-        assert!(
-            !db.validate_lease(&claim.wallet_verification_key_hex, &[4; 32], 50)
-                .unwrap()
-        );
-    }
-
-    #[test]
     fn expired_token_is_rejected() {
         let (_file, db) = lease_db();
-        let claim = claim(1);
+        let claim = claim(1, 1);
         db.claim_lease(&claim, [4; 32], 100).unwrap();
         assert!(
             !db.validate_lease(&claim.wallet_verification_key_hex, &[4; 32], 100)
@@ -451,7 +577,7 @@ mod tests {
     #[test]
     fn lease_validates_after_database_reopens() {
         let (file, db) = lease_db();
-        let claim = claim(1);
+        let claim = claim(1, 1);
         db.claim_lease(&claim, [4; 32], 100).unwrap();
         drop(db);
         let db = Db::open(file.path().to_str().unwrap()).unwrap();

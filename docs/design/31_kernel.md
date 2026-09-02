@@ -31,8 +31,9 @@ no built-in token list. It rejects a wrong or additional native asset, an
 invalid policy/name length, and values below the minimum-Ada reserve.
 
 For Ada, capacity is lovelace above the reserve. For a native asset, capacity is
-the selected token quantity; the lovelace is reserve only. A zero-capacity
-native continuation therefore contains only the reserve. Aliases, decimal
+the selected token quantity; lovelace is reserve only. A native continuing output
+must preserve the input lovelace amount, which must meet the minimum-Ada reserve,
+so no lovelace can be siphoned during a continuing spend. Aliases, decimal
 places, fingerprints, and prices are off-chain metadata and never enter the
 datum.
 
@@ -145,8 +146,6 @@ case.
 
 ### Simplifications from CL
 
-- In the initial iteration we remove the possibility of (non ada) native asset
-  channels.
 - Only `Sha2_256` locks are available (cf Cardano Lightning with support for
   other lock types).
 
@@ -449,6 +448,7 @@ type Constants {
   add_vkey : VerificationKey,
   sub_vkey : VerificationKey,
   close_period : Int,
+  asset_id : AssetId,
 }
 
 /// ScriptHash is own_hash
@@ -660,9 +660,9 @@ The fifth channel constant is its immutable `AssetId`: `Ada` or
 `Native(policy_id, asset_name)`. Both input and continuing-output amounts are
 extracted against that identity. Ada values must contain no native assets.
 Native values must contain only the selected positive token quantity, or no
-native entry for a zero-capacity continuation. Every channel value must retain
-the minimum-Ada reserve; reserve lovelace is never capacity for a native
-channel.
+native entry for a zero-capacity continuation. Every native continuing output
+must preserve its input lovelace and meet the minimum-Ada reserve; reserve
+lovelace is never capacity or siphonable value.
 
 ## Steps / BL Specific
 

@@ -19,53 +19,47 @@ pub(crate) fn amount(asset: &AssetId, value: &Value<u64>) -> Result<u64, Error> 
     if value.lovelace() < MIN_ADA_BUFFER {
         return Err(Error::Reserve);
     }
-    match asset {
-        AssetId::Ada => {
-            if !value.assets().is_empty() {
-                return Err(Error::AdaWithNativeAssets);
-            }
-            Ok(value.lovelace() - MIN_ADA_BUFFER)
+    if *asset == AssetId::Ada {
+        if !value.assets().is_empty() {
+            return Err(Error::AdaWithNativeAssets);
         }
-        AssetId::Native {
-            policy_id,
-            asset_name,
-        } => {
-            if value.assets().is_empty() {
-                return Ok(0);
-            }
-            if value.assets().len() != 1 {
-                return Err(Error::UnexpectedAsset);
-            }
-            let (policy, assets) = value.assets().first_key_value().unwrap();
-            if assets.len() != 1 {
-                return Err(Error::UnexpectedAsset);
-            }
-            let (name, quantity) = assets.first_key_value().unwrap();
-            if policy.as_ref() != policy_id || name != asset_name {
-                return Err(Error::UnexpectedAsset);
-            }
-            if *quantity == 0 {
-                return Err(Error::NonPositiveQuantity);
-            }
-            Ok(*quantity)
-        }
+        return Ok(value.lovelace() - MIN_ADA_BUFFER);
     }
+    if value.assets().is_empty() {
+        return Ok(0);
+    }
+    if value.assets().len() != 1 {
+        return Err(Error::UnexpectedAsset);
+    }
+    let (policy, assets) = value.assets().first_key_value().unwrap();
+    if assets.len() != 1 {
+        return Err(Error::UnexpectedAsset);
+    }
+    let (name, quantity) = assets.first_key_value().unwrap();
+    if policy.as_ref() != asset.policy_id().unwrap() || name != asset.asset_name().unwrap() {
+        return Err(Error::UnexpectedAsset);
+    }
+    if *quantity == 0 {
+        return Err(Error::NonPositiveQuantity);
+    }
+    Ok(*quantity)
 }
 
 pub(crate) fn value(asset: &AssetId, amount: u64) -> Value<u64> {
-    match asset {
-        AssetId::Ada => Value::new(
+    if *asset == AssetId::Ada {
+        return Value::new(
             amount
                 .checked_add(MIN_ADA_BUFFER)
                 .expect("channel amount exceeds u64"),
-        ),
-        AssetId::Native { .. } if amount == 0 => Value::new(MIN_ADA_BUFFER),
-        AssetId::Native {
-            policy_id,
-            asset_name,
-        } => Value::new(MIN_ADA_BUFFER)
-            .with_assets([(Hash::<28>::from(*policy_id), [(asset_name, amount)])]),
+        );
     }
+    if amount == 0 {
+        return Value::new(MIN_ADA_BUFFER);
+    }
+    Value::new(MIN_ADA_BUFFER).with_assets([(
+        Hash::<28>::from(*asset.policy_id().unwrap()),
+        [(asset.asset_name().unwrap(), amount)],
+    )])
 }
 
 #[cfg(test)]

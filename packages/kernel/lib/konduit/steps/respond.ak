@@ -2,7 +2,7 @@ use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
 use cardano/assets.{Value}
 use extra/xlist.{foldl6}
-use konduit/assets.{amount_in, amount_out} as k_assets
+use konduit/assets.{amount_in, amount_out, preserve_lovelace} as k_assets
 use konduit/prelude.{Amount, Index, Signature, Timebound}
 use konduit/steps/common.{next_index}
 use konduit/types as t
@@ -21,6 +21,7 @@ pub fn do(
   let (tag, add_vkey, sub_vkey, _close_period, asset) = constants
   expect t.Closed(subbed_in, useds_in, _) = stage_in
   expect t.Responded(pends_amount, pends) = stage_out
+  expect preserve_lovelace(value_in, value_out, asset)
   let subbed_out = subbed_in - amount_in(value_in, asset) + amount_out(
     value_out,
     asset,

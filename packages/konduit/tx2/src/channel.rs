@@ -4,8 +4,8 @@ use minicbor::{Decode, Encode};
 
 use cardano_sdk::{Credential, Output, Value};
 use konduit_data::{
-    Cheque, Constants, Datum, Duration, Lock, Pending, Secret, Squash, Stage, Unlocked, Unpend,
-    Used,
+    AssetId, Cheque, Constants, Datum, Duration, Lock, Pending, Secret, Squash, Stage, Unlocked,
+    Unpend, Used,
 };
 
 use crate::{
@@ -28,6 +28,8 @@ pub enum FromOutputError {
     Inline,
     #[error("Failed to parse datum")]
     ParseDatum,
+    #[error("native asset channels are not supported")]
+    NativeAsset,
     #[error("Own hash is wrong")]
     OwnHash,
 }
@@ -74,10 +76,12 @@ impl TryFrom<&Output> for Channel {
             constants,
             stage,
         } = Datum::try_from(data).map_err(|_| FromOutputError::ParseDatum)?;
+        if constants.asset != AssetId::Ada {
+            return Err(FromOutputError::NativeAsset);
+        }
         if own_hash != <[u8; 28]>::from(KONDUIT_VALIDATOR.hash) {
             return Err(FromOutputError::OwnHash);
         }
-
         let amount = debuffer_amount(output.value());
         Ok(Self {
             delegation,
@@ -223,8 +227,11 @@ impl Channel {
         self.amount() + MIN_ADA_BUFFER
     }
 
-    pub fn buffered_value(&self) -> Value<u64> {
-        Value::new(self.buffered_amount())
+    pub fn buffered_value(&self) -> Result<Value<u64>, FromOutputError> {
+        if self.constants.asset != AssetId::Ada {
+            return Err(FromOutputError::NativeAsset);
+        }
+        Ok(Value::new(self.buffered_amount()))
     }
 
     pub fn datum(&self) -> Datum {

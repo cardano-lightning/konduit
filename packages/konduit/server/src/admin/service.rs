@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, iter, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+    sync::Arc,
+};
 
 use crate::{
     channel::{self, Retainer},
@@ -7,7 +11,7 @@ use crate::{
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::{AssetCatalog, AssetDefinition, Lock, Secret};
+use konduit_data::{AssetCatalog, AssetDefinition, AssetId, Lock, Secret};
 use konduit_tmp::{ChannelParameters, Keytag};
 use konduit_tx::{
     Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
@@ -31,6 +35,28 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     tx_preferences: AdaptorPreferences,
     script_utxo: (Input, Output),
     wallet: SigningKey,
+}
+
+fn keep_keytag(
+    identities: &mut BTreeMap<Keytag, AssetId>,
+    quarantined: &mut BTreeSet<Keytag>,
+    keytag: Keytag,
+    asset: AssetId,
+) -> bool {
+    if quarantined.contains(&keytag) {
+        return false;
+    }
+    match identities.entry(keytag.clone()) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            entry.insert(asset);
+            true
+        }
+        std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &asset => true,
+        std::collections::btree_map::Entry::Occupied(_) => {
+            quarantined.insert(keytag);
+            false
+        }
+    }
 }
 
 impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
@@ -126,28 +152,31 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
                     && channel.stage().is_opened()
             });
         let mut retainers = BTreeMap::new();
+        let mut identities = BTreeMap::new();
+        let mut quarantined = BTreeSet::new();
         for utxo in candidates {
-            let Some(definition) = self
-                .assets
-                .by_asset(&utxo.data().constants().asset)
-                .cloned()
-            else {
+            let keytag = utxo.data().keytag();
+            let asset = utxo.data().constants().asset.clone();
+            if !keep_keytag(
+                &mut identities,
+                &mut quarantined,
+                keytag.clone(),
+                asset.clone(),
+            ) {
+                retainers.remove(&keytag);
+                continue;
+            }
+            let Some(definition) = self.assets.by_asset(&asset).cloned() else {
                 continue;
             };
             let Ok(retainer) = Retainer::try_from(utxo.data()) else {
                 continue;
             };
-            let keytag = utxo.data().keytag();
             match retainers.entry(keytag) {
                 std::collections::btree_map::Entry::Vacant(entry) => {
                     entry.insert((definition, vec![retainer]));
                 }
                 std::collections::btree_map::Entry::Occupied(mut entry) => {
-                    if entry.get().0.asset != definition.asset {
-                        return Err(anyhow::anyhow!(
-                            "one channel keytag resolved to different asset identities"
-                        ));
-                    }
                     entry.get_mut().1.push(retainer);
                 }
             }
@@ -289,9 +318,12 @@ mod tests {
         Address, Credential, Hash, Input, Network, Output, PlutusScript, PlutusVersion,
         ProtocolParameters, SigningKey, Transaction, Value, address::kind, transaction::state,
     };
-    use konduit_data::Duration;
+    use konduit_data::{AssetCatalog, Duration, Tag};
     use konduit_tx::{KONDUIT_VALIDATOR, adaptor::AdaptorPreferences};
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        sync::Arc,
+    };
 
     struct FakeConnector {
         network: Network,
@@ -383,6 +415,37 @@ mod tests {
 
     fn host_utxos_with_reference_script() -> BTreeMap<Input, Output> {
         BTreeMap::from([(Input::new(Hash::<32>::from([9; 32]), 0), script_output())])
+    }
+
+    #[test]
+    fn conflicting_keytag_is_quarantined_without_affecting_other_keytags() {
+        let wallet = SigningKey::from([3; 32]);
+        let tag = Tag::from(b"shared-keytag".as_slice());
+        let keytag = Keytag::new(&wallet.to_verification_key(), &tag);
+        let other = Keytag::new(
+            &SigningKey::from([4; 32]).to_verification_key(),
+            &Tag::from(b"other-keytag".as_slice()),
+        );
+        let catalog = AssetCatalog::builtins();
+        let ada = catalog.by_alias("ada").unwrap().asset.clone();
+        let usdm = catalog.by_alias("usdm").unwrap().asset.clone();
+        let mut identities = BTreeMap::new();
+        let mut quarantined = BTreeSet::new();
+
+        assert!(keep_keytag(
+            &mut identities,
+            &mut quarantined,
+            keytag.clone(),
+            ada
+        ));
+        assert!(!keep_keytag(
+            &mut identities,
+            &mut quarantined,
+            keytag.clone(),
+            usdm.clone()
+        ));
+        assert!(quarantined.contains(&keytag));
+        assert!(keep_keytag(&mut identities, &mut quarantined, other, usdm));
     }
 
     #[tokio::test]

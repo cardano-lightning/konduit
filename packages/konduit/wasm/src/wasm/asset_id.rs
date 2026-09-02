@@ -30,12 +30,14 @@ impl AssetId {
 
     #[wasm_bindgen(js_name = "toString")]
     pub fn _wasm_to_string(&self) -> String {
-        match &self.0 {
-            core::AssetId::Ada => "ada".to_owned(),
-            core::AssetId::Native {
-                policy_id,
-                asset_name,
-            } => format!("{}.{}", hex::encode(policy_id), hex::encode(asset_name)),
+        if self.0 == core::AssetId::Ada {
+            "ada".to_owned()
+        } else {
+            format!(
+                "{}.{}",
+                hex::encode(self.0.policy_id().unwrap()),
+                hex::encode(self.0.asset_name().unwrap())
+            )
         }
     }
 }

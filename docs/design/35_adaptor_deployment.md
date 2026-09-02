@@ -217,32 +217,20 @@ Admin endpoints should not be proxied publicly.
 
 ## Operations
 
-Deployment workflow:
+Generic-asset cutover workflow:
 
-1. pull and inspect the desired source revision
-2. build from a pinned commit SHA
-3. run targeted verification
-4. install the new binary and config
-5. use `konduit-cli admin show config` to verify the Cardano network and
-   `KONDUIT_HOST_ADDRESS`
-6. use `konduit-cli admin show tip --verbose` to verify the reference-script
-   output, Plutus version, and hash
-7. if the configured host has no matching script, run
-   `konduit-cli admin tx deploy`, wait for confirmation, and repeat the verbose
-   tip check
-8. restart `konduit.service`
-9. confirm startup selected the reference script and the service is healthy
+1. retain the old binary, database, configuration, and validator reference
+2. use the old binary to close or settle every legacy channel, then verify none
+   remain
+3. stop the old service
+4. deploy and confirm the generic validator
+5. install the new binary and configure a fresh database, USD FX base, and the
+   asset catalog that matches the clients it serves
+6. start `konduit.service`, then verify the configured Cardano network,
+   reference script, catalog, and service health
 
-Changing the host does not require spending a script at the previous host.
-Deployment inputs come from the admin wallet; an output controlled by another
-payment credential cannot be removed without that credential's signing key.
-
-Rollback workflow:
-
-1. stop `konduit.service`
-2. restore prior known-good binary and config
-3. restart `konduit.service`
-4. verify health through localhost and proxy checks
+Rollback is available before opening generic channels: stop the new service and
+restore the retained old binary, database, configuration, and validator.
 
 ## Observability
 

@@ -70,13 +70,16 @@ impl<T: Transport> Adaptor<T> {
         &mut self,
         claim: &SessionClaimRequest,
     ) -> anyhow::Result<&SessionClaimResponse> {
-        self.session = Some(
-            self.http_client
-                .post::<SessionClaimRequest, SessionClaimResponse>("/session/claim", claim)
-                .await
-                .map_err(|error| anyhow!(error))?,
-        );
-        Ok(self.session.as_ref().unwrap())
+        let session = self
+            .http_client
+            .post::<SessionClaimRequest, SessionClaimResponse>("/session/claim", claim)
+            .await
+            .map_err(|error| anyhow!(error))?;
+        if !valid_lease(&session.lease) {
+            return Err(anyhow!("invalid FERRET-SESSION lease"));
+        }
+        self.session = Some(session);
+        Ok(self.session.as_ref().expect("session was just stored"))
     }
 
     pub fn info(&self) -> &AdaptorInfo<TxHelp> {
@@ -141,6 +144,13 @@ impl<T: Transport> Adaptor<T> {
     }
 }
 
+fn valid_lease(lease: &str) -> bool {
+    lease.len() == 64
+        && lease
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +191,12 @@ mod tests {
             adaptor.mutation_headers().err().unwrap().to_string(),
             "missing FERRET-SESSION lease"
         );
+    }
+
+    #[test]
+    fn lease_must_be_lowercase_hex() {
+        assert!(valid_lease(&"ab".repeat(32)));
+        assert!(!valid_lease(&"AB".repeat(32)));
+        assert!(!valid_lease(&"ab".repeat(31)));
     }
 }

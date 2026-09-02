@@ -13,7 +13,7 @@ pub use providers::{DolosLedger, History, KoiosHistory, Ledger};
 use cardano_connector_utxorpc::{Config, UtxoRpc, live_network};
 use cardano_sdk::Network;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub struct ServerConfig {
@@ -30,19 +30,24 @@ pub struct ServerConfig {
 pub async fn boot(
     config: ServerConfig,
 ) -> anyhow::Result<(AppState<DolosLedger, KoiosHistory>, String)> {
-    let live = live_network(&config.dolos_endpoint).await?;
+    let live = live_network(&config.dolos_endpoint)
+        .await
+        .map_err(|_| anyhow::anyhow!("failed to connect to Dolos"))?;
     cardano_connector_utxorpc::ensure_network_matches(
         Network::Mainnet,
         live,
         &config.dolos_endpoint,
-    )?;
-    let rpc = UtxoRpc::connect(Config::new(config.dolos_endpoint, Network::Mainnet)).await?;
-    let ledger = DolosLedger::new(rpc);
+    )
+    .map_err(|_| anyhow::anyhow!("Dolos network does not match mainnet"))?;
+    let rpc = UtxoRpc::connect(Config::new(config.dolos_endpoint, Network::Mainnet))
+        .await
+        .map_err(|_| anyhow::anyhow!("failed to connect to Dolos"))?;
+    let ledger = Arc::new(DolosLedger::new(rpc));
     ledger
         .ready()
         .await
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
-    let history = KoiosHistory::new(config.koios_url)?;
+        .map_err(|_| anyhow::anyhow!("Dolos is unavailable"))?;
+    let history = Arc::new(KoiosHistory::new(config.koios_url)?);
     let ops = OpsStore::open(
         &config.db_path,
         config.max_pending,
@@ -53,7 +58,7 @@ pub async fn boot(
         AppState {
             ledger,
             history,
-            ops,
+            ops: Arc::new(ops),
             limits: Limits {
                 rate_per_minute: config.rate_per_minute,
             },
@@ -67,16 +72,16 @@ pub async fn reconcile_loop<L: Ledger>(ledger: std::sync::Arc<L>, ops: std::sync
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {
         interval.tick().await;
-        let Ok(ids) = ops.pending_ids() else {
+        let Ok(ids) = ops.pending_ids().await else {
             continue;
         };
         let Ok((height, slot)) = ledger.tip().await else {
             continue;
         };
         for id in ids {
-            if let Ok(Some(mut record)) = ops.get(&id) {
+            if let Ok(Some(mut record)) = ops.get(id).await {
                 let _ = ops
-                    .reconcile_one(ledger.as_ref(), &id, &mut record, height, slot, true)
+                    .reconcile_one(ledger.as_ref(), id, &mut record, height, slot, true)
                     .await;
             }
         }

@@ -45,7 +45,12 @@ pub fn build_staged_tx_interactively(
     let mut proposed: BTreeMap<Input, &'static str> = BTreeMap::new();
 
     loop {
-        let inputs: Vec<Input> = staged.channels().keys().cloned().collect();
+        let inputs: Vec<Input> = staged
+            .channels()
+            .iter()
+            .filter(|(_, channel)| matches!(&channel.constants().asset, AssetId::Ada))
+            .map(|(input, _)| input.clone())
+            .collect();
 
         let mut menu: Vec<String> = inputs
             .iter()

@@ -1,5 +1,5 @@
 use actix_web::web::Data;
-use cardano_connector_server_utxorpc::{ServerConfig, boot, serve};
+use cardano_connector_server_utxorpc::{ServerConfig, boot, reconcile_loop, serve};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -43,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
     })
     .await?;
     log::info!("binding {bind}");
+    tokio::spawn(reconcile_loop(state.ledger.clone(), state.ops.clone()));
     serve(&bind, Data::new(state)).await?;
     Ok(())
 }

@@ -98,6 +98,23 @@ fn scale(amount: u64, decimals: u8) -> anyhow::Result<u64> {
         .ok_or_else(|| anyhow::anyhow!("amount exceeds asset precision/range"))
 }
 
+fn record_asset(
+    assets: &mut BTreeMap<Tag, AssetId>,
+    tag: Tag,
+    asset: AssetId,
+) -> anyhow::Result<()> {
+    match assets.entry(tag) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            entry.insert(asset);
+            Ok(())
+        }
+        std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &asset => Ok(()),
+        std::collections::btree_map::Entry::Occupied(entry) => {
+            Err(anyhow::anyhow!("mixed assets for tag: {:?}", entry.key()))
+        }
+    }
+}
+
 impl Cmd {
     pub async fn run(self, config: &Config) -> anyhow::Result<()> {
         let catalog = AssetCatalog::load(config.asset_config.as_deref())?;
@@ -110,15 +127,30 @@ impl Cmd {
             .map(|args| args.resolve(&catalog))
             .collect::<anyhow::Result<Vec<_>>>()?;
 
+        let mut open_assets = BTreeMap::new();
+        for open in &opens {
+            record_asset(&mut open_assets, open.tag.clone(), open.asset.clone())?;
+        }
+
         let channel_assets = if add.is_empty() {
             BTreeMap::new()
         } else {
             client
                 .channels(None)
                 .await?
-                .map(|channel| (channel.tag().clone(), channel.constants().asset.clone()))
-                .collect::<BTreeMap<Tag, AssetId>>()
+                .try_fold(BTreeMap::new(), |mut assets, channel| {
+                    record_asset(
+                        &mut assets,
+                        channel.tag().clone(),
+                        channel.constants().asset.clone(),
+                    )?;
+                    Ok::<_, anyhow::Error>(assets)
+                })?
         };
+
+        for (tag, asset) in &channel_assets {
+            record_asset(&mut open_assets, tag.clone(), asset.clone())?;
+        }
         let adds = add
             .into_iter()
             .map(|args| {
@@ -130,7 +162,10 @@ impl Cmd {
                     .ok_or_else(|| anyhow::anyhow!("channel asset is not configured"))?;
                 Ok((
                     args.tag,
-                    Intent::Add(scale(args.amount, definition.decimals)?),
+                    Intent::Add {
+                        amount: scale(args.amount, definition.decimals)?,
+                        asset: asset.clone(),
+                    },
                 ))
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -174,6 +209,16 @@ mod tests {
         assert_eq!(
             "a,b,c,d,e,f".parse::<OpenArgs>().unwrap_err().to_string(),
             "Expected 4 or 5 args"
+        );
+    }
+
+    #[test]
+    fn mixed_assets_for_one_tag_are_rejected() {
+        let tag = Tag::from(vec![1]);
+        let mut assets = BTreeMap::new();
+        record_asset(&mut assets, tag.clone(), AssetId::Ada).unwrap();
+        assert!(
+            record_asset(&mut assets, tag, AssetId::native([0; 28], vec![]).unwrap(),).is_err()
         );
     }
 }

@@ -1,4 +1,5 @@
 use crate::error::ApiError;
+use crate::tx::parse_tx_id;
 use crate::wire::{AssetObject, TransactionSummary, TxInput, TxOutput, Utxo};
 use async_trait::async_trait;
 use cardano_connector_utxorpc::{SubmitCbor, UtxoRpc};
@@ -188,38 +189,50 @@ impl History for KoiosHistory {
         address: &str,
         tip_height: u64,
     ) -> Result<Vec<TransactionSummary>, ApiError> {
-        let rows: Vec<AddressTx> = self
-            .post(
-                "/address_txs",
-                serde_json::json!({ "_addresses": [address], "_limit": 100 }),
-            )
-            .await?;
-        let mut hashes = Vec::new();
-        for row in rows {
-            if !hashes.contains(&row.tx_hash) {
-                hashes.push(row.tx_hash);
-            }
-            if hashes.len() == 100 {
-                break;
-            }
-        }
-        let mut out = Vec::new();
-        for chunk in hashes.chunks(20) {
-            let infos: Vec<TxInfo> = self
-                .post("/tx_info", serde_json::json!({ "_tx_hashes": chunk }))
+        tokio::time::timeout(Duration::from_secs(19), async {
+            let rows: Vec<AddressTx> = self
+                .post(
+                    "/address_txs?limit=100",
+                    serde_json::json!({ "_addresses": [address] }),
+                )
                 .await?;
-            for info in infos {
-                if let Some(tx) = map_tx(info, tip_height)?
-                    && tx_touches(&tx, address)
-                {
-                    out.push(tx);
+            let mut hashes = Vec::new();
+            for row in rows {
+                if parse_tx_id(&row.tx_hash).is_ok() && !hashes.contains(&row.tx_hash) {
+                    hashes.push(row.tx_hash);
+                }
+                if hashes.len() == 100 {
+                    break;
                 }
             }
-        }
-        if out.len() > 1000 {
-            out.truncate(1000);
-        }
-        Ok(out)
+            let mut out = Vec::new();
+            for chunk in hashes.chunks(20) {
+                let infos: Vec<TxInfo> = self
+                    .post(
+                        "/tx_info",
+                        serde_json::json!({
+                            "_tx_hashes": chunk,
+                            "_inputs": true,
+                            "_assets": true,
+                            "_scripts": true
+                        }),
+                    )
+                    .await?;
+                for info in infos {
+                    if let Some(tx) = map_tx(info, tip_height)?
+                        && tx_touches(&tx, address)
+                    {
+                        out.push(tx);
+                    }
+                }
+            }
+            if out.len() > 1000 {
+                out.truncate(1000);
+            }
+            Ok(out)
+        })
+        .await
+        .map_err(|_| ApiError::unavailable())?
     }
 
     async fn transaction(
@@ -227,8 +240,17 @@ impl History for KoiosHistory {
         txid: &str,
         tip_height: u64,
     ) -> Result<Option<TransactionSummary>, ApiError> {
+        parse_tx_id(txid).map_err(|_| ApiError::bad_request())?;
         let infos: Vec<TxInfo> = self
-            .post("/tx_info", serde_json::json!({ "_tx_hashes": [txid] }))
+            .post(
+                "/tx_info",
+                serde_json::json!({
+                    "_tx_hashes": [txid],
+                    "_inputs": true,
+                    "_assets": true,
+                    "_scripts": true
+                }),
+            )
             .await?;
         match infos.into_iter().next() {
             Some(info) => map_tx(info, tip_height),

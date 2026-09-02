@@ -49,6 +49,9 @@ pub enum Error {
     #[error("DB returned: {0}")]
     DbBackend(String),
 
+    #[error("lease is invalid")]
+    LeaseInvalid,
+
     #[error("commitment: {0}")]
     Commitment(#[from] CommitmentError),
 
@@ -63,6 +66,7 @@ impl From<db::Error> for Error {
             db::Error::Backend(error) => Error::DbBackend(error),
             db::Error::NoChannel => Error::NoChannel,
             db::Error::AlreadyExists => Error::DbBackend("entry already exists".into()),
+            db::Error::LeaseInvalid => Error::LeaseInvalid,
             db::Error::Channel(error) => Error::Channel(error),
         }
     }
@@ -134,8 +138,18 @@ impl Data {
     }
 
     // FIXME :: This is permissive against stale and bad squashes
-    pub fn squash(&self, keytag: &Keytag, squash: Squash) -> Result<(), Error> {
-        match self.db().update(keytag, apply_squash(squash)) {
+    pub fn squash(
+        &self,
+        keytag: &Keytag,
+        lease_token: &[u8; 32],
+        squash: Squash,
+    ) -> Result<(), Error> {
+        match self.db().update_with_lease(
+            keytag,
+            lease_token,
+            time::now()?.as_millis() as u64,
+            apply_squash(squash),
+        ) {
             Ok(()) | Err(db::Error::Channel(channel::Error::Receipt(_))) => Ok(()),
             Err(err) => Err(err.into()),
         }
@@ -246,13 +260,23 @@ impl Data {
         Ok((fee_limit, relative_timeout))
     }
 
-    pub async fn pay(&self, keytag: &Keytag, body: PayBody) -> Result<PayResponse, Error> {
+    pub async fn pay(
+        &self,
+        keytag: &Keytag,
+        lease_token: &[u8; 32],
+        body: PayBody,
+    ) -> Result<PayResponse, Error> {
         let definition = self.channel(keytag)?.asset_definition().clone();
         let PayBody { locked, invoice } = body;
         let (fee_limit, rel_timeout) = self
             .align_commitments(&definition, time::now()?, &locked, &invoice)
             .await?;
-        self.db().update(keytag, apply_locked(locked))?;
+        self.db().update_with_lease(
+            keytag,
+            lease_token,
+            time::now()?.as_millis() as u64,
+            apply_locked(locked),
+        )?;
         let pay_res = self.bln_pay(invoice, fee_limit, rel_timeout).await?;
         if let Some(secret) = pay_res.secret {
             self.db()

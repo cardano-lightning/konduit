@@ -520,6 +520,10 @@ in. - Else display error "Cannot make sense of QR code". On "Back" return to QR
 scanner. On click of manual or successful scan open form view. Consumer must set
 amount to fund channel. There are two numbers to provide context:
 
+The form selects the channel's immutable `AssetId` from the operator catalog;
+this per-channel choice, not a global setting, determines the asset and amount
+used by its open and later adds.
+
 - Partner's "min volume" or "min flux" (TBC)
 - Embedded Wallet amount of the relevant currency
 

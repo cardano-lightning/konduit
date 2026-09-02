@@ -1,7 +1,7 @@
 use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
 use cardano/assets.{Value}
-use konduit/assets.{amount_in, amount_out} as k_assets
+use konduit/assets.{amount_in, amount_out, preserve_lovelace} as k_assets
 use konduit/prelude.{Timebound}
 use konduit/types as t
 
@@ -18,6 +18,7 @@ pub fn do(
   expect t.Closed(subbed_, useds_, elapse_at) = stage_out
   expect subbed == subbed_
   expect useds == useds_
+  expect preserve_lovelace(value_in, value_out, asset)
   expect amount_in(value_in, asset) <= amount_out(value_out, asset)
   expect Finite(upper_bound) = upper_bound
   expect upper_bound <= elapse_at - close_period

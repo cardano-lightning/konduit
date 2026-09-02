@@ -1,7 +1,9 @@
-use cardano_sdk::{Output, PlutusData, VerificationKey};
-use konduit_data::Step;
+use std::cmp;
 
-use crate::{Bounds, ChannelUtxo, Stepped, from_verifying_key, utxo_and::UtxoAnd};
+use cardano_sdk::{Output, PlutusData, VerificationKey};
+use konduit_data::{AssetId, Step};
+
+use crate::{Bounds, ChannelUtxo, MIN_ADA_BUFFER, Stepped, from_verifying_key, utxo_and::UtxoAnd};
 
 pub type SteppedUtxo = UtxoAnd<Stepped>;
 
@@ -19,11 +21,21 @@ impl SteppedUtxo {
 
     pub fn cont_output(&self) -> Option<Output> {
         self.data().cont_data().map(|channel_data| {
-            Output::new(
-                self.output().address().clone(),
-                channel_data.buffered_value(),
-            )
-            .with_datum(PlutusData::from(channel_data.datum()))
+            let address = self.output().address().clone();
+            let value = channel_data.buffered_value();
+            let datum = PlutusData::from(channel_data.datum());
+            if channel_data.constants().asset == AssetId::Ada {
+                return Output::new(address, value).with_datum(datum);
+            }
+            let min_lovelace = Output::new(address.clone(), value.clone())
+                .with_datum(datum.clone())
+                .min_acceptable_value();
+            let mut value = value;
+            value.with_lovelace(cmp::max(
+                self.output().value().lovelace(),
+                cmp::max(MIN_ADA_BUFFER, min_lovelace),
+            ));
+            Output::new(address, value).with_datum(datum)
         })
     }
 
@@ -48,7 +60,16 @@ impl SteppedUtxo {
     }
 
     pub fn gain(&self) -> i64 {
-        self.data().channel().amount() as i64
-            - self.data().cont_data().map_or(0, |x| x.amount()) as i64
+        let gain = self.gain_i128();
+        i64::try_from(gain).unwrap_or(if gain.is_negative() {
+            i64::MIN
+        } else {
+            i64::MAX
+        })
+    }
+
+    pub(crate) fn gain_i128(&self) -> i128 {
+        i128::from(self.data().channel().amount())
+            - i128::from(self.data().cont_data().map_or(0, |x| x.amount()))
     }
 }

@@ -1,3 +1,4 @@
+use crate::dolos;
 use anyhow::{Context, anyhow};
 use cardano_sdk::ProtocolParameters;
 use num::rational::Ratio;
@@ -6,15 +7,13 @@ use utxorpc::spec::{cardano, query};
 const BYRON_SLOT_LENGTH_SECS: u64 = 20;
 
 pub async fn read(client: &mut utxorpc::CardanoQueryClient) -> anyhow::Result<ProtocolParameters> {
-    let params = client
-        .read_params()
-        .await
+    let params = dolos(client.read_params())
+        .await?
         .map_err(|error| anyhow!(error))
         .context("failed to read protocol parameters from UTxO RPC")?;
 
-    let era_summary = client
-        .read_era_summary()
-        .await
+    let era_summary = dolos(client.read_era_summary())
+        .await?
         .map_err(|error| anyhow!(error))
         .context("failed to read era summary from UTxO RPC")?;
 
@@ -152,9 +151,8 @@ pub struct BloxbeanPayload {
 pub async fn cardano_pparams(
     client: &mut utxorpc::CardanoQueryClient,
 ) -> anyhow::Result<cardano::PParams> {
-    let params = client
-        .read_params()
-        .await
+    let params = dolos(client.read_params())
+        .await?
         .map_err(|error| anyhow!(error))
         .context("failed to read protocol parameters from UTxO RPC")?;
     match params.params {

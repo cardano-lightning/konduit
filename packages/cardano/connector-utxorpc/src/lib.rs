@@ -16,6 +16,7 @@ use cardano_sdk::{
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,13 +28,15 @@ pub enum SubmitCbor {
 }
 
 impl SubmitCbor {
-    fn from_error(error: &utxorpc::Error) -> Self {
-        let message = error.to_string().to_ascii_lowercase();
-        if message.contains("already") || message.contains("duplicate") || message.contains("known")
+    fn from_status_message(message: &str) -> Self {
+        let message = message.to_ascii_lowercase();
+        if message.contains("input") && message.contains("spent") {
+            Self::InputsSpent
+        } else if message.contains("already")
+            || message.contains("duplicate")
+            || message.contains("known")
         {
             Self::AlreadyKnown
-        } else if message.contains("input") && message.contains("spent") {
-            Self::InputsSpent
         } else {
             Self::Indeterminate
         }
@@ -43,6 +46,15 @@ impl SubmitCbor {
 use utxorpc::{CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, ClientBuilder};
 
 const PAGE_SIZE: u32 = 100;
+pub(crate) const RPC_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub(crate) async fn dolos<T, E>(
+    request: impl Future<Output = Result<T, E>>,
+) -> anyhow::Result<Result<T, E>> {
+    tokio::time::timeout(RPC_TIMEOUT, request)
+        .await
+        .map_err(|_| anyhow!("Dolos RPC timed out"))
+}
 
 pub struct UtxoRpc {
     config: Config,
@@ -78,10 +90,10 @@ impl UtxoRpc {
             .build::<CardanoSyncClient>()
             .await;
 
-        sync.read_tip()
-            .await
+        dolos(sync.read_tip())
+            .await?
             .map_err(|error| anyhow!(error))
-            .with_context(|| format!("failed to read Dolos tip from {}", self.config.endpoint()))?
+            .context("failed to read Dolos tip")?
             .ok_or_else(|| anyhow!("Dolos returned no tip"))
     }
 
@@ -98,9 +110,8 @@ impl UtxoRpc {
             let endpoint = self.config.endpoint().to_owned();
             let network = self.config.network();
             Box::pin(async move {
-                query
-                    .search_utxos(predicate, start, PAGE_SIZE)
-                    .await
+                dolos(query.search_utxos(predicate, start, PAGE_SIZE))
+                    .await?
                     .map_err(|error| anyhow!(error))
                     .with_context(|| format!("failed to search UTxOs from {endpoint} on {network}"))
             })
@@ -117,9 +128,8 @@ impl UtxoRpc {
         &self,
     ) -> anyhow::Result<utxorpc::spec::query::read_era_summary_response::Summary> {
         let mut query = self.query.lock().await;
-        query
-            .read_era_summary()
-            .await
+        dolos(query.read_era_summary())
+            .await?
             .map_err(|error| anyhow!(error))
             .context("failed to read era summary from UTxO RPC")
     }
@@ -140,9 +150,8 @@ impl UtxoRpc {
         let mut start = None;
         let mut all = Vec::new();
         loop {
-            let page = query
-                .search_utxos(predicate.clone(), start.clone(), PAGE_SIZE)
-                .await
+            let page = dolos(query.search_utxos(predicate.clone(), start.clone(), PAGE_SIZE))
+                .await?
                 .map_err(|error| anyhow!(error))
                 .with_context(|| format!("failed to search UTxOs from {endpoint}"))?;
             start = page.next.clone();
@@ -160,16 +169,15 @@ impl UtxoRpc {
         hash: &[u8],
     ) -> anyhow::Result<Option<utxorpc::ChainTx<utxorpc::spec::cardano::Tx>>> {
         let mut query = self.query.lock().await;
-        query
-            .read_tx(hash.to_vec().into())
-            .await
+        dolos(query.read_tx(hash.to_vec().into()))
+            .await?
             .map_err(|error| anyhow!(error))
             .context("failed to read transaction from UTxO RPC")
     }
 
     pub async fn submit_cbor(&self, tx: &[u8]) -> anyhow::Result<SubmitCbor> {
         let mut submit = self.submit.lock().await;
-        match submit.submit_tx(tx.to_vec()).await {
+        match dolos(submit.submit_tx(tx.to_vec())).await? {
             Ok(hash) => {
                 let hash: [u8; 32] = hash
                     .as_ref()
@@ -177,16 +185,17 @@ impl UtxoRpc {
                     .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
                 Ok(SubmitCbor::Accepted(hash))
             }
-            Err(error @ utxorpc::Error::GrpcError(_)) => Ok(SubmitCbor::from_error(&error)),
+            Err(utxorpc::Error::GrpcError(status)) => {
+                Ok(SubmitCbor::from_status_message(status.message()))
+            }
             Err(error) => Err(submit_error(self.config.endpoint(), error)),
         }
     }
 
     pub async fn wait_for_tx(&self, hash: &[u8]) -> anyhow::Result<utxorpc::TxEventStream> {
         let mut submit = self.submit.lock().await;
-        submit
-            .wait_for_tx(vec![hash.to_vec()])
-            .await
+        dolos(submit.wait_for_tx(vec![hash.to_vec()]))
+            .await?
             .map_err(|error| anyhow!(error))
             .context("failed to wait for transaction via UTxO RPC")
     }
@@ -251,39 +260,39 @@ fn submit_error(endpoint: &str, error: utxorpc::Error) -> anyhow::Error {
 pub async fn live_network(endpoint: &str) -> anyhow::Result<Network> {
     let builder = ClientBuilder::new()
         .uri(endpoint)
-        .map_err(|error| anyhow!(error))
-        .with_context(|| format!("invalid UTxO RPC endpoint {endpoint}"))?;
+        .map_err(|_| anyhow!("invalid Dolos endpoint"))?;
 
     let mut query = builder.build::<CardanoQueryClient>().await;
 
-    let response = query
-        .inner
-        .read_genesis(utxorpc::spec::query::ReadGenesisRequest { field_mask: None })
-        .await
-        .map_err(|error| anyhow!(error))
-        .with_context(|| format!("failed to read Dolos genesis from {endpoint}"))?
-        .into_inner();
+    let response = dolos(
+        query
+            .inner
+            .read_genesis(utxorpc::spec::query::ReadGenesisRequest { field_mask: None }),
+    )
+    .await?
+    .map_err(|error| anyhow!(error))
+    .context("failed to read Dolos genesis")?
+    .into_inner();
 
     let genesis = match response.config {
         Some(utxorpc::spec::query::read_genesis_response::Config::Cardano(genesis)) => genesis,
         None => return Err(anyhow!("UTxO RPC returned no Cardano genesis config")),
     };
 
-    network_from_genesis(&genesis)
-        .with_context(|| format!("failed to derive live Cardano network from {endpoint}"))
+    network_from_genesis(&genesis).context("failed to derive live Cardano network from dolos")
 }
 
 pub fn ensure_network_matches(
     configured: Network,
     live: Network,
-    endpoint: &str,
+    _endpoint: &str,
 ) -> anyhow::Result<()> {
     if configured == live {
         return Ok(());
     }
 
     Err(anyhow!(
-        "configured Cardano network {configured} does not match live Dolos network {live} at {endpoint}"
+        "configured Cardano network {configured} does not match live Dolos network {live} at dolos"
     ))
 }
 
@@ -349,10 +358,8 @@ impl CardanoConnector for UtxoRpc {
     ) -> anyhow::Result<()> {
         let mut submit = self.submit.lock().await;
         let tx = transaction.to_cbor();
-
-        submit
-            .submit_tx(tx)
-            .await
+        dolos(submit.submit_tx(tx))
+            .await?
             .map_err(|error| submit_error(self.config.endpoint(), error))?;
 
         Ok(())
@@ -362,8 +369,8 @@ impl CardanoConnector for UtxoRpc {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_utxos_pages, ensure_network_matches, network_from_genesis, next_start_token,
-        submit_error,
+        SubmitCbor, collect_utxos_pages, ensure_network_matches, network_from_genesis,
+        next_start_token, submit_error,
     };
     use cardano_sdk::{
         Datum, Network, Output, PlutusData, Value, address_test, cbor::ToCbor, key_credential,
@@ -491,11 +498,25 @@ mod tests {
 
     #[test]
     fn ensure_network_matches_rejects_mismatch() {
-        let error =
-            ensure_network_matches(Network::Preview, Network::Preprod, "http://127.0.0.1:1337")
-                .expect_err("network mismatch should fail");
+        let endpoint = "http://user:password@127.0.0.1:1337";
+        let error = ensure_network_matches(Network::Preview, Network::Preprod, endpoint)
+            .expect_err("network mismatch should fail");
 
         assert!(error.to_string().contains("does not match"));
+        assert!(error.to_string().contains("at dolos"));
+        assert!(!error.to_string().contains(endpoint));
+    }
+
+    #[test]
+    fn submit_status_prioritizes_spent_inputs() {
+        assert_eq!(
+            SubmitCbor::from_status_message("transaction is already known; inputs spent"),
+            SubmitCbor::InputsSpent
+        );
+        assert_eq!(
+            SubmitCbor::from_status_message("transaction already known"),
+            SubmitCbor::AlreadyKnown
+        );
     }
 
     #[tokio::test]
