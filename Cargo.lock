@@ -835,6 +835,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "cardano-connector-server-utxorpc"
+version = "0.0.0"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "anyhow",
+ "async-trait",
+ "cardano-connector-utxorpc",
+ "cardano-sdk",
+ "clap",
+ "env_logger",
+ "hex",
+ "log",
+ "pallas-codec",
+ "pallas-crypto",
+ "pallas-primitives",
+ "redb",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tokio",
+]
+
+[[package]]
 name = "cardano-connector-utxorpc"
 version = "0.0.0"
 dependencies = [
@@ -843,6 +868,7 @@ dependencies = [
  "cardano-sdk",
  "hex",
  "num",
+ "pallas-codec",
  "pallas-primitives",
  "tokio",
  "utxorpc",

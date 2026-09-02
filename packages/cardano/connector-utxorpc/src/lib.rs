@@ -1,8 +1,11 @@
 mod config;
 mod mapping;
 mod params;
+mod wire;
 
 pub use config::Config;
+pub use params::BloxbeanPayload;
+pub use wire::{MappedAsset, MappedUtxo};
 
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
@@ -14,6 +17,29 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use tokio::sync::Mutex;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubmitCbor {
+    Accepted([u8; 32]),
+    AlreadyKnown,
+    InputsSpent,
+    Indeterminate,
+}
+
+impl SubmitCbor {
+    fn from_error(error: &utxorpc::Error) -> Self {
+        let message = error.to_string().to_ascii_lowercase();
+        if message.contains("already") || message.contains("duplicate") || message.contains("known")
+        {
+            Self::AlreadyKnown
+        } else if message.contains("input") && message.contains("spent") {
+            Self::InputsSpent
+        } else {
+            Self::Indeterminate
+        }
+    }
+}
+
 use utxorpc::{CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, ClientBuilder};
 
 const PAGE_SIZE: u32 = 100;
@@ -45,7 +71,7 @@ impl UtxoRpc {
         &self.config
     }
 
-    async fn read_tip(&self) -> anyhow::Result<utxorpc::spec::sync::BlockRef> {
+    pub async fn tip(&self) -> anyhow::Result<utxorpc::spec::sync::BlockRef> {
         let mut sync = ClientBuilder::new()
             .uri(self.config.endpoint())
             .map_err(|error| anyhow!(error))?
@@ -80,6 +106,89 @@ impl UtxoRpc {
             })
         })
         .await
+    }
+
+    pub async fn read_params_raw(&self) -> anyhow::Result<utxorpc::spec::cardano::PParams> {
+        let mut query = self.query.lock().await;
+        params::cardano_pparams(&mut query).await
+    }
+
+    pub async fn read_era_summary_raw(
+        &self,
+    ) -> anyhow::Result<utxorpc::spec::query::read_era_summary_response::Summary> {
+        let mut query = self.query.lock().await;
+        query
+            .read_era_summary()
+            .await
+            .map_err(|error| anyhow!(error))
+            .context("failed to read era summary from UTxO RPC")
+    }
+
+    pub async fn bloxbean_parameters(&self) -> anyhow::Result<(String, u64, u64, BloxbeanPayload)> {
+        let tip = self.tip().await?;
+        let params = self.read_params_raw().await?;
+        let eras = self.read_era_summary_raw().await?;
+        let (era, epoch) = params::era_epoch(&eras, tip.slot)?;
+        let payload = params::bloxbean(&params)?;
+        Ok((era, epoch, tip.slot, payload))
+    }
+
+    pub async fn utxos_at_address(&self, address: &[u8]) -> anyhow::Result<Vec<MappedUtxo>> {
+        let mut query = self.query.lock().await;
+        let predicate = wire::predicate_for_exact_address(address);
+        let endpoint = self.config.endpoint().to_owned();
+        let mut start = None;
+        let mut all = Vec::new();
+        loop {
+            let page = query
+                .search_utxos(predicate.clone(), start.clone(), PAGE_SIZE)
+                .await
+                .map_err(|error| anyhow!(error))
+                .with_context(|| format!("failed to search UTxOs from {endpoint}"))?;
+            start = page.next.clone();
+            for utxo in page.items {
+                all.push(wire::map_wire_utxo(utxo)?);
+            }
+            if start.is_none() {
+                return Ok(all);
+            }
+        }
+    }
+
+    pub async fn read_tx(
+        &self,
+        hash: &[u8],
+    ) -> anyhow::Result<Option<utxorpc::ChainTx<utxorpc::spec::cardano::Tx>>> {
+        let mut query = self.query.lock().await;
+        query
+            .read_tx(hash.to_vec().into())
+            .await
+            .map_err(|error| anyhow!(error))
+            .context("failed to read transaction from UTxO RPC")
+    }
+
+    pub async fn submit_cbor(&self, tx: &[u8]) -> anyhow::Result<SubmitCbor> {
+        let mut submit = self.submit.lock().await;
+        match submit.submit_tx(tx.to_vec()).await {
+            Ok(hash) => {
+                let hash: [u8; 32] = hash
+                    .as_ref()
+                    .try_into()
+                    .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
+                Ok(SubmitCbor::Accepted(hash))
+            }
+            Err(error @ utxorpc::Error::GrpcError(_)) => Ok(SubmitCbor::from_error(&error)),
+            Err(error) => Err(submit_error(self.config.endpoint(), error)),
+        }
+    }
+
+    pub async fn wait_for_tx(&self, hash: &[u8]) -> anyhow::Result<utxorpc::TxEventStream> {
+        let mut submit = self.submit.lock().await;
+        submit
+            .wait_for_tx(vec![hash.to_vec()])
+            .await
+            .map_err(|error| anyhow!(error))
+            .context("failed to wait for transaction via UTxO RPC")
     }
 }
 
@@ -210,7 +319,7 @@ impl CardanoConnector for UtxoRpc {
     }
 
     async fn health(&self) -> anyhow::Result<String> {
-        let tip = self.read_tip().await?;
+        let tip = self.tip().await?;
 
         Ok(format!(
             "utxorpc endpoint={} network={} tip_slot={} tip_hash={}",

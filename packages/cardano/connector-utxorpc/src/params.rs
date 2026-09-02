@@ -134,9 +134,128 @@ fn bytes_to_u64(bytes: &[u8], label: &str) -> anyhow::Result<u64> {
         .fold(0u64, |acc, byte| (acc << 8) | u64::from(*byte)))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BloxbeanPayload {
+    pub min_fee_a: u64,
+    pub min_fee_b: u64,
+    pub max_tx_size: u64,
+    pub key_deposit: u64,
+    pub pool_deposit: u64,
+    pub min_pool_cost: u64,
+    pub protocol_major_ver: u32,
+    pub protocol_minor_ver: u32,
+    pub coins_per_utxo_size: u64,
+    pub collateral_percent: u64,
+    pub max_collateral_inputs: u64,
+}
+
+pub async fn cardano_pparams(
+    client: &mut utxorpc::CardanoQueryClient,
+) -> anyhow::Result<cardano::PParams> {
+    let params = client
+        .read_params()
+        .await
+        .map_err(|error| anyhow!(error))
+        .context("failed to read protocol parameters from UTxO RPC")?;
+    match params.params {
+        Some(query::any_chain_params::Params::Cardano(params)) => Ok(params),
+        _ => Err(anyhow!(
+            "UTxO RPC did not return Cardano protocol parameters"
+        )),
+    }
+}
+
+pub fn bloxbean(params: &cardano::PParams) -> anyhow::Result<BloxbeanPayload> {
+    let version = params
+        .protocol_version
+        .as_ref()
+        .ok_or_else(|| anyhow!("UTxO RPC protocol parameters missing protocol version"))?;
+    if params.max_tx_size == 0 {
+        return Err(anyhow!("UTxO RPC protocol parameters missing max_tx_size"));
+    }
+    if params.collateral_percentage == 0 {
+        return Err(anyhow!(
+            "UTxO RPC protocol parameters missing collateral_percentage"
+        ));
+    }
+    if params.max_collateral_inputs == 0 {
+        return Err(anyhow!(
+            "UTxO RPC protocol parameters missing max_collateral_inputs"
+        ));
+    }
+    Ok(BloxbeanPayload {
+        min_fee_a: big_int_to_u64(params.min_fee_coefficient.as_ref(), "min_fee_coefficient")?,
+        min_fee_b: big_int_to_u64(params.min_fee_constant.as_ref(), "min_fee_constant")?,
+        max_tx_size: params.max_tx_size,
+        key_deposit: big_int_to_u64(params.stake_key_deposit.as_ref(), "stake_key_deposit")?,
+        pool_deposit: big_int_to_u64(params.pool_deposit.as_ref(), "pool_deposit")?,
+        min_pool_cost: big_int_to_u64(params.min_pool_cost.as_ref(), "min_pool_cost")?,
+        protocol_major_ver: version.major,
+        protocol_minor_ver: version.minor,
+        coins_per_utxo_size: big_int_to_u64(
+            params.coins_per_utxo_byte.as_ref(),
+            "coins_per_utxo_byte",
+        )?,
+        collateral_percent: params.collateral_percentage,
+        max_collateral_inputs: params.max_collateral_inputs,
+    })
+}
+
+pub fn era_epoch(
+    summary: &query::read_era_summary_response::Summary,
+    slot: u64,
+) -> anyhow::Result<(String, u64)> {
+    let query::read_era_summary_response::Summary::Cardano(summaries) = summary;
+    let mut current = None;
+    for (index, era) in summaries.summaries.iter().enumerate() {
+        let start = era
+            .start
+            .as_ref()
+            .ok_or_else(|| anyhow!("era summary missing start point"))?;
+        let ended = era.end.as_ref().is_some_and(|end| slot >= end.slot);
+        if slot >= start.slot && !ended {
+            current = Some((index, era, start));
+        }
+    }
+    let (index, era, start) = current.ok_or_else(|| anyhow!("no era contains tip slot"))?;
+    let epoch_length = summaries
+        .summaries
+        .get(index + 1)
+        .and_then(|next| {
+            let next_start = next.start.as_ref()?;
+            let slots = next_start.slot.checked_sub(start.slot)?;
+            let epochs = next_start.epoch.checked_sub(start.epoch)?;
+            if epochs == 0 {
+                None
+            } else {
+                Some(slots / epochs)
+            }
+        })
+        .or_else(|| {
+            index.checked_sub(1).and_then(|prev| {
+                let prev = summaries.summaries.get(prev)?;
+                let prev_start = prev.start.as_ref()?;
+                let slots = start.slot.checked_sub(prev_start.slot)?;
+                let epochs = start.epoch.checked_sub(prev_start.epoch)?;
+                if epochs == 0 {
+                    None
+                } else {
+                    Some(slots / epochs)
+                }
+            })
+        })
+        // ponytail: 432000 Mainnet Shelley epoch length if era summary has a single era
+        .unwrap_or(432_000);
+    if epoch_length == 0 {
+        return Err(anyhow!("computed zero epoch length"));
+    }
+    let epoch = start.epoch + (slot.saturating_sub(start.slot) / epoch_length);
+    Ok((era.name.clone(), epoch))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{build, bytes_to_u64, rational_to_f64};
+    use super::{bloxbean, build, bytes_to_u64, era_epoch, rational_to_f64};
     use std::time::Duration;
     use utxorpc::spec::{cardano, query};
 
@@ -281,5 +400,63 @@ mod tests {
             .expect_err("missing plutus v3 should fail");
 
         assert!(error.to_string().contains("missing Plutus V3 cost model"));
+    }
+
+    #[test]
+    fn bloxbean_requires_live_values() {
+        let mut pparams = match params().params {
+            Some(query::any_chain_params::Params::Cardano(params)) => params,
+            _ => panic!("cardano"),
+        };
+        pparams.max_tx_size = 16_384;
+        pparams.stake_key_deposit = Some(bigint(2_000_000));
+        pparams.pool_deposit = Some(bigint(500_000_000));
+        pparams.min_pool_cost = Some(bigint(170_000_000));
+        pparams.coins_per_utxo_byte = Some(bigint(4310));
+        pparams.protocol_version = Some(cardano::ProtocolVersion {
+            major: 10,
+            minor: 0,
+        });
+        pparams.max_collateral_inputs = 3;
+        pparams.collateral_percentage = 150;
+        let payload = bloxbean(&pparams).expect("payload");
+        assert_eq!(payload.min_fee_a, 44);
+        assert_eq!(payload.coins_per_utxo_size, 4310);
+        assert_eq!(payload.protocol_major_ver, 10);
+    }
+
+    #[test]
+    fn era_epoch_from_consecutive_eras() {
+        let summary = query::read_era_summary_response::Summary::Cardano(cardano::EraSummaries {
+            summaries: vec![
+                cardano::EraSummary {
+                    name: "Shelley".into(),
+                    start: Some(cardano::EraBoundary {
+                        time: 0,
+                        slot: 0,
+                        epoch: 0,
+                    }),
+                    end: Some(cardano::EraBoundary {
+                        time: 0,
+                        slot: 864_000,
+                        epoch: 2,
+                    }),
+                    protocol_params: None,
+                },
+                cardano::EraSummary {
+                    name: "Conway".into(),
+                    start: Some(cardano::EraBoundary {
+                        time: 0,
+                        slot: 864_000,
+                        epoch: 2,
+                    }),
+                    end: None,
+                    protocol_params: None,
+                },
+            ],
+        });
+        let (era, epoch) = era_epoch(&summary, 864_000 + 432_000).expect("epoch");
+        assert_eq!(era, "Conway");
+        assert_eq!(epoch, 3);
     }
 }

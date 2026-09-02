@@ -170,7 +170,7 @@ fn map_plutus_script(script: cardano::Script) -> anyhow::Result<PlutusScript> {
     }
 }
 
-fn big_int_to_u64(value: &cardano::BigInt) -> anyhow::Result<u64> {
+pub(crate) fn big_int_to_u64(value: &cardano::BigInt) -> anyhow::Result<u64> {
     match &value.big_int {
         Some(cardano::big_int::BigInt::Int(value)) if *value >= 0 => Ok(*value as u64),
         Some(cardano::big_int::BigInt::Int(value)) => {

@@ -1,0 +1,473 @@
+openapi: 3.1.0
+info:
+  title: Cardano Connector Server API
+  version: 1.0.0
+  description: |
+    Mainnet-only HTTP facade over Dolos (UTxO RPC) and a bounded Koios
+    transaction history capability.
+servers:
+  - url: http://localhost:8787
+    description: Local development server
+paths:
+  /:
+    get:
+      summary: API documentation
+      operationId: getDocs
+      responses:
+        "200":
+          description: HTML documentation
+  /openapi.yaml:
+    get:
+      summary: OpenAPI document
+      operationId: getOpenApi
+      responses:
+        "200":
+          description: OpenAPI YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /health:
+    get:
+      summary: Health
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /network:
+    get:
+      summary: Network
+      operationId: getNetwork
+      responses:
+        "200":
+          description: Fixed Mainnet identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /protocol-parameters:
+    get:
+      summary: Protocol parameters
+      operationId: getProtocolParameters
+      responses:
+        "200":
+          description: Live Bloxbean-compatible parameters from Dolos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolParametersResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /balance/{address}:
+    get:
+      summary: Address balance
+      operationId: getBalance
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: Lovelace balance for the address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /utxos_at/{address}:
+    get:
+      summary: UTxOs by address
+      operationId: getUtxosAt
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: Current UTxOs found at the address
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Utxo"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /transactions/{address}:
+    get:
+      summary: Transactions by address
+      operationId: getTransactions
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: Transactions touching the address
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TransactionSummary"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /transaction/{id}:
+    get:
+      summary: Transaction by id
+      operationId: getTransaction
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Expanded transaction summary
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/TransactionSummary"
+                  - type: "null"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /submit:
+    post:
+      summary: Submit transaction
+      operationId: submitTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitRequest"
+      responses:
+        "200":
+          description: Transaction accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmitResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /operations:
+    post:
+      summary: Create or reuse a durable L1 operation
+      operationId: createOperation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOperationRequest"
+      responses:
+        "200":
+          description: Operation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /operations/{operation_id}:
+    get:
+      summary: Get durable L1 operation
+      operationId: getOperation
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Operation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+components:
+  parameters:
+    Address:
+      name: address
+      in: path
+      required: true
+      description: Mainnet Shelley address encoded as bech32
+      schema:
+        type: string
+        format: bech32
+        minLength: 1
+    TransactionId:
+      name: id
+      in: path
+      required: true
+      description: 32-byte transaction hash encoded as lowercase hexadecimal
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{64}$"
+  responses:
+    UnexpectedError:
+      description: Upstream failure or malformed request
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: unexpected error
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    NetworkResponse:
+      type: object
+      additionalProperties: false
+      required: [network]
+      properties:
+        network:
+          type: string
+          enum: [mainnet]
+    ProtocolParametersResponse:
+      type: object
+      additionalProperties: false
+      required: [era, epoch, slot, payload]
+      properties:
+        era:
+          type: string
+        epoch:
+          type: integer
+          minimum: 0
+        slot:
+          type: integer
+          minimum: 0
+        payload:
+          $ref: "#/components/schemas/BloxbeanPayload"
+    BloxbeanPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - min_fee_a
+        - min_fee_b
+        - max_tx_size
+        - key_deposit
+        - pool_deposit
+        - min_pool_cost
+        - protocol_major_ver
+        - protocol_minor_ver
+        - coins_per_utxo_size
+        - collateral_percent
+        - max_collateral_inputs
+      properties:
+        min_fee_a:
+          type: integer
+        min_fee_b:
+          type: integer
+        max_tx_size:
+          type: integer
+        key_deposit:
+          type: string
+          pattern: "^[0-9]+$"
+        pool_deposit:
+          type: string
+          pattern: "^[0-9]+$"
+        min_pool_cost:
+          type: string
+          pattern: "^[0-9]+$"
+        protocol_major_ver:
+          type: integer
+        protocol_minor_ver:
+          type: integer
+        coins_per_utxo_size:
+          type: string
+          pattern: "^[0-9]+$"
+        collateral_percent:
+          type: integer
+        max_collateral_inputs:
+          type: integer
+    BalanceResponse:
+      type: object
+      required: [lovelace]
+      additionalProperties: false
+      properties:
+        lovelace:
+          type: string
+          pattern: "^[0-9]+$"
+    AssetObject:
+      type: object
+      required: [unit, quantity]
+      additionalProperties: false
+      properties:
+        unit:
+          type: string
+        quantity:
+          type: string
+          pattern: "^[0-9]+$"
+    TxOutput:
+      type: object
+      additionalProperties: false
+      required: [address, value]
+      properties:
+        address:
+          type: string
+        consumed_by:
+          $ref: "#/components/schemas/TxId"
+        value:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetObject"
+        datum_hash:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        datum_inline:
+          type: string
+        reference_script_hash:
+          type: string
+          pattern: "^[0-9a-f]{56}$"
+    TxId:
+      type: string
+      pattern: "^[0-9a-f]{64}$"
+    TxInput:
+      type: object
+      additionalProperties: false
+      required: [transaction_id, output_index, address, value]
+      properties:
+        transaction_id:
+          $ref: "#/components/schemas/TxId"
+        output_index:
+          type: integer
+          minimum: 0
+        address:
+          type: string
+        consumed_by:
+          $ref: "#/components/schemas/TxId"
+        value:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetObject"
+        datum_hash:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        datum_inline:
+          type: string
+        reference_script_hash:
+          type: string
+          pattern: "^[0-9a-f]{56}$"
+    Utxo:
+      type: object
+      additionalProperties: false
+      required: [transaction_id, output_index, address, value]
+      properties:
+        transaction_id:
+          $ref: "#/components/schemas/TxId"
+        output_index:
+          type: integer
+          minimum: 0
+        address:
+          type: string
+        consumed_by:
+          $ref: "#/components/schemas/TxId"
+        value:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetObject"
+        datum_hash:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        datum_inline:
+          type: string
+        reference_script_hash:
+          type: string
+          pattern: "^[0-9a-f]{56}$"
+        reference_script_version:
+          type: integer
+          minimum: 0
+          maximum: 3
+        reference_script:
+          type: string
+    TransactionSummary:
+      type: object
+      required: [id, index, depth, timestamp, inputs, outputs]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: "#/components/schemas/TxId"
+        index:
+          type: integer
+          minimum: 0
+        depth:
+          type: integer
+          minimum: 0
+        timestamp:
+          type: integer
+          minimum: 0
+        invalid_before:
+          type: integer
+          minimum: 0
+        invalid_after:
+          type: integer
+          minimum: 0
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TxInput"
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TxOutput"
+    SubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [transaction]
+      properties:
+        transaction:
+          type: string
+          pattern: "^[0-9a-f]+$"
+    SubmitResponse:
+      type: object
+      additionalProperties: false
+      required: [transaction_id]
+      properties:
+        transaction_id:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+    CreateOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [operation_id, expected_transaction_id, transaction]
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+        expected_transaction_id:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        transaction:
+          type: string
+          pattern: "^[0-9a-f]+$"
+    OperationResponse:
+      type: object
+      additionalProperties: false
+      required: [operation_id, expected_transaction_id, status, depth]
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+        expected_transaction_id:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        transaction_id:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        status:
+          type: string
+          enum: [pending, accepted, confirmed, settled, rejected]
+        depth:
+          type: integer
+          minimum: 0
