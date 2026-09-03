@@ -31,7 +31,9 @@ pub enum SubmitCbor {
 impl SubmitCbor {
     fn from_status_message(message: &str) -> Self {
         let message = message.to_ascii_lowercase();
-        if message.contains("input") && message.contains("spent") {
+        if message.contains("input")
+            && (message.contains("spent") || message.contains("not present"))
+        {
             Self::InputsSpent
         } else if message.contains("already known") || message.contains("duplicate") {
             Self::AlreadyKnown
@@ -152,24 +154,29 @@ impl UtxoRpc {
     }
 
     pub async fn utxos_at_address(&self, address: &[u8]) -> anyhow::Result<Vec<MappedUtxo>> {
-        let mut query = self.query_client().await?;
-        let predicate = wire::predicate_for_exact_address(address);
-        let endpoint = self.config.endpoint().to_owned();
-        let mut start = None;
-        let mut all = Vec::new();
-        loop {
-            let page = dolos(query.search_utxos(predicate.clone(), start.clone(), PAGE_SIZE))
-                .await?
-                .map_err(|error| anyhow!(error))
-                .with_context(|| format!("failed to search UTxOs from {endpoint}"))?;
-            start = page.next.clone();
-            for utxo in page.items {
-                all.push(wire::map_wire_utxo(utxo)?);
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let mut query = self.query_client().await?;
+            let predicate = wire::predicate_for_exact_address(address);
+            let endpoint = self.config.endpoint().to_owned();
+            let mut start = None;
+            let mut all = Vec::new();
+            loop {
+                let page = query
+                    .search_utxos(predicate.clone(), start.clone(), PAGE_SIZE)
+                    .await
+                    .map_err(|error| anyhow!(error))
+                    .with_context(|| format!("failed to search UTxOs from {endpoint}"))?;
+                start = page.next.clone();
+                for utxo in page.items {
+                    all.push(wire::map_wire_utxo(utxo)?);
+                }
+                if start.is_none() {
+                    return Ok(all);
+                }
             }
-            if start.is_none() {
-                return Ok(all);
-            }
-        }
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos UTxO lookup timed out"))?
     }
 
     pub async fn read_tx(
@@ -185,29 +192,24 @@ impl UtxoRpc {
     }
 
     pub async fn submit_cbor(&self, tx: &[u8]) -> anyhow::Result<SubmitCbor> {
-        let mut submit = self.submit.lock().await;
-        match dolos(submit.submit_tx(tx.to_vec())).await? {
-            Ok(hash) => {
-                let hash: [u8; 32] = hash
-                    .as_ref()
-                    .try_into()
-                    .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
-                Ok(SubmitCbor::Accepted(hash))
-            }
-            Err(utxorpc::Error::GrpcError(status)) => {
-                let classified = SubmitCbor::from_status_message(status.message());
-                if classified != SubmitCbor::Indeterminate {
-                    Ok(classified)
-                } else if grpc_debug_is(&status, "InvalidArgument")
-                    || grpc_debug_is(&status, "FailedPrecondition")
-                {
-                    Ok(SubmitCbor::Rejected)
-                } else {
-                    Ok(SubmitCbor::Indeterminate)
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let mut submit = self.submit.lock().await;
+            match submit.submit_tx(tx.to_vec()).await {
+                Ok(hash) => {
+                    let hash: [u8; 32] = hash
+                        .as_ref()
+                        .try_into()
+                        .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
+                    Ok(SubmitCbor::Accepted(hash))
                 }
+                Err(utxorpc::Error::GrpcError(status)) => {
+                    Ok(SubmitCbor::from_status_message(status.message()))
+                }
+                Err(error) => Err(submit_error(self.config.endpoint(), error)),
             }
-            Err(error) => Err(submit_error(self.config.endpoint(), error)),
-        }
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos RPC timed out"))?
     }
 
     pub async fn wait_for_tx(&self, hash: &[u8; 32]) -> anyhow::Result<utxorpc::TxEventStream> {
@@ -500,6 +502,16 @@ mod tests {
             .expect("testnet id casing should be accepted");
 
         assert_eq!(network, Network::Preview);
+    }
+
+    #[test]
+    fn missing_input_message_is_inputs_spent() {
+        assert_eq!(
+            SubmitCbor::from_status_message(
+                "some transaction input is not present in the UTxO set"
+            ),
+            SubmitCbor::InputsSpent
+        );
     }
 
     #[test]

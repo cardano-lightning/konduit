@@ -172,6 +172,9 @@ fn mapped_from_parsed(
         if !datum.hash.is_empty() {
             datum_hash = Some(bytes32(datum.hash.as_ref(), "datum hash")?);
         }
+        if datum_hash.is_none() && datum_inline.is_none() {
+            return Err(anyhow!("parsed datum missing original bytes and hash"));
+        }
     }
 
     let (reference_script_hash, reference_script, reference_script_version) = match parsed.script {

@@ -4,6 +4,7 @@ use crate::core::{
 };
 use anyhow::anyhow;
 use http_client::{HeaderPolicy, Transport, codec, header_policy};
+use std::sync::Mutex;
 
 const HEADER_NAME_KEYTAG: &str = "KONDUIT";
 const HEADER_NAME_SESSION: &str = "FERRET-SESSION";
@@ -14,7 +15,7 @@ pub struct Adaptor<T: Transport> {
     http_client: Client<T>,
     info: AdaptorInfo<TxHelp>,
     keytag: Option<(Tag, String)>,
-    session: Option<SessionClaimResponse>,
+    session: Mutex<Option<SessionClaimResponse>>,
 }
 
 /// An isomorphic Adaptor (a.k.a konduit-server) client that selectively pick a platform-compatible
@@ -30,7 +31,7 @@ impl<T: Transport> Adaptor<T> {
             http_client,
             info,
             keytag: None,
-            session: None,
+            session: Mutex::new(None),
         };
 
         adaptor.set_keytag(keytag);
@@ -49,13 +50,15 @@ impl<T: Transport> Adaptor<T> {
     }
 
     fn mutation_headers(&self) -> anyhow::Result<Vec<Box<dyn HeaderPolicy>>> {
-        let lease = &self
-            .session
+        let session = self.session.lock().expect("session lock");
+        let lease = session
             .as_ref()
             .ok_or_else(|| anyhow!("missing FERRET-SESSION lease"))?
-            .lease;
+            .lease
+            .clone();
+        drop(session);
         let mut headers = self.with_keytag_header();
-        headers.push(header_policy::Custom::new(HEADER_NAME_SESSION, lease).boxed());
+        headers.push(header_policy::Custom::new(HEADER_NAME_SESSION, &lease).boxed());
         Ok(headers)
     }
 
@@ -67,9 +70,9 @@ impl<T: Transport> Adaptor<T> {
     }
 
     pub async fn claim_session(
-        &mut self,
+        &self,
         claim: &SessionClaimRequest,
-    ) -> anyhow::Result<&SessionClaimResponse> {
+    ) -> anyhow::Result<SessionClaimResponse> {
         let session = self
             .http_client
             .post::<SessionClaimRequest, SessionClaimResponse>("/session/claim", claim)
@@ -78,8 +81,8 @@ impl<T: Transport> Adaptor<T> {
         if !valid_lease(&session.lease) {
             return Err(anyhow!("invalid FERRET-SESSION lease"));
         }
-        self.session = Some(session);
-        Ok(self.session.as_ref().expect("session was just stored"))
+        *self.session.lock().expect("session lock") = Some(session.clone());
+        Ok(session)
     }
 
     pub fn info(&self) -> &AdaptorInfo<TxHelp> {
@@ -185,7 +188,7 @@ mod tests {
                 asset_catalog_digest: None,
             },
             keytag: None,
-            session: None,
+            session: Mutex::new(None),
         };
 
         assert_eq!(

@@ -231,10 +231,10 @@ Generic-asset cutover workflow:
 7. deploy and confirm the generic validator
 8. install the new binary and configure a fresh database, USD FX base, and one
    versioned asset-catalog artifact shared by the clients it serves
-9. verify the catalog digest exposed during adaptor discovery before permitting
-   clients to open channels
-10. start `konduit.service`, then verify the configured Cardano network,
-    reference script, catalog, and service health
+9. start `konduit.service`, then verify the configured Cardano network,
+   reference script, catalog, and service health
+10. verify the catalog digest exposed during adaptor discovery before permitting
+    clients to open channels
 
 Before any generic channel opens, rollback by stopping the new service and
 restoring the retained legacy binary, database, configuration, and validator.

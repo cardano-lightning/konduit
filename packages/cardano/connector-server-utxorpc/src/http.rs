@@ -107,6 +107,17 @@ fn json_bounded<T: Serialize>(value: &T) -> Result<HttpResponse, ApiError> {
         .body(body))
 }
 
+const REQUEST_BUDGET: Duration = Duration::from_secs(19);
+
+async fn bounded<F, T>(fut: F) -> Result<T, ApiError>
+where
+    F: Future<Output = Result<T, ApiError>>,
+{
+    tokio::time::timeout(REQUEST_BUDGET, fut)
+        .await
+        .map_err(|_| ApiError::unavailable())?
+}
+
 async fn read_json_body(mut payload: Payload) -> Result<Bytes, ApiError> {
     let mut body = BytesMut::new();
     while let Some(chunk) = payload.next().await {
@@ -227,14 +238,17 @@ async fn transaction<L: Ledger, H: History>(
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
     parse_tx_id(&id).map_err(|_| ApiError::bad_request())?;
-    let (height, _) = state.ledger.tip().await?;
-    let tx = state.history.transaction(&id, height).await?;
-    let tx = match tx {
-        Some(tx) if tx.id == id => confirm_canonical(state.ledger.as_ref(), tx, height).await?,
-        Some(_) => return Err(ApiError::unavailable()),
-        None => None,
-    };
-    json_bounded(&tx)
+    bounded(async {
+        let (height, _) = state.ledger.tip().await?;
+        let tx = state.history.transaction(&id, height).await?;
+        let tx = match tx {
+            Some(tx) if tx.id == id => confirm_canonical(state.ledger.as_ref(), tx, height).await?,
+            Some(_) => return Err(ApiError::unavailable()),
+            None => None,
+        };
+        json_bounded(&tx)
+    })
+    .await
 }
 
 async fn submit<L: Ledger, H: History>(
@@ -247,29 +261,32 @@ async fn submit<L: Ledger, H: History>(
         return Err(ApiError::bad_request());
     }
     let _admission = state.ops.admit_write()?;
-    let body = read_json_body(payload).await?;
-    let body: crate::wire::SubmitRequest =
-        serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
-    let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
-    let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
-    let max = state.ledger.max_tx_size().await?;
-    if signed.bytes.len() as u64 > max {
-        return Err(ApiError::bad_request());
-    }
-    let uuid = legacy_uuid(&signed.hash);
-    let op_id = parse_uuid(&uuid).map_err(|_| ApiError::unexpected())?;
-    let key = OpsStore::legacy_key(&op_id);
-    let record = state
-        .ops
-        .persist_new(key, signed.hash, signed.clone(), uuid)
-        .await?;
-    let (_, record) = submit_record(&state, key, record).await?;
-    if record.state == InternalState::Rejected {
-        return Err(ApiError::bad_request());
-    }
-    json_bounded(&SubmitResponse {
-        transaction_id: hex::encode(signed.hash),
+    bounded(async {
+        let body = read_json_body(payload).await?;
+        let body: crate::wire::SubmitRequest =
+            serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
+        let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
+        let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
+        let max = state.ledger.max_tx_size().await?;
+        if signed.bytes.len() as u64 > max {
+            return Err(ApiError::bad_request());
+        }
+        let uuid = legacy_uuid(&signed.hash);
+        let op_id = parse_uuid(&uuid).map_err(|_| ApiError::unexpected())?;
+        let key = OpsStore::legacy_key(&op_id);
+        let record = state
+            .ops
+            .persist_new(key, signed.hash, signed.clone(), uuid)
+            .await?;
+        let (_, record) = submit_record(&state, key, record).await?;
+        if record.state == InternalState::Rejected {
+            return Err(ApiError::bad_request());
+        }
+        json_bounded(&SubmitResponse {
+            transaction_id: hex::encode(signed.hash),
+        })
     })
+    .await
 }
 
 async fn create_operation<L: Ledger, H: History>(
@@ -282,32 +299,37 @@ async fn create_operation<L: Ledger, H: History>(
         return Err(ApiError::bad_request());
     }
     let _admission = state.ops.admit_write()?;
-    let body = read_json_body(payload).await?;
-    let body: crate::wire::CreateOperationRequest =
-        serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
-    let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
-    let expected =
-        parse_tx_id(&body.expected_transaction_id).map_err(|_| ApiError::bad_request())?;
-    let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
-    let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
-    if signed.hash != expected {
-        return Err(ApiError::bad_request());
-    }
-    let (_, tip_slot) = state.ledger.tip().await?;
-    if signed.ttl.is_none_or(|ttl| ttl <= tip_slot) {
-        return Err(ApiError::bad_request());
-    }
-    let max = state.ledger.max_tx_size().await?;
-    if signed.bytes.len() as u64 > max {
-        return Err(ApiError::bad_request());
-    }
-    let key = OpsStore::client_key(&op_id);
-    let record = state
-        .ops
-        .persist_new(key, expected, signed, body.operation_id.clone())
-        .await?;
-    let (depth, record) = submit_record(&state, key, record).await?;
-    json_bounded(&OpsStore::response(&record, depth))
+    bounded(async {
+        let body = read_json_body(payload).await?;
+        let body: crate::wire::CreateOperationRequest =
+            serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
+        let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
+        let expected =
+            parse_tx_id(&body.expected_transaction_id).map_err(|_| ApiError::bad_request())?;
+        let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
+        let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
+        if signed.hash != expected {
+            return Err(ApiError::bad_request());
+        }
+        let key = OpsStore::client_key(&op_id);
+        if state.ops.get(key).await?.is_none() {
+            let (_, tip_slot) = state.ledger.tip().await?;
+            if signed.ttl.is_none_or(|ttl| ttl <= tip_slot) {
+                return Err(ApiError::bad_request());
+            }
+            let max = state.ledger.max_tx_size().await?;
+            if signed.bytes.len() as u64 > max {
+                return Err(ApiError::bad_request());
+            }
+        }
+        let record = state
+            .ops
+            .persist_new(key, expected, signed, body.operation_id.clone())
+            .await?;
+        let (depth, record) = submit_record(&state, key, record).await?;
+        json_bounded(&OpsStore::response(&record, depth))
+    })
+    .await
 }
 
 async fn get_operation<L: Ledger, H: History>(
@@ -317,12 +339,21 @@ async fn get_operation<L: Ledger, H: History>(
     let op_id = parse_uuid(&path).map_err(|_| ApiError::bad_request())?;
     let key = OpsStore::client_key(&op_id);
     let mut record = state.ops.get(key).await?.ok_or_else(ApiError::not_found)?;
-    let (height, slot) = state.ledger.tip().await?;
-    let depth = state
-        .ops
-        .reconcile_one(state.ledger.as_ref(), key, &mut record, height, slot, false)
-        .await?;
-    json_bounded(&OpsStore::response(&record, depth))
+    if matches!(
+        record.state,
+        InternalState::Settled | InternalState::Rejected
+    ) {
+        return json_bounded(&OpsStore::response(&record, 0));
+    }
+    bounded(async {
+        let (height, slot) = state.ledger.tip().await?;
+        let depth = state
+            .ops
+            .reconcile_one(state.ledger.as_ref(), key, &mut record, height, slot, false)
+            .await?;
+        json_bounded(&OpsStore::response(&record, depth))
+    })
+    .await
 }
 
 async fn confirm_canonical<L: Ledger>(
@@ -440,6 +471,7 @@ where
     H: History + 'static,
 {
     HttpServer::new(move || app(state.clone()))
+        .client_request_timeout(REQUEST_BUDGET)
         .bind(bind)?
         .run()
         .await

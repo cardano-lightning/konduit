@@ -172,6 +172,9 @@ async fn claim_cli_session<T: Transport>(
     let generation = cli
         .session_generation
         .ok_or_else(|| anyhow::anyhow!("--session-generation is required"))?;
+    if generation == 0 {
+        anyhow::bail!("--session-generation must be at least 1");
+    }
     let backup_hash = cli
         .session_backup_hash
         .ok_or_else(|| anyhow::anyhow!("--session-backup-hash is required"))?;
@@ -322,10 +325,18 @@ impl Cli {
         let keytag = Keytag::new(&vk, &self.tag);
         let server_client = client_json(server_url);
         let mut adaptor = Adaptor::new(server_client, Some(&keytag)).await?;
-        let catalog_digest = AssetCatalog::load(self.asset_config.as_deref())?.digest()?;
-        if adaptor.info().asset_catalog_digest.as_deref() != Some(&catalog_digest) {
-            anyhow::bail!("asset catalog does not match adaptor discovery");
+        if !matches!(args.cmd, L2Cmd::Info) {
+            let catalog_digest = AssetCatalog::load(self.asset_config.as_deref())?.digest()?;
+            if adaptor.info().asset_catalog_digest.as_deref() != Some(&catalog_digest) {
+                anyhow::bail!("asset catalog does not match adaptor discovery");
+            }
         }
+        let parsed_invoice = match &args.cmd {
+            L2Cmd::Quote { invoice } | L2Cmd::Pay { invoice } => {
+                Some(invoice.parse::<Invoice>()?)
+            }
+            _ => None,
+        };
         let mut last_claim_timestamp = 0;
         let protected = matches!(
             args.cmd,
@@ -340,16 +351,16 @@ impl Cli {
                 println!("{}", serde_json::to_string_pretty(adaptor.info())?);
             }
 
-            L2Cmd::Quote { invoice } => {
-                let invoice = invoice.parse::<Invoice>()?;
+            L2Cmd::Quote { .. } => {
+                let invoice = parsed_invoice.unwrap();
                 let quote = l2::Client::new(&adaptor, &self.signing_key)
                     .quote(&invoice)
                     .await?;
                 println!("{}", serde_json::to_string_pretty(&quote)?);
             }
 
-            L2Cmd::Pay { invoice } => {
-                let invoice = invoice.parse::<Invoice>()?;
+            L2Cmd::Pay { .. } => {
+                let invoice = parsed_invoice.unwrap();
                 let quote = l2::Client::new(&adaptor, &self.signing_key)
                     .quote(&invoice)
                     .await?;
@@ -365,8 +376,9 @@ impl Cli {
                     .pay(&invoice, &quote)
                     .await?;
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
-
-                claim_cli_session(self, &mut adaptor, &mut last_claim_timestamp).await?;
+                if and_confirm {
+                    claim_cli_session(self, &mut adaptor, &mut last_claim_timestamp).await?;
+                }
                 l2::Client::new(&adaptor, &self.signing_key)
                     .sync(res, and_confirm, |x| known_lock(&x))
                     .await?;
@@ -377,7 +389,9 @@ impl Cli {
                     .squash(SquashBody::default())
                     .await?;
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
-                claim_cli_session(self, &mut adaptor, &mut last_claim_timestamp).await?;
+                if and_confirm {
+                    claim_cli_session(self, &mut adaptor, &mut last_claim_timestamp).await?;
+                }
                 l2::Client::new(&adaptor, &self.signing_key)
                     .sync(res, and_confirm, |_x: konduit_data::Lock| known_lock(&_x))
                     .await?;

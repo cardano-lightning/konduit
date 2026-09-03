@@ -1,8 +1,8 @@
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, str::FromStr};
 
 use chrono::Utc;
 use minicbor::Encode;
-use num::{BigInt, ToPrimitive, rational::BigRational};
+use num::{BigInt, BigRational, ToPrimitive};
 use serde::Serialize;
 
 use crate::{Error, Result};
@@ -114,8 +114,26 @@ fn scale(decimals: u8) -> Result<u64> {
 }
 
 fn price_ratio(price: f64, label: &str) -> Result<BigRational> {
-    BigRational::from_float(valid_price(price, label)?)
-        .ok_or_else(|| Error::InvalidData(format!("{label} price cannot be represented")))
+    let price = valid_price(price, label)?;
+    let formatted = price.to_string();
+    if formatted.contains(['e', 'E']) {
+        return BigRational::from_float(price)
+            .ok_or_else(|| Error::InvalidData(format!("{label} price cannot be represented")));
+    }
+    match formatted.split_once('.') {
+        Some((whole, frac)) => {
+            let numer = BigInt::from_str(&format!("{whole}{frac}"))
+                .map_err(|_| Error::InvalidData(format!("{label} price cannot be represented")))?;
+            Ok(BigRational::new(
+                numer,
+                BigInt::from(10).pow(frac.len() as u32),
+            ))
+        }
+        None => Ok(BigRational::from_integer(
+            BigInt::from_str(&formatted)
+                .map_err(|_| Error::InvalidData(format!("{label} price cannot be represented")))?,
+        )),
+    }
 }
 
 fn ratio_floor(value: BigRational) -> Result<u64> {
@@ -234,5 +252,12 @@ mod tests {
             (1 << 53) + 1
         );
         assert!(state().asset_usd("missing").is_err());
+    }
+
+    #[test]
+    fn decimal_prices_floor_to_exact_units() {
+        let mut state = state();
+        state.bitcoin = 100_000.0;
+        assert_eq!(state.msat_to_asset_units(100_000, 0, 0.1).unwrap(), 1);
     }
 }

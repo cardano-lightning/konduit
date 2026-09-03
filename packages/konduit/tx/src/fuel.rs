@@ -1,4 +1,4 @@
-use cardano_sdk::{Input, Value};
+use cardano_sdk::{Address, Input, Output, Value};
 
 use crate::{Lovelace, Utxos};
 
@@ -12,14 +12,35 @@ pub fn select(utxos: &Utxos, target: &Value<u64>) -> anyhow::Result<Vec<Input>> 
         .copied()
         .filter(|(_, output)| !has_unrelated_tokens(output.value(), target))
         .collect();
-    let selection = Value::cover(target, &clean, |(_, output)| output.value())
-        .or_else(|| Value::cover(target, &candidates, |(_, output)| output.value()))
-        .ok_or_else(|| anyhow::anyhow!("insufficient wallet value to cover target {target}"))?;
-    Ok(selection
-        .inputs
-        .into_iter()
-        .map(|(input, _)| (*input).clone())
-        .collect())
+    let mut need = target.clone();
+    for _ in 0..candidates.len().saturating_add(1) {
+        let selection = Value::cover(&need, &clean, |(_, output)| output.value())
+            .or_else(|| Value::cover(&need, &candidates, |(_, output)| output.value()))
+            .ok_or_else(|| anyhow::anyhow!("insufficient wallet value to cover target {target}"))?;
+        let extra = change_min_ada(&selection.excess);
+        if selection.excess.lovelace() >= extra {
+            return Ok(selection
+                .inputs
+                .into_iter()
+                .map(|(input, _)| (*input).clone())
+                .collect());
+        }
+        need.with_lovelace(
+            need.lovelace()
+                .saturating_add(extra.saturating_sub(selection.excess.lovelace())),
+        );
+    }
+    Err(anyhow::anyhow!(
+        "insufficient wallet value to cover target {target}"
+    ))
+}
+
+fn change_min_ada(excess: &Value<u64>) -> u64 {
+    if excess.assets().values().all(|names| names.is_empty()) {
+        0
+    } else {
+        Output::new(Address::default(), excess.clone()).min_acceptable_value()
+    }
 }
 
 pub fn select_collateral(utxos: &Utxos, minimum: Lovelace) -> anyhow::Result<Input> {
@@ -131,5 +152,26 @@ mod tests {
             ),
         ]);
         assert_eq!(select_collateral(&utxos, FEE_BUFFER).unwrap(), selected);
+    }
+
+    #[test]
+    fn extra_tokens_pull_in_ada_for_change() {
+        let token_input = Input::new(Hash::<32>::new([2; 32]), 0);
+        let ada_input = Input::new(Hash::<32>::new([1; 32]), 0);
+        let policy = Hash::<28>::new([1; 28]);
+        let other = Hash::<28>::new([2; 28]);
+        let bulky =
+            Value::new(10_000_000).with_assets([(policy, [(b"T", 1)]), (other, [(b"X", 1)])]);
+        let utxos = Utxos::from([
+            (token_input.clone(), Output::new(Address::default(), bulky)),
+            (
+                ada_input.clone(),
+                Output::new(Address::default(), Value::new(5_000_000)),
+            ),
+        ]);
+        let target = Value::new(10_000_000).with_assets([(policy, [(b"T", 1)])]);
+        let selected = select(&utxos, &target).unwrap();
+        assert!(selected.contains(&token_input));
+        assert!(selected.contains(&ada_input));
     }
 }

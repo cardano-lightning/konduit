@@ -489,6 +489,29 @@ async fn stale_revision_cannot_roll_back_newer_state() {
 }
 
 #[actix_web::test]
+async fn confirmed_can_regress_to_accepted() {
+    let store = tmp_db();
+    let uuid = "550e8400-e29b-41d4-a716-446655440006";
+    let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
+    let txid = [12u8; 32];
+    let signed = SignedTx {
+        hash: txid,
+        digest: [13u8; 32],
+        ttl: Some(99),
+        bytes: vec![9, 9, 9],
+    };
+    let mut record = store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    record.state = InternalState::Confirmed;
+    store.put(key, &mut record).await.unwrap();
+    record.state = InternalState::Accepted;
+    store.put(key, &mut record).await.unwrap();
+    assert_eq!(record.state, InternalState::Accepted);
+}
+
+#[actix_web::test]
 async fn legacy_operation_without_ttl_expires() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440006";

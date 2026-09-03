@@ -43,9 +43,12 @@ planning, debugging, code review, and documentation work in Moneta.
 
 ### Step 1: Confirm project state
 
-This repo launches `code-index` with
-`--project-path /home/westbam/Development/moneta`, so the project path should
-already be set.
+Index the current Konduit checkout. If the MCP project path is unset or points
+elsewhere:
+
+- run `code-index:set_project_path` with this repository root
+- run `code-index:refresh_index`
+- run `code-index:refresh_search_tools`
 
 Use these tools first:
 
@@ -54,7 +57,7 @@ Use these tools first:
 
 If startup state looks wrong or stale:
 
-- run `code-index:set_project_path` with `/home/westbam/Development/moneta`
+- run `code-index:set_project_path` with the current repository root
 - run `code-index:refresh_index`
 - run `code-index:refresh_search_tools`
 

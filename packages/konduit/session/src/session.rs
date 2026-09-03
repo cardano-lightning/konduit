@@ -100,19 +100,18 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
 
     pub fn channels(&self) -> Result<BTreeMap<Input, Channel>, FromOutputError> {
         let konduit_credential = Credential::from_script(KONDUIT_VALIDATOR.hash);
-        Ok(self
-            .cardano
+        self.cardano
             .tip()
             .addresses()
             .filter(|address| address.payment() == konduit_credential)
             .filter_map(|address| self.cardano.utxos_at(address))
             .flat_map(|utxos| utxos.iter())
-            .filter_map(|(input, output)| {
-                Channel::try_from(output)
-                    .ok()
-                    .map(|channel| (input.clone(), channel))
+            .filter_map(|(input, output)| match Channel::try_from(output) {
+                Ok(channel) => Some(Ok((input.clone(), channel))),
+                Err(FromOutputError::NativeAsset) => Some(Err(FromOutputError::NativeAsset)),
+                Err(_) => None,
             })
-            .collect())
+            .collect()
     }
 
     pub fn stage_tx(&self, window: Interval) -> Result<StagedTx, FromOutputError> {

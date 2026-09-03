@@ -340,11 +340,13 @@ impl OpsStore {
                     || current.state == InternalState::Settled
                     || current.state == InternalState::Rejected
                     || (current.state.rank() > proposed.state.rank()
-                        && !(proposed.state == InternalState::Prepared
-                            && matches!(
-                                current.state,
-                                InternalState::Accepted | InternalState::Confirmed
-                            )))
+                        && !(matches!(
+                            proposed.state,
+                            InternalState::Prepared | InternalState::Accepted
+                        ) && matches!(
+                            current.state,
+                            InternalState::Accepted | InternalState::Confirmed
+                        )))
                 {
                     return Ok(current);
                 }

@@ -484,7 +484,11 @@ fn map_output(io: KoiosIo) -> Result<TxOutput, ApiError> {
     for asset in io.asset_list {
         let policy = parse_lowercase_hex(&asset.policy_id).map_err(|_| ApiError::unavailable())?;
         let asset_name = asset.asset_name.unwrap_or_default();
-        let name = parse_lowercase_hex(&asset_name).map_err(|_| ApiError::unavailable())?;
+        let name = if asset_name.is_empty() {
+            Vec::new()
+        } else {
+            parse_lowercase_hex(&asset_name).map_err(|_| ApiError::unavailable())?
+        };
         if policy.len() != 28 || name.len() > 32 {
             return Err(ApiError::unavailable());
         }
@@ -501,9 +505,10 @@ fn map_output(io: KoiosIo) -> Result<TxOutput, ApiError> {
             quantity: asset.quantity,
         });
     }
-    let datum_hash = validate_hash(io.datum_hash)?;
+    let datum_hash = validate_hash(io.datum_hash, 32)?;
     let datum_inline = validate_hex(io.inline_datum.and_then(|datum| datum.bytes))?;
-    let reference_script_hash = validate_hash(io.reference_script.and_then(|script| script.hash))?;
+    let reference_script_hash =
+        validate_hash(io.reference_script.and_then(|script| script.hash), 28)?;
     Ok(TxOutput {
         address,
         consumed_by: None,
@@ -514,12 +519,13 @@ fn map_output(io: KoiosIo) -> Result<TxOutput, ApiError> {
     })
 }
 
-fn validate_hash(value: Option<String>) -> Result<Option<String>, ApiError> {
+fn validate_hash(value: Option<String>, len: usize) -> Result<Option<String>, ApiError> {
     value
         .map(|hash| {
-            parse_tx_id(&hash)
-                .map(|_| hash)
-                .map_err(|_| ApiError::unavailable())
+            let bytes = parse_lowercase_hex(&hash).map_err(|_| ApiError::unavailable())?;
+            (bytes.len() == len)
+                .then_some(hash)
+                .ok_or_else(ApiError::unavailable)
         })
         .transpose()
 }
@@ -568,5 +574,15 @@ mod tests {
         )
         .unwrap();
         assert!(io.asset_list.is_empty());
+    }
+
+    #[test]
+    fn hash_lengths_match_cardano_sizes() {
+        let hash28 = "ab".repeat(28);
+        let hash32 = "cd".repeat(32);
+        assert!(validate_hash(Some(hash28.clone()), 28).unwrap().is_some());
+        assert!(validate_hash(Some(hash32.clone()), 32).unwrap().is_some());
+        assert!(validate_hash(Some(hash28), 32).is_err());
+        assert!(validate_hash(Some(hash32), 28).is_err());
     }
 }

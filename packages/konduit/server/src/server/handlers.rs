@@ -80,7 +80,7 @@ pub async fn claim_session(
         .duration_since(UNIX_EPOCH)
         .map_err(|_| Error::Other)?
         .as_millis() as u64;
-    if now.abs_diff(claim.timestamp) > SESSION_TIMESTAMP_SKEW_MILLIS {
+    if claim.timestamp > now || now - claim.timestamp > SESSION_TIMESTAMP_SKEW_MILLIS {
         return Err(Error::InvalidSessionTimestamp);
     }
     let expected_adaptor: [u8; 32] = data.info().channel_parameters.adaptor_key.into();

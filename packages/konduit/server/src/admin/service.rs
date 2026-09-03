@@ -163,18 +163,13 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         for utxo in candidates {
             let keytag = utxo.data().keytag();
             let asset = utxo.data().constants().asset.clone();
-            if !keep_keytag(
-                &mut identities,
-                &mut quarantined,
-                keytag.clone(),
-                asset.clone(),
-            ) {
-                retainers.remove(&keytag);
-                continue;
-            }
             let Some(definition) = self.assets.by_asset(&asset).cloned() else {
                 continue;
             };
+            if !keep_keytag(&mut identities, &mut quarantined, keytag.clone(), asset) {
+                retainers.remove(&keytag);
+                continue;
+            }
             let Ok(retainer) = Retainer::try_from(utxo.data()) else {
                 continue;
             };

@@ -138,7 +138,7 @@ Current mainnet deployment (2026-09-02):
 - host: `addr1vy9z4llh8hxdwc54c0xlfgeza39vqm3zua4zva4elp0quqcxa7mjc`
 - output: `e40cd245f1cc4b8f8be7f7e676df94f8f70ae5cd6e205ad5820a6f7d1eed66c3#0`
 - Plutus version: V3
-- script hash: `2790f3743fe062f855f7c8568ff13a9f93f2a97ccd7868270a2e7d6c`
+- script hash: `8cc6bbaeed22c253b9d703d39f63b7e215f7af08bda930ac6b85ebaf`
 
 > [!TIP]
 >

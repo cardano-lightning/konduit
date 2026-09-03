@@ -9,31 +9,31 @@ surfaces, and any matching Rust skills before acting.
 
 Project anchors
 
-- ADR: `docs/adrs/06-dolos-utxorpc-adaptor-backend.md`
+- ADR: `docs/adrs/07-dolos-utxorpc-adaptor-backend.md`
 - Connector design: `docs/design/33_cardano_connector.md`
 - Deployment design: `docs/design/35_adaptor_deployment.md`
 - Implementation PRD: `docs/design/36_dolos_utxorpc_implementation_prd.md`
 - Deployment PRD: `docs/design/37_adaptor_deployment_prd.md`
-- Tasks: `.opencode/plans/dolos-utxorpc/dolos-utxorpc-tasks.json`
-- Task plans: `.opencode/plans/dolos-utxorpc/task-plans/`
-- Research brain: `.opencode/plans/dolos-utxorpc/research/`
-- Rust workspace overview: `rust/README.md`
-- Workflow: `.opencode/workflows/rust.md`
-- Workspace manifest: `rust/Cargo.toml`
+- Tasks: `.agents/plans/dolos-utxorpc/dolos-utxorpc-tasks.json`
+- Task plans: `.agents/plans/dolos-utxorpc/task-plans/`
+- Research brain: `.agents/plans/dolos-utxorpc/research/`
+- Rust workspace overview: `README.md`
+- Workflow: `.agents/workflows/rust.md`
+- Workspace manifest: `Cargo.toml`
 
 Key runtime surfaces
 
-- Connector trait: `rust/crates/cardano-connector/src/connector.rs`
+- Connector trait: `packages/cardano/connector/src/connector.rs`
 - Existing direct Blockfrost implementation:
-  `rust/crates/cardano-connector-direct/src/blockfrost.rs`
-- Server runtime binding: `rust/crates/konduit-server/src/cardano.rs`
+  `packages/cardano/connector-direct/src/blockfrost.rs`
+- Server runtime binding: `packages/konduit/server/src/cardano.rs`
 - Server backend config/bootstrap:
-  `rust/crates/konduit-server/src/cardano/args.rs`
+  `packages/konduit/server/src/cardano/args.rs`
 - Server startup consumer of Cardano data:
-  `rust/crates/konduit-server/src/admin/service.rs`
-- CLI runtime connector wrapper: `rust/crates/konduit-cli/src/connector.rs`
-- CLI connector config: `rust/crates/konduit-cli/src/config/connector.rs`
-- CLI connector env parsing: `rust/crates/konduit-cli/src/env/connector.rs`
+  `packages/konduit/server/src/admin/service.rs`
+- CLI runtime connector wrapper: `packages/konduit/cli/src/connector.rs`
+- CLI connector config: `packages/konduit/cli/src/config/connector.rs`
+- CLI connector env parsing: `packages/konduit/cli/src/env/connector.rs`
 
 External references
 

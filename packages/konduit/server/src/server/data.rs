@@ -232,26 +232,19 @@ impl Data {
         if invoice.payment_hash != locked.lock().0 {
             return Err(CommitmentError::Lock);
         }
-        let fee = {
+        let effective_amount_msat = {
             let fx = self.fx.read().await;
             let usd = asset_usd(&fx, definition)
                 .map_err(|error| CommitmentError::Fx(error.to_string()))?;
-            fx.msat_to_asset_units(FEE_PLACEHOLDER_MSAT, definition.decimals, usd)
+            let fee = fx
+                .msat_to_asset_units(FEE_PLACEHOLDER_MSAT, definition.decimals, usd)
+                .map_err(|error| CommitmentError::Fx(error.to_string()))?;
+            let effective_asset_amount = locked
+                .amount()
+                .checked_sub(fee)
+                .ok_or(CommitmentError::Fee)?;
+            fx.asset_units_to_msat(effective_asset_amount, definition.decimals, usd)
                 .map_err(|error| CommitmentError::Fx(error.to_string()))?
-        };
-        let effective_asset_amount = locked
-            .amount()
-            .checked_sub(fee)
-            .ok_or(CommitmentError::Fee)?;
-        let effective_amount_msat = {
-            let fx = self.fx.read().await;
-            fx.asset_units_to_msat(
-                effective_asset_amount,
-                definition.decimals,
-                asset_usd(&fx, definition)
-                    .map_err(|error| CommitmentError::Fx(error.to_string()))?,
-            )
-            .map_err(|error| CommitmentError::Fx(error.to_string()))?
         };
         let fee_limit = effective_amount_msat.saturating_sub(invoice.amount_msat);
         if fee_limit < 1 {

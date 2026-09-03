@@ -72,49 +72,38 @@ the corrected guidance.
 ## Project Location
 
 ```text
-rust/
+.
 |- Cargo.toml
 |- README.md
-|- crates/
-|  |- bln-client/                 # BLN-facing client bindings
-|  |- bln-sdk/                    # BLN data/types
-|  |- cardano-connector/          # Cardano connector trait boundary
-|  |- cardano-connector-client/   # HTTP client for connector-server style use
-|  |- cardano-connector-direct/   # Direct Blockfrost implementation
-|  |- cardano-sdk/                # Cardano primitives and tx-building support
-|  |- fx-client/                  # Price feed client surface
-|  |- http-client/                # Isomorphic HTTP abstractions
-|  |- http-client-native/         # Native HTTP implementation
-|  |- http-client-wasm/           # WASM HTTP implementation
-|  |- konduit-cli/                # CLI for admin/adaptor/consumer flows
-|  |- konduit-client/             # Reusable client logic over connector/adaptor
-|  |- konduit-data/               # Shared data encoding/decoding and protocol data
-|  |- konduit-server/             # Adaptor-facing HTTP server
-|  |- konduit-tx/                 # Konduit transaction-building logic
-|  `- konduit-wasm/               # WASM-facing API surface
+|- packages/
+|  |- cardano/                    # Cardano connector, SDK, UTxO RPC
+|  |- konduit/                    # CLI, client, data, server, tx, wasm
+|  |- kernel/                     # Aiken validators
+|  `- util/                       # fx-client and shared utilities
 `- Cargo.lock
 ```
 
 For the Dolos UTxO RPC effort, the workspace now includes:
 
-- `cardano-connector-utxorpc/`
+- `packages/cardano/connector-utxorpc/`
+- `packages/cardano/connector-server-utxorpc/`
 
 Key references:
 
-- `rust/README.md`
+- `README.md`
 - `docs/design/00_intro.md`
 - `docs/design/11_roles.md`
 - `docs/design/20_architecture.md`
 - `docs/design/33_cardano_connector.md`
 - `docs/adrs/03-cardano-connector-unification.md`
-- `docs/adrs/06-dolos-utxorpc-adaptor-backend.md`
+- `docs/adrs/07-dolos-utxorpc-adaptor-backend.md`
 - `docs/design/36_dolos_utxorpc_implementation_prd.md`
 
 ---
 
 ## Quick Commands
 
-Use `workdir=rust` instead of `cd rust && ...` when tooling supports it.
+Use the repository root as `workdir`. Do not use `rust/` — that path is ignored.
 
 ### Fast Feedback
 

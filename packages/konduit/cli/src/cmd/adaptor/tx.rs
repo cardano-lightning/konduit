@@ -1,10 +1,11 @@
 use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::Credential;
+use konduit_data::AssetId;
 use konduit_tmp::{Keytag, Receipt};
 use konduit_tx::{
     self, Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, Utxos,
-    adaptor::AdaptorPreferences,
+    adaptor::AdaptorPreferences, to_verifying_key,
 };
 use std::collections::BTreeMap;
 
@@ -26,12 +27,7 @@ impl Cmd {
         let connector = config.connector.connector().await?;
         let own_key = config.wallet.to_verification_key();
         let own_address = own_key.to_address(connector.network().into());
-        let receipts = self.receipt;
-        let preferences = AdaptorPreferences {
-            min_single: 10_000,
-            min_total: 1_000_000,
-            asset_minimums: BTreeMap::new(),
-        };
+        let preferences_ada = (10_000, 1_000_000);
         let bounds = Bounds::twenty_mins();
         let upper = bounds.upper.unwrap();
 
@@ -59,13 +55,17 @@ impl Cmd {
                     .await?,
             )
             .collect();
-        let receipts = receipts
+        let receipts = self
+            .receipt
             .into_iter()
             .map(|(keytag, receipt)| {
                 let mut assets = utxos
                     .iter()
                     .filter_map(|utxo| ChannelUtxo::try_from(utxo).ok())
-                    .filter(|channel| channel.data().keytag() == keytag)
+                    .filter(|channel| {
+                        channel.data().keytag() == keytag
+                            && channel.data().constants().sub_vkey == to_verifying_key(own_key)
+                    })
                     .map(|channel| channel.data().constants().asset.clone());
                 let asset = assets
                     .next()
@@ -76,6 +76,16 @@ impl Cmd {
                 Ok((keytag, (asset, receipt)))
             })
             .collect::<anyhow::Result<BTreeMap<_, _>>>()?;
+        let preferences = AdaptorPreferences {
+            min_single: preferences_ada.0,
+            min_total: preferences_ada.1,
+            asset_minimums: receipts
+                .values()
+                .filter_map(|(asset, _)| {
+                    (*asset != AssetId::Ada).then(|| (asset.clone(), preferences_ada))
+                })
+                .collect(),
+        };
         let mut tx = konduit_tx::adaptor::tx(
             &network_parameters,
             &preferences,
