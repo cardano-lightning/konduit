@@ -292,7 +292,7 @@ mod tests {
         assert!(minicbor::decode::<AssetId>(&encoder.into_writer()).is_err());
     }
 
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "json")]
     #[test]
     fn serde_rejects_long_asset_names() {
         let json = format!(

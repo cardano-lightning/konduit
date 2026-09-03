@@ -220,17 +220,29 @@ Admin endpoints should not be proxied publicly.
 Generic-asset cutover workflow:
 
 1. retain the old binary, database, configuration, and validator reference
-2. use the old binary to close or settle every legacy channel, then verify none
-   remain
-3. stop the old service
-4. deploy and confirm the generic validator
-5. install the new binary and configure a fresh database, USD FX base, and the
-   asset catalog that matches the clients it serves
-6. start `konduit.service`, then verify the configured Cardano network,
-   reference script, catalog, and service health
+2. disable consumer write endpoints on the old service and reject new opens,
+   quotes, payments, and squash requests
+3. drain in-flight payments and off-chain receipt updates
+4. close every legacy channel, then fully settle or elapse every closed channel;
+   a merely `Closed` output is not drained
+5. verify that the old validator has no channel UTxOs, then wait through the
+   operator's rollback/finality threshold
+6. stop the old service
+7. deploy and confirm the generic validator
+8. install the new binary and configure a fresh database, USD FX base, and one
+   versioned asset-catalog artifact shared by the clients it serves
+9. verify the catalog digest exposed during adaptor discovery before permitting
+   clients to open channels
+10. start `konduit.service`, then verify the configured Cardano network,
+    reference script, catalog, and service health
 
-Rollback is available before opening generic channels: stop the new service and
-restore the retained old binary, database, configuration, and validator.
+Before any generic channel opens, rollback by stopping the new service and
+restoring the retained legacy binary, database, configuration, and validator.
+After generic channels exist, never restore a legacy binary that cannot decode
+them. Roll back only to a release that declares the same validator, database,
+and catalog schema versions; otherwise keep writes disabled and roll forward to
+a fixed compatible release. Every routine deployment must retain the prior
+compatible binary and database snapshot until the finality threshold passes.
 
 ## Observability
 

@@ -86,7 +86,8 @@ For each input page there is:
 The input pages include:
 
 - Settings Cardano Connector
-- Settings Currencies - select an operator-configured channel asset.
+- Settings Currencies - view the operator-configured asset catalog; the asset is
+  selected per channel when it is opened, not as a global setting.
 - Settings Stake
 - Settings Locale - Date time, number format, fiat.
 - Settings ... TBC

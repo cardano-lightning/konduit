@@ -22,6 +22,23 @@ pub fn select(utxos: &Utxos, target: &Value<u64>) -> anyhow::Result<Vec<Input>> 
         .collect())
 }
 
+pub fn select_collateral(utxos: &Utxos, minimum: Lovelace) -> anyhow::Result<Input> {
+    utxos
+        .iter()
+        .filter(|(_, output)| {
+            output.script().is_none()
+                && output.value().assets().is_empty()
+                && output.value().lovelace() >= minimum
+                && output
+                    .address()
+                    .as_shelley()
+                    .is_some_and(|address| address.payment().as_key().is_some())
+        })
+        .min_by_key(|(_, output)| output.value().lovelace())
+        .map(|(input, _)| input.clone())
+        .ok_or_else(|| anyhow::anyhow!("no Ada-only collateral UTxO covers {minimum} lovelace"))
+}
+
 fn has_unrelated_tokens(value: &Value<u64>, target: &Value<u64>) -> bool {
     value.assets().iter().any(|(policy, names)| {
         names.iter().any(|(name, quantity)| {
@@ -56,6 +73,7 @@ mod tests {
     use cardano_sdk::{Address, Hash, Output};
 
     use super::*;
+    use crate::tx::FEE_BUFFER;
 
     #[test]
     fn token_target_selects_token_utxo() {
@@ -85,5 +103,33 @@ mod tests {
             Output::new(Address::default(), Value::new(10_000_000)),
         )]);
         assert!(select(&lovelace_only, &target).is_err());
+    }
+
+    #[test]
+    fn collateral_is_one_ada_only_key_output() {
+        let address =
+            cardano_sdk::VerificationKey::from([9; 32]).to_address(cardano_sdk::NetworkId::TESTNET);
+        let small = Input::new(Hash::<32>::new([4; 32]), 0);
+        let selected = Input::new(Hash::<32>::new([5; 32]), 0);
+        let token = Input::new(Hash::<32>::new([6; 32]), 0);
+        let policy = Hash::<28>::new([1; 28]);
+        let utxos = Utxos::from([
+            (
+                small,
+                Output::new(address.clone().into(), Value::new(FEE_BUFFER - 1)),
+            ),
+            (
+                selected.clone(),
+                Output::new(address.clone().into(), Value::new(FEE_BUFFER)),
+            ),
+            (
+                token,
+                Output::new(
+                    address.into(),
+                    Value::new(FEE_BUFFER + 1).with_assets([(policy, [(b"T", 1)])]),
+                ),
+            ),
+        ]);
+        assert_eq!(select_collateral(&utxos, FEE_BUFFER).unwrap(), selected);
     }
 }

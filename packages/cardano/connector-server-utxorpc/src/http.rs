@@ -3,17 +3,17 @@ use crate::ops::{InternalState, OpsStore, Record};
 use crate::providers::{History, Ledger, parse_mainnet_address};
 use crate::tx::{decode_signed_tx, parse_lowercase_hex, parse_tx_id, parse_uuid};
 use crate::wire::{
-    BalanceResponse, CreateOperationRequest, HealthResponse, NetworkResponse,
-    ProtocolParametersResponse, SubmitRequest, SubmitResponse, TransactionSummary, Utxo,
+    BalanceResponse, HealthResponse, NetworkResponse, ProtocolParametersResponse, SubmitResponse,
+    TransactionSummary, Utxo,
 };
 use actix_cors::Cors;
 use actix_web::{
-    App, HttpRequest, HttpResponse, HttpServer,
+    App, HttpMessage, HttpRequest, HttpResponse, HttpServer,
     error::JsonPayloadError,
-    http::StatusCode,
     middleware::Logger,
-    web::{self, Bytes, Data, JsonConfig, Path, PayloadConfig},
+    web::{self, Bytes, BytesMut, Data, JsonConfig, Path, Payload, PayloadConfig},
 };
+use futures_util::StreamExt;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -107,6 +107,18 @@ fn json_bounded<T: Serialize>(value: &T) -> Result<HttpResponse, ApiError> {
         .body(body))
 }
 
+async fn read_json_body(mut payload: Payload) -> Result<Bytes, ApiError> {
+    let mut body = BytesMut::new();
+    while let Some(chunk) = payload.next().await {
+        let chunk = chunk.map_err(|_| ApiError::bad_request())?;
+        if body.len().saturating_add(chunk.len()) > MAX_JSON {
+            return Err(ApiError::payload());
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body.freeze())
+}
+
 async fn docs() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
@@ -122,10 +134,14 @@ async fn openapi() -> HttpResponse {
 async fn health<L: Ledger, H: History>(
     state: Data<AppState<L, H>>,
 ) -> Result<HttpResponse, ApiError> {
-    state.ledger.ready().await?;
-    state.history.ping().await?;
-    state.ops.pending_ids().await?;
-    json_bounded(&HealthResponse { status: "ok" })
+    tokio::time::timeout(Duration::from_secs(19), async {
+        state.ledger.ready().await?;
+        state.history.ping().await?;
+        state.ops.ready().await?;
+        json_bounded(&HealthResponse { status: "ok" })
+    })
+    .await
+    .map_err(|_| ApiError::unavailable())?
 }
 
 async fn network() -> Result<HttpResponse, ApiError> {
@@ -135,13 +151,17 @@ async fn network() -> Result<HttpResponse, ApiError> {
 async fn protocol_parameters<L: Ledger, H: History>(
     state: Data<AppState<L, H>>,
 ) -> Result<HttpResponse, ApiError> {
-    let (era, epoch, slot, payload) = state.ledger.protocol_parameters().await?;
-    json_bounded(&ProtocolParametersResponse {
-        era,
-        epoch,
-        slot,
-        payload: payload.into(),
+    tokio::time::timeout(Duration::from_secs(19), async {
+        let (era, epoch, slot, payload) = state.ledger.protocol_parameters().await?;
+        json_bounded(&ProtocolParametersResponse {
+            era,
+            epoch,
+            slot,
+            payload: payload.into(),
+        })
     })
+    .await
+    .map_err(|_| ApiError::unavailable())?
 }
 
 async fn balance<L: Ledger, H: History>(
@@ -178,18 +198,27 @@ async fn transactions<L: Ledger, H: History>(
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let address = parse_mainnet_address(&path)?;
-    let (height, _) = state.ledger.tip().await?;
-    let mut txs = state
-        .history
-        .address_history(&address.to_string(), height)
-        .await?;
-    let mut out = Vec::new();
-    for tx in txs.drain(..) {
-        if let Some(tx) = confirm_canonical(state.ledger.as_ref(), tx, height).await? {
-            out.push(tx);
+    tokio::time::timeout(Duration::from_secs(19), async {
+        let (height, _) = state.ledger.tip().await?;
+        let txs = state
+            .history
+            .address_history(&address.to_string(), height)
+            .await?;
+        let mut checks = futures_util::stream::iter(
+            txs.into_iter()
+                .map(|tx| confirm_canonical(state.ledger.as_ref(), tx, height)),
+        )
+        .buffer_unordered(8);
+        let mut out = Vec::new();
+        while let Some(result) = checks.next().await {
+            if let Some(tx) = result? {
+                out.push(tx);
+            }
         }
-    }
-    json_bounded(&out)
+        json_bounded(&out)
+    })
+    .await
+    .map_err(|_| ApiError::unavailable())?
 }
 
 async fn transaction<L: Ledger, H: History>(
@@ -201,7 +230,8 @@ async fn transaction<L: Ledger, H: History>(
     let (height, _) = state.ledger.tip().await?;
     let tx = state.history.transaction(&id, height).await?;
     let tx = match tx {
-        Some(tx) => confirm_canonical(state.ledger.as_ref(), tx, height).await?,
+        Some(tx) if tx.id == id => confirm_canonical(state.ledger.as_ref(), tx, height).await?,
+        Some(_) => return Err(ApiError::unavailable()),
         None => None,
     };
     json_bounded(&tx)
@@ -210,9 +240,14 @@ async fn transaction<L: Ledger, H: History>(
 async fn submit<L: Ledger, H: History>(
     req: HttpRequest,
     state: Data<AppState<L, H>>,
-    body: Bytes,
+    payload: Payload,
 ) -> Result<HttpResponse, ApiError> {
     state.rate_limit(&req)?;
+    if req.content_type() != "application/json" {
+        return Err(ApiError::bad_request());
+    }
+    let _admission = state.ops.admit_write()?;
+    let body = read_json_body(payload).await?;
     let body: crate::wire::SubmitRequest =
         serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
     let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
@@ -240,9 +275,14 @@ async fn submit<L: Ledger, H: History>(
 async fn create_operation<L: Ledger, H: History>(
     req: HttpRequest,
     state: Data<AppState<L, H>>,
-    body: Bytes,
+    payload: Payload,
 ) -> Result<HttpResponse, ApiError> {
     state.rate_limit(&req)?;
+    if req.content_type() != "application/json" {
+        return Err(ApiError::bad_request());
+    }
+    let _admission = state.ops.admit_write()?;
+    let body = read_json_body(payload).await?;
     let body: crate::wire::CreateOperationRequest =
         serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
     let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
@@ -251,6 +291,10 @@ async fn create_operation<L: Ledger, H: History>(
     let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
     let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
     if signed.hash != expected {
+        return Err(ApiError::bad_request());
+    }
+    let (_, tip_slot) = state.ledger.tip().await?;
+    if signed.ttl.is_none_or(|ttl| ttl <= tip_slot) {
         return Err(ApiError::bad_request());
     }
     let max = state.ledger.max_tx_size().await?;
@@ -263,9 +307,6 @@ async fn create_operation<L: Ledger, H: History>(
         .persist_new(key, expected, signed, body.operation_id.clone())
         .await?;
     let (depth, record) = submit_record(&state, key, record).await?;
-    if record.state == InternalState::Rejected {
-        return Err(ApiError::bad_request());
-    }
     json_bounded(&OpsStore::response(&record, depth))
 }
 
@@ -365,8 +406,9 @@ where
             .allowed_origin(&origin)
             .allow_any_method()
             .allow_any_header()
+            .block_on_origin_mismatch(true)
     } else {
-        Cors::default()
+        Cors::default().block_on_origin_mismatch(true)
     };
     App::new()
         .app_data(state)

@@ -283,10 +283,11 @@ adaptor verify locked \
         )
 ```
 
-Consumer adds 2 ada to channel
+Consumer adds 2 Ada to the Ada channel. Adds always name the expected asset so
+an unrelated same-tag output cannot select a different currency:
 
 ```sh
-consumer tx --add deadbeef,2
+consumer tx --add deadbeef,2,ada
 ```
 
 Adaptor subs 3 ada from channel

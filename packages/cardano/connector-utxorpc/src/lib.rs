@@ -56,7 +56,6 @@ pub(crate) async fn dolos<T, E>(
 
 pub struct UtxoRpc {
     config: Config,
-    query: Mutex<CardanoQueryClient>,
     submit: Mutex<CardanoSubmitClient>,
 }
 
@@ -67,18 +66,25 @@ impl UtxoRpc {
             .map_err(|error| anyhow!(error))
             .with_context(|| format!("invalid UTxO RPC endpoint {}", config.endpoint()))?;
 
-        let query = builder.build::<CardanoQueryClient>().await;
+        let _query = builder.build::<CardanoQueryClient>().await;
         let submit = builder.build::<CardanoSubmitClient>().await;
 
         Ok(Self {
             config,
-            query: Mutex::new(query),
             submit: Mutex::new(submit),
         })
     }
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    async fn query_client(&self) -> anyhow::Result<CardanoQueryClient> {
+        Ok(ClientBuilder::new()
+            .uri(self.config.endpoint())
+            .map_err(|error| anyhow!(error))?
+            .build::<CardanoQueryClient>()
+            .await)
     }
 
     pub async fn tip(&self) -> anyhow::Result<utxorpc::spec::sync::BlockRef> {
@@ -100,10 +106,10 @@ impl UtxoRpc {
         payment: &Credential,
         delegation: Option<&Credential>,
     ) -> anyhow::Result<BTreeMap<Input, Output>> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         let predicate =
             mapping::predicate_for_credentials(self.config.network(), payment, delegation);
-        collect_utxos_pages(payment, delegation, &mut *query, |query, start| {
+        collect_utxos_pages(payment, delegation, &mut query, |query, start| {
             let predicate = predicate.clone();
             let endpoint = self.config.endpoint().to_owned();
             let network = self.config.network();
@@ -118,14 +124,14 @@ impl UtxoRpc {
     }
 
     pub async fn read_params_raw(&self) -> anyhow::Result<utxorpc::spec::cardano::PParams> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         params::cardano_pparams(&mut query).await
     }
 
     pub async fn read_era_summary_raw(
         &self,
     ) -> anyhow::Result<utxorpc::spec::query::read_era_summary_response::Summary> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         dolos(query.read_era_summary())
             .await?
             .map_err(|error| anyhow!(error))
@@ -133,16 +139,20 @@ impl UtxoRpc {
     }
 
     pub async fn bloxbean_parameters(&self) -> anyhow::Result<(String, u64, u64, BloxbeanPayload)> {
-        let tip = self.tip().await?;
-        let params = self.read_params_raw().await?;
-        let eras = self.read_era_summary_raw().await?;
-        let (era, epoch) = params::era_epoch(&eras, tip.slot)?;
-        let payload = params::bloxbean(&params)?;
-        Ok((era, epoch, tip.slot, payload))
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let tip = self.tip().await?;
+            let params = self.read_params_raw().await?;
+            let eras = self.read_era_summary_raw().await?;
+            let (era, epoch) = params::era_epoch(&eras, tip.slot)?;
+            let payload = params::bloxbean(&params)?;
+            Ok((era, epoch, tip.slot, payload))
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos parameter lookup timed out"))?
     }
 
     pub async fn utxos_at_address(&self, address: &[u8]) -> anyhow::Result<Vec<MappedUtxo>> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         let predicate = wire::predicate_for_exact_address(address);
         let endpoint = self.config.endpoint().to_owned();
         let mut start = None;
@@ -166,7 +176,7 @@ impl UtxoRpc {
         &self,
         hash: &[u8],
     ) -> anyhow::Result<Option<utxorpc::ChainTx<utxorpc::spec::cardano::Tx>>> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         match dolos(query.read_tx(hash.to_vec().into())).await? {
             Ok(tx) => Ok(tx),
             Err(error) if grpc_status_is(&error, "NotFound") => Ok(None),
@@ -184,20 +194,23 @@ impl UtxoRpc {
                     .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
                 Ok(SubmitCbor::Accepted(hash))
             }
-            Err(utxorpc::Error::GrpcError(status))
-                if grpc_debug_is(&status, "InvalidArgument")
-                    || grpc_debug_is(&status, "FailedPrecondition") =>
-            {
-                Ok(SubmitCbor::Rejected)
-            }
             Err(utxorpc::Error::GrpcError(status)) => {
-                Ok(SubmitCbor::from_status_message(status.message()))
+                let classified = SubmitCbor::from_status_message(status.message());
+                if classified != SubmitCbor::Indeterminate {
+                    Ok(classified)
+                } else if grpc_debug_is(&status, "InvalidArgument")
+                    || grpc_debug_is(&status, "FailedPrecondition")
+                {
+                    Ok(SubmitCbor::Rejected)
+                } else {
+                    Ok(SubmitCbor::Indeterminate)
+                }
             }
             Err(error) => Err(submit_error(self.config.endpoint(), error)),
         }
     }
 
-    pub async fn wait_for_tx(&self, hash: &[u8]) -> anyhow::Result<utxorpc::TxEventStream> {
+    pub async fn wait_for_tx(&self, hash: &[u8; 32]) -> anyhow::Result<utxorpc::TxEventStream> {
         let mut submit = self.submit.lock().await;
         dolos(submit.wait_for_tx(vec![hash.to_vec()]))
             .await?
@@ -353,7 +366,7 @@ impl CardanoConnector for UtxoRpc {
     }
 
     async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         params::read(&mut query).await
     }
 

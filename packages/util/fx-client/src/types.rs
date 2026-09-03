@@ -1,7 +1,8 @@
 use std::{collections::BTreeMap, fmt};
 
 use chrono::Utc;
-use minicbor::{Decode, Encode};
+use minicbor::Encode;
+use num::{BigInt, ToPrimitive, rational::BigRational};
 use serde::Serialize;
 
 use crate::{Error, Result};
@@ -51,17 +52,25 @@ impl State {
         decimals: u8,
         asset_usd: f64,
     ) -> Result<u64> {
-        let bitcoin = valid_price(self.bitcoin, "bitcoin")?;
-        let asset = valid_price(asset_usd, "asset")?;
-        let scale = scale(decimals)?;
-        checked_floor(amount_msat as f64 * bitcoin * scale as f64 / (100_000_000_000.0 * asset))
+        let bitcoin = price_ratio(self.bitcoin, "bitcoin")?;
+        let asset = price_ratio(asset_usd, "asset")?;
+        let scale = BigInt::from(scale(decimals)?);
+        ratio_floor(
+            BigRational::from_integer(BigInt::from(amount_msat)) * bitcoin * scale
+                / (BigRational::from_integer(BigInt::from(100_000_000_000_u64)) * asset),
+        )
     }
 
     pub fn asset_units_to_msat(&self, amount: u64, decimals: u8, asset_usd: f64) -> Result<u64> {
-        let bitcoin = valid_price(self.bitcoin, "bitcoin")?;
-        let asset = valid_price(asset_usd, "asset")?;
-        let scale = scale(decimals)?;
-        checked_floor(amount as f64 * 100_000_000_000.0 * asset / (bitcoin * scale as f64))
+        let bitcoin = price_ratio(self.bitcoin, "bitcoin")?;
+        let asset = price_ratio(asset_usd, "asset")?;
+        let scale = BigInt::from(scale(decimals)?);
+        ratio_floor(
+            BigRational::from_integer(BigInt::from(amount))
+                * BigInt::from(100_000_000_000_u64)
+                * asset
+                / (bitcoin * scale),
+        )
     }
 }
 
@@ -104,15 +113,16 @@ fn scale(decimals: u8) -> Result<u64> {
         .ok_or_else(|| Error::InvalidData("asset decimal scale overflows u64".into()))
 }
 
-fn checked_floor(value: f64) -> Result<u64> {
-    let value = value.floor();
-    if (0.0..18_446_744_073_709_551_616.0).contains(&value) {
-        Ok(value as u64)
-    } else {
-        Err(Error::InvalidData(
-            "converted amount is outside the u64 range".into(),
-        ))
-    }
+fn price_ratio(price: f64, label: &str) -> Result<BigRational> {
+    BigRational::from_float(valid_price(price, label)?)
+        .ok_or_else(|| Error::InvalidData(format!("{label} price cannot be represented")))
+}
+
+fn ratio_floor(value: BigRational) -> Result<u64> {
+    value
+        .to_integer()
+        .to_u64()
+        .ok_or_else(|| Error::InvalidData("converted amount is outside the u64 range".into()))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Debug)]
@@ -219,6 +229,10 @@ mod tests {
         assert!(invalid_btc.msat_to_asset_units(1, 6, 1.0).is_err());
         assert!(state().msat_to_asset_units(1, 20, 1.0).is_err());
         assert!(state().asset_units_to_msat(u64::MAX, 0, f64::MAX).is_err());
+        assert_eq!(
+            state().asset_units_to_msat((1 << 53) + 1, 6, 1.0).unwrap(),
+            (1 << 53) + 1
+        );
         assert!(state().asset_usd("missing").is_err());
     }
 }

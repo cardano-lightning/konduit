@@ -52,7 +52,7 @@ impl redb::Value for Value {
     }
 
     fn type_name() -> redb::TypeName {
-        redb::TypeName::new("Entry")
+        redb::TypeName::new("EntryV2")
     }
 }
 
@@ -289,11 +289,15 @@ impl Db {
                     .range(wallet.as_slice()..end.as_slice())
                     .map_err(Error::from)?
                     .next()
+                    .transpose()
+                    .map_err(Error::from)?
                     .is_some(),
                 None => channels
                     .range(wallet.as_slice()..)
                     .map_err(Error::from)?
                     .next()
+                    .transpose()
+                    .map_err(Error::from)?
                     .is_some(),
             };
             if !has_channel {
@@ -471,6 +475,7 @@ mod tests {
     fn claim(generation: u64, timestamp: u64) -> SessionClaimRequest {
         SessionClaimRequest::signed(
             &SigningKey::from([1; 32]),
+            [9; 32],
             generation,
             [2; 32],
             [3; 32],
@@ -525,7 +530,14 @@ mod tests {
     #[test]
     fn unknown_wallet_does_not_create_lease() {
         let (_file, db) = lease_db();
-        let claim = SessionClaimRequest::signed(&SigningKey::from([9; 32]), 1, [2; 32], [3; 32], 1);
+        let claim = SessionClaimRequest::signed(
+            &SigningKey::from([9; 32]),
+            [8; 32],
+            1,
+            [2; 32],
+            [3; 32],
+            1,
+        );
         assert!(matches!(
             db.claim_lease(&claim, [4; 32], 100),
             Err(LeaseClaimError::UnknownWallet)
@@ -543,11 +555,10 @@ mod tests {
         db.claim_lease(&claim, [4; 32], 100).unwrap();
         let keytag = db.keys().unwrap().pop().unwrap();
         assert!(matches!(
-            db.update_with_lease(&keytag, &[5; 32], 99, |channel| Ok(channel)),
+            db.update_with_lease(&keytag, &[5; 32], 99, Ok),
             Err(Error::LeaseInvalid)
         ));
-        db.update_with_lease(&keytag, &[4; 32], 99, |channel| Ok(channel))
-            .unwrap();
+        db.update_with_lease(&keytag, &[4; 32], 99, Ok).unwrap();
     }
 
     #[test]

@@ -16,6 +16,8 @@ pub struct MappedAsset {
     pub quantity: u64,
 }
 
+type MappedScript = ([u8; 28], Option<Vec<u8>>, Option<u8>);
+type ParsedScript = (Option<[u8; 28]>, Option<Vec<u8>>, Option<u8>);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MappedUtxo {
     pub transaction_id: [u8; 32],
@@ -197,7 +199,7 @@ fn finish(
     amount: Vec<MappedAsset>,
     datum_hash: Option<[u8; 32]>,
     datum_inline: Option<Vec<u8>>,
-    script: Option<([u8; 28], Option<Vec<u8>>, Option<u8>)>,
+    script: Option<MappedScript>,
 ) -> anyhow::Result<MappedUtxo> {
     if datum_inline
         .as_ref()
@@ -291,9 +293,7 @@ fn policy_unit(policy: &[u8]) -> anyhow::Result<String> {
     Ok(hex::encode(policy))
 }
 
-fn map_minted_script(
-    script: MintedScriptRef<'_>,
-) -> anyhow::Result<([u8; 28], Option<Vec<u8>>, Option<u8>)> {
+fn map_minted_script(script: MintedScriptRef<'_>) -> anyhow::Result<MappedScript> {
     match script {
         PseudoScript::NativeScript(script) => {
             let cbor = script.raw_cbor().to_vec();
@@ -314,9 +314,7 @@ fn map_minted_script(
     }
 }
 
-fn map_parsed_script(
-    script: cardano::Script,
-) -> anyhow::Result<(Option<[u8; 28]>, Option<Vec<u8>>, Option<u8>)> {
+fn map_parsed_script(script: cardano::Script) -> anyhow::Result<ParsedScript> {
     match script.script {
         Some(cardano::script::Script::Native(_)) => Err(anyhow!(
             "native reference script requires original output bytes"
@@ -328,10 +326,7 @@ fn map_parsed_script(
     }
 }
 
-fn ok_script(
-    version: u8,
-    bytes: &[u8],
-) -> anyhow::Result<(Option<[u8; 28]>, Option<Vec<u8>>, Option<u8>)> {
+fn ok_script(version: u8, bytes: &[u8]) -> anyhow::Result<ParsedScript> {
     if bytes.len() > MAX_SCRIPT_BYTES {
         return Err(anyhow!("reference script exceeds size bound"));
     }

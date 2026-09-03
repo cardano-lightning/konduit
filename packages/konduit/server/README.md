@@ -51,6 +51,11 @@ Konduit settlement requires `FX_BASE_CURRENCY=usd`. USD-pegged assets resolve
 locally to USD `1`; configured variable assets require the CoinGecko provider
 and a valid `coin_id`.
 
+Automatic native-asset settlement is disabled unless the operator supplies a
+raw-unit profitability threshold for that asset. Configure comma-separated
+`alias:min_single:min_total` entries with `KONDUIT_ASSET_MINIMUMS` or repeat
+`--asset-minimum`; Ada continues to use `--min-single` and `--min-total`.
+
 The server stores the complete asset definition with each channel. Startup
 fails if a persisted channel's alias, identity, decimals, or pricing differs
 from the active catalog. This release requires closing legacy channels,

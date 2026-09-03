@@ -31,9 +31,10 @@ no built-in token list. It rejects a wrong or additional native asset, an
 invalid policy/name length, and values below the minimum-Ada reserve.
 
 For Ada, capacity is lovelace above the reserve. For a native asset, capacity is
-the selected token quantity; lovelace is reserve only. A native continuing output
-must preserve the input lovelace amount, which must meet the minimum-Ada reserve,
-so no lovelace can be siphoned during a continuing spend. Aliases, decimal
+the selected token quantity; lovelace is reserve only. A native continuing
+output may increase its lovelace reserve as its datum grows, but must never
+decrease the input lovelace amount. This permits min-UTxO top-ups without
+allowing lovelace to be siphoned during a continuing spend. Aliases, decimal
 places, fingerprints, and prices are off-chain metadata and never enter the
 datum.
 

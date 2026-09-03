@@ -51,6 +51,7 @@ impl From<CommonArgs> for AdaptorInfo<TxHelp> {
             tos,
             tx_help,
             channel_parameters,
+            asset_catalog_digest: None,
         }
     }
 }

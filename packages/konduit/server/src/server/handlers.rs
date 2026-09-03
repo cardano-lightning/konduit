@@ -83,7 +83,8 @@ pub async fn claim_session(
     if now.abs_diff(claim.timestamp) > SESSION_TIMESTAMP_SKEW_MILLIS {
         return Err(Error::InvalidSessionTimestamp);
     }
-    if !claim.verify() {
+    let expected_adaptor: [u8; 32] = data.info().channel_parameters.adaptor_key.into();
+    if claim.adaptor_verification_key_hex != expected_adaptor || !claim.verify() {
         return Err(Error::InvalidSessionSignature);
     }
 
@@ -297,6 +298,7 @@ mod tests {
                 host_address,
                 validator: konduit_tx::KONDUIT_VALIDATOR.hash,
             },
+            asset_catalog_digest: None,
         };
         let data = server::Data::new(
             std::sync::Arc::new(bln_client::mock::Client::new()),

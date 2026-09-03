@@ -225,7 +225,7 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        let claim = SessionClaimRequest::signed(&wallet_a, 1, [7; 32], [8; 32], 1);
+        let claim = SessionClaimRequest::signed(&wallet_a, [0; 32], 1, [7; 32], [8; 32], 1);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -282,7 +282,7 @@ mod tests {
             StatusCode::UNAUTHORIZED
         );
 
-        let claim = SessionClaimRequest::signed(&wallet_a, 1, [7; 32], [8; 32], 2);
+        let claim = SessionClaimRequest::signed(&wallet_a, [0; 32], 1, [7; 32], [8; 32], 2);
         db.claim_lease(&claim, [4; 32], now + 60_000).unwrap();
         let error = test::try_call_service(
             &app,
@@ -310,7 +310,7 @@ mod tests {
         .await;
         assert_eq!(response.status(), StatusCode::OK);
 
-        let claim = SessionClaimRequest::signed(&wallet_a, 1, [7; 32], [8; 32], 3);
+        let claim = SessionClaimRequest::signed(&wallet_a, [0; 32], 1, [7; 32], [8; 32], 3);
         db.claim_lease(&claim, [5; 32], now + 60_000).unwrap();
         let error = test::try_call_service(
             &app,

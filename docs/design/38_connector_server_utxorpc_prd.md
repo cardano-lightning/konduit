@@ -296,15 +296,17 @@ mandatory and verified before channel transaction construction is enabled.
 `GET /utxos_at/{address}` must:
 
 - accept only a valid Mainnet Shelley address
-- query the exact payment and delegation pair represented by the address
+- query the exact decoded address bytes through Dolos; credential-pair lookup is
+  insufficient for enterprise and pointer addresses
 - return transaction ID, output index, full address, and all asset values
 - preserve datum hash and inline datum as separate fields
 - return a reference-script hash for native and Plutus reference scripts
 - reject duplicate assets, invalid quantities, malformed hashes, and oversized
   fields
-- return no more than 100 UTxOs; this unpaginated route returns a bounded
-  non-2xx response when the count or serialized response would exceed Ferret's
-  1 MiB response limit
+- exhaust Dolos pagination and return the complete UTxO set, including addresses
+  with more than 100 UTxOs
+- return a bounded non-2xx response only when the serialized response would
+  exceed Ferret's 1 MiB response limit
 
 The server must map directly from the UTxO RPC provider structures needed by the
 wire contract. It must not force the response through `cardano_sdk::Output`,
@@ -338,6 +340,12 @@ service must not switch any other endpoint to Koios.
 The complete `/transactions/{address}` route deadline must be less than
 Ferret's 20-second request timeout.
 
+Dolos retention must cover every transaction Koios can return through this API,
+including direct transaction-ID lookup and the newest 100 transactions of an
+inactive address. Deployments must use archival retention for that horizon. A
+deployment with less retention must reject startup rather than silently omit
+Koios rows.
+
 ## Transaction by ID
 
 `GET /transaction/{id}` must preserve the existing connector-server contract:
@@ -363,6 +371,11 @@ reuse the operation store under an internal transaction-derived key so repeated
 submission of identical bytes remains idempotent. This compatibility route is
 not the future lease-gated Ferret channel submission contract.
 
+Legacy transactions without a validity upper bound remain eligible for
+reconciliation for at most one hour from first persistence. If no canonical
+inclusion is found by then, the server marks the internal record rejected,
+deletes its CBOR, and releases pending capacity.
+
 # Durable L1 Operations
 
 ## Public Contract
@@ -374,6 +387,11 @@ not the future lease-gated Ferret channel submission contract.
 - `transaction`: signed transaction CBOR as lowercase hex
 
 `GET /operations/{operation_id}` returns the stored public operation state.
+
+The client must persist the originating connector URL with each operation and
+send all retries and status reads to that same connector. A reverse proxy must
+provide sticky routing to the single process that owns the redb operation
+database; multi-process deployments require shared operation storage.
 
 Public states are:
 
@@ -397,6 +415,10 @@ Before persistence or submission, the server must:
 - reject CBOR larger than the live Cardano `max_tx_size`
 - require a bounded transaction validity upper bound (TTL), and reject when the
   current tip slot is greater than or equal to it
+
+The operation record also stores a monotonic revision and a submission-lease
+timestamp. Updates are compare-and-set against the observed revision, and an
+abandoned submission may be retried only after its lease expires.
 
 ## Persistent Schema
 
@@ -451,12 +473,16 @@ State mapping:
 - internal `prepared` or `submitting` maps to public `pending`
 - successful Dolos submission returning the expected hash maps to `accepted`
 - a definitive Dolos `SubmitTx` rejection maps to `rejected`
-- canonical inclusion with depth below 5 remains `accepted` or `pending`
+- canonical inclusion with depth below 5 maps to `accepted`
 - depth at least 5 maps to `confirmed`
 - depth at least 2160 maps to `settled`
 - rollback before settlement returns the operation to `pending`
 - canonical absence through the transaction validity bound maps to `rejected`
 - `settled` is terminal and never returns to `prepared` or `pending`
+
+The app maps both `accepted` and `confirmed` to its `Confirming` state and
+continues reconciliation. Only `settled` maps to the app's terminal `Confirmed`
+state; `rejected` maps to `Failed`.
 
 `GET /operations/{id}` may refresh and persist status from Dolos. It must never
 create or submit an operation.

@@ -223,11 +223,7 @@ pub fn era_epoch(
             let next_start = next.start.as_ref()?;
             let slots = next_start.slot.checked_sub(start.slot)?;
             let epochs = next_start.epoch.checked_sub(start.epoch)?;
-            if epochs == 0 {
-                None
-            } else {
-                Some(slots / epochs)
-            }
+            slots.checked_div(epochs)
         })
         .or_else(|| {
             index.checked_sub(1).and_then(|prev| {
@@ -235,11 +231,7 @@ pub fn era_epoch(
                 let prev_start = prev.start.as_ref()?;
                 let slots = start.slot.checked_sub(prev_start.slot)?;
                 let epochs = start.epoch.checked_sub(prev_start.epoch)?;
-                if epochs == 0 {
-                    None
-                } else {
-                    Some(slots / epochs)
-                }
+                slots.checked_div(epochs)
             })
         })
         // ponytail: 432000 Mainnet Shelley epoch length if era summary has a single era

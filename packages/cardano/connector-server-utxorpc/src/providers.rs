@@ -1,11 +1,11 @@
 use crate::error::ApiError;
-use crate::tx::parse_tx_id;
+use crate::tx::{parse_lowercase_hex, parse_tx_id};
 use crate::wire::{AssetObject, TransactionSummary, TxInput, TxOutput, Utxo};
 use async_trait::async_trait;
 use cardano_connector_utxorpc::{SubmitCbor, UtxoRpc};
 use cardano_sdk::{Address, NetworkId, address::kind};
 use serde::Deserialize;
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct TxPresence {
@@ -185,8 +185,9 @@ impl History for KoiosHistory {
         let genesis: Vec<KoiosGenesis> =
             response.json().await.map_err(|_| ApiError::unavailable())?;
         let magic = genesis
-            .first()
-            .and_then(|row| row.networkmagic)
+            .into_iter()
+            .next()
+            .and_then(|row| json_u64(row.networkmagic))
             .ok_or_else(ApiError::unavailable)?;
         if magic != 764824073 {
             return Err(ApiError::unavailable());
@@ -264,17 +265,20 @@ impl History for KoiosHistory {
                 }),
             )
             .await?;
-        match infos.into_iter().next() {
-            Some(info) => map_tx(info, tip_height),
-            None => Ok(None),
+        let Some(info) = infos.into_iter().next() else {
+            return Ok(None);
+        };
+        if info.tx_hash != txid {
+            return Err(ApiError::unavailable());
         }
+        map_tx(info, tip_height)
     }
 }
 
 #[derive(Deserialize)]
 struct KoiosGenesis {
     #[serde(default)]
-    networkmagic: Option<u64>,
+    networkmagic: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -317,9 +321,8 @@ struct KoiosIo {
     tx_index: Option<u32>,
     #[serde(default)]
     value: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_assets")]
     asset_list: Vec<KoiosAsset>,
-    #[serde(default)]
     payment_addr: Option<PaymentAddr>,
     #[serde(default)]
     datum_hash: Option<String>,
@@ -347,6 +350,23 @@ struct KoiosAsset {
     quantity: String,
 }
 
+fn deserialize_assets<'de, D>(deserializer: D) -> Result<Vec<KoiosAsset>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Assets {
+        List(Vec<KoiosAsset>),
+        Json(String),
+    }
+
+    match Assets::deserialize(deserializer)? {
+        Assets::List(assets) => Ok(assets),
+        Assets::Json(json) => serde_json::from_str(&json).map_err(serde::de::Error::custom),
+    }
+}
+
 #[derive(Deserialize, Clone)]
 struct InlineDatum {
     #[serde(default)]
@@ -368,9 +388,7 @@ fn json_u64(value: Option<serde_json::Value>) -> Option<u64> {
 }
 
 fn map_tx(info: TxInfo, tip_height: u64) -> Result<Option<TransactionSummary>, ApiError> {
-    if info.tx_hash.len() != 64 {
-        return Err(ApiError::unavailable());
-    }
+    parse_tx_id(&info.tx_hash).map_err(|_| ApiError::unavailable())?;
     let success = info.valid_contract.unwrap_or(true);
     let inputs = if success {
         info.inputs
@@ -429,10 +447,13 @@ fn map_tx(info: TxInfo, tip_height: u64) -> Result<Option<TransactionSummary>, A
 }
 
 fn map_input(io: KoiosIo) -> Result<TxInput, ApiError> {
-    let output = map_output(io.clone())?;
+    let transaction_id = io.tx_hash.clone().ok_or_else(ApiError::unavailable)?;
+    parse_tx_id(&transaction_id).map_err(|_| ApiError::unavailable())?;
+    let output_index = io.tx_index.ok_or_else(ApiError::unavailable)?;
+    let output = map_output(io)?;
     Ok(TxInput {
-        transaction_id: io.tx_hash.ok_or_else(ApiError::unavailable)?,
-        output_index: io.tx_index.ok_or_else(ApiError::unavailable)?,
+        transaction_id,
+        output_index,
         address: output.address,
         consumed_by: None,
         value: output.value,
@@ -447,31 +468,70 @@ fn map_output(io: KoiosIo) -> Result<TxOutput, ApiError> {
         .payment_addr
         .and_then(|addr| addr.bech32)
         .ok_or_else(ApiError::unavailable)?;
+    Address::<kind::Any>::try_from(address.as_str()).map_err(|_| ApiError::unavailable())?;
+    let mut units = BTreeSet::new();
     let mut value = Vec::new();
     if let Some(lovelace) = io.value {
+        lovelace
+            .parse::<u64>()
+            .map_err(|_| ApiError::unavailable())?;
+        units.insert("lovelace".to_string());
         value.push(AssetObject {
             unit: "lovelace".into(),
             quantity: lovelace,
         });
     }
     for asset in io.asset_list {
+        let policy = parse_lowercase_hex(&asset.policy_id).map_err(|_| ApiError::unavailable())?;
+        let asset_name = asset.asset_name.unwrap_or_default();
+        let name = parse_lowercase_hex(&asset_name).map_err(|_| ApiError::unavailable())?;
+        if policy.len() != 28 || name.len() > 32 {
+            return Err(ApiError::unavailable());
+        }
+        asset
+            .quantity
+            .parse::<u64>()
+            .map_err(|_| ApiError::unavailable())?;
+        let unit = format!("{}{}", asset.policy_id, asset_name);
+        if !units.insert(unit.clone()) {
+            return Err(ApiError::unavailable());
+        }
         value.push(AssetObject {
-            unit: format!(
-                "{}{}",
-                asset.policy_id,
-                asset.asset_name.unwrap_or_default()
-            ),
+            unit,
             quantity: asset.quantity,
         });
     }
+    let datum_hash = validate_hash(io.datum_hash)?;
+    let datum_inline = validate_hex(io.inline_datum.and_then(|datum| datum.bytes))?;
+    let reference_script_hash = validate_hash(io.reference_script.and_then(|script| script.hash))?;
     Ok(TxOutput {
         address,
         consumed_by: None,
         value,
-        datum_hash: io.datum_hash.filter(|h| h.len() == 64),
-        datum_inline: io.inline_datum.and_then(|d| d.bytes),
-        reference_script_hash: io.reference_script.and_then(|s| s.hash),
+        datum_hash,
+        datum_inline,
+        reference_script_hash,
     })
+}
+
+fn validate_hash(value: Option<String>) -> Result<Option<String>, ApiError> {
+    value
+        .map(|hash| {
+            parse_tx_id(&hash)
+                .map(|_| hash)
+                .map_err(|_| ApiError::unavailable())
+        })
+        .transpose()
+}
+
+fn validate_hex(value: Option<String>) -> Result<Option<String>, ApiError> {
+    value
+        .map(|hex| {
+            parse_lowercase_hex(&hex)
+                .map(|_| hex)
+                .map_err(|_| ApiError::unavailable())
+        })
+        .transpose()
 }
 
 fn tx_touches(tx: &TransactionSummary, address: &str) -> bool {
@@ -485,4 +545,28 @@ pub fn parse_mainnet_address(raw: &str) -> Result<Address<kind::Shelley>, ApiErr
         return Err(ApiError::bad_request());
     }
     Ok(address)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn koios_genesis_accepts_string_network_magic() {
+        let rows: Vec<KoiosGenesis> =
+            serde_json::from_str(r#"[{"networkmagic":"764824073"}]"#).unwrap();
+        assert_eq!(
+            json_u64(rows.into_iter().next().unwrap().networkmagic),
+            Some(764824073)
+        );
+    }
+
+    #[test]
+    fn koios_collateral_accepts_json_encoded_assets() {
+        let io: KoiosIo = serde_json::from_str(
+            r#"{"asset_list":"[]","payment_addr":{"bech32":"addr_test1..."}}"#,
+        )
+        .unwrap();
+        assert!(io.asset_list.is_empty());
+    }
 }

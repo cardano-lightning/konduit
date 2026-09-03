@@ -1,7 +1,7 @@
 use crate::config::consumer::Config;
 use cardano_sdk::VerificationKey;
 use konduit_client::l1;
-use konduit_data::{AssetCatalog, AssetId, Duration, Tag};
+use konduit_data::{AssetCatalog, Duration, Tag};
 use konduit_tx::consumer::{Intent, OpenIntent};
 use std::{collections::BTreeMap, str};
 
@@ -18,7 +18,7 @@ pub struct Cmd {
     open: Vec<OpenArgs>,
 
     /// Add displayed whole asset units to a channel
-    #[arg(long, value_names = ["TAG,AMOUNT"])]
+    #[arg(long, value_names = ["TAG,AMOUNT,ASSET_ALIAS"])]
     add: Vec<TagAmount>,
 
     /// Close channel
@@ -59,17 +59,18 @@ impl str::FromStr for OpenArgs {
 struct TagAmount {
     pub tag: Tag,
     pub amount: u64,
+    pub asset_alias: String,
 }
 
 impl str::FromStr for TagAmount {
     type Err = anyhow::Error;
-
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let [a, b] = <[&str; 2]>::try_from(s.split(",").collect::<Vec<&str>>())
-            .map_err(|_err| anyhow::anyhow!("Expected 2 args"))?;
+        let [tag, amount, asset_alias] = <[&str; 3]>::try_from(s.split(',').collect::<Vec<_>>())
+            .map_err(|_| anyhow::anyhow!("Expected 3 args"))?;
         Ok(Self {
-            tag: a.parse()?,
-            amount: b.parse::<u64>()?,
+            tag: tag.parse()?,
+            amount: amount.parse::<u64>()?,
+            asset_alias: asset_alias.to_owned(),
         })
     }
 }
@@ -98,23 +99,6 @@ fn scale(amount: u64, decimals: u8) -> anyhow::Result<u64> {
         .ok_or_else(|| anyhow::anyhow!("amount exceeds asset precision/range"))
 }
 
-fn record_asset(
-    assets: &mut BTreeMap<Tag, AssetId>,
-    tag: Tag,
-    asset: AssetId,
-) -> anyhow::Result<()> {
-    match assets.entry(tag) {
-        std::collections::btree_map::Entry::Vacant(entry) => {
-            entry.insert(asset);
-            Ok(())
-        }
-        std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &asset => Ok(()),
-        std::collections::btree_map::Entry::Occupied(entry) => {
-            Err(anyhow::anyhow!("mixed assets for tag: {:?}", entry.key()))
-        }
-    }
-}
-
 impl Cmd {
     pub async fn run(self, config: &Config) -> anyhow::Result<()> {
         let catalog = AssetCatalog::load(config.asset_config.as_deref())?;
@@ -127,44 +111,49 @@ impl Cmd {
             .map(|args| args.resolve(&catalog))
             .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let mut open_assets = BTreeMap::new();
-        for open in &opens {
-            record_asset(&mut open_assets, open.tag.clone(), open.asset.clone())?;
-        }
+        let requested_adds = add
+            .into_iter()
+            .map(|args| {
+                let definition = catalog
+                    .by_alias(&args.asset_alias)
+                    .ok_or_else(|| anyhow::anyhow!("unknown asset alias '{}'", args.asset_alias))?;
+                Ok((
+                    args.tag,
+                    args.amount,
+                    definition.asset.clone(),
+                    definition.decimals,
+                ))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let channel_assets = if opens.is_empty() && add.is_empty() {
+        let requested_assets = requested_adds
+            .iter()
+            .map(|(tag, _, asset, _)| (tag.clone(), asset.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let matched_assets = if requested_assets.is_empty() {
             BTreeMap::new()
         } else {
             client
                 .channels(None)
                 .await?
-                .try_fold(BTreeMap::new(), |mut assets, channel| {
-                    record_asset(
-                        &mut assets,
-                        channel.tag().clone(),
-                        channel.constants().asset.clone(),
-                    )?;
-                    Ok::<_, anyhow::Error>(assets)
-                })?
+                .filter(|channel| {
+                    requested_assets.get(channel.tag()) == Some(&channel.constants().asset)
+                })
+                .map(|channel| (channel.tag().clone(), channel.constants().asset.clone()))
+                .collect::<BTreeMap<_, _>>()
         };
 
-        for (tag, asset) in &channel_assets {
-            record_asset(&mut open_assets, tag.clone(), asset.clone())?;
-        }
-        let adds = add
+        let adds = requested_adds
             .into_iter()
-            .map(|args| {
-                let asset = channel_assets
-                    .get(&args.tag)
-                    .ok_or_else(|| anyhow::anyhow!("channel not found for add: {:?}", args.tag))?;
-                let definition = catalog
-                    .by_asset(asset)
-                    .ok_or_else(|| anyhow::anyhow!("channel asset is not configured"))?;
+            .map(|(tag, amount, asset, decimals)| {
+                if matched_assets.get(&tag) != Some(&asset) {
+                    anyhow::bail!("channel not found for add: {tag:?}");
+                }
                 Ok((
-                    args.tag,
+                    tag,
                     Intent::Add {
-                        amount: scale(args.amount, definition.decimals)?,
-                        asset: asset.clone(),
+                        amount: scale(amount, decimals)?,
+                        asset,
                     },
                 ))
             })
@@ -213,12 +202,10 @@ mod tests {
     }
 
     #[test]
-    fn mixed_assets_for_one_tag_are_rejected() {
-        let tag = Tag::from(vec![1]);
-        let mut assets = BTreeMap::new();
-        record_asset(&mut assets, tag.clone(), AssetId::Ada).unwrap();
-        assert!(
-            record_asset(&mut assets, tag, AssetId::native([0; 28], vec![]).unwrap(),).is_err()
-        );
+    fn add_requires_explicit_asset_alias() {
+        assert!("deadbeef,2".parse::<TagAmount>().is_err());
+        let parsed = "deadbeef,2,ada".parse::<TagAmount>().unwrap();
+        assert_eq!(parsed.amount, 2);
+        assert_eq!(parsed.asset_alias, "ada");
     }
 }

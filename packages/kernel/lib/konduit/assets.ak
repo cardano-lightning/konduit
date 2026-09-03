@@ -30,7 +30,7 @@ pub fn preserve_lovelace(
 ) -> Bool {
   when asset is {
     Ada -> True
-    Native(_, _) -> lovelace(value_in) == lovelace(value_out)
+    Native(_, _) -> lovelace(value_in) <= lovelace(value_out)
   }
 }
 
@@ -141,6 +141,15 @@ test native_extra_lovelace_is_preserved() {
   let value = assets.from_lovelace(env.min_ada_buffer + 1)
     |> assets.add(test_policy, test_name, 1)
   preserve_lovelace(value, value, asset)
+}
+
+test native_lovelace_can_be_topped_up() {
+  let asset = Native(test_policy, test_name)
+  let value_in = assets.from_lovelace(env.min_ada_buffer)
+    |> assets.add(test_policy, test_name, 1)
+  let value_out = assets.from_lovelace(env.min_ada_buffer + 1)
+    |> assets.add(test_policy, test_name, 1)
+  preserve_lovelace(value_in, value_out, asset)
 }
 
 test native_extra_lovelace_cannot_be_siphoned() fail {

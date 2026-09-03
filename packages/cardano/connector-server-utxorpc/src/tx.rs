@@ -76,10 +76,7 @@ pub fn parse_uuid(input: &str) -> anyhow::Result<[u8; 16]> {
         return Err(anyhow!("invalid uuid"));
     }
     let hex: String = parts.concat();
-    if !hex
-        .bytes()
-        .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F'))
-    {
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(anyhow!("invalid uuid"));
     }
     let decoded = hex::decode(hex).context("uuid")?;

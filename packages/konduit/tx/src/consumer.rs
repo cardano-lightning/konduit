@@ -68,29 +68,19 @@ pub fn tx(
                     unmatched_adds.remove(&tag);
                     Some(u.add(*amount).map_err(|(_, error)| error)?)
                 }
-                Some(Intent::Add { asset, .. }) => {
-                    anyhow::bail!(
-                        "add asset {asset:?} does not match channel asset {channel_asset:?}"
-                    );
-                }
+                Some(Intent::Add { .. }) => None,
                 Some(Intent::Close) => Some(
                     u.close(&bounds.upper.expect("Must have upper bound for close"))
                         .map_err(|(_, error)| error)?,
                 ),
                 None => None,
             },
-            Stage::Closed(_, _, _) => bounds
-                .lower
-                .map(|lower| u.elapse(&lower).map_err(|(_, error)| error))
-                .transpose()?,
+            Stage::Closed(_, _, _) => bounds.lower.and_then(|lower| u.elapse(&lower).ok()),
             Stage::Responded(_, pendings) => {
                 if pendings.is_empty() {
                     u.end(bounds.lower.as_ref()).ok()
                 } else {
-                    bounds
-                        .lower
-                        .map(|lower| u.expire(&lower).map_err(|(_, error)| error))
-                        .transpose()?
+                    bounds.lower.and_then(|lower| u.expire(&lower).ok())
                 }
             }
         };

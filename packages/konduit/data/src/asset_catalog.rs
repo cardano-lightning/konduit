@@ -134,6 +134,18 @@ impl AssetCatalog {
             .collect()
     }
 
+    #[cfg(feature = "json")]
+    pub fn digest(&self) -> Result<String, serde_json::Error> {
+        use cryptoxide::{digest::Digest, sha2::Sha256};
+
+        let canonical = serde_json::to_vec(&self.aliases)?;
+        let mut digest = [0; 32];
+        let mut hasher = Sha256::new();
+        hasher.input(&canonical);
+        hasher.result(&mut digest);
+        Ok(hex::encode(digest))
+    }
+
     fn extend_json(&mut self, json: &str) -> Result<(), CatalogError> {
         for mut definition in serde_json::from_str::<Vec<AssetDefinition>>(json)? {
             definition.alias.make_ascii_lowercase();
@@ -272,5 +284,17 @@ mod tests {
         let definition = AssetCatalog::builtins().by_alias("usdm").unwrap().clone();
         let bytes = minicbor::to_vec(&definition).unwrap();
         assert_eq!(definition, minicbor::decode(&bytes).unwrap());
+    }
+
+    #[test]
+    fn catalog_digest_is_stable_and_content_sensitive() {
+        let builtins = AssetCatalog::builtins();
+        assert_eq!(
+            builtins.digest().unwrap(),
+            AssetCatalog::builtins().digest().unwrap()
+        );
+        let mut extended = AssetCatalog::builtins();
+        extended.extend_json(SNEK).unwrap();
+        assert_ne!(builtins.digest().unwrap(), extended.digest().unwrap());
     }
 }

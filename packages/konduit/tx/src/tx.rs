@@ -1,4 +1,4 @@
-use std::{cmp, collections::BTreeMap};
+use std::collections::BTreeMap;
 
 use cardano_sdk::{
     Address, ChangeStrategy, Hash, Output, PlutusData, SlotBound, Transaction, Value,
@@ -35,14 +35,22 @@ pub fn tx(
         stepped_utxos.values().map(|output| output.value()),
         outputs.iter().map(|output| output.value()),
     )?;
-    let fuel_inputs = fuel::select(fuel, &target)?;
+    let collateral = (!steppeds.inputs().is_empty())
+        .then(|| fuel::select_collateral(fuel, FEE_BUFFER))
+        .transpose()?;
+    let spendable_fuel = fuel
+        .iter()
+        .filter(|(input, _)| collateral.as_ref() != Some(input))
+        .map(|(input, output)| (input.clone(), output.clone()))
+        .collect();
+    let fuel_inputs = fuel::select(&spendable_fuel, &target)?;
     let inputs = steppeds
         .inputs()
         .iter()
         .map(|i| (i.0.clone(), Some(PlutusData::from(i.1.clone()))))
         .chain(fuel_inputs.iter().map(|i| (i.clone(), None)))
         .collect::<Vec<_>>();
-    let collaterals = fuel_inputs.clone();
+    let collaterals = collateral.into_iter().collect::<Vec<_>>();
     let specified_signatories = steppeds.specified_signatories();
     let bounds = steppeds.bounds();
 
@@ -115,16 +123,13 @@ fn wallet_target<'a>(
     } else {
         0
     };
-    let lovelace = cmp::max(
-        i128::from(FEE_BUFFER),
-        i128::from(FEE_BUFFER)
-            .checked_add(lovelace)
-            .ok_or_else(|| anyhow::anyhow!("wallet target lovelace overflow"))?,
-    )
-    .max(i128::from(
+    let required_change = i128::from(FEE_BUFFER)
+        .checked_add(lovelace)
+        .and_then(|value| value.checked_add(change_min))
+        .ok_or_else(|| anyhow::anyhow!("wallet target lovelace overflow"))?;
+    let lovelace = required_change.max(0).max(i128::from(
         Output::new(Address::default(), target.clone()).min_acceptable_value(),
-    ))
-    .max(change_min);
+    ));
     let lovelace =
         u64::try_from(lovelace).map_err(|_| anyhow::anyhow!("wallet target lovelace overflow"))?;
     target.with_lovelace(lovelace);
@@ -178,5 +183,16 @@ mod tests {
         let minimum = Output::new(Address::default(), target.clone()).min_acceptable_value();
         assert!(minimum > FEE_BUFFER);
         assert_eq!(target.lovelace(), minimum);
+    }
+
+    #[test]
+    fn wallet_target_reserves_token_change_after_fee() {
+        let input = Value::new(2_000_000)
+            .with_assets((0..32).map(|policy| (Hash::<28>::new([policy; 28]), [(b"TOKEN", 1)])));
+        let output = Value::new(2_000_000);
+        let target = wallet_target([&input].into_iter(), [&output].into_iter()).unwrap();
+        let change = Value::new(0).with_assets(input.assets().clone());
+        let change_min = Output::new(Address::default(), change).min_acceptable_value();
+        assert_eq!(target.lovelace(), FEE_BUFFER + change_min);
     }
 }

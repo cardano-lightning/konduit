@@ -85,14 +85,14 @@ async fn main() -> anyhow::Result<()> {
 
     // ADMIN
     let admin_every = args.admin.admin_every;
-    let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
+    let admin_config = admin::Config::from_args(args.common.clone(), args.admin, &assets)?;
     let admin = Arc::new(
         admin::Service::new(
             admin_config,
             bln.clone(),
             cardano.clone(),
             db.clone(),
-            assets,
+            assets.clone(),
         )
         .await?,
     );
@@ -119,7 +119,9 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let info = Arc::new(AdaptorInfo::from(args.common));
+    let mut info = AdaptorInfo::from(args.common);
+    info.asset_catalog_digest = Some(assets.digest()?);
+    let info = Arc::new(info);
     let server_data = server::Data::new(bln, db, fx_state, info, admin);
     let server = server::Service::new(args.server, server_data);
 

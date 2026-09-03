@@ -8,6 +8,8 @@ use serde_with::{hex::Hex, serde_as};
 pub struct SessionClaimRequest {
     #[serde_as(as = "Hex")]
     pub wallet_verification_key_hex: [u8; 32],
+    #[serde_as(as = "Hex")]
+    pub adaptor_verification_key_hex: [u8; 32],
     #[serde(deserialize_with = "deserialize_generation")]
     pub generation: u64,
     #[serde_as(as = "Hex")]
@@ -22,7 +24,8 @@ pub struct SessionClaimRequest {
 impl SessionClaimRequest {
     pub fn message(&self) -> String {
         format!(
-            "{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}",
+            hex::encode(self.adaptor_verification_key_hex),
             self.generation,
             hex::encode(self.backup_hash_hex),
             hex::encode(self.device_public_key_hex),
@@ -32,6 +35,7 @@ impl SessionClaimRequest {
 
     pub fn signed(
         signing_key: &SigningKey,
+        adaptor_verification_key: [u8; 32],
         generation: u64,
         backup_hash: [u8; 32],
         device_public_key: [u8; 32],
@@ -40,6 +44,7 @@ impl SessionClaimRequest {
         assert!(generation > 0, "session generation must be at least 1");
         let mut claim = Self {
             wallet_verification_key_hex: signing_key.to_verification_key().into(),
+            adaptor_verification_key_hex: adaptor_verification_key,
             generation,
             backup_hash_hex: backup_hash,
             device_public_key_hex: device_public_key,
@@ -82,14 +87,26 @@ mod tests {
     use serde_json::json;
 
     fn claim() -> SessionClaimRequest {
-        SessionClaimRequest::signed(&SigningKey::from([7; 32]), 3, [0xab; 32], [0xcd; 32], 42)
+        SessionClaimRequest::signed(
+            &SigningKey::from([7; 32]),
+            [9; 32],
+            3,
+            [0xab; 32],
+            [0xcd; 32],
+            42,
+        )
     }
 
     #[test]
     fn message_has_canonical_format() {
         assert_eq!(
             claim().message(),
-            format!("3\n{}\n{}\n42", "ab".repeat(32), "cd".repeat(32))
+            format!(
+                "{}\n3\n{}\n{}\n42",
+                "09".repeat(32),
+                "ab".repeat(32),
+                "cd".repeat(32)
+            )
         );
     }
 
@@ -100,6 +117,9 @@ mod tests {
 
         let mut changed = claim.clone();
         changed.generation += 1;
+        assert!(!changed.verify());
+        changed = claim.clone();
+        changed.adaptor_verification_key_hex[0] ^= 1;
         assert!(!changed.verify());
         changed = claim.clone();
         changed.backup_hash_hex[0] ^= 1;
@@ -140,6 +160,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "session generation must be at least 1")]
     fn signed_rejects_zero_generation() {
-        SessionClaimRequest::signed(&SigningKey::from([7; 32]), 0, [0; 32], [0; 32], 0);
+        SessionClaimRequest::signed(&SigningKey::from([7; 32]), [9; 32], 0, [0; 32], [0; 32], 0);
     }
 }

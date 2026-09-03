@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
@@ -19,10 +19,20 @@ pub struct InsufficientTotalGain {
 
 #[derive(Debug, Clone)]
 pub struct AdaptorPreferences {
-    // Prevents spending a utxo that would result in too little gain relative to the cost of inclusion.
+    /// Ada-denominated minimums.
     pub min_single: u64,
-    // Prevents a transaction in which the total gain is too little
     pub min_total: u64,
+    /// Raw-unit minimums for explicitly enabled native assets.
+    pub asset_minimums: BTreeMap<AssetId, (u64, u64)>,
+}
+
+impl AdaptorPreferences {
+    fn minimums(&self, asset: &AssetId) -> Option<(u64, u64)> {
+        match asset {
+            AssetId::Ada => Some((self.min_single, self.min_total)),
+            _ => self.asset_minimums.get(asset).copied(),
+        }
+    }
 }
 
 // WARNING :: This transaction does **not** verify that the resultant tx does not
@@ -33,7 +43,7 @@ pub fn tx(
     network_parameters: &NetworkParameters,
     preferences: &AdaptorPreferences,
     wallet: &VerificationKey,
-    receipts: &BTreeMap<Keytag, Receipt>,
+    receipts: &BTreeMap<Keytag, (AssetId, Receipt)>,
     utxos: &Utxos,
     upper: &Duration,
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
@@ -42,40 +52,20 @@ pub fn tx(
         return Err(anyhow::anyhow!("No konduit reference found"));
     };
     let change_address = wallet.to_address(network_parameters.network_id);
-    let mut receipt_assets = BTreeMap::new();
-    let mut skip = BTreeSet::new();
-    for u in utxos
-        .iter()
-        .filter_map(|u| ChannelUtxo::try_from(u).ok())
-        .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
-        .filter(|u| receipts.contains_key(&u.data().keytag()))
-    {
-        let keytag = u.data().keytag();
-        let asset = u.data().constants().asset.clone();
-        if receipt_assets
-            .get(&keytag)
-            .is_some_and(|expected| expected != &asset)
-        {
-            skip.insert(keytag);
-            continue;
-        }
-        receipt_assets.insert(keytag, asset);
-    }
     let groups = utxos
         .iter()
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
         .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
-        .filter(|u| !skip.contains(&u.data().keytag()))
         .filter_map(|u| {
             let keytag = u.data().keytag();
-            if receipt_assets.get(&keytag) != Some(&u.data().constants().asset) {
+            let (asset, receipt) = receipts.get(&keytag)?;
+            if asset != &u.data().constants().asset {
                 return None;
             }
-            receipts
-                .get(&keytag)
-                .and_then(|receipt| u.any_sub(receipt, upper).ok())
+            let (min_single, _) = preferences.minimums(asset)?;
+            let stepped = u.any_sub(receipt, upper).ok()?;
+            (stepped.gain_i128() >= i128::from(min_single)).then_some(stepped)
         })
-        .filter(|u| u.gain_i128() >= i128::from(preferences.min_single))
         .fold(BTreeMap::<AssetId, Vec<_>>::new(), |mut groups, stepped| {
             groups
                 .entry(stepped.data().channel().constants().asset.clone())
@@ -89,10 +79,11 @@ pub fn tx(
         .max()
         .unwrap_or(0);
     let eligible = groups
-        .into_values()
-        .filter(|group| {
-            group.iter().map(|step| step.gain_i128()).sum::<i128>()
-                >= i128::from(preferences.min_total)
+        .into_iter()
+        .filter_map(|(asset, group)| {
+            let (_, min_total) = preferences.minimums(&asset)?;
+            (group.iter().map(|step| step.gain_i128()).sum::<i128>() >= i128::from(min_total))
+                .then_some(group)
         })
         .collect::<Vec<_>>();
     if eligible.is_empty() {

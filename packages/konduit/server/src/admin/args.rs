@@ -10,4 +10,7 @@ pub struct AdminArgs {
     pub min_single: u64,
     #[arg(long, env = crate::env::MIN_TOTAL, default_value_t = 1_000_000)]
     pub min_total: u64,
+    /// Native-asset settlement minimums as `alias:min_single:min_total`.
+    #[arg(long, env = "KONDUIT_ASSET_MINIMUMS", value_delimiter = ',')]
+    pub asset_minimum: Vec<String>,
 }

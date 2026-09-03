@@ -2,7 +2,10 @@ use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::Credential;
 use konduit_tmp::{Keytag, Receipt};
-use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
+use konduit_tx::{
+    self, Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, Utxos,
+    adaptor::AdaptorPreferences,
+};
 use std::collections::BTreeMap;
 
 /// Create and submit Konduit transactions
@@ -23,10 +26,11 @@ impl Cmd {
         let connector = config.connector.connector().await?;
         let own_key = config.wallet.to_verification_key();
         let own_address = own_key.to_address(connector.network().into());
-        let receipts = self.receipt.into_iter().collect::<BTreeMap<_, _>>();
+        let receipts = self.receipt;
         let preferences = AdaptorPreferences {
             min_single: 10_000,
             min_total: 1_000_000,
+            asset_minimums: BTreeMap::new(),
         };
         let bounds = Bounds::twenty_mins();
         let upper = bounds.upper.unwrap();
@@ -37,7 +41,7 @@ impl Cmd {
             network_id,
             protocol_parameters,
         };
-        let utxos = connector
+        let utxos: Utxos = connector
             .utxos_at(&own_address.payment(), None)
             .await?
             .into_iter()
@@ -55,6 +59,23 @@ impl Cmd {
                     .await?,
             )
             .collect();
+        let receipts = receipts
+            .into_iter()
+            .map(|(keytag, receipt)| {
+                let mut assets = utxos
+                    .iter()
+                    .filter_map(|utxo| ChannelUtxo::try_from(utxo).ok())
+                    .filter(|channel| channel.data().keytag() == keytag)
+                    .map(|channel| channel.data().constants().asset.clone());
+                let asset = assets
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("no channel matches receipt {keytag}"))?;
+                if assets.any(|candidate| candidate != asset) {
+                    anyhow::bail!("receipt {keytag} matches channels with different assets");
+                }
+                Ok((keytag, (asset, receipt)))
+            })
+            .collect::<anyhow::Result<BTreeMap<_, _>>>()?;
         let mut tx = konduit_tx::adaptor::tx(
             &network_parameters,
             &preferences,

@@ -14,8 +14,6 @@ use cardano_sdk::{Address, address::kind};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-const MAINNET_ADDR: &str = "addr1vy2q4s9vxk3q8l0xq0l0xq0l0xq0l0xq0l0xq0l0xq0l0xq0l0xq0l0";
-
 struct FakeLedger {
     tip: (u64, u64),
     ready: bool,
@@ -301,6 +299,30 @@ async fn operations_reject_unknown_fields() {
 }
 
 #[actix_web::test]
+async fn write_routes_reject_non_json_before_parsing() {
+    let app = test::init_service(app(state(
+        default_ledger(),
+        FakeHistory {
+            ping: true,
+            by_id: HashMap::new(),
+            by_addr: HashMap::new(),
+            fail: false,
+        },
+    )))
+    .await;
+    let response = test::call_service(
+        &app,
+        TestRequest::post()
+            .uri("/operations")
+            .insert_header(("content-type", "text/plain"))
+            .set_payload("{}")
+            .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
 async fn openapi_is_served() {
     let app = test::init_service(app(state(
         default_ledger(),
@@ -430,12 +452,66 @@ async fn settled_is_not_reset() {
         .unwrap();
     record.state = InternalState::Settled;
     record.cbor = None;
-    store.put(key, record.clone()).await.unwrap();
+    store.put(key, &mut record).await.unwrap();
     store
         .reconcile_one(&default_ledger(), key, &mut record, 100, 50_000, true)
         .await
         .unwrap();
     assert_eq!(record.state, InternalState::Settled);
+}
+
+#[actix_web::test]
+async fn stale_revision_cannot_roll_back_newer_state() {
+    let store = tmp_db();
+    let uuid = "550e8400-e29b-41d4-a716-446655440005";
+    let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
+    let txid = [10u8; 32];
+    let signed = SignedTx {
+        hash: txid,
+        digest: [11u8; 32],
+        ttl: Some(99),
+        bytes: vec![9, 9, 9],
+    };
+    let mut stale = store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    let mut current = stale.clone();
+    current.state = InternalState::Accepted;
+    store.put(key, &mut current).await.unwrap();
+    stale.state = InternalState::Prepared;
+    store.put(key, &mut stale).await.unwrap();
+    assert_eq!(stale.state, InternalState::Accepted);
+    assert_eq!(
+        store.get(key).await.unwrap().unwrap().state,
+        InternalState::Accepted
+    );
+}
+
+#[actix_web::test]
+async fn legacy_operation_without_ttl_expires() {
+    let store = tmp_db();
+    let uuid = "550e8400-e29b-41d4-a716-446655440006";
+    let key = OpsStore::legacy_key(&parse_uuid(uuid).unwrap());
+    let txid = [12u8; 32];
+    let signed = SignedTx {
+        hash: txid,
+        digest: [13u8; 32],
+        ttl: None,
+        bytes: vec![9, 9, 9],
+    };
+    let mut record = store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    record.created_at_epoch_secs = 0;
+    store.put(key, &mut record).await.unwrap();
+    store
+        .reconcile_one(&default_ledger(), key, &mut record, 100, 50_000, false)
+        .await
+        .unwrap();
+    assert_eq!(record.state, InternalState::Rejected);
+    assert!(record.cbor.is_none());
 }
 #[test]
 fn legacy_submit_uuid_is_canonical() {

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const OPERATIONS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("operations");
 const TX_IDS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("transaction_ids");
@@ -59,6 +60,12 @@ pub struct Record {
     pub state: InternalState,
     pub inclusion_height: Option<u64>,
     pub attempts: u32,
+    #[serde(default)]
+    pub revision: u64,
+    #[serde(default)]
+    pub submit_started_at: Option<u64>,
+    #[serde(default)]
+    pub created_at_epoch_secs: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -75,6 +82,12 @@ impl OperationKey {
     fn as_slice(&self) -> &[u8] {
         &self.0
     }
+}
+
+struct StoreLimits {
+    path: PathBuf,
+    max_pending: usize,
+    max_bytes: u64,
 }
 
 pub struct OpsStore {
@@ -165,20 +178,13 @@ impl OpsStore {
         uuid: String,
     ) -> Result<Record, ApiError> {
         let db = self.db.clone();
-        let path = self.path.clone();
-        let max_pending = self.max_pending;
-        let max_bytes = self.max_bytes;
+        let limits = StoreLimits {
+            path: self.path.clone(),
+            max_pending: self.max_pending,
+            max_bytes: self.max_bytes,
+        };
         tokio::task::spawn_blocking(move || {
-            Self::persist_new_blocking(
-                &db,
-                &path,
-                max_pending,
-                max_bytes,
-                key,
-                txid,
-                &signed,
-                &uuid,
-            )
+            Self::persist_new_blocking(&db, &limits, key, txid, &signed, &uuid)
         })
         .await
         .map_err(|_| ApiError::unavailable())?
@@ -186,17 +192,12 @@ impl OpsStore {
 
     fn persist_new_blocking(
         db: &Database,
-        path: &Path,
-        max_pending: usize,
-        max_bytes: u64,
+        limits: &StoreLimits,
         key: OperationKey,
         txid: [u8; 32],
         signed: &SignedTx,
         uuid: &str,
     ) -> Result<Record, ApiError> {
-        if Self::file_len(path)? > max_bytes {
-            return Err(ApiError::too_many());
-        }
         let digest = hex::encode(signed.digest);
         let expected = hex::encode(txid);
         let tx = db.begin_write().map_err(|_| ApiError::unavailable())?;
@@ -225,7 +226,9 @@ impl OpsStore {
                 } else {
                     Err(ApiError::conflict())
                 }
-            } else if Self::count_pending(&operations)? >= max_pending {
+            } else if Self::count_pending(&operations)? >= limits.max_pending
+                || Self::file_len(&limits.path)? > limits.max_bytes
+            {
                 Err(ApiError::too_many())
             } else {
                 let record = Record {
@@ -237,6 +240,12 @@ impl OpsStore {
                     state: InternalState::Prepared,
                     inclusion_height: None,
                     attempts: 0,
+                    revision: 0,
+                    submit_started_at: None,
+                    created_at_epoch_secs: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_err(|_| ApiError::unexpected())?
+                        .as_secs(),
                 };
                 let bytes = serde_json::to_vec(&record).map_err(|_| ApiError::unexpected())?;
                 operations
@@ -275,11 +284,22 @@ impl OpsStore {
             drop(existing);
             let mut record: Record =
                 serde_json::from_slice(&bytes).map_err(|_| ApiError::unexpected())?;
-            if record.state != InternalState::Prepared {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| ApiError::unexpected())?
+                .as_secs();
+            let lease_expired = record
+                .submit_started_at
+                .is_none_or(|started| now.saturating_sub(started) >= 30);
+            if record.state != InternalState::Prepared
+                && !(record.state == InternalState::Submitting && lease_expired)
+            {
                 Ok(None)
             } else {
                 record.state = InternalState::Submitting;
-                record.attempts += 1;
+                record.submit_started_at = Some(now);
+                record.attempts = record.attempts.saturating_add(1);
+                record.revision = record.revision.saturating_add(1);
                 let stored = serde_json::to_vec(&record).map_err(|_| ApiError::unexpected())?;
                 operations
                     .insert(key.as_slice(), stored.as_slice())
@@ -291,16 +311,22 @@ impl OpsStore {
         result
     }
 
-    pub async fn put(&self, key: OperationKey, record: Record) -> Result<(), ApiError> {
+    pub async fn put(&self, key: OperationKey, record: &mut Record) -> Result<(), ApiError> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || Self::put_blocking(&db, key, &record))
+        let proposed = record.clone();
+        *record = tokio::task::spawn_blocking(move || Self::put_blocking(&db, key, proposed))
             .await
-            .map_err(|_| ApiError::unavailable())?
+            .map_err(|_| ApiError::unavailable())??;
+        Ok(())
     }
 
-    fn put_blocking(db: &Database, key: OperationKey, record: &Record) -> Result<(), ApiError> {
+    fn put_blocking(
+        db: &Database,
+        key: OperationKey,
+        mut proposed: Record,
+    ) -> Result<Record, ApiError> {
         let tx = db.begin_write().map_err(|_| ApiError::unavailable())?;
-        {
+        let result = {
             let mut operations = tx
                 .open_table(OPERATIONS)
                 .map_err(|_| ApiError::unavailable())?;
@@ -310,25 +336,28 @@ impl OpsStore {
             {
                 let current: Record =
                     serde_json::from_slice(existing.value()).map_err(|_| ApiError::unexpected())?;
-                if current.state == InternalState::Settled
+                if current.revision != proposed.revision
+                    || current.state == InternalState::Settled
                     || current.state == InternalState::Rejected
-                    || (current.state.rank() > record.state.rank()
-                        && !(record.state == InternalState::Prepared
+                    || (current.state.rank() > proposed.state.rank()
+                        && !(proposed.state == InternalState::Prepared
                             && matches!(
                                 current.state,
                                 InternalState::Accepted | InternalState::Confirmed
                             )))
                 {
-                    return Ok(());
+                    return Ok(current);
                 }
             }
-            let bytes = serde_json::to_vec(record).map_err(|_| ApiError::unexpected())?;
+            proposed.revision = proposed.revision.saturating_add(1);
+            let bytes = serde_json::to_vec(&proposed).map_err(|_| ApiError::unexpected())?;
             operations
                 .insert(key.as_slice(), bytes.as_slice())
                 .map_err(|_| ApiError::unavailable())?;
-        }
+            proposed
+        };
         tx.commit().map_err(|_| ApiError::unavailable())?;
-        Ok(())
+        Ok(result)
     }
 
     pub fn response(record: &Record, depth: u64) -> OperationResponse {
@@ -376,38 +405,46 @@ impl OpsStore {
                 if record.state == InternalState::Settled {
                     record.cbor = None;
                 }
-                self.put(key, record.clone()).await?;
+                self.put(key, record).await?;
                 Ok(depth)
             }
             None => {
                 if record.state == InternalState::Settled {
                     return Ok(0);
                 }
+                if record.ttl.is_none() {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_err(|_| ApiError::unexpected())?
+                        .as_secs();
+                    if record.created_at_epoch_secs == 0
+                        || now.saturating_sub(record.created_at_epoch_secs) >= 3600
+                    {
+                        record.state = InternalState::Rejected;
+                        record.cbor = None;
+                        self.put(key, record).await?;
+                        return Ok(0);
+                    }
+                }
                 if record.ttl.is_some_and(|ttl| tip_slot >= ttl) {
                     record.state = InternalState::Rejected;
                     record.cbor = None;
-                    self.put(key, record.clone()).await?;
+                    self.put(key, record).await?;
                     return Ok(0);
                 }
                 if record.inclusion_height.is_some() {
                     record.inclusion_height = None;
                     record.state = InternalState::Prepared;
-                    self.put(key, record.clone()).await?;
+                    self.put(key, record).await?;
                 }
                 if record.state == InternalState::Accepted {
                     return Ok(0);
                 }
                 if submit && record.cbor.is_some() {
-                    match record.state {
-                        InternalState::Prepared => {
-                            let Some(claimed) = self.claim_submit(key).await? else {
-                                return Ok(0);
-                            };
-                            *record = claimed;
-                        }
-                        InternalState::Submitting => {}
-                        _ => return Ok(0),
-                    }
+                    let Some(claimed) = self.claim_submit(key).await? else {
+                        return Ok(0);
+                    };
+                    *record = claimed;
                     let Some(cbor_hex) = record.cbor.as_ref() else {
                         return Ok(0);
                     };
@@ -425,7 +462,8 @@ impl OpsStore {
                         | SubmitResult::InputsSpent
                         | SubmitResult::Indeterminate => {}
                     }
-                    self.put(key, record.clone()).await?;
+                    record.submit_started_at = None;
+                    self.put(key, record).await?;
                 }
                 Ok(0)
             }
@@ -437,6 +475,19 @@ impl OpsStore {
         tokio::task::spawn_blocking(move || Self::pending_ids_blocking(&db))
             .await
             .map_err(|_| ApiError::unavailable())?
+    }
+
+    pub async fn ready(&self) -> Result<(), ApiError> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let tx = db.begin_read().map_err(|_| ApiError::unavailable())?;
+            let _ = tx
+                .open_table(OPERATIONS)
+                .map_err(|_| ApiError::unavailable())?;
+            Ok(())
+        })
+        .await
+        .map_err(|_| ApiError::unavailable())?
     }
 
     fn pending_ids_blocking(db: &Database) -> Result<Vec<OperationKey>, ApiError> {

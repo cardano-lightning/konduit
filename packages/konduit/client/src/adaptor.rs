@@ -182,6 +182,7 @@ mod tests {
                     tag_length: 0,
                 },
                 tx_help: (),
+                asset_catalog_digest: None,
             },
             keytag: None,
             session: None,

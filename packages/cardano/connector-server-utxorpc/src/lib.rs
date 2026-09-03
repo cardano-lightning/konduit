@@ -8,7 +8,8 @@ mod wire;
 pub use error::ApiError;
 pub use http::{AppState, Limits, OPENAPI_YAML, app, serve};
 pub use ops::OpsStore;
-pub use providers::{DolosLedger, History, KoiosHistory, Ledger};
+pub use providers::{DolosLedger, History, KoiosHistory, Ledger, SubmitResult, TxPresence};
+pub use wire::{TransactionSummary, Utxo};
 
 use cardano_connector_utxorpc::{Config, UtxoRpc, live_network};
 use cardano_sdk::Network;
@@ -70,6 +71,7 @@ pub async fn boot(
 
 pub async fn reconcile_loop<L: Ledger>(ledger: std::sync::Arc<L>, ops: std::sync::Arc<OpsStore>) {
     let mut interval = tokio::time::interval(Duration::from_secs(5));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         interval.tick().await;
         let ids = match ops.pending_ids().await {

@@ -10,7 +10,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
+use cardano_sdk::{
+    Address, Credential, Hash, Input, Output, SigningKey, VerificationKey, address::kind,
+};
 use konduit_data::{AssetCatalog, AssetDefinition, AssetId, Lock, Secret};
 use konduit_tmp::{ChannelParameters, Keytag};
 use konduit_tx::{
@@ -84,9 +86,13 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         };
         // Treat reference script utxo as constant.
         // If this moves, the service needs to be restarted.
+        let exact_host: Address<kind::Any> = host_address.clone().into();
         let host_utxos = cardano
             .utxos_at(&host_address.payment(), host_address.delegation().as_ref())
-            .await?;
+            .await?
+            .into_iter()
+            .filter(|(_, output)| output.address() == &exact_host)
+            .collect::<BTreeMap<_, _>>();
         let script_candidates = host_utxos
             .iter()
             .filter_map(|(input, output)| {
@@ -253,7 +259,12 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
                     self.db.insert(channel::open(k, definition, retainers)?)?;
                 }
                 CoItem::Both(k, (definition, retainers)) => {
-                    self.db.update(&k, channel::update(definition, retainers))?
+                    match self.db.update(&k, channel::update(definition, retainers)) {
+                        Err(db::Error::Channel(channel::Error::AssetDefinitionMismatch)) => {
+                            self.db.update(&k, channel::close)?
+                        }
+                        result => result?,
+                    }
                 }
             };
         }
@@ -265,10 +276,11 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         let keys: Vec<Keytag> = self.db.keys()?;
         let receipts = keys
             .into_iter()
-            .filter_map(|k| {
-                let channel = self.db.get(&k).ok().flatten()?;
-                let receipt = channel.receipt().as_ref()?;
-                Some((k, receipt.to_owned()))
+            .filter_map(|keytag| {
+                let channel = self.db.get(&keytag).ok().flatten()?;
+                self.assets.by_asset(channel.asset())?;
+                let receipt = channel.receipt().as_ref()?.to_owned();
+                Some((keytag, (channel.asset().clone(), receipt)))
             })
             .collect::<BTreeMap<_, _>>();
         // FIXME :: This is the fudge. We treat tip as snapshot.
@@ -393,6 +405,7 @@ mod tests {
             tx_preferences: AdaptorPreferences {
                 min_single: 1,
                 min_total: 1,
+                asset_minimums: BTreeMap::new(),
             },
             host_address: test_host_address(),
         }

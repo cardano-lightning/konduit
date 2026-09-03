@@ -29,6 +29,7 @@ cli = [
   "serde_json",
   "cardano-connector-direct",
   "konduit-data/serde",
+  "konduit-data/json",
 ]
 
 [dependencies]

@@ -29,6 +29,7 @@ impl AdaptorInfo {
             },
             tos: TosInfo { flat_fee: fee },
             tx_help: (),
+            asset_catalog_digest: None,
         })
     }
 

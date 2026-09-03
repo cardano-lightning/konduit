@@ -238,8 +238,6 @@ impl Data {
                 .map_err(|error| CommitmentError::Fx(error.to_string()))?;
             fx.msat_to_asset_units(FEE_PLACEHOLDER_MSAT, definition.decimals, usd)
                 .map_err(|error| CommitmentError::Fx(error.to_string()))?
-                .checked_add(1)
-                .ok_or(CommitmentError::Fee)?
         };
         let effective_asset_amount = locked
             .amount()
