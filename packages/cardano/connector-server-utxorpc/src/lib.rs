@@ -20,6 +20,7 @@ use std::time::Duration;
 pub struct ServerConfig {
     pub dolos_endpoint: String,
     pub koios_url: String,
+    pub koios_api_key: Option<String>,
     pub db_path: PathBuf,
     pub bind: String,
     pub max_pending: usize,
@@ -48,7 +49,7 @@ pub async fn boot(
         .ready()
         .await
         .map_err(|_| anyhow::anyhow!("Dolos is unavailable"))?;
-    let history = Arc::new(KoiosHistory::new(config.koios_url)?);
+    let history = Arc::new(KoiosHistory::new(config.koios_url, config.koios_api_key)?);
     let (height, _) = ledger
         .tip()
         .await

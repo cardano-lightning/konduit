@@ -4,6 +4,7 @@ use crate::wire::{AssetObject, TransactionSummary, TxInput, TxOutput, Utxo};
 use async_trait::async_trait;
 use cardano_connector_utxorpc::{SubmitCbor, UtxoRpc};
 use cardano_sdk::{Address, NetworkId, address::kind};
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -45,14 +46,6 @@ impl DolosLedger {
 #[async_trait]
 impl Ledger for DolosLedger {
     async fn ready(&self) -> Result<(), ApiError> {
-        let start = self
-            .inner
-            .history_start_height()
-            .await
-            .map_err(ApiError::from)?;
-        if start > 1 {
-            return Err(ApiError::unavailable());
-        }
         let _ = self
             .inner
             .bloxbean_parameters()
@@ -116,10 +109,17 @@ pub struct KoiosHistory {
 }
 
 impl KoiosHistory {
-    pub fn new(base: String) -> anyhow::Result<Self> {
+    pub fn new(base: String, api_key: Option<String>) -> anyhow::Result<Self> {
+        let mut headers = HeaderMap::new();
+        if let Some(api_key) = api_key.filter(|key| !key.trim().is_empty()) {
+            let mut authorization = HeaderValue::from_str(&format!("Bearer {}", api_key.trim()))?;
+            authorization.set_sensitive(true);
+            headers.insert(AUTHORIZATION, authorization);
+        }
         Ok(Self {
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
+                .default_headers(headers)
                 .build()?,
             base: base.trim_end_matches('/').to_string(),
         })
@@ -131,11 +131,19 @@ impl KoiosHistory {
             .get(format!("{}{path}", self.base))
             .send()
             .await
-            .map_err(|_| ApiError::unavailable())?;
-        if !response.status().is_success() {
+            .map_err(|error| {
+                log::warn!("Koios GET {path} failed: {error}");
+                ApiError::unavailable()
+            })?;
+        let status = response.status();
+        if !status.is_success() {
+            log::warn!("Koios GET {path} returned {status}");
             return Err(ApiError::unavailable());
         }
-        response.json().await.map_err(|_| ApiError::unavailable())
+        response.json().await.map_err(|error| {
+            log::warn!("Koios GET {path} returned invalid JSON: {error:?}");
+            ApiError::unavailable()
+        })
     }
     async fn post<T: serde::de::DeserializeOwned>(
         &self,
@@ -148,45 +156,27 @@ impl KoiosHistory {
             .json(&body)
             .send()
             .await
-            .map_err(|_| ApiError::unavailable())?;
+            .map_err(|error| {
+                log::warn!("Koios POST {path} failed: {error}");
+                ApiError::unavailable()
+            })?;
         let status = response.status();
-        if status.as_u16() == 429 || status.is_server_error() {
-            return Err(ApiError::unavailable());
-        }
         if !status.is_success() {
+            log::warn!("Koios POST {path} returned {status}");
             return Err(ApiError::unavailable());
         }
-        response.json().await.map_err(|_| ApiError::unavailable())
+        response.json().await.map_err(|error| {
+            log::warn!("Koios POST {path} returned invalid JSON: {error:?}");
+            ApiError::unavailable()
+        })
     }
 }
 
 #[async_trait]
 impl History for KoiosHistory {
     async fn ready(&self, dolos_height: u64) -> Result<(), ApiError> {
-        let checks: (
-            Vec<KoiosGenesis>,
-            Vec<KoiosTip>,
-            Vec<AddressTx>,
-            Vec<TxInfo>,
-        ) = tokio::try_join!(
-            self.get("/genesis"),
-            self.get("/tip"),
-            self.post(
-                "/address_txs?limit=1",
-                serde_json::json!({ "_addresses": [] })
-            ),
-            self.post(
-                "/tx_info",
-                serde_json::json!({
-                    "_tx_hashes": [],
-                    "_inputs": true,
-                    "_assets": true,
-                    "_scripts": true,
-                    "_bytecode": true
-                })
-            )
-        )?;
-        let (genesis, tip, _, _) = checks;
+        let (genesis, tip): (Vec<KoiosGenesis>, Vec<KoiosTip>) =
+            tokio::try_join!(self.get("/genesis"), self.get("/tip"))?;
         let magic = genesis
             .into_iter()
             .next()
@@ -198,6 +188,9 @@ impl History for KoiosHistory {
             .map(|row| row.block_height)
             .ok_or_else(ApiError::unavailable)?;
         if magic != 764824073 || koios_height.abs_diff(dolos_height) > MAX_DOLOS_TIP_LAG {
+            log::warn!(
+                "Koios readiness mismatch: network_magic={magic}, koios_height={koios_height}, dolos_height={dolos_height}, max_lag={MAX_DOLOS_TIP_LAG}"
+            );
             return Err(ApiError::unavailable());
         }
         Ok(())
@@ -304,19 +297,24 @@ struct TxInfo {
     invalid_before: Option<u64>,
     #[serde(default, deserialize_with = "deserialize_optional_u64")]
     invalid_after: Option<u64>,
-    valid_contract: bool,
+    #[serde(default, deserialize_with = "deserialize_null_vec")]
+    plutus_contracts: Vec<PlutusContract>,
     inputs: Vec<KoiosIo>,
     outputs: Vec<KoiosIo>,
     #[serde(default, deserialize_with = "deserialize_null_vec")]
     collateral_inputs: Vec<KoiosIo>,
-    #[serde(default, deserialize_with = "deserialize_null_vec")]
-    collateral_output: Vec<KoiosIo>,
+    collateral_output: Option<KoiosIo>,
     #[serde(
         default,
         rename = "reference_inputs",
         deserialize_with = "deserialize_null_vec"
     )]
     _reference_inputs: Vec<KoiosIo>,
+}
+
+#[derive(Deserialize)]
+struct PlutusContract {
+    valid_contract: bool,
 }
 
 #[derive(Deserialize, Clone)]
@@ -423,7 +421,11 @@ where
 
 fn map_tx(info: TxInfo) -> Result<TransactionSummary, ApiError> {
     parse_tx_id(&info.tx_hash).map_err(|_| ApiError::unavailable())?;
-    let inputs = if info.valid_contract {
+    let valid_contract = info
+        .plutus_contracts
+        .iter()
+        .all(|contract| contract.valid_contract);
+    let inputs = if valid_contract {
         info.inputs
             .into_iter()
             .filter(|io| !io.reference && !io.collateral)
@@ -433,16 +435,13 @@ fn map_tx(info: TxInfo) -> Result<TransactionSummary, ApiError> {
     } else {
         info.inputs.into_iter().filter(|io| io.collateral).collect()
     };
-    if info.collateral_output.len() > 1 {
-        return Err(ApiError::unavailable());
-    }
-    let outputs = if info.valid_contract {
+    let outputs = if valid_contract {
         info.outputs
             .into_iter()
             .filter(|io| !io.collateral)
             .collect()
-    } else if !info.collateral_output.is_empty() {
-        info.collateral_output
+    } else if let Some(collateral_output) = info.collateral_output {
+        vec![collateral_output]
     } else {
         info.outputs
             .into_iter()

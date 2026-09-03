@@ -78,8 +78,7 @@ impl ResponseError for ApiError {
 
 impl From<anyhow::Error> for ApiError {
     fn from(error: anyhow::Error) -> Self {
-        log::warn!("dependency failure");
-        let _ = error;
+        log::warn!("dependency failure: {error:#}");
         Self::unavailable()
     }
 }

@@ -101,11 +101,27 @@ impl UtxoRpc {
             .build::<CardanoSyncClient>()
             .await;
 
-        dolos(sync.read_tip())
+        let mut tip = dolos(sync.read_tip())
             .await?
             .map_err(|error| anyhow!(error))
             .context("failed to read Dolos tip")?
-            .ok_or_else(|| anyhow!("Dolos returned no tip"))
+            .ok_or_else(|| anyhow!("Dolos returned no tip"))?;
+
+        if tip.height == 0 {
+            tip.height = dolos(sync.fetch_block(vec![tip.clone()]))
+                .await?
+                .map_err(|error| anyhow!(error))
+                .context("failed to fetch Dolos tip block")?
+                .into_iter()
+                .next()
+                .and_then(|block| block.parsed)
+                .and_then(|block| block.header)
+                .map(|header| header.height)
+                .filter(|height| *height != 0)
+                .ok_or_else(|| anyhow!("Dolos tip block returned no height"))?;
+        }
+
+        Ok(tip)
     }
 
     pub async fn history_start_height(&self) -> anyhow::Result<u64> {
