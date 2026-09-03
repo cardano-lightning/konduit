@@ -277,6 +277,8 @@ async fn create_operation<L: Ledger, H: History>(
     state: Data<AppState<L, H>>,
     body: Json<crate::wire::CreateOperationRequest>,
 ) -> Result<HttpResponse, ApiError> {
+    state.rate_limit(&req)?;
+    let _admission = state.ops.admit_write()?;
     let body = body.into_inner();
     let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
     let expected =
@@ -294,8 +296,7 @@ async fn create_operation<L: Ledger, H: History>(
             .await?;
         return json_bounded(&OpsStore::response(&record));
     }
-    state.rate_limit(&req)?;
-    let _admission = state.ops.admit_write()?;
+
     bounded(async {
         let (_, tip_slot) = state.ledger.tip().await?;
         if signed.ttl.is_none_or(|ttl| ttl <= tip_slot) {

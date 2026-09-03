@@ -329,7 +329,7 @@ async fn operation_conflict_and_idempotency() {
 }
 
 #[actix_web::test]
-async fn idempotent_retry_bypasses_admission() {
+async fn idempotent_retry_respects_admission() {
     let state = state(default_ledger(), FakeHistory::default());
     let uuid = "550e8400-e29b-41d4-a716-446655440008";
     let op_id = parse_uuid(uuid).unwrap();
@@ -358,7 +358,7 @@ async fn idempotent_retry_bypasses_admission() {
             .to_request(),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
 #[actix_web::test]
