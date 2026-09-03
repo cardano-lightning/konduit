@@ -234,8 +234,7 @@ pub fn era_epoch(
                 slots.checked_div(epochs)
             })
         })
-        // ponytail: 432000 Mainnet Shelley epoch length if era summary has a single era
-        .unwrap_or(432_000);
+        .ok_or_else(|| anyhow!("era summary cannot establish epoch length"))?;
     if epoch_length == 0 {
         return Err(anyhow!("computed zero epoch length"));
     }
@@ -448,5 +447,11 @@ mod tests {
         let (era, epoch) = era_epoch(&summary, 864_000 + 432_000).expect("epoch");
         assert_eq!(era, "Conway");
         assert_eq!(epoch, 3);
+    }
+
+    #[test]
+    fn era_epoch_rejects_missing_epoch_length() {
+        let error = era_epoch(&era_summary(0, 0), 1).expect_err("single era is ambiguous");
+        assert!(error.to_string().contains("cannot establish epoch length"));
     }
 }

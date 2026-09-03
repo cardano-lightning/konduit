@@ -139,6 +139,8 @@ pub struct TransactionSummary {
     pub id: String,
     pub index: u64,
     pub depth: u64,
+    #[serde(skip)]
+    pub(crate) block_height: u64,
     pub timestamp: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub invalid_before: Option<u64>,

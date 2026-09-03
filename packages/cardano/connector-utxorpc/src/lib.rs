@@ -18,6 +18,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::Mutex;
+use tonic::Code;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubmitCbor {
@@ -29,14 +30,19 @@ pub enum SubmitCbor {
 }
 
 impl SubmitCbor {
-    fn from_status_message(message: &str) -> Self {
-        let message = message.to_ascii_lowercase();
+    fn from_status(status: &tonic::Status) -> Self {
+        let message = status.message().to_ascii_lowercase();
         if message.contains("input")
             && (message.contains("spent") || message.contains("not present"))
         {
             Self::InputsSpent
         } else if message.contains("already known") || message.contains("duplicate") {
             Self::AlreadyKnown
+        } else if matches!(
+            status.code(),
+            Code::InvalidArgument | Code::FailedPrecondition | Code::OutOfRange
+        ) {
+            Self::Rejected
         } else {
             Self::Indeterminate
         }
@@ -68,7 +74,6 @@ impl UtxoRpc {
             .map_err(|error| anyhow!(error))
             .with_context(|| format!("invalid UTxO RPC endpoint {}", config.endpoint()))?;
 
-        let _query = builder.build::<CardanoQueryClient>().await;
         let submit = builder.build::<CardanoSubmitClient>().await;
 
         Ok(Self {
@@ -101,6 +106,30 @@ impl UtxoRpc {
             .map_err(|error| anyhow!(error))
             .context("failed to read Dolos tip")?
             .ok_or_else(|| anyhow!("Dolos returned no tip"))
+    }
+
+    pub async fn history_start_height(&self) -> anyhow::Result<u64> {
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let mut sync = ClientBuilder::new()
+                .uri(self.config.endpoint())
+                .map_err(|error| anyhow!(error))?
+                .build::<CardanoSyncClient>()
+                .await;
+            let page = sync
+                .dump_history(None, 1)
+                .await
+                .map_err(|error| anyhow!(error))
+                .context("failed to read Dolos history start")?;
+            page.items
+                .into_iter()
+                .next()
+                .and_then(|block| block.parsed)
+                .and_then(|block| block.header)
+                .map(|header| header.height)
+                .ok_or_else(|| anyhow!("Dolos returned no history start"))
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos history lookup timed out"))?
     }
 
     async fn load_utxos(
@@ -186,7 +215,7 @@ impl UtxoRpc {
         let mut query = self.query_client().await?;
         match dolos(query.read_tx(hash.to_vec().into())).await? {
             Ok(tx) => Ok(tx),
-            Err(error) if grpc_status_is(&error, "NotFound") => Ok(None),
+            Err(error) if grpc_status_is(&error, Code::NotFound) => Ok(None),
             Err(error) => Err(anyhow!(error)).context("failed to read transaction from UTxO RPC"),
         }
     }
@@ -202,22 +231,12 @@ impl UtxoRpc {
                         .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
                     Ok(SubmitCbor::Accepted(hash))
                 }
-                Err(utxorpc::Error::GrpcError(status)) => {
-                    Ok(SubmitCbor::from_status_message(status.message()))
-                }
+                Err(utxorpc::Error::GrpcError(status)) => Ok(SubmitCbor::from_status(&status)),
                 Err(error) => Err(submit_error(self.config.endpoint(), error)),
             }
         })
         .await
         .map_err(|_| anyhow!("Dolos RPC timed out"))?
-    }
-
-    pub async fn wait_for_tx(&self, hash: &[u8; 32]) -> anyhow::Result<utxorpc::TxEventStream> {
-        let mut submit = self.submit.lock().await;
-        dolos(submit.wait_for_tx(vec![hash.to_vec()]))
-            .await?
-            .map_err(|error| anyhow!(error))
-            .context("failed to wait for transaction via UTxO RPC")
     }
 }
 
@@ -277,12 +296,8 @@ fn submit_error(endpoint: &str, error: utxorpc::Error) -> anyhow::Error {
     anyhow!(error).context(format!("failed to submit transaction via {endpoint}"))
 }
 
-fn grpc_status_is(error: &utxorpc::Error, code: &str) -> bool {
-    matches!(error, utxorpc::Error::GrpcError(status) if grpc_debug_is(status, code))
-}
-
-fn grpc_debug_is(status: &impl std::fmt::Debug, code: &str) -> bool {
-    format!("{status:?}").contains(code)
+fn grpc_status_is(error: &utxorpc::Error, code: Code) -> bool {
+    matches!(error, utxorpc::Error::GrpcError(status) if status.code() == code)
 }
 
 pub async fn live_network(endpoint: &str) -> anyhow::Result<Network> {
@@ -506,12 +521,10 @@ mod tests {
 
     #[test]
     fn missing_input_message_is_inputs_spent() {
-        assert_eq!(
-            SubmitCbor::from_status_message(
-                "some transaction input is not present in the UTxO set"
-            ),
-            SubmitCbor::InputsSpent
+        let status = tonic::Status::failed_precondition(
+            "some transaction input is not present in the UTxO set",
         );
+        assert_eq!(SubmitCbor::from_status(&status), SubmitCbor::InputsSpent);
     }
 
     #[test]
@@ -546,17 +559,23 @@ mod tests {
     }
 
     #[test]
-    fn submit_status_prioritizes_spent_inputs() {
+    fn submit_status_classifies_chain_outcomes() {
         assert_eq!(
-            SubmitCbor::from_status_message("transaction is already known; inputs spent"),
+            SubmitCbor::from_status(&tonic::Status::failed_precondition(
+                "transaction is already known; inputs spent"
+            )),
             SubmitCbor::InputsSpent
         );
         assert_eq!(
-            SubmitCbor::from_status_message("transaction already known"),
+            SubmitCbor::from_status(&tonic::Status::already_exists("transaction already known")),
             SubmitCbor::AlreadyKnown
         );
         assert_eq!(
-            SubmitCbor::from_status_message("unknown transaction"),
+            SubmitCbor::from_status(&tonic::Status::invalid_argument("invalid transaction")),
+            SubmitCbor::Rejected
+        );
+        assert_eq!(
+            SubmitCbor::from_status(&tonic::Status::unavailable("upstream unavailable")),
             SubmitCbor::Indeterminate
         );
     }

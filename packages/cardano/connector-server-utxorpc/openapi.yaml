@@ -111,6 +111,7 @@ paths:
             application/json:
               schema:
                 type: array
+                maxItems: 1000
                 items:
                   $ref: "#/components/schemas/TransactionSummary"
         default:
@@ -199,8 +200,9 @@ components:
       description: Mainnet Shelley address encoded as bech32
       schema:
         type: string
-        format: bech32
-        minLength: 1
+        pattern: "^addr1[0-9a-z]+$"
+        minLength: 58
+        maxLength: 108
     TransactionId:
       name: id
       in: path
@@ -267,30 +269,41 @@ components:
       properties:
         min_fee_a:
           type: integer
+          minimum: 0
         min_fee_b:
           type: integer
+          minimum: 0
         max_tx_size:
           type: integer
+          minimum: 0
         key_deposit:
           type: string
+          maxLength: 20
           pattern: "^[0-9]+$"
         pool_deposit:
           type: string
+          maxLength: 20
           pattern: "^[0-9]+$"
         min_pool_cost:
           type: string
+          maxLength: 20
           pattern: "^[0-9]+$"
         protocol_major_ver:
           type: integer
+          minimum: 0
         protocol_minor_ver:
           type: integer
+          minimum: 0
         coins_per_utxo_size:
           type: string
           pattern: "^[0-9]+$"
+          maxLength: 20
         collateral_percent:
           type: integer
+          minimum: 0
         max_collateral_inputs:
           type: integer
+          minimum: 0
     BalanceResponse:
       type: object
       required: [lovelace]
@@ -299,6 +312,7 @@ components:
         lovelace:
           type: string
           pattern: "^[0-9]+$"
+          maxLength: 20
     AssetObject:
       type: object
       required: [unit, quantity]
@@ -306,9 +320,12 @@ components:
       properties:
         unit:
           type: string
+          pattern: "^(lovelace|[0-9a-f]{56}(?:[0-9a-f]{2}){0,32})$"
+          maxLength: 120
         quantity:
           type: string
           pattern: "^[0-9]+$"
+          maxLength: 20
     TxOutput:
       type: object
       additionalProperties: false
@@ -316,10 +333,15 @@ components:
       properties:
         address:
           type: string
+          pattern: "^addr1[0-9a-z]+$"
+          minLength: 58
+          maxLength: 108
         consumed_by:
           $ref: "#/components/schemas/TxId"
         value:
           type: array
+          minItems: 1
+          maxItems: 10000
           items:
             $ref: "#/components/schemas/AssetObject"
         datum_hash:
@@ -327,6 +349,8 @@ components:
           pattern: "^[0-9a-f]{64}$"
         datum_inline:
           type: string
+          pattern: "^(?:[0-9a-f]{2})*$"
+          maxLength: 131072
         reference_script_hash:
           type: string
           pattern: "^[0-9a-f]{56}$"
@@ -345,10 +369,15 @@ components:
           minimum: 0
         address:
           type: string
+          pattern: "^addr1[0-9a-z]+$"
+          minLength: 58
+          maxLength: 108
         consumed_by:
           $ref: "#/components/schemas/TxId"
         value:
           type: array
+          minItems: 1
+          maxItems: 10000
           items:
             $ref: "#/components/schemas/AssetObject"
         datum_hash:
@@ -356,6 +385,8 @@ components:
           pattern: "^[0-9a-f]{64}$"
         datum_inline:
           type: string
+          pattern: "^(?:[0-9a-f]{2})*$"
+          maxLength: 131072
         reference_script_hash:
           type: string
           pattern: "^[0-9a-f]{56}$"
@@ -371,10 +402,15 @@ components:
           minimum: 0
         address:
           type: string
+          pattern: "^addr1[0-9a-z]+$"
+          minLength: 58
+          maxLength: 108
         consumed_by:
           $ref: "#/components/schemas/TxId"
         value:
           type: array
+          minItems: 1
+          maxItems: 10000
           items:
             $ref: "#/components/schemas/AssetObject"
         datum_hash:
@@ -382,6 +418,8 @@ components:
           pattern: "^[0-9a-f]{64}$"
         datum_inline:
           type: string
+          pattern: "^(?:[0-9a-f]{2})*$"
+          maxLength: 131072
         reference_script_hash:
           type: string
           pattern: "^[0-9a-f]{56}$"
@@ -391,6 +429,8 @@ components:
           maximum: 3
         reference_script:
           type: string
+          pattern: "^(?:[0-9a-f]{2})*$"
+          maxLength: 131072
     TransactionSummary:
       type: object
       required: [id, index, depth, timestamp, inputs, outputs]
@@ -415,10 +455,12 @@ components:
           minimum: 0
         inputs:
           type: array
+          maxItems: 10000
           items:
             $ref: "#/components/schemas/TxInput"
         outputs:
           type: array
+          maxItems: 10000
           items:
             $ref: "#/components/schemas/TxOutput"
     SubmitRequest:
@@ -428,7 +470,9 @@ components:
       properties:
         transaction:
           type: string
-          pattern: "^[0-9a-f]+$"
+          pattern: "^(?:[0-9a-f]{2})+$"
+          minLength: 2
+          maxLength: 1048576
     SubmitResponse:
       type: object
       additionalProperties: false
@@ -445,12 +489,15 @@ components:
         operation_id:
           type: string
           format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         expected_transaction_id:
           type: string
           pattern: "^[0-9a-f]{64}$"
         transaction:
           type: string
-          pattern: "^[0-9a-f]+$"
+          pattern: "^(?:[0-9a-f]{2})+$"
+          minLength: 2
+          maxLength: 1048576
     OperationResponse:
       type: object
       additionalProperties: false
@@ -459,6 +506,7 @@ components:
         operation_id:
           type: string
           format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         expected_transaction_id:
           type: string
           pattern: "^[0-9a-f]{64}$"

@@ -1,7 +1,8 @@
 use crate::error::ApiError;
-use crate::providers::{Ledger, SubmitResult, TxPresence};
+use crate::providers::Ledger;
 use crate::tx::SignedTx;
 use crate::wire::OperationResponse;
+use cardano_connector_utxorpc::SubmitCbor;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -59,6 +60,8 @@ pub struct Record {
     pub ttl: Option<u64>,
     pub state: InternalState,
     pub inclusion_height: Option<u64>,
+    #[serde(default)]
+    pub depth: u64,
     pub attempts: u32,
     #[serde(default)]
     pub revision: u64,
@@ -239,6 +242,7 @@ impl OpsStore {
                     ttl: signed.ttl,
                     state: InternalState::Prepared,
                     inclusion_height: None,
+                    depth: 0,
                     attempts: 0,
                     revision: 0,
                     submit_started_at: None,
@@ -290,7 +294,7 @@ impl OpsStore {
                 .as_secs();
             let lease_expired = record
                 .submit_started_at
-                .is_none_or(|started| now.saturating_sub(started) >= 30);
+                .is_some_and(|started| now.saturating_sub(started) >= 30);
             if record.state != InternalState::Prepared
                 && !(record.state == InternalState::Submitting && lease_expired)
             {
@@ -362,7 +366,7 @@ impl OpsStore {
         Ok(result)
     }
 
-    pub fn response(record: &Record, depth: u64) -> OperationResponse {
+    pub fn response(record: &Record) -> OperationResponse {
         let transaction_id = if matches!(
             record.state,
             InternalState::Accepted | InternalState::Confirmed | InternalState::Settled
@@ -376,7 +380,7 @@ impl OpsStore {
             expected_transaction_id: record.expected_transaction_id.clone(),
             transaction_id,
             status: record.state.public(),
-            depth,
+            depth: record.depth,
         }
     }
 
@@ -390,19 +394,17 @@ impl OpsStore {
         submit: bool,
     ) -> Result<u64, ApiError> {
         if record.state == InternalState::Settled {
-            return Ok(record
-                .inclusion_height
-                .map(|height| tip_height.saturating_sub(height))
-                .unwrap_or(0));
+            return Ok(record.depth);
         }
         let txid =
             hex::decode(&record.expected_transaction_id).map_err(|_| ApiError::unexpected())?;
         let txid: [u8; 32] = txid.try_into().map_err(|_| ApiError::unexpected())?;
         let presence = ledger.read_tx(&txid).await?;
         match presence {
-            Some(TxPresence { height }) => {
+            Some(height) => {
                 let depth = tip_height.saturating_sub(height);
                 record.inclusion_height = Some(height);
+                record.depth = depth;
                 record.state = finality(depth);
                 if record.state == InternalState::Settled {
                     record.cbor = None;
@@ -424,6 +426,7 @@ impl OpsStore {
                     {
                         record.state = InternalState::Rejected;
                         record.cbor = None;
+                        record.depth = 0;
                         self.put(key, record).await?;
                         return Ok(0);
                     }
@@ -431,11 +434,13 @@ impl OpsStore {
                 if record.ttl.is_some_and(|ttl| tip_slot >= ttl) {
                     record.state = InternalState::Rejected;
                     record.cbor = None;
+                    record.depth = 0;
                     self.put(key, record).await?;
                     return Ok(0);
                 }
                 if record.inclusion_height.is_some() {
                     record.inclusion_height = None;
+                    record.depth = 0;
                     record.state = InternalState::Prepared;
                     self.put(key, record).await?;
                 }
@@ -451,20 +456,25 @@ impl OpsStore {
                         return Ok(0);
                     };
                     let cbor = hex::decode(cbor_hex).map_err(|_| ApiError::unexpected())?;
-                    match ledger.submit_cbor(&cbor).await? {
-                        SubmitResult::Accepted(hash) if hash == txid => {
+                    let clear_lease = match ledger.submit_cbor(&cbor).await? {
+                        SubmitCbor::Accepted(hash) if hash == txid => {
                             record.state = InternalState::Accepted;
+                            true
                         }
-                        SubmitResult::Accepted(_) => return Err(ApiError::unavailable()),
-                        SubmitResult::Rejected => {
+                        SubmitCbor::Accepted(_) => return Err(ApiError::unavailable()),
+                        SubmitCbor::Rejected => {
                             record.state = InternalState::Rejected;
                             record.cbor = None;
+                            record.depth = 0;
+                            true
                         }
-                        SubmitResult::AlreadyKnown
-                        | SubmitResult::InputsSpent
-                        | SubmitResult::Indeterminate => {}
+                        SubmitCbor::AlreadyKnown
+                        | SubmitCbor::InputsSpent
+                        | SubmitCbor::Indeterminate => false,
+                    };
+                    if clear_lease {
+                        record.submit_started_at = None;
                     }
-                    record.submit_started_at = None;
                     self.put(key, record).await?;
                 }
                 Ok(0)

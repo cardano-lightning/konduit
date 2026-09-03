@@ -5,21 +5,12 @@ use async_trait::async_trait;
 use cardano_connector_utxorpc::{SubmitCbor, UtxoRpc};
 use cardano_sdk::{Address, NetworkId, address::kind};
 use serde::Deserialize;
-use std::{collections::BTreeSet, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    time::Duration,
+};
 
-#[derive(Debug, Clone)]
-pub struct TxPresence {
-    pub height: u64,
-}
-
-#[derive(Debug, Clone)]
-pub enum SubmitResult {
-    Accepted([u8; 32]),
-    AlreadyKnown,
-    InputsSpent,
-    Indeterminate,
-    Rejected,
-}
+const MAX_DOLOS_TIP_LAG: u64 = 20;
 
 #[async_trait]
 pub trait Ledger: Send + Sync {
@@ -29,24 +20,16 @@ pub trait Ledger: Send + Sync {
         &self,
     ) -> Result<(String, u64, u64, cardano_connector_utxorpc::BloxbeanPayload), ApiError>;
     async fn utxos_at(&self, address: &Address<kind::Shelley>) -> Result<Vec<Utxo>, ApiError>;
-    async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<TxPresence>, ApiError>;
-    async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitResult, ApiError>;
+    async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<u64>, ApiError>;
+    async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, ApiError>;
     async fn max_tx_size(&self) -> Result<u64, ApiError>;
 }
 
 #[async_trait]
 pub trait History: Send + Sync {
-    async fn ping(&self) -> Result<(), ApiError>;
-    async fn address_history(
-        &self,
-        address: &str,
-        tip_height: u64,
-    ) -> Result<Vec<TransactionSummary>, ApiError>;
-    async fn transaction(
-        &self,
-        txid: &str,
-        tip_height: u64,
-    ) -> Result<Option<TransactionSummary>, ApiError>;
+    async fn ready(&self, dolos_height: u64) -> Result<(), ApiError>;
+    async fn address_history(&self, address: &str) -> Result<Vec<TransactionSummary>, ApiError>;
+    async fn transaction(&self, txid: &str) -> Result<Option<TransactionSummary>, ApiError>;
 }
 
 pub struct DolosLedger {
@@ -62,7 +45,14 @@ impl DolosLedger {
 #[async_trait]
 impl Ledger for DolosLedger {
     async fn ready(&self) -> Result<(), ApiError> {
-        let _ = self.inner.tip().await.map_err(ApiError::from)?;
+        let start = self
+            .inner
+            .history_start_height()
+            .await
+            .map_err(ApiError::from)?;
+        if start > 1 {
+            return Err(ApiError::unavailable());
+        }
         let _ = self
             .inner
             .bloxbean_parameters()
@@ -97,29 +87,17 @@ impl Ledger for DolosLedger {
             .collect())
     }
 
-    async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<TxPresence>, ApiError> {
+    async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<u64>, ApiError> {
         Ok(self
             .inner
             .read_tx(txid)
             .await
             .map_err(ApiError::from)?
-            .and_then(|tx| {
-                tx.block_ref.map(|point| TxPresence {
-                    height: point.height,
-                })
-            }))
+            .and_then(|tx| tx.block_ref.map(|point| point.height)))
     }
 
-    async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitResult, ApiError> {
-        Ok(
-            match self.inner.submit_cbor(cbor).await.map_err(ApiError::from)? {
-                SubmitCbor::Accepted(hash) => SubmitResult::Accepted(hash),
-                SubmitCbor::AlreadyKnown => SubmitResult::AlreadyKnown,
-                SubmitCbor::InputsSpent => SubmitResult::InputsSpent,
-                SubmitCbor::Indeterminate => SubmitResult::Indeterminate,
-                SubmitCbor::Rejected => SubmitResult::Rejected,
-            },
-        )
+    async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, ApiError> {
+        self.inner.submit_cbor(cbor).await.map_err(ApiError::from)
     }
 
     async fn max_tx_size(&self) -> Result<u64, ApiError> {
@@ -147,6 +125,18 @@ impl KoiosHistory {
         })
     }
 
+    async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ApiError> {
+        let response = self
+            .client
+            .get(format!("{}{path}", self.base))
+            .send()
+            .await
+            .map_err(|_| ApiError::unavailable())?;
+        if !response.status().is_success() {
+            return Err(ApiError::unavailable());
+        }
+        response.json().await.map_err(|_| ApiError::unavailable())
+    }
     async fn post<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -172,86 +162,96 @@ impl KoiosHistory {
 
 #[async_trait]
 impl History for KoiosHistory {
-    async fn ping(&self) -> Result<(), ApiError> {
-        let response = self
-            .client
-            .get(format!("{}/genesis", self.base))
-            .send()
-            .await
-            .map_err(|_| ApiError::unavailable())?;
-        if !response.status().is_success() {
-            return Err(ApiError::unavailable());
-        }
-        let genesis: Vec<KoiosGenesis> =
-            response.json().await.map_err(|_| ApiError::unavailable())?;
+    async fn ready(&self, dolos_height: u64) -> Result<(), ApiError> {
+        let checks: (
+            Vec<KoiosGenesis>,
+            Vec<KoiosTip>,
+            Vec<AddressTx>,
+            Vec<TxInfo>,
+        ) = tokio::try_join!(
+            self.get("/genesis"),
+            self.get("/tip"),
+            self.post(
+                "/address_txs?limit=1",
+                serde_json::json!({ "_addresses": [] })
+            ),
+            self.post(
+                "/tx_info",
+                serde_json::json!({
+                    "_tx_hashes": [],
+                    "_inputs": true,
+                    "_assets": true,
+                    "_scripts": true,
+                    "_bytecode": true
+                })
+            )
+        )?;
+        let (genesis, tip, _, _) = checks;
         let magic = genesis
             .into_iter()
             .next()
-            .and_then(|row| json_u64(row.networkmagic))
+            .map(|row| row.networkmagic)
             .ok_or_else(ApiError::unavailable)?;
-        if magic != 764824073 {
+        let koios_height = tip
+            .into_iter()
+            .next()
+            .map(|row| row.block_height)
+            .ok_or_else(ApiError::unavailable)?;
+        if magic != 764824073 || koios_height.abs_diff(dolos_height) > MAX_DOLOS_TIP_LAG {
             return Err(ApiError::unavailable());
         }
         Ok(())
     }
 
-    async fn address_history(
-        &self,
-        address: &str,
-        tip_height: u64,
-    ) -> Result<Vec<TransactionSummary>, ApiError> {
-        tokio::time::timeout(Duration::from_secs(19), async {
-            let rows: Vec<AddressTx> = self
+    async fn address_history(&self, address: &str) -> Result<Vec<TransactionSummary>, ApiError> {
+        let rows: Vec<AddressTx> = self
+            .post(
+                "/address_txs?order=block_height.desc&limit=100",
+                serde_json::json!({ "_addresses": [address] }),
+            )
+            .await?;
+        let mut hashes = Vec::new();
+        for row in rows {
+            if parse_tx_id(&row.tx_hash).is_ok() && !hashes.contains(&row.tx_hash) {
+                hashes.push(row.tx_hash);
+            }
+            if hashes.len() == 100 {
+                break;
+            }
+        }
+        let mut out = Vec::new();
+        for chunk in hashes.chunks(20) {
+            let infos: Vec<TxInfo> = self
                 .post(
-                    "/address_txs?limit=100",
-                    serde_json::json!({ "_addresses": [address] }),
+                    "/tx_info",
+                    serde_json::json!({
+                        "_tx_hashes": chunk,
+                        "_inputs": true,
+                        "_assets": true,
+                        "_scripts": true,
+                        "_bytecode": true
+                    }),
                 )
                 .await?;
-            let mut hashes = Vec::new();
-            for row in rows {
-                if parse_tx_id(&row.tx_hash).is_ok() && !hashes.contains(&row.tx_hash) {
-                    hashes.push(row.tx_hash);
-                }
-                if hashes.len() == 100 {
-                    break;
+            let mut hydrated = BTreeMap::new();
+            for info in infos {
+                let tx = map_tx(info)?;
+                if !chunk.contains(&tx.id) || hydrated.insert(tx.id.clone(), tx).is_some() {
+                    return Err(ApiError::unavailable());
                 }
             }
-            let mut out = Vec::new();
-            for chunk in hashes.chunks(20) {
-                let infos: Vec<TxInfo> = self
-                    .post(
-                        "/tx_info",
-                        serde_json::json!({
-                            "_tx_hashes": chunk,
-                            "_inputs": true,
-                            "_assets": true,
-                            "_scripts": true,
-                            "_bytecode": true
-                        }),
-                    )
-                    .await?;
-                for info in infos {
-                    if let Some(tx) = map_tx(info, tip_height)?
-                        && tx_touches(&tx, address)
-                    {
-                        out.push(tx);
-                    }
+            for hash in chunk {
+                if let Some(tx) = hydrated.remove(hash)
+                    && tx_touches(&tx, address)
+                {
+                    out.push(tx);
                 }
             }
-            if out.len() > 1000 {
-                out.truncate(1000);
-            }
-            Ok(out)
-        })
-        .await
-        .map_err(|_| ApiError::unavailable())?
+        }
+        Ok(out)
     }
 
-    async fn transaction(
-        &self,
-        txid: &str,
-        tip_height: u64,
-    ) -> Result<Option<TransactionSummary>, ApiError> {
+    async fn transaction(&self, txid: &str) -> Result<Option<TransactionSummary>, ApiError> {
         parse_tx_id(txid).map_err(|_| ApiError::bad_request())?;
         let infos: Vec<TxInfo> = self
             .post(
@@ -265,20 +265,28 @@ impl History for KoiosHistory {
                 }),
             )
             .await?;
+        if infos.len() > 1 {
+            return Err(ApiError::unavailable());
+        }
         let Some(info) = infos.into_iter().next() else {
             return Ok(None);
         };
         if info.tx_hash != txid {
             return Err(ApiError::unavailable());
         }
-        map_tx(info, tip_height)
+        map_tx(info).map(Some)
     }
 }
 
 #[derive(Deserialize)]
 struct KoiosGenesis {
-    #[serde(default)]
-    networkmagic: Option<serde_json::Value>,
+    #[serde(deserialize_with = "deserialize_u64")]
+    networkmagic: u64,
+}
+
+#[derive(Deserialize)]
+struct KoiosTip {
+    block_height: u64,
 }
 
 #[derive(Deserialize)]
@@ -289,28 +297,26 @@ struct AddressTx {
 #[derive(Deserialize)]
 struct TxInfo {
     tx_hash: String,
-    #[serde(default)]
-    block_height: Option<u64>,
-    #[serde(default)]
-    tx_timestamp: Option<u64>,
-    #[serde(default)]
-    tx_block_index: Option<u64>,
-    #[serde(default)]
-    invalid_before: Option<serde_json::Value>,
-    #[serde(default)]
-    invalid_after: Option<serde_json::Value>,
-    #[serde(default)]
-    valid_contract: Option<bool>,
-    #[serde(default)]
+    block_height: u64,
+    tx_timestamp: u64,
+    tx_block_index: u64,
+    #[serde(default, deserialize_with = "deserialize_optional_u64")]
+    invalid_before: Option<u64>,
+    #[serde(default, deserialize_with = "deserialize_optional_u64")]
+    invalid_after: Option<u64>,
+    valid_contract: bool,
     inputs: Vec<KoiosIo>,
-    #[serde(default)]
     outputs: Vec<KoiosIo>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_vec")]
     collateral_inputs: Vec<KoiosIo>,
-    #[serde(default)]
-    collateral_output: Option<KoiosIo>,
-    #[serde(default)]
-    reference_inputs: Vec<KoiosIo>,
+    #[serde(default, deserialize_with = "deserialize_null_vec")]
+    collateral_output: Vec<KoiosIo>,
+    #[serde(
+        default,
+        rename = "reference_inputs",
+        deserialize_with = "deserialize_null_vec"
+    )]
+    _reference_inputs: Vec<KoiosIo>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -319,11 +325,10 @@ struct KoiosIo {
     tx_hash: Option<String>,
     #[serde(default)]
     tx_index: Option<u32>,
-    #[serde(default)]
-    value: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_assets")]
+    value: String,
+    #[serde(deserialize_with = "deserialize_assets")]
     asset_list: Vec<KoiosAsset>,
-    payment_addr: Option<PaymentAddr>,
+    payment_addr: PaymentAddr,
     #[serde(default)]
     datum_hash: Option<String>,
     #[serde(default)]
@@ -331,15 +336,14 @@ struct KoiosIo {
     #[serde(default)]
     reference_script: Option<RefScript>,
     #[serde(default)]
-    collateral: Option<bool>,
+    collateral: bool,
     #[serde(default)]
-    reference: Option<bool>,
+    reference: bool,
 }
 
 #[derive(Deserialize, Clone)]
 struct PaymentAddr {
-    #[serde(default)]
-    bech32: Option<String>,
+    bech32: String,
 }
 
 #[derive(Deserialize, Clone)]
@@ -369,72 +373,90 @@ where
 
 #[derive(Deserialize, Clone)]
 struct InlineDatum {
-    #[serde(default)]
-    bytes: Option<String>,
+    bytes: String,
 }
 
 #[derive(Deserialize, Clone)]
 struct RefScript {
-    #[serde(default)]
-    hash: Option<String>,
+    hash: String,
 }
 
-fn json_u64(value: Option<serde_json::Value>) -> Option<u64> {
-    match value {
-        Some(serde_json::Value::Number(n)) => n.as_u64(),
-        Some(serde_json::Value::String(s)) => s.parse().ok(),
-        _ => None,
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum JsonU64 {
+    Number(u64),
+    String(String),
+}
+
+impl JsonU64 {
+    fn get<E: serde::de::Error>(self) -> Result<u64, E> {
+        match self {
+            Self::Number(value) => Ok(value),
+            Self::String(value) => value.parse().map_err(E::custom),
+        }
     }
 }
 
-fn map_tx(info: TxInfo, tip_height: u64) -> Result<Option<TransactionSummary>, ApiError> {
+fn deserialize_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    JsonU64::deserialize(deserializer)?.get()
+}
+
+fn deserialize_optional_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<JsonU64>::deserialize(deserializer)?
+        .map(JsonU64::get)
+        .transpose()
+}
+
+fn deserialize_null_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+fn map_tx(info: TxInfo) -> Result<TransactionSummary, ApiError> {
     parse_tx_id(&info.tx_hash).map_err(|_| ApiError::unavailable())?;
-    let success = info.valid_contract.unwrap_or(true);
-    let inputs = if success {
+    let inputs = if info.valid_contract {
         info.inputs
             .into_iter()
-            .filter(|io| !io.reference.unwrap_or(false) && !io.collateral.unwrap_or(false))
-            .chain(
-                // Koios may split collateral/reference rather than flag them
-                Vec::new(),
-            )
+            .filter(|io| !io.reference && !io.collateral)
             .collect::<Vec<_>>()
     } else if !info.collateral_inputs.is_empty() {
         info.collateral_inputs
     } else {
-        info.inputs
-            .into_iter()
-            .filter(|io| io.collateral.unwrap_or(false))
-            .collect()
+        info.inputs.into_iter().filter(|io| io.collateral).collect()
     };
-    let _ = info.reference_inputs;
-    let outputs = if success {
+    if info.collateral_output.len() > 1 {
+        return Err(ApiError::unavailable());
+    }
+    let outputs = if info.valid_contract {
         info.outputs
             .into_iter()
-            .filter(|io| !io.collateral.unwrap_or(false))
+            .filter(|io| !io.collateral)
             .collect()
-    } else if let Some(output) = info.collateral_output {
-        vec![output]
+    } else if !info.collateral_output.is_empty() {
+        info.collateral_output
     } else {
         info.outputs
             .into_iter()
-            .filter(|io| io.collateral.unwrap_or(false))
+            .filter(|io| io.collateral)
             .collect()
     };
-    let height = info.block_height.unwrap_or(0);
-    let depth = if height > tip_height {
-        log::warn!("provider height ahead of Dolos tip");
-        0
-    } else {
-        tip_height - height
-    };
-    Ok(Some(TransactionSummary {
+    Ok(TransactionSummary {
         id: info.tx_hash,
-        index: info.tx_block_index.unwrap_or(0),
-        depth,
-        timestamp: info.tx_timestamp.unwrap_or(0),
-        invalid_before: json_u64(info.invalid_before),
-        invalid_after: json_u64(info.invalid_after),
+        index: info.tx_block_index,
+        depth: 0,
+        block_height: info.block_height,
+        timestamp: info.tx_timestamp,
+        invalid_before: info.invalid_before,
+        invalid_after: info.invalid_after,
         inputs: inputs
             .into_iter()
             .map(map_input)
@@ -443,7 +465,7 @@ fn map_tx(info: TxInfo, tip_height: u64) -> Result<Option<TransactionSummary>, A
             .into_iter()
             .map(map_output)
             .collect::<Result<Vec<_>, _>>()?,
-    }))
+    })
 }
 
 fn map_input(io: KoiosIo) -> Result<TxInput, ApiError> {
@@ -464,23 +486,24 @@ fn map_input(io: KoiosIo) -> Result<TxInput, ApiError> {
 }
 
 fn map_output(io: KoiosIo) -> Result<TxOutput, ApiError> {
-    let address = io
-        .payment_addr
-        .and_then(|addr| addr.bech32)
-        .ok_or_else(ApiError::unavailable)?;
-    Address::<kind::Any>::try_from(address.as_str()).map_err(|_| ApiError::unavailable())?;
-    let mut units = BTreeSet::new();
-    let mut value = Vec::new();
-    if let Some(lovelace) = io.value {
-        lovelace
-            .parse::<u64>()
-            .map_err(|_| ApiError::unavailable())?;
-        units.insert("lovelace".to_string());
-        value.push(AssetObject {
-            unit: "lovelace".into(),
-            quantity: lovelace,
-        });
+    let address = io.payment_addr.bech32;
+    let parsed =
+        Address::<kind::Any>::try_from(address.as_str()).map_err(|_| ApiError::unavailable())?;
+    if parsed
+        .as_shelley()
+        .is_none_or(|address| address.network_id() != NetworkId::MAINNET)
+    {
+        return Err(ApiError::unavailable());
     }
+    let lovelace = io
+        .value
+        .parse::<u64>()
+        .map_err(|_| ApiError::unavailable())?;
+    let mut units = BTreeSet::from(["lovelace".to_string()]);
+    let mut value = vec![AssetObject {
+        unit: "lovelace".into(),
+        quantity: lovelace.to_string(),
+    }];
     for asset in io.asset_list {
         let policy = parse_lowercase_hex(&asset.policy_id).map_err(|_| ApiError::unavailable())?;
         let asset_name = asset.asset_name.unwrap_or_default();
@@ -506,9 +529,8 @@ fn map_output(io: KoiosIo) -> Result<TxOutput, ApiError> {
         });
     }
     let datum_hash = validate_hash(io.datum_hash, 32)?;
-    let datum_inline = validate_hex(io.inline_datum.and_then(|datum| datum.bytes))?;
-    let reference_script_hash =
-        validate_hash(io.reference_script.and_then(|script| script.hash), 28)?;
+    let datum_inline = validate_hex(io.inline_datum.map(|datum| datum.bytes), 64 * 1024)?;
+    let reference_script_hash = validate_hash(io.reference_script.map(|script| script.hash), 28)?;
     Ok(TxOutput {
         address,
         consumed_by: None,
@@ -530,12 +552,13 @@ fn validate_hash(value: Option<String>, len: usize) -> Result<Option<String>, Ap
         .transpose()
 }
 
-fn validate_hex(value: Option<String>) -> Result<Option<String>, ApiError> {
+fn validate_hex(value: Option<String>, max_bytes: usize) -> Result<Option<String>, ApiError> {
     value
         .map(|hex| {
-            parse_lowercase_hex(&hex)
-                .map(|_| hex)
-                .map_err(|_| ApiError::unavailable())
+            let bytes = parse_lowercase_hex(&hex).map_err(|_| ApiError::unavailable())?;
+            (bytes.len() <= max_bytes)
+                .then_some(hex)
+                .ok_or_else(ApiError::unavailable)
         })
         .transpose()
 }
@@ -561,19 +584,29 @@ mod tests {
     fn koios_genesis_accepts_string_network_magic() {
         let rows: Vec<KoiosGenesis> =
             serde_json::from_str(r#"[{"networkmagic":"764824073"}]"#).unwrap();
-        assert_eq!(
-            json_u64(rows.into_iter().next().unwrap().networkmagic),
-            Some(764824073)
-        );
+        assert_eq!(rows.into_iter().next().unwrap().networkmagic, 764824073);
     }
 
     #[test]
     fn koios_collateral_accepts_json_encoded_assets() {
         let io: KoiosIo = serde_json::from_str(
-            r#"{"asset_list":"[]","payment_addr":{"bech32":"addr_test1..."}}"#,
+            r#"{"value":"0","asset_list":"[]","payment_addr":{"bech32":"addr_test1..."}}"#,
         )
         .unwrap();
         assert!(io.asset_list.is_empty());
+    }
+
+    #[test]
+    fn koios_transaction_rejects_missing_required_fields() {
+        let result = serde_json::from_value::<TxInfo>(serde_json::json!({
+            "tx_hash": "ab".repeat(32),
+            "tx_timestamp": 1,
+            "tx_block_index": 0,
+            "valid_contract": true,
+            "inputs": [],
+            "outputs": []
+        }));
+        assert!(result.is_err());
     }
 
     #[test]

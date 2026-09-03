@@ -8,7 +8,7 @@ mod wire;
 pub use error::ApiError;
 pub use http::{AppState, Limits, OPENAPI_YAML, app, serve};
 pub use ops::OpsStore;
-pub use providers::{DolosLedger, History, KoiosHistory, Ledger, SubmitResult, TxPresence};
+pub use providers::{DolosLedger, History, KoiosHistory, Ledger};
 pub use wire::{TransactionSummary, Utxo};
 
 use cardano_connector_utxorpc::{Config, UtxoRpc, live_network};
@@ -49,6 +49,14 @@ pub async fn boot(
         .await
         .map_err(|_| anyhow::anyhow!("Dolos is unavailable"))?;
     let history = Arc::new(KoiosHistory::new(config.koios_url)?);
+    let (height, _) = ledger
+        .tip()
+        .await
+        .map_err(|_| anyhow::anyhow!("Dolos is unavailable"))?;
+    history
+        .ready(height)
+        .await
+        .map_err(|_| anyhow::anyhow!("Koios is unavailable or stale"))?;
     let ops = OpsStore::open(
         &config.db_path,
         config.max_pending,

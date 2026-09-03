@@ -872,6 +872,7 @@ dependencies = [
  "pallas-codec",
  "pallas-primitives",
  "tokio",
+ "tonic",
  "utxorpc",
 ]
 

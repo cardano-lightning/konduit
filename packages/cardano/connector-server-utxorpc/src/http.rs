@@ -8,10 +8,10 @@ use crate::wire::{
 };
 use actix_cors::Cors;
 use actix_web::{
-    App, HttpMessage, HttpRequest, HttpResponse, HttpServer,
+    App, HttpRequest, HttpResponse, HttpServer,
     error::JsonPayloadError,
     middleware::Logger,
-    web::{self, Bytes, BytesMut, Data, JsonConfig, Path, Payload, PayloadConfig},
+    web::{self, Data, Json, JsonConfig, Path},
 };
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -118,18 +118,6 @@ where
         .map_err(|_| ApiError::unavailable())?
 }
 
-async fn read_json_body(mut payload: Payload) -> Result<Bytes, ApiError> {
-    let mut body = BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk.map_err(|_| ApiError::bad_request())?;
-        if body.len().saturating_add(chunk.len()) > MAX_JSON {
-            return Err(ApiError::payload());
-        }
-        body.extend_from_slice(&chunk);
-    }
-    Ok(body.freeze())
-}
-
 async fn docs() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
@@ -145,14 +133,14 @@ async fn openapi() -> HttpResponse {
 async fn health<L: Ledger, H: History>(
     state: Data<AppState<L, H>>,
 ) -> Result<HttpResponse, ApiError> {
-    tokio::time::timeout(Duration::from_secs(19), async {
+    bounded(async {
         state.ledger.ready().await?;
-        state.history.ping().await?;
+        let (height, _) = state.ledger.tip().await?;
+        state.history.ready(height).await?;
         state.ops.ready().await?;
         json_bounded(&HealthResponse { status: "ok" })
     })
     .await
-    .map_err(|_| ApiError::unavailable())?
 }
 
 async fn network() -> Result<HttpResponse, ApiError> {
@@ -162,7 +150,7 @@ async fn network() -> Result<HttpResponse, ApiError> {
 async fn protocol_parameters<L: Ledger, H: History>(
     state: Data<AppState<L, H>>,
 ) -> Result<HttpResponse, ApiError> {
-    tokio::time::timeout(Duration::from_secs(19), async {
+    bounded(async {
         let (era, epoch, slot, payload) = state.ledger.protocol_parameters().await?;
         json_bounded(&ProtocolParametersResponse {
             era,
@@ -172,7 +160,6 @@ async fn protocol_parameters<L: Ledger, H: History>(
         })
     })
     .await
-    .map_err(|_| ApiError::unavailable())?
 }
 
 async fn balance<L: Ledger, H: History>(
@@ -180,19 +167,22 @@ async fn balance<L: Ledger, H: History>(
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let address = parse_mainnet_address(&path)?;
-    let utxos = state.ledger.utxos_at(&address).await?;
-    let mut total: u128 = 0;
-    for utxo in utxos {
-        for asset in utxo.value {
-            if asset.unit == "lovelace" {
-                let qty: u128 = asset.quantity.parse().map_err(|_| ApiError::unexpected())?;
-                total = total.checked_add(qty).ok_or_else(ApiError::unexpected)?;
+    bounded(async {
+        let utxos = state.ledger.utxos_at(&address).await?;
+        let mut total: u128 = 0;
+        for utxo in utxos {
+            for asset in utxo.value {
+                if asset.unit == "lovelace" {
+                    let qty: u128 = asset.quantity.parse().map_err(|_| ApiError::unexpected())?;
+                    total = total.checked_add(qty).ok_or_else(ApiError::unexpected)?;
+                }
             }
         }
-    }
-    json_bounded(&BalanceResponse {
-        lovelace: total.to_string(),
+        json_bounded(&BalanceResponse {
+            lovelace: total.to_string(),
+        })
     })
+    .await
 }
 
 async fn utxos_at<L: Ledger, H: History>(
@@ -200,8 +190,11 @@ async fn utxos_at<L: Ledger, H: History>(
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let address = parse_mainnet_address(&path)?;
-    let utxos: Vec<Utxo> = state.ledger.utxos_at(&address).await?;
-    json_bounded(&utxos)
+    bounded(async {
+        let utxos: Vec<Utxo> = state.ledger.utxos_at(&address).await?;
+        json_bounded(&utxos)
+    })
+    .await
 }
 
 async fn transactions<L: Ledger, H: History>(
@@ -209,17 +202,14 @@ async fn transactions<L: Ledger, H: History>(
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let address = parse_mainnet_address(&path)?;
-    tokio::time::timeout(Duration::from_secs(19), async {
+    bounded(async {
         let (height, _) = state.ledger.tip().await?;
-        let txs = state
-            .history
-            .address_history(&address.to_string(), height)
-            .await?;
+        let txs = state.history.address_history(&address.to_string()).await?;
         let mut checks = futures_util::stream::iter(
             txs.into_iter()
                 .map(|tx| confirm_canonical(state.ledger.as_ref(), tx, height)),
         )
-        .buffer_unordered(8);
+        .buffered(8);
         let mut out = Vec::new();
         while let Some(result) = checks.next().await {
             if let Some(tx) = result? {
@@ -229,7 +219,6 @@ async fn transactions<L: Ledger, H: History>(
         json_bounded(&out)
     })
     .await
-    .map_err(|_| ApiError::unavailable())?
 }
 
 async fn transaction<L: Ledger, H: History>(
@@ -240,7 +229,7 @@ async fn transaction<L: Ledger, H: History>(
     parse_tx_id(&id).map_err(|_| ApiError::bad_request())?;
     bounded(async {
         let (height, _) = state.ledger.tip().await?;
-        let tx = state.history.transaction(&id, height).await?;
+        let tx = state.history.transaction(&id).await?;
         let tx = match tx {
             Some(tx) if tx.id == id => confirm_canonical(state.ledger.as_ref(), tx, height).await?,
             Some(_) => return Err(ApiError::unavailable()),
@@ -254,17 +243,11 @@ async fn transaction<L: Ledger, H: History>(
 async fn submit<L: Ledger, H: History>(
     req: HttpRequest,
     state: Data<AppState<L, H>>,
-    payload: Payload,
+    body: Json<crate::wire::SubmitRequest>,
 ) -> Result<HttpResponse, ApiError> {
     state.rate_limit(&req)?;
-    if req.content_type() != "application/json" {
-        return Err(ApiError::bad_request());
-    }
     let _admission = state.ops.admit_write()?;
     bounded(async {
-        let body = read_json_body(payload).await?;
-        let body: crate::wire::SubmitRequest =
-            serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
         let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
         let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
         let max = state.ledger.max_tx_size().await?;
@@ -278,7 +261,7 @@ async fn submit<L: Ledger, H: History>(
             .ops
             .persist_new(key, signed.hash, signed.clone(), uuid)
             .await?;
-        let (_, record) = submit_record(&state, key, record).await?;
+        let record = submit_record(&state, key, record).await?;
         if record.state == InternalState::Rejected {
             return Err(ApiError::bad_request());
         }
@@ -292,42 +275,42 @@ async fn submit<L: Ledger, H: History>(
 async fn create_operation<L: Ledger, H: History>(
     req: HttpRequest,
     state: Data<AppState<L, H>>,
-    payload: Payload,
+    body: Json<crate::wire::CreateOperationRequest>,
 ) -> Result<HttpResponse, ApiError> {
-    state.rate_limit(&req)?;
-    if req.content_type() != "application/json" {
+    let body = body.into_inner();
+    let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
+    let expected =
+        parse_tx_id(&body.expected_transaction_id).map_err(|_| ApiError::bad_request())?;
+    let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
+    let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
+    if signed.hash != expected {
         return Err(ApiError::bad_request());
     }
+    let key = OpsStore::client_key(&op_id);
+    if state.ops.get(key).await?.is_some() {
+        let record = state
+            .ops
+            .persist_new(key, expected, signed, body.operation_id)
+            .await?;
+        return json_bounded(&OpsStore::response(&record));
+    }
+    state.rate_limit(&req)?;
     let _admission = state.ops.admit_write()?;
     bounded(async {
-        let body = read_json_body(payload).await?;
-        let body: crate::wire::CreateOperationRequest =
-            serde_json::from_slice(&body).map_err(|_| ApiError::bad_request())?;
-        let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
-        let expected =
-            parse_tx_id(&body.expected_transaction_id).map_err(|_| ApiError::bad_request())?;
-        let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
-        let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
-        if signed.hash != expected {
+        let (_, tip_slot) = state.ledger.tip().await?;
+        if signed.ttl.is_none_or(|ttl| ttl <= tip_slot) {
             return Err(ApiError::bad_request());
         }
-        let key = OpsStore::client_key(&op_id);
-        if state.ops.get(key).await?.is_none() {
-            let (_, tip_slot) = state.ledger.tip().await?;
-            if signed.ttl.is_none_or(|ttl| ttl <= tip_slot) {
-                return Err(ApiError::bad_request());
-            }
-            let max = state.ledger.max_tx_size().await?;
-            if signed.bytes.len() as u64 > max {
-                return Err(ApiError::bad_request());
-            }
+        let max = state.ledger.max_tx_size().await?;
+        if signed.bytes.len() as u64 > max {
+            return Err(ApiError::bad_request());
         }
         let record = state
             .ops
-            .persist_new(key, expected, signed, body.operation_id.clone())
+            .persist_new(key, expected, signed, body.operation_id)
             .await?;
-        let (depth, record) = submit_record(&state, key, record).await?;
-        json_bounded(&OpsStore::response(&record, depth))
+        let record = submit_record(&state, key, record).await?;
+        json_bounded(&OpsStore::response(&record))
     })
     .await
 }
@@ -343,15 +326,15 @@ async fn get_operation<L: Ledger, H: History>(
         record.state,
         InternalState::Settled | InternalState::Rejected
     ) {
-        return json_bounded(&OpsStore::response(&record, 0));
+        return json_bounded(&OpsStore::response(&record));
     }
     bounded(async {
         let (height, slot) = state.ledger.tip().await?;
-        let depth = state
+        state
             .ops
             .reconcile_one(state.ledger.as_ref(), key, &mut record, height, slot, false)
             .await?;
-        json_bounded(&OpsStore::response(&record, depth))
+        json_bounded(&OpsStore::response(&record))
     })
     .await
 }
@@ -362,20 +345,26 @@ async fn confirm_canonical<L: Ledger>(
     tip_height: u64,
 ) -> Result<Option<TransactionSummary>, ApiError> {
     let id = parse_tx_id(&tx.id).map_err(|_| ApiError::unavailable())?;
-    let Some(presence) = ledger.read_tx(&id).await? else {
+    let Some(height) = ledger.read_tx(&id).await? else {
         return Ok(None);
     };
-    tx.depth = tip_height.saturating_sub(presence.height);
+    if height != tx.block_height {
+        return Err(ApiError::unavailable());
+    }
+    if height > tip_height {
+        log::warn!("Dolos transaction height is ahead of its current tip");
+    }
+    tx.depth = tip_height.saturating_sub(height);
     Ok(Some(tx))
 }
 async fn submit_record<L: Ledger, H: History>(
     state: &AppState<L, H>,
     key: crate::ops::OperationKey,
     mut record: Record,
-) -> Result<(u64, Record), ApiError> {
+) -> Result<Record, ApiError> {
     let (height, slot) = state.ledger.tip().await?;
     let submit = record.state == InternalState::Prepared;
-    let depth = state
+    state
         .ops
         .reconcile_one(
             state.ledger.as_ref(),
@@ -386,7 +375,7 @@ async fn submit_record<L: Ledger, H: History>(
             submit,
         )
         .await?;
-    Ok((depth, record))
+    Ok(record)
 }
 
 pub fn config<L, H>(cfg: &mut web::ServiceConfig)
@@ -443,7 +432,6 @@ where
     };
     App::new()
         .app_data(state)
-        .app_data(PayloadConfig::default().limit(MAX_JSON))
         .app_data(
             JsonConfig::default()
                 .limit(MAX_JSON)

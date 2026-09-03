@@ -1,7 +1,7 @@
 use crate::http::{AppState, Limits, app, legacy_uuid};
-use crate::ops::{InternalState, OpsStore, finality};
-use crate::providers::{History, Ledger, SubmitResult, TxPresence};
-use crate::tx::{SignedTx, parse_uuid};
+use crate::ops::{InternalState, OpsStore};
+use crate::providers::{History, Ledger};
+use crate::tx::{SignedTx, TEST_TX, decode_signed_tx, parse_uuid};
 use crate::wire::{TransactionSummary, Utxo};
 use actix_web::{
     http::StatusCode,
@@ -9,26 +9,39 @@ use actix_web::{
     web::Data,
 };
 use async_trait::async_trait;
-use cardano_connector_utxorpc::BloxbeanPayload;
+use cardano_connector_utxorpc::{BloxbeanPayload, SubmitCbor};
 use cardano_sdk::{Address, address::kind};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 struct FakeLedger {
     tip: (u64, u64),
     ready: bool,
     utxos: Vec<Utxo>,
-    txs: HashMap<[u8; 32], TxPresence>,
-    submits: Mutex<Vec<Vec<u8>>>,
+    txs: HashMap<[u8; 32], u64>,
+    submits: AtomicUsize,
+    submit_result: Option<SubmitCbor>,
     max_tx_size: u64,
     params: BloxbeanPayload,
 }
 
 struct FakeHistory {
-    ping: bool,
+    ready: bool,
     by_id: HashMap<String, TransactionSummary>,
     by_addr: HashMap<String, Vec<TransactionSummary>>,
     fail: bool,
+}
+
+impl Default for FakeHistory {
+    fn default() -> Self {
+        Self {
+            ready: true,
+            by_id: HashMap::new(),
+            by_addr: HashMap::new(),
+            fail: false,
+        }
+    }
 }
 
 #[async_trait]
@@ -55,16 +68,16 @@ impl Ledger for FakeLedger {
         Ok(self.utxos.clone())
     }
 
-    async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<TxPresence>, crate::ApiError> {
-        Ok(self.txs.get(txid).cloned())
+    async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<u64>, crate::ApiError> {
+        Ok(self.txs.get(txid).copied())
     }
 
-    async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitResult, crate::ApiError> {
-        self.submits.lock().expect("lock").push(cbor.to_vec());
-        Ok(SubmitResult::Accepted({
+    async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, crate::ApiError> {
+        self.submits.fetch_add(1, Ordering::Relaxed);
+        Ok(self.submit_result.clone().unwrap_or_else(|| {
             let mut hash = [0u8; 32];
-            hash.copy_from_slice(&cbor[..32.min(cbor.len())]);
-            hash
+            hash[..cbor.len().min(32)].copy_from_slice(&cbor[..cbor.len().min(32)]);
+            SubmitCbor::Accepted(hash)
         }))
     }
 
@@ -75,8 +88,8 @@ impl Ledger for FakeLedger {
 
 #[async_trait]
 impl History for FakeHistory {
-    async fn ping(&self) -> Result<(), crate::ApiError> {
-        if self.ping && !self.fail {
+    async fn ready(&self, _: u64) -> Result<(), crate::ApiError> {
+        if self.ready && !self.fail {
             Ok(())
         } else {
             Err(crate::ApiError::unavailable())
@@ -86,7 +99,6 @@ impl History for FakeHistory {
     async fn address_history(
         &self,
         address: &str,
-        _: u64,
     ) -> Result<Vec<TransactionSummary>, crate::ApiError> {
         if self.fail {
             return Err(crate::ApiError::unavailable());
@@ -94,11 +106,7 @@ impl History for FakeHistory {
         Ok(self.by_addr.get(address).cloned().unwrap_or_default())
     }
 
-    async fn transaction(
-        &self,
-        txid: &str,
-        _: u64,
-    ) -> Result<Option<TransactionSummary>, crate::ApiError> {
+    async fn transaction(&self, txid: &str) -> Result<Option<TransactionSummary>, crate::ApiError> {
         if self.fail {
             return Err(crate::ApiError::unavailable());
         }
@@ -155,7 +163,8 @@ fn default_ledger() -> FakeLedger {
         ready: true,
         utxos: vec![],
         txs: HashMap::new(),
-        submits: Mutex::new(Vec::new()),
+        submits: AtomicUsize::new(0),
+        submit_result: None,
         max_tx_size: 16_384,
         params: payload(),
     }
@@ -163,16 +172,7 @@ fn default_ledger() -> FakeLedger {
 
 #[actix_web::test]
 async fn health_and_network() {
-    let app = test::init_service(app(state(
-        default_ledger(),
-        FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
-            fail: false,
-        },
-    )))
-    .await;
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
     let health = test::call_service(&app, TestRequest::get().uri("/health").to_request()).await;
     assert_eq!(health.status(), StatusCode::OK);
     let body: serde_json::Value = test::read_body_json(health).await;
@@ -187,32 +187,14 @@ async fn health_and_network() {
 async fn health_fails_closed() {
     let mut ledger = default_ledger();
     ledger.ready = false;
-    let app = test::init_service(app(state(
-        ledger,
-        FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
-            fail: false,
-        },
-    )))
-    .await;
+    let app = test::init_service(app(state(ledger, FakeHistory::default()))).await;
     let health = test::call_service(&app, TestRequest::get().uri("/health").to_request()).await;
     assert_eq!(health.status(), StatusCode::SERVICE_UNAVAILABLE);
 }
 
 #[actix_web::test]
 async fn protocol_parameters_from_ledger() {
-    let app = test::init_service(app(state(
-        default_ledger(),
-        FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
-            fail: false,
-        },
-    )))
-    .await;
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
     let res = test::call_service(
         &app,
         TestRequest::get().uri("/protocol-parameters").to_request(),
@@ -226,16 +208,7 @@ async fn protocol_parameters_from_ledger() {
 
 #[actix_web::test]
 async fn missing_transaction_is_null() {
-    let app = test::init_service(app(state(
-        default_ledger(),
-        FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
-            fail: false,
-        },
-    )))
-    .await;
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
     let res = test::call_service(
         &app,
         TestRequest::get()
@@ -253,10 +226,8 @@ async fn koios_failure_is_unavailable() {
     let app = test::init_service(app(state(
         default_ledger(),
         FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
             fail: true,
+            ..Default::default()
         },
     )))
     .await;
@@ -272,16 +243,7 @@ async fn koios_failure_is_unavailable() {
 
 #[actix_web::test]
 async fn operations_reject_unknown_fields() {
-    let app = test::init_service(app(state(
-        default_ledger(),
-        FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
-            fail: false,
-        },
-    )))
-    .await;
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
     let res = test::call_service(
         &app,
         TestRequest::post()
@@ -300,16 +262,7 @@ async fn operations_reject_unknown_fields() {
 
 #[actix_web::test]
 async fn write_routes_reject_non_json_before_parsing() {
-    let app = test::init_service(app(state(
-        default_ledger(),
-        FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
-            fail: false,
-        },
-    )))
-    .await;
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
     let response = test::call_service(
         &app,
         TestRequest::post()
@@ -324,16 +277,7 @@ async fn write_routes_reject_non_json_before_parsing() {
 
 #[actix_web::test]
 async fn openapi_is_served() {
-    let app = test::init_service(app(state(
-        default_ledger(),
-        FakeHistory {
-            ping: true,
-            by_id: HashMap::new(),
-            by_addr: HashMap::new(),
-            fail: false,
-        },
-    )))
-    .await;
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
     let res = test::call_service(&app, TestRequest::get().uri("/openapi.yaml").to_request()).await;
     assert_eq!(res.status(), StatusCode::OK);
     let body = test::read_body(res).await;
@@ -385,6 +329,39 @@ async fn operation_conflict_and_idempotency() {
 }
 
 #[actix_web::test]
+async fn idempotent_retry_bypasses_admission() {
+    let state = state(default_ledger(), FakeHistory::default());
+    let uuid = "550e8400-e29b-41d4-a716-446655440008";
+    let op_id = parse_uuid(uuid).unwrap();
+    let signed = decode_signed_tx(&hex::decode(TEST_TX).unwrap()).unwrap();
+    state
+        .ops
+        .persist_new(
+            OpsStore::client_key(&op_id),
+            signed.hash,
+            signed.clone(),
+            uuid.to_owned(),
+        )
+        .await
+        .unwrap();
+    let _guards: Vec<_> = (0..8).map(|_| state.ops.admit_write().unwrap()).collect();
+    let app = test::init_service(app(state.clone())).await;
+    let response = test::call_service(
+        &app,
+        TestRequest::post()
+            .uri("/operations")
+            .set_json(serde_json::json!({
+                "operation_id": uuid,
+                "expected_transaction_id": hex::encode(signed.hash),
+                "transaction": TEST_TX
+            }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[actix_web::test]
 async fn claim_submit_is_exclusive() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440002";
@@ -421,7 +398,7 @@ async fn confirmed_keeps_cbor() {
         .await
         .unwrap();
     let mut txs = HashMap::new();
-    txs.insert(txid, TxPresence { height: 95 });
+    txs.insert(txid, 95);
     let ledger = FakeLedger {
         txs,
         ..default_ledger()
@@ -432,10 +409,11 @@ async fn confirmed_keeps_cbor() {
         .unwrap();
     assert_eq!(record.state, InternalState::Confirmed);
     assert!(record.cbor.is_some());
+    assert_eq!(record.depth, 5);
 }
 
 #[actix_web::test]
-async fn settled_is_not_reset() {
+async fn settled_depth_is_preserved() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440004";
     let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
@@ -450,14 +428,54 @@ async fn settled_is_not_reset() {
         .persist_new(key, txid, signed, uuid.to_owned())
         .await
         .unwrap();
-    record.state = InternalState::Settled;
-    record.cbor = None;
-    store.put(key, &mut record).await.unwrap();
+    let ledger = FakeLedger {
+        tip: (2260, 50_000),
+        txs: HashMap::from([(txid, 100)]),
+        ..default_ledger()
+    };
     store
-        .reconcile_one(&default_ledger(), key, &mut record, 100, 50_000, true)
+        .reconcile_one(&ledger, key, &mut record, 2260, 50_000, false)
         .await
         .unwrap();
     assert_eq!(record.state, InternalState::Settled);
+    assert_eq!(OpsStore::response(&record).depth, 2160);
+    assert_eq!(
+        store
+            .reconcile_one(&default_ledger(), key, &mut record, 100, 50_000, true)
+            .await
+            .unwrap(),
+        2160
+    );
+}
+
+#[actix_web::test]
+async fn indeterminate_submission_holds_lease() {
+    let store = tmp_db();
+    let uuid = "550e8400-e29b-41d4-a716-446655440007";
+    let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
+    let txid = [14u8; 32];
+    let signed = SignedTx {
+        hash: txid,
+        digest: [15u8; 32],
+        ttl: Some(60_000),
+        bytes: vec![9, 9, 9],
+    };
+    let mut record = store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    let ledger = FakeLedger {
+        submit_result: Some(SubmitCbor::Indeterminate),
+        ..default_ledger()
+    };
+    store
+        .reconcile_one(&ledger, key, &mut record, 100, 50_000, true)
+        .await
+        .unwrap();
+    assert_eq!(record.state, InternalState::Submitting);
+    assert!(record.submit_started_at.is_some());
+    assert!(store.claim_submit(key).await.unwrap().is_none());
+    assert_eq!(ledger.submits.load(Ordering::Relaxed), 1);
 }
 
 #[actix_web::test]
@@ -542,14 +560,6 @@ fn legacy_submit_uuid_is_canonical() {
     let uuid = legacy_uuid(&hash);
     assert_eq!(uuid, "00010203-0405-0607-0809-0a0b0c0d0e0f");
     assert_eq!(parse_uuid(&uuid).unwrap(), hash[..16]);
-}
-
-#[test]
-fn finality_edges() {
-    assert_eq!(finality(4), InternalState::Accepted);
-    assert_eq!(finality(5), InternalState::Confirmed);
-    assert_eq!(finality(2159), InternalState::Confirmed);
-    assert_eq!(finality(2160), InternalState::Settled);
 }
 
 #[test]

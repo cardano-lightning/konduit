@@ -87,10 +87,11 @@ pub fn parse_uuid(input: &str) -> anyhow::Result<[u8; 16]> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{decode_signed_tx, parse_uuid};
+pub(crate) const TEST_TX: &str = "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a001092a803d818558203525101010023259800a518a4d136564004ae69a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a00a208bb021a00029755a0f5f6";
 
-    const TX: &str = "84a300d9010281825820c984c8bf52a141254c714c905b2d27b432d4b546f815fbc2fea7b9da6e490324030182a30058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a001092a803d818558203525101010023259800a518a4d136564004ae69a20058390082c1729d5fd44124a6ae72bcdb86b6e827aac6a74301e4003c092e6f4af57b0c9ff6ca5218967d1e7a3f572d7cd277d73468d3b2fca56572011a00a208bb021a00029755a0f5f6";
+#[cfg(test)]
+mod tests {
+    use super::{TEST_TX, decode_signed_tx, parse_uuid};
 
     #[test]
     fn parse_uuid_canonical() {
@@ -106,7 +107,7 @@ mod tests {
 
     #[test]
     fn rejects_trailing_cbor() {
-        let mut bytes = hex::decode(TX).unwrap();
+        let mut bytes = hex::decode(TEST_TX).unwrap();
         assert!(decode_signed_tx(&bytes).is_ok());
         bytes.push(0);
         assert!(decode_signed_tx(&bytes).is_err());
