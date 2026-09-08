@@ -1,6 +1,6 @@
 use crate::{
     Channel, admin,
-    channel::{self, apply_locked, apply_secrets, apply_squash, apply_timeout},
+    channel::{self, apply_secrets, apply_squash, apply_timeout},
     db,
     time::{self, now},
 };
@@ -9,6 +9,7 @@ use konduit_data::{AssetDefinition, Duration, Locked, Pricing, Secret, Squash};
 use konduit_tmp::{
     AdaptorInfo, Keytag, Quote, QuoteBody, Receipt, SquashProposal, SquashStatus, TxHelp,
 };
+use sha2::{Digest, Sha256};
 /// Actix web server "Data" ie the context of handlers.
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -53,7 +54,8 @@ pub enum Error {
 
     #[error("lease is invalid")]
     LeaseInvalid,
-
+    #[error("operation id conflicts with an existing request")]
+    OperationConflict,
     #[error("commitment: {0}")]
     Commitment(#[from] CommitmentError),
 
@@ -69,6 +71,7 @@ impl From<db::Error> for Error {
             db::Error::NoChannel => Error::NoChannel,
             db::Error::AlreadyExists => Error::DbBackend("entry already exists".into()),
             db::Error::LeaseInvalid => Error::LeaseInvalid,
+            db::Error::OperationConflict => Error::OperationConflict,
             db::Error::Channel(error) => Error::Channel(error),
         }
     }
@@ -87,6 +90,7 @@ pub struct Data {
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<AdaptorInfo<TxHelp>>,
     admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
+    channel_operations: Arc<dyn super::channel_operations::Api>,
 }
 
 impl Data {
@@ -96,6 +100,7 @@ impl Data {
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<AdaptorInfo<TxHelp>>,
         admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
+        channel_operations: Arc<dyn super::channel_operations::Api>,
     ) -> Self {
         Self {
             bln,
@@ -103,6 +108,7 @@ impl Data {
             fx,
             info,
             admin,
+            channel_operations,
         }
     }
 
@@ -126,6 +132,9 @@ impl Data {
         self.info.clone()
     }
 
+    pub fn channel_operations(&self) -> Arc<dyn super::channel_operations::Api> {
+        self.channel_operations.clone()
+    }
     pub fn channel(&self, keytag: &Keytag) -> Result<Channel, Error> {
         self.db.get(keytag)?.ok_or(Error::NoChannel)
     }
@@ -177,30 +186,42 @@ impl Data {
         let channel = self.channel(keytag)?;
         let definition = channel.asset_definition().clone();
         let amount_msat = body.amount_msat();
-        let min_amount = {
-            let fx = self.fx.read().await;
-            quote_amount(&fx, &definition, amount_msat)?
-        };
-        channel.can_commit(min_amount)?;
+        let invoice_hash = body.invoice_hash().map(hex::encode);
+        let pricing = self.fx.read().await.clone();
+        channel.can_commit(quote_amount(&pricing, &definition, amount_msat)?)?;
         let bln_res = self
             .bln_quote(amount_msat, body.payee(), body.route_hints())
             .await?;
         let quote_msat = amount_msat
             .checked_add(bln_res.fee_msat)
             .ok_or_else(|| Error::Fx("quote amount exceeds u64".into()))?;
-        let amount = {
-            let fx = self.fx.read().await;
-            quote_amount(&fx, &definition, quote_msat)?
-        };
+        let converted_total = quote_amount(&pricing, &definition, quote_msat)?;
+        let routing_fee_amount = quote_amount(&pricing, &definition, bln_res.fee_msat)?;
+        let payment_amount = converted_total
+            .checked_sub(routing_fee_amount)
+            .ok_or_else(|| Error::Fx("quote fee exceeds total".into()))?;
+        let adaptor_fee = self.info.tos.flat_fee;
+        let amount = converted_total
+            .checked_add(adaptor_fee)
+            .ok_or_else(|| Error::Fx("quote amount exceeds u64".into()))?;
         let index = channel.can_commit(amount)?;
         let relative_timeout =
             (ADAPTOR_TIME_DELTA + QUOTE_PAY_TIME_MARGIN + bln_res.relative_timeout).as_millis()
                 as u64;
+        let expires_at_epoch_millis = (time::now()?.as_millis() as u64)
+            .checked_add(relative_timeout)
+            .ok_or(Error::Time(time::Error::NoTime))?;
         Ok(Quote {
             index,
             amount,
             relative_timeout,
             routing_fee: bln_res.fee_msat,
+            invoice_hash,
+            invoice_amount_msat: amount_msat,
+            payment_amount,
+            routing_fee_amount,
+            adaptor_fee,
+            expires_at_epoch_millis,
         })
     }
 
@@ -271,12 +292,32 @@ impl Data {
         let (fee_limit, rel_timeout) = self
             .align_commitments(&definition, time::now()?, &locked, &invoice)
             .await?;
-        self.db().update_with_lease(
+        let payment_hash = locked.lock().0;
+        let mut digest = Sha256::new();
+        digest.update(minicbor::to_vec(&locked).map_err(|_| Error::Other)?);
+        digest.update(invoice.to_string().as_bytes());
+        let request_digest: [u8; 32] = digest.finalize().into();
+        let mut identity = Sha256::new();
+        identity.update(keytag.as_ref());
+        identity.update(locked.index().to_be_bytes());
+        let identity: [u8; 32] = identity.finalize().into();
+        let inserted = self.db().reserve_payment(
+            &identity,
+            &request_digest,
+            &payment_hash,
             keytag,
             lease_token,
             time::now()?.as_millis() as u64,
-            apply_locked(locked),
+            locked,
         )?;
+        if !inserted {
+            return Ok(PayResponse::from(
+                self.bln()
+                    .reveal(bln_client::types::RevealRequest { lock: payment_hash })
+                    .await?
+                    .secret,
+            ));
+        }
         let pay_res = self.bln_pay(invoice, fee_limit, rel_timeout).await?;
         if let Some(secret) = pay_res.secret {
             self.db()

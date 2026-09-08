@@ -122,7 +122,11 @@ async fn main() -> anyhow::Result<()> {
     let mut info = AdaptorInfo::from(args.common);
     info.asset_catalog_digest = Some(assets.digest()?);
     let info = Arc::new(info);
-    let server_data = server::Data::new(bln, db, fx_state, info, admin);
+    let channel_operations = Arc::new(server::channel_operations::Client::new(
+        args.server.channel_connector_url.clone(),
+        args.server.channel_connector_token.clone(),
+    ));
+    let server_data = server::Data::new(bln, db, fx_state, info, admin, channel_operations);
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;

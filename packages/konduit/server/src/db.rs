@@ -1,5 +1,5 @@
 use cardano_sdk::Hash;
-use konduit_data::AssetDefinition;
+use konduit_data::{AssetDefinition, Locked};
 use konduit_tmp::{Keytag, Receipt, SessionClaimRequest};
 use minicbor::{Decode, Encode};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
@@ -12,6 +12,10 @@ pub use args::DbArgs as Args;
 
 const TABLE: TableDefinition<&[u8], Value> = TableDefinition::new("channels");
 const LEASES: TableDefinition<&[u8], LeaseValue> = TableDefinition::new("leases");
+const CHANNEL_OPERATIONS: TableDefinition<&[u8], ChannelOperationValue> =
+    TableDefinition::new("channel_operations");
+const PAYMENT_AUTHORIZATIONS: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new("payment_authorizations");
 
 // ---------------------------------------------------------------------------
 // Value
@@ -99,6 +103,51 @@ impl redb::Value for LeaseValue {
     }
 }
 
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
+pub struct ChannelOperationValue {
+    #[n(0)]
+    pub keytag: Vec<u8>,
+    #[n(1)]
+    pub expected_transaction_id: [u8; 32],
+    #[n(2)]
+    pub transaction_digest: [u8; 32],
+    #[n(3)]
+    pub transaction: Vec<u8>,
+    #[n(4)]
+    pub status: String,
+    #[n(5)]
+    pub transaction_id: Option<[u8; 32]>,
+    #[n(6)]
+    pub depth: Option<u64>,
+}
+
+impl redb::Value for ChannelOperationValue {
+    type SelfType<'a> = ChannelOperationValue;
+    type AsBytes<'a> = Vec<u8>;
+
+    fn fixed_width() -> Option<usize> {
+        None
+    }
+
+    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
+    where
+        Self: 'a,
+    {
+        minicbor::decode(data).expect("corrupt channel operation bytes")
+    }
+
+    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+    where
+        Self: 'b,
+    {
+        minicbor::to_vec(value).expect("channel operation encode failed")
+    }
+
+    fn type_name() -> redb::TypeName {
+        redb::TypeName::new("ChannelOperationV1")
+    }
+}
+
 impl Value {
     pub fn to_channel(self, keytag: &Keytag) -> Channel {
         let Self {
@@ -140,6 +189,8 @@ pub enum Error {
     AlreadyExists,
     #[error("channel lease is invalid")]
     LeaseInvalid,
+    #[error("operation id conflicts with an existing request")]
+    OperationConflict,
     #[error("channel: {0}")]
     Channel(#[from] channel::Error),
 }
@@ -178,8 +229,6 @@ impl From<redb::CommitError> for Error {
 pub enum LeaseClaimError {
     #[error("lease claim conflicts with active generation")]
     Conflict,
-    #[error("no channel for wallet")]
-    UnknownWallet,
     #[error(transparent)]
     Database(#[from] Error),
 }
@@ -197,6 +246,8 @@ impl Db {
         {
             let _ = tx.open_table(TABLE)?;
             let _ = tx.open_table(LEASES)?;
+            let _ = tx.open_table(CHANNEL_OPERATIONS)?;
+            let _ = tx.open_table(PAYMENT_AUTHORIZATIONS)?;
         }
         tx.commit()?;
         Ok(Self(db))
@@ -281,29 +332,6 @@ impl Db {
         }
 
         let tx = self.0.begin_write().map_err(Error::from)?;
-        {
-            let channels = tx.open_table(TABLE).map_err(Error::from)?;
-            let wallet = claim.wallet_verification_key_hex;
-            let has_channel = match next_wallet_prefix(&wallet) {
-                Some(end) => channels
-                    .range(wallet.as_slice()..end.as_slice())
-                    .map_err(Error::from)?
-                    .next()
-                    .transpose()
-                    .map_err(Error::from)?
-                    .is_some(),
-                None => channels
-                    .range(wallet.as_slice()..)
-                    .map_err(Error::from)?
-                    .next()
-                    .transpose()
-                    .map_err(Error::from)?
-                    .is_some(),
-            };
-            if !has_channel {
-                return Err(LeaseClaimError::UnknownWallet);
-            }
-        }
 
         {
             let mut leases = tx.open_table(LEASES).map_err(Error::from)?;
@@ -312,10 +340,9 @@ impl Db {
                 .map_err(Error::from)?
                 .map(|value| value.value())
             {
-                let same_identity = claim.backup_hash_hex == current.backup_hash
-                    && claim.device_public_key_hex == current.device_public_key;
+                let same_device = claim.device_public_key_hex == current.device_public_key;
                 if claim.generation < current.generation
-                    || (claim.generation == current.generation && !same_identity)
+                    || (claim.generation == current.generation && !same_device)
                     || (claim.generation == current.generation
                         && claim.timestamp <= current.last_claim_timestamp.unwrap_or(0))
                 {
@@ -340,6 +367,164 @@ impl Db {
         Ok((token, expires_at_epoch_millis))
     }
 
+    pub fn reserve_channel_operation(
+        &self,
+        operation_id: &[u8; 16],
+        keytag: &Keytag,
+        token: &[u8; 32],
+        now_epoch_millis: u64,
+        expected_transaction_id: [u8; 32],
+        transaction_digest: [u8; 32],
+        transaction: Vec<u8>,
+    ) -> Result<ChannelOperationValue, Error> {
+        let wallet_key: [u8; 32] = keytag
+            .as_ref()
+            .get(..32)
+            .and_then(|key| key.try_into().ok())
+            .ok_or(Error::LeaseInvalid)?;
+        let tx = self.0.begin_write()?;
+        {
+            let leases = tx.open_table(LEASES)?;
+            let valid = leases
+                .get(wallet_key.as_slice())?
+                .map(|value| {
+                    let lease = value.value();
+                    lease.expires_at_epoch_millis > now_epoch_millis
+                        && bool::from(lease.token.ct_eq(&hash_token(token)))
+                })
+                .unwrap_or(false);
+            if !valid {
+                return Err(Error::LeaseInvalid);
+            }
+        }
+        let operation = {
+            let mut operations = tx.open_table(CHANNEL_OPERATIONS)?;
+            if let Some(existing) = operations.get(operation_id.as_slice())? {
+                let existing = existing.value();
+                if existing.keytag != keytag.as_ref()
+                    || existing.expected_transaction_id != expected_transaction_id
+                    || existing.transaction_digest != transaction_digest
+                    || existing.transaction != transaction
+                {
+                    return Err(Error::OperationConflict);
+                }
+                existing
+            } else {
+                let operation = ChannelOperationValue {
+                    keytag: keytag.as_ref().to_vec(),
+                    expected_transaction_id,
+                    transaction_digest,
+                    transaction,
+                    status: "reserved".into(),
+                    transaction_id: None,
+                    depth: None,
+                };
+                operations.insert(operation_id.as_slice(), operation.clone())?;
+                operation
+            }
+        };
+        tx.commit()?;
+        Ok(operation)
+    }
+
+    pub fn channel_operation(
+        &self,
+        operation_id: &[u8; 16],
+        keytag: &Keytag,
+    ) -> Result<Option<ChannelOperationValue>, Error> {
+        let tx = self.0.begin_read()?;
+        let operations = tx.open_table(CHANNEL_OPERATIONS)?;
+        Ok(operations
+            .get(operation_id.as_slice())?
+            .map(|value| value.value())
+            .filter(|operation| operation.keytag == keytag.as_ref()))
+    }
+
+    pub fn update_channel_operation(
+        &self,
+        operation_id: &[u8; 16],
+        keytag: &Keytag,
+        status: String,
+        transaction_id: Option<[u8; 32]>,
+        depth: Option<u64>,
+    ) -> Result<ChannelOperationValue, Error> {
+        let tx = self.0.begin_write()?;
+        let updated = {
+            let mut operations = tx.open_table(CHANNEL_OPERATIONS)?;
+            let mut operation = operations
+                .get(operation_id.as_slice())?
+                .map(|value| value.value())
+                .filter(|operation| operation.keytag == keytag.as_ref())
+                .ok_or(Error::NoChannel)?;
+            operation.status = status;
+            operation.transaction_id = transaction_id;
+            operation.depth = depth;
+            operations.insert(operation_id.as_slice(), operation.clone())?;
+            operation
+        };
+        tx.commit()?;
+        Ok(updated)
+    }
+
+    pub fn reserve_payment(
+        &self,
+        identity: &[u8; 32],
+        request_digest: &[u8; 32],
+        payment_hash: &[u8; 32],
+        keytag: &Keytag,
+        token: &[u8; 32],
+        now_epoch_millis: u64,
+        locked: Locked,
+    ) -> Result<bool, Error> {
+        let wallet_key: [u8; 32] = keytag
+            .as_ref()
+            .get(..32)
+            .and_then(|key| key.try_into().ok())
+            .ok_or(Error::LeaseInvalid)?;
+        let tx = self.0.begin_write()?;
+        {
+            let leases = tx.open_table(LEASES)?;
+            let valid = leases
+                .get(wallet_key.as_slice())?
+                .map(|value| {
+                    let lease = value.value();
+                    lease.expires_at_epoch_millis > now_epoch_millis
+                        && bool::from(lease.token.ct_eq(&hash_token(token)))
+                })
+                .unwrap_or(false);
+            if !valid {
+                return Err(Error::LeaseInvalid);
+            }
+        }
+        let mut persisted = Vec::with_capacity(64);
+        persisted.extend_from_slice(request_digest);
+        persisted.extend_from_slice(payment_hash);
+        let inserted = {
+            let mut authorizations = tx.open_table(PAYMENT_AUTHORIZATIONS)?;
+            let existing = authorizations
+                .get(identity.as_slice())?
+                .map(|value| value.value().to_vec());
+            match existing.as_deref() {
+                Some(existing) if existing == persisted => false,
+                Some(_) => return Err(Error::OperationConflict),
+                None => {
+                    authorizations.insert(identity.as_slice(), persisted.as_slice())?;
+                    true
+                }
+            }
+        };
+        if inserted {
+            let mut channels = tx.open_table(TABLE)?;
+            let mut channel = channels
+                .get(keytag.as_ref())?
+                .map(|value| value.value().to_channel(keytag))
+                .ok_or(Error::NoChannel)?;
+            channel.apply_locked(locked)?;
+            channels.insert(keytag.as_ref(), Value::from_channel(channel))?;
+        }
+        tx.commit()?;
+        Ok(inserted)
+    }
     pub fn update_with_lease<F>(
         &self,
         keytag: &Keytag,
@@ -406,20 +591,6 @@ impl Db {
 
 fn hash_token(token: &[u8; 32]) -> [u8; 32] {
     Hash::<32>::new(token).into()
-}
-
-fn next_wallet_prefix(prefix: &[u8; 32]) -> Option<[u8; 32]> {
-    let mut end = *prefix;
-    for i in (0..32).rev() {
-        if end[i] != 0xff {
-            end[i] += 1;
-            for byte in end.iter_mut().skip(i + 1) {
-                *byte = 0;
-            }
-            return Some(end);
-        }
-    }
-    None
 }
 
 #[cfg(test)]
@@ -528,8 +699,9 @@ mod tests {
     }
 
     #[test]
-    fn unknown_wallet_does_not_create_lease() {
-        let (_file, db) = lease_db();
+    fn first_claim_does_not_require_an_open_channel() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let db = Db::open(file.path().to_str().unwrap()).unwrap();
         let claim = SessionClaimRequest::signed(
             &SigningKey::from([9; 32]),
             [8; 32],
@@ -538,14 +710,12 @@ mod tests {
             [3; 32],
             1,
         );
-        assert!(matches!(
-            db.claim_lease(&claim, [4; 32], 100),
-            Err(LeaseClaimError::UnknownWallet)
-        ));
+        db.claim_lease(&claim, [4; 32], 100).unwrap();
         assert!(
-            !db.validate_lease(&claim.wallet_verification_key_hex, &[4; 32], 99)
+            db.validate_lease(&claim.wallet_verification_key_hex, &[4; 32], 99)
                 .unwrap()
         );
+        assert!(db.keys().unwrap().is_empty());
     }
 
     #[test]
@@ -575,6 +745,20 @@ mod tests {
     }
 
     #[test]
+    fn equal_generation_same_device_may_advance_backup() {
+        let (_file, db) = lease_db();
+        let original = claim(1, 1);
+        db.claim_lease(&original, [4; 32], 100).unwrap();
+        let mut advanced = claim(1, 2);
+        advanced.backup_hash_hex[0] ^= 1;
+        db.claim_lease(&advanced, [5; 32], 200).unwrap();
+        assert!(
+            db.validate_lease(&advanced.wallet_verification_key_hex, &[5; 32], 199)
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn higher_generation_replaces_lease() {
         let (_file, db) = lease_db();
         let old = claim(1, 1);
@@ -596,6 +780,57 @@ mod tests {
             !db.validate_lease(&claim.wallet_verification_key_hex, &[4; 32], 100)
                 .unwrap()
         );
+    }
+
+    #[test]
+    fn channel_operation_reservation_is_idempotent_and_fenced() {
+        let (_file, db) = lease_db();
+        let original = claim(1, 1);
+        db.claim_lease(&original, [4; 32], 100).unwrap();
+        let keytag = db.keys().unwrap().pop().unwrap();
+        let first = db
+            .reserve_channel_operation(&[1; 16], &keytag, &[4; 32], 99, [2; 32], [3; 32], vec![4])
+            .unwrap();
+        assert_eq!(
+            first,
+            db.reserve_channel_operation(
+                &[1; 16],
+                &keytag,
+                &[4; 32],
+                99,
+                [2; 32],
+                [3; 32],
+                vec![4]
+            )
+            .unwrap()
+        );
+        assert!(matches!(
+            db.reserve_channel_operation(
+                &[1; 16],
+                &keytag,
+                &[4; 32],
+                99,
+                [2; 32],
+                [3; 32],
+                vec![5]
+            ),
+            Err(Error::OperationConflict)
+        ));
+
+        db.claim_lease(&claim(2, 2), [5; 32], 200).unwrap();
+        assert!(matches!(
+            db.reserve_channel_operation(
+                &[6; 16],
+                &keytag,
+                &[4; 32],
+                99,
+                [2; 32],
+                [3; 32],
+                vec![4]
+            ),
+            Err(Error::LeaseInvalid)
+        ));
+        assert!(db.channel_operation(&[1; 16], &keytag).unwrap().is_some());
     }
 
     #[test]

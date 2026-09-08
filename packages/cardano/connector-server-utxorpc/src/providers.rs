@@ -2,7 +2,7 @@ use crate::error::ApiError;
 use crate::tx::{parse_lowercase_hex, parse_tx_id};
 use crate::wire::{AssetObject, TransactionSummary, TxInput, TxOutput, Utxo};
 use async_trait::async_trait;
-use cardano_connector_utxorpc::{SubmitCbor, UtxoRpc};
+use cardano_connector_utxorpc::{EvaluationRedeemer, SubmitCbor, UtxoRpc};
 use cardano_sdk::{Address, NetworkId, address::kind};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
@@ -23,6 +23,7 @@ pub trait Ledger: Send + Sync {
     async fn utxos_at(&self, address: &Address<kind::Shelley>) -> Result<Vec<Utxo>, ApiError>;
     async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<u64>, ApiError>;
     async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, ApiError>;
+    async fn evaluate_cbor(&self, cbor: &[u8]) -> Result<Vec<EvaluationRedeemer>, ApiError>;
     async fn max_tx_size(&self) -> Result<u64, ApiError>;
 }
 
@@ -91,6 +92,10 @@ impl Ledger for DolosLedger {
 
     async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, ApiError> {
         self.inner.submit_cbor(cbor).await.map_err(ApiError::from)
+    }
+
+    async fn evaluate_cbor(&self, cbor: &[u8]) -> Result<Vec<EvaluationRedeemer>, ApiError> {
+        self.inner.evaluate_cbor(cbor).await.map_err(ApiError::from)
     }
 
     async fn max_tx_size(&self) -> Result<u64, ApiError> {

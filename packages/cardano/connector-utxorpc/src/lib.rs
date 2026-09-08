@@ -29,6 +29,14 @@ pub enum SubmitCbor {
     Rejected,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvaluationRedeemer {
+    pub purpose: String,
+    pub index: u32,
+    pub memory: u64,
+    pub steps: u64,
+}
+
 impl SubmitCbor {
     fn from_status(status: &tonic::Status) -> Self {
         let message = status.message().to_ascii_lowercase();
@@ -253,6 +261,46 @@ impl UtxoRpc {
         })
         .await
         .map_err(|_| anyhow!("Dolos RPC timed out"))?
+    }
+
+    pub async fn evaluate_cbor(&self, tx: &[u8]) -> anyhow::Result<Vec<EvaluationRedeemer>> {
+        let tx = Some(utxorpc::spec::submit::AnyChainTx {
+            r#type: Some(utxorpc::spec::submit::any_chain_tx::Type::Raw(
+                tx.to_vec().into(),
+            )),
+        });
+        let request = utxorpc::spec::submit::EvalTxRequest { tx };
+        let mut submit = self.submit.lock().await;
+        let response = dolos(submit.inner.eval_tx(request))
+            .await??
+            .into_inner()
+            .report
+            .and_then(|report| report.chain)
+            .and_then(|chain| match chain {
+                utxorpc::spec::submit::any_chain_eval::Chain::Cardano(report) => Some(report),
+            })
+            .ok_or_else(|| anyhow!("Dolos returned no Cardano evaluation"))?;
+        if !response.errors.is_empty() {
+            return Err(anyhow!("Dolos rejected transaction evaluation"));
+        }
+        response
+            .redeemers
+            .into_iter()
+            .map(|redeemer| {
+                let units = redeemer
+                    .ex_units
+                    .ok_or_else(|| anyhow!("evaluation omitted execution units"))?;
+                let purpose =
+                    utxorpc::spec::cardano::RedeemerPurpose::try_from(redeemer.purpose)
+                        .map_err(|_| anyhow!("evaluation returned an unknown redeemer purpose"))?;
+                Ok(EvaluationRedeemer {
+                    purpose: format!("{purpose:?}").to_ascii_lowercase(),
+                    index: redeemer.index,
+                    memory: units.memory,
+                    steps: units.steps,
+                })
+            })
+            .collect()
     }
 }
 

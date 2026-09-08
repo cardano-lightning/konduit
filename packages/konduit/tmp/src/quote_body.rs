@@ -29,6 +29,13 @@ impl QuoteBody {
         }
     }
 
+    pub fn invoice_hash(&self) -> Option<[u8; 32]> {
+        match self {
+            QuoteBody::Simple(_) => None,
+            QuoteBody::Bolt11(invoice) => Some(invoice.payment_hash),
+        }
+    }
+
     pub fn payee(&self) -> [u8; 33] {
         match self {
             QuoteBody::Simple(simple_quote) => simple_quote.payee,

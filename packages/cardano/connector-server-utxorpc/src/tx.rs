@@ -10,20 +10,22 @@ pub struct SignedTx {
     pub digest: [u8; 32],
     pub ttl: Option<u64>,
     pub bytes: Vec<u8>,
+    pub creates_pinned_channel: bool,
 }
 
 pub fn decode_signed_tx(bytes: &[u8]) -> anyhow::Result<SignedTx> {
-    let (hash, ttl) = tx_details(bytes)?;
+    let (hash, ttl, creates_pinned_channel) = tx_details(bytes)?;
     let digest = Sha256::digest(bytes);
     Ok(SignedTx {
         hash,
         digest: digest.into(),
         ttl,
         bytes: bytes.to_vec(),
+        creates_pinned_channel,
     })
 }
 
-fn tx_details(bytes: &[u8]) -> anyhow::Result<([u8; 32], Option<u64>)> {
+fn tx_details(bytes: &[u8]) -> anyhow::Result<([u8; 32], Option<u64>, bool)> {
     let mut decoder = minicbor::Decoder::new(bytes);
     if let Ok(tx) = decoder.decode::<conway::MintedTx<'_>>()
         && decoder.position() == bytes.len()
@@ -31,6 +33,10 @@ fn tx_details(bytes: &[u8]) -> anyhow::Result<([u8; 32], Option<u64>)> {
         return Ok((
             *Hasher::<256>::hash(tx.transaction_body.raw_cbor()),
             tx.transaction_body.ttl,
+            tx.transaction_body
+                .outputs
+                .iter()
+                .any(conway_output_is_pinned),
         ));
     }
     let mut decoder = minicbor::Decoder::new(bytes);
@@ -40,9 +46,38 @@ fn tx_details(bytes: &[u8]) -> anyhow::Result<([u8; 32], Option<u64>)> {
         return Ok((
             *Hasher::<256>::hash(tx.transaction_body.raw_cbor()),
             tx.transaction_body.ttl,
+            tx.transaction_body
+                .outputs
+                .iter()
+                .any(babbage_output_is_pinned),
         ));
     }
     Err(anyhow!("unable to decode signed transaction CBOR")).context("invalid transaction")
+}
+
+const PINNED_VALIDATOR: [u8; 28] = [
+    0x8c, 0xc6, 0xbb, 0xae, 0xed, 0x22, 0xc2, 0x53, 0xb9, 0xd7, 0x03, 0xd3, 0x9f, 0x63, 0xb7, 0xe2,
+    0x15, 0xf7, 0xaf, 0x08, 0xbd, 0xa9, 0x30, 0xac, 0x6b, 0x85, 0xeb, 0xaf,
+];
+
+fn address_is_pinned(address: &[u8]) -> bool {
+    address.len() >= 29
+        && matches!(address[0] >> 4, 1 | 3 | 5 | 7)
+        && address[1..29] == PINNED_VALIDATOR
+}
+
+fn conway_output_is_pinned(output: &conway::MintedTransactionOutput<'_>) -> bool {
+    match output {
+        conway::PseudoTransactionOutput::Legacy(output) => address_is_pinned(&output.address),
+        conway::PseudoTransactionOutput::PostAlonzo(output) => address_is_pinned(&output.address),
+    }
+}
+
+fn babbage_output_is_pinned(output: &babbage::MintedTransactionOutput<'_>) -> bool {
+    match output {
+        babbage::PseudoTransactionOutput::Legacy(output) => address_is_pinned(&output.address),
+        babbage::PseudoTransactionOutput::PostAlonzo(output) => address_is_pinned(&output.address),
+    }
 }
 
 pub fn parse_lowercase_hex(input: &str) -> anyhow::Result<Vec<u8>> {

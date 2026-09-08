@@ -1,4 +1,4 @@
-use crate::http::{AppState, Limits, app, legacy_uuid};
+use crate::http::{AppState, Limits, app};
 use crate::ops::{InternalState, OpsStore};
 use crate::providers::{History, Ledger};
 use crate::tx::{SignedTx, TEST_TX, decode_signed_tx, parse_uuid};
@@ -9,7 +9,7 @@ use actix_web::{
     web::Data,
 };
 use async_trait::async_trait;
-use cardano_connector_utxorpc::{BloxbeanPayload, SubmitCbor};
+use cardano_connector_utxorpc::{BloxbeanPayload, EvaluationRedeemer, SubmitCbor};
 use cardano_sdk::{Address, address::kind};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -79,6 +79,10 @@ impl Ledger for FakeLedger {
             hash[..cbor.len().min(32)].copy_from_slice(&cbor[..cbor.len().min(32)]);
             SubmitCbor::Accepted(hash)
         }))
+    }
+
+    async fn evaluate_cbor(&self, _: &[u8]) -> Result<Vec<EvaluationRedeemer>, crate::ApiError> {
+        Ok(vec![])
     }
 
     async fn max_tx_size(&self) -> Result<u64, crate::ApiError> {
@@ -153,6 +157,7 @@ fn state(ledger: FakeLedger, history: FakeHistory) -> Data<AppState<FakeLedger, 
         limits: Limits {
             rate_per_minute: 1_000,
         },
+        channel_operator_token: "test-channel-operator".into(),
         hits: Mutex::new(Default::default()),
     })
 }
@@ -204,6 +209,29 @@ async fn protocol_parameters_from_ledger() {
     let body: serde_json::Value = test::read_body_json(res).await;
     assert_eq!(body["payload"]["min_fee_a"], 44);
     assert_eq!(body["payload"]["key_deposit"], "2000000");
+}
+
+#[actix_web::test]
+async fn evaluation_is_bound_to_transaction_body_without_submission() {
+    let signed = decode_signed_tx(&hex::decode(TEST_TX).unwrap()).unwrap();
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
+    let res = test::call_service(
+        &app,
+        TestRequest::post()
+            .uri("/evaluate")
+            .set_json(serde_json::json!({"transaction": TEST_TX}))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = test::read_body_json(res).await;
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "transaction_id": hex::encode(signed.hash),
+            "redeemers": [],
+        })
+    );
 }
 
 #[actix_web::test]
@@ -285,6 +313,37 @@ async fn openapi_is_served() {
 }
 
 #[actix_web::test]
+async fn legacy_submit_is_removed_and_internal_channel_routes_are_concealed() {
+    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
+    let legacy = test::call_service(
+        &app,
+        TestRequest::post()
+            .uri("/submit")
+            .set_payload("{}")
+            .to_request(),
+    )
+    .await;
+    assert_eq!(legacy.status(), StatusCode::NOT_FOUND);
+
+    let signed = decode_signed_tx(&hex::decode(TEST_TX).unwrap()).unwrap();
+    let internal = test::call_service(
+        &app,
+        TestRequest::post()
+            .uri("/internal/channel-operations")
+            .peer_addr("203.0.113.1:1234".parse().unwrap())
+            .insert_header(("authorization", "Bearer test-channel-operator"))
+            .set_json(serde_json::json!({
+                "operation_id": "550e8400-e29b-41d4-a716-446655440000",
+                "expected_transaction_id": hex::encode(signed.hash),
+                "transaction": TEST_TX,
+            }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(internal.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
 async fn operation_conflict_and_idempotency() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440000";
@@ -295,6 +354,7 @@ async fn operation_conflict_and_idempotency() {
         digest: [2u8; 32],
         ttl: Some(10),
         bytes: vec![1, 2, 3],
+        creates_pinned_channel: false,
     };
     let first = store
         .persist_new(op, txid, signed.clone(), uuid.to_owned())
@@ -372,6 +432,7 @@ async fn claim_submit_is_exclusive() {
         digest: [4u8; 32],
         ttl: Some(99),
         bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
     };
     store
         .persist_new(key, txid, signed, uuid.to_owned())
@@ -392,6 +453,7 @@ async fn confirmed_keeps_cbor() {
         digest: [6u8; 32],
         ttl: Some(99),
         bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
     };
     let mut record = store
         .persist_new(key, txid, signed, uuid.to_owned())
@@ -423,6 +485,7 @@ async fn settled_depth_is_preserved() {
         digest: [8u8; 32],
         ttl: Some(99),
         bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
     };
     let mut record = store
         .persist_new(key, txid, signed, uuid.to_owned())
@@ -459,6 +522,7 @@ async fn indeterminate_submission_holds_lease() {
         digest: [15u8; 32],
         ttl: Some(60_000),
         bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
     };
     let mut record = store
         .persist_new(key, txid, signed, uuid.to_owned())
@@ -489,6 +553,7 @@ async fn stale_revision_cannot_roll_back_newer_state() {
         digest: [11u8; 32],
         ttl: Some(99),
         bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
     };
     let mut stale = store
         .persist_new(key, txid, signed, uuid.to_owned())
@@ -517,6 +582,7 @@ async fn confirmed_can_regress_to_accepted() {
         digest: [13u8; 32],
         ttl: Some(99),
         bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
     };
     let mut record = store
         .persist_new(key, txid, signed, uuid.to_owned())
@@ -540,6 +606,7 @@ async fn legacy_operation_without_ttl_expires() {
         digest: [13u8; 32],
         ttl: None,
         bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
     };
     let mut record = store
         .persist_new(key, txid, signed, uuid.to_owned())
@@ -553,13 +620,6 @@ async fn legacy_operation_without_ttl_expires() {
         .unwrap();
     assert_eq!(record.state, InternalState::Rejected);
     assert!(record.cbor.is_none());
-}
-#[test]
-fn legacy_submit_uuid_is_canonical() {
-    let hash: [u8; 32] = std::array::from_fn(|index| index as u8);
-    let uuid = legacy_uuid(&hash);
-    assert_eq!(uuid, "00010203-0405-0607-0809-0a0b0c0d0e0f");
-    assert_eq!(parse_uuid(&uuid).unwrap(), hash[..16]);
 }
 
 #[test]

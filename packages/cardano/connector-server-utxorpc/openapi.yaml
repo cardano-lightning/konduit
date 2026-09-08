@@ -133,23 +133,23 @@ paths:
                   - type: "null"
         default:
           $ref: "#/components/responses/UnexpectedError"
-  /submit:
+  /evaluate:
     post:
-      summary: Submit transaction
-      operationId: submitTransaction
+      summary: Evaluate a transaction without submitting it
+      operationId: evaluateTransaction
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SubmitRequest"
+              $ref: "#/components/schemas/EvaluateRequest"
       responses:
         "200":
-          description: Transaction accepted
+          description: Node evaluation bound to the transaction body
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SubmitResponse"
+                $ref: "#/components/schemas/EvaluationResponse"
         default:
           $ref: "#/components/responses/UnexpectedError"
   /operations:
@@ -191,7 +191,54 @@ paths:
                 $ref: "#/components/schemas/OperationResponse"
         default:
           $ref: "#/components/responses/UnexpectedError"
+  /internal/channel-operations:
+    post:
+      summary: Create or reuse an adaptor-authorized channel operation
+      operationId: createChannelOperation
+      security:
+        - channelOperator: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOperationRequest"
+      responses:
+        "200":
+          description: Operation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+  /internal/channel-operations/{operation_id}:
+    get:
+      summary: Get adaptor-authorized channel operation
+      operationId: getChannelOperation
+      security:
+        - channelOperator: []
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Operation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
 components:
+  securitySchemes:
+    channelOperator:
+      type: http
+      scheme: bearer
   parameters:
     Address:
       name: address
@@ -463,7 +510,7 @@ components:
           maxItems: 10000
           items:
             $ref: "#/components/schemas/TxOutput"
-    SubmitRequest:
+    EvaluateRequest:
       type: object
       additionalProperties: false
       required: [transaction]
@@ -473,14 +520,35 @@ components:
           pattern: "^(?:[0-9a-f]{2})+$"
           minLength: 2
           maxLength: 1048576
-    SubmitResponse:
+    EvaluationResponse:
       type: object
       additionalProperties: false
-      required: [transaction_id]
+      required: [transaction_id, redeemers]
       properties:
         transaction_id:
+          $ref: "#/components/schemas/TxId"
+        redeemers:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/EvaluationRedeemer"
+    EvaluationRedeemer:
+      type: object
+      additionalProperties: false
+      required: [purpose, index, memory, steps]
+      properties:
+        purpose:
           type: string
-          pattern: "^[0-9a-f]{64}$"
+          enum: [spend, mint, cert, reward, voting, proposing]
+        index:
+          type: integer
+          minimum: 0
+        memory:
+          type: integer
+          minimum: 0
+        steps:
+          type: integer
+          minimum: 0
     CreateOperationRequest:
       type: object
       additionalProperties: false

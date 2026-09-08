@@ -152,17 +152,6 @@ pub struct TransactionSummary {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SubmitRequest {
-    pub transaction: String,
-}
-
-#[derive(Serialize)]
-pub struct SubmitResponse {
-    pub transaction_id: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct CreateOperationRequest {
     pub operation_id: String,
     pub expected_transaction_id: String,
@@ -177,4 +166,24 @@ pub struct OperationResponse {
     pub transaction_id: Option<String>,
     pub status: &'static str,
     pub depth: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluateRequest {
+    pub transaction: String,
+}
+
+#[derive(Serialize)]
+pub struct EvaluationRedeemerResponse {
+    pub purpose: String,
+    pub index: u32,
+    pub memory: u64,
+    pub steps: u64,
+}
+
+#[derive(Serialize)]
+pub struct EvaluationResponse {
+    pub transaction_id: String,
+    pub redeemers: Vec<EvaluationRedeemerResponse>,
 }

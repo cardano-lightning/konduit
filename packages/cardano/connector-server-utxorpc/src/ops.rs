@@ -134,6 +134,10 @@ impl OpsStore {
         OperationKey::new(b'L', operation_id)
     }
 
+    pub fn channel_key(operation_id: &[u8; 16]) -> OperationKey {
+        OperationKey::new(b'H', operation_id)
+    }
+
     pub fn admit_write(&self) -> Result<InflightGuard<'_>, ApiError> {
         let mut current = self.inflight.load(Ordering::Acquire);
         loop {

@@ -3,8 +3,8 @@ use crate::ops::{InternalState, OpsStore, Record};
 use crate::providers::{History, Ledger, parse_mainnet_address};
 use crate::tx::{decode_signed_tx, parse_lowercase_hex, parse_tx_id, parse_uuid};
 use crate::wire::{
-    BalanceResponse, HealthResponse, NetworkResponse, ProtocolParametersResponse, SubmitResponse,
-    TransactionSummary, Utxo,
+    BalanceResponse, EvaluateRequest, EvaluationRedeemerResponse, EvaluationResponse,
+    HealthResponse, NetworkResponse, ProtocolParametersResponse, TransactionSummary, Utxo,
 };
 use actix_cors::Cors;
 use actix_web::{
@@ -35,17 +35,6 @@ const DOCS_HTML: &str = r#"<!doctype html>
 </html>
 "#;
 
-pub(crate) fn legacy_uuid(hash: &[u8; 32]) -> String {
-    format!(
-        "{:08x}-{:04x}-{:04x}-{:04x}-{}",
-        u32::from_be_bytes(hash[..4].try_into().unwrap()),
-        u16::from_be_bytes(hash[4..6].try_into().unwrap()),
-        u16::from_be_bytes(hash[6..8].try_into().unwrap()),
-        u16::from_be_bytes(hash[8..10].try_into().unwrap()),
-        hex::encode(&hash[10..16]),
-    )
-}
-
 pub struct Limits {
     pub rate_per_minute: usize,
 }
@@ -56,6 +45,7 @@ pub struct AppState<L, H> {
     pub ops: Arc<OpsStore>,
     pub limits: Limits,
     pub hits: Mutex<HashMap<IpAddr, Vec<Instant>>>,
+    pub channel_operator_token: String,
 }
 
 impl<L: Ledger, H: History> AppState<L, H> {
@@ -240,36 +230,57 @@ async fn transaction<L: Ledger, H: History>(
     .await
 }
 
-async fn submit<L: Ledger, H: History>(
+async fn evaluate<L: Ledger, H: History>(
     req: HttpRequest,
     state: Data<AppState<L, H>>,
-    body: Json<crate::wire::SubmitRequest>,
+    body: Json<EvaluateRequest>,
 ) -> Result<HttpResponse, ApiError> {
     state.rate_limit(&req)?;
-    let _admission = state.ops.admit_write()?;
     bounded(async {
         let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
-        let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
-        let max = state.ledger.max_tx_size().await?;
-        if signed.bytes.len() as u64 > max {
+        let transaction = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
+        if transaction.bytes.len() as u64 > state.ledger.max_tx_size().await? {
             return Err(ApiError::bad_request());
         }
-        let uuid = legacy_uuid(&signed.hash);
-        let op_id = parse_uuid(&uuid).map_err(|_| ApiError::unexpected())?;
-        let key = OpsStore::legacy_key(&op_id);
-        let record = state
-            .ops
-            .persist_new(key, signed.hash, signed.clone(), uuid)
-            .await?;
-        let record = submit_record(&state, key, record).await?;
-        if record.state == InternalState::Rejected {
-            return Err(ApiError::bad_request());
-        }
-        json_bounded(&SubmitResponse {
-            transaction_id: hex::encode(signed.hash),
+        let redeemers = state
+            .ledger
+            .evaluate_cbor(&bytes)
+            .await?
+            .into_iter()
+            .map(|redeemer| EvaluationRedeemerResponse {
+                purpose: redeemer.purpose,
+                index: redeemer.index,
+                memory: redeemer.memory,
+                steps: redeemer.steps,
+            })
+            .collect();
+        json_bounded(&EvaluationResponse {
+            transaction_id: hex::encode(transaction.hash),
+            redeemers,
         })
     })
     .await
+}
+
+fn require_channel_operator<L, H>(
+    req: &HttpRequest,
+    state: &AppState<L, H>,
+) -> Result<(), ApiError> {
+    let trusted_peer = req.peer_addr().is_some_and(|peer| match peer.ip() {
+        IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
+        IpAddr::V6(ip) => ip.is_loopback() || ip.is_unique_local(),
+    });
+    let authorized = req
+        .headers()
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .is_some_and(|token| token == state.channel_operator_token);
+    if trusted_peer && authorized {
+        Ok(())
+    } else {
+        Err(ApiError::not_found())
+    }
 }
 
 async fn create_operation<L: Ledger, H: History>(
@@ -285,7 +296,7 @@ async fn create_operation<L: Ledger, H: History>(
         parse_tx_id(&body.expected_transaction_id).map_err(|_| ApiError::bad_request())?;
     let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
     let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
-    if signed.hash != expected {
+    if signed.hash != expected || signed.creates_pinned_channel {
         return Err(ApiError::bad_request());
     }
     let key = OpsStore::client_key(&op_id);
@@ -316,12 +327,81 @@ async fn create_operation<L: Ledger, H: History>(
     .await
 }
 
+async fn create_channel_operation<L: Ledger, H: History>(
+    req: HttpRequest,
+    state: Data<AppState<L, H>>,
+    body: Json<crate::wire::CreateOperationRequest>,
+) -> Result<HttpResponse, ApiError> {
+    require_channel_operator(&req, &state)?;
+    state.rate_limit(&req)?;
+    let _admission = state.ops.admit_write()?;
+    let body = body.into_inner();
+    let op_id = parse_uuid(&body.operation_id).map_err(|_| ApiError::bad_request())?;
+    let expected =
+        parse_tx_id(&body.expected_transaction_id).map_err(|_| ApiError::bad_request())?;
+    let bytes = parse_lowercase_hex(&body.transaction).map_err(|_| ApiError::bad_request())?;
+    let signed = decode_signed_tx(&bytes).map_err(|_| ApiError::bad_request())?;
+    if signed.hash != expected {
+        return Err(ApiError::bad_request());
+    }
+    let key = OpsStore::channel_key(&op_id);
+    if state.ops.get(key).await?.is_some() {
+        let record = state
+            .ops
+            .persist_new(key, expected, signed, body.operation_id)
+            .await?;
+        return json_bounded(&OpsStore::response(&record));
+    }
+    bounded(async {
+        let (_, tip_slot) = state.ledger.tip().await?;
+        if signed.ttl.is_none_or(|ttl| ttl <= tip_slot)
+            || signed.bytes.len() as u64 > state.ledger.max_tx_size().await?
+        {
+            return Err(ApiError::bad_request());
+        }
+        let record = state
+            .ops
+            .persist_new(key, expected, signed, body.operation_id)
+            .await?;
+        json_bounded(&OpsStore::response(
+            &submit_record(&state, key, record).await?,
+        ))
+    })
+    .await
+}
+
 async fn get_operation<L: Ledger, H: History>(
     state: Data<AppState<L, H>>,
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let op_id = parse_uuid(&path).map_err(|_| ApiError::bad_request())?;
     let key = OpsStore::client_key(&op_id);
+    let mut record = state.ops.get(key).await?.ok_or_else(ApiError::not_found)?;
+    if matches!(
+        record.state,
+        InternalState::Settled | InternalState::Rejected
+    ) {
+        return json_bounded(&OpsStore::response(&record));
+    }
+    bounded(async {
+        let (height, slot) = state.ledger.tip().await?;
+        state
+            .ops
+            .reconcile_one(state.ledger.as_ref(), key, &mut record, height, slot, false)
+            .await?;
+        json_bounded(&OpsStore::response(&record))
+    })
+    .await
+}
+
+async fn get_channel_operation<L: Ledger, H: History>(
+    req: HttpRequest,
+    state: Data<AppState<L, H>>,
+    path: Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    require_channel_operator(&req, &state)?;
+    let op_id = parse_uuid(&path).map_err(|_| ApiError::bad_request())?;
+    let key = OpsStore::channel_key(&op_id);
     let mut record = state.ops.get(key).await?.ok_or_else(ApiError::not_found)?;
     if matches!(
         record.state,
@@ -399,11 +479,19 @@ where
             web::get().to(transactions::<L, H>),
         )
         .route("/transaction/{id}", web::get().to(transaction::<L, H>))
-        .route("/submit", web::post().to(submit::<L, H>))
+        .route("/evaluate", web::post().to(evaluate::<L, H>))
         .route("/operations", web::post().to(create_operation::<L, H>))
         .route(
             "/operations/{operation_id}",
             web::get().to(get_operation::<L, H>),
+        )
+        .route(
+            "/internal/channel-operations",
+            web::post().to(create_channel_operation::<L, H>),
+        )
+        .route(
+            "/internal/channel-operations/{operation_id}",
+            web::get().to(get_channel_operation::<L, H>),
         );
 }
 

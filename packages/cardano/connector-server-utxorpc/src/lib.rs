@@ -27,6 +27,7 @@ pub struct ServerConfig {
     pub max_inflight: usize,
     pub rate_per_minute: usize,
     pub db_max_bytes: u64,
+    pub channel_operator_token: String,
 }
 
 pub async fn boot(
@@ -72,6 +73,7 @@ pub async fn boot(
             limits: Limits {
                 rate_per_minute: config.rate_per_minute,
             },
+            channel_operator_token: config.channel_operator_token,
             hits: Mutex::new(Default::default()),
         },
         config.bind,

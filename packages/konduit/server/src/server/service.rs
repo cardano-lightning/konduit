@@ -58,6 +58,16 @@ impl Service {
                             web::resource("/pay")
                                 .wrap(auth::LeaseAuth::new(db.clone()))
                                 .route(web::post().to(handlers::pay)),
+                        )
+                        .service(
+                            web::resource("/submit")
+                                .wrap(auth::LeaseAuth::new(db.clone()))
+                                .route(web::post().to(handlers::submit_channel_operation)),
+                        )
+                        .service(
+                            web::resource("/operations/{operation_id}")
+                                .wrap(auth::LeaseAuth::new(db.clone()))
+                                .route(web::get().to(handlers::channel_operation)),
                         ),
                 )
                 .service(web::scope("/opt").route("/fx", web::get().to(handlers::fx)))

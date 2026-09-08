@@ -27,6 +27,8 @@ struct Args {
     rate_per_minute: usize,
     #[arg(long, default_value_t = 1_000_000_000)]
     db_max_bytes: u64,
+    #[arg(long, env = "CONNECTOR_CHANNEL_OPERATOR_TOKEN", hide_env_values = true)]
+    channel_operator_token: String,
 }
 
 #[actix_web::main]
@@ -46,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
         max_inflight: args.max_inflight,
         rate_per_minute: args.rate_per_minute,
         db_max_bytes: args.db_max_bytes,
+        channel_operator_token: args.channel_operator_token,
     })
     .await?;
     log::info!("binding {bind}");

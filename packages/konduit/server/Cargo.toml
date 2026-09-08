@@ -32,12 +32,14 @@ konduit-tx.workspace = true
 log.workspace = true
 minicbor.workspace = true
 redb.workspace = true
+reqwest = { workspace = true, features = ["json"] }
 rand_core.workspace = true
 rustls = { version = "0.23", default-features = false, features = [
   "ring",
   "std",
 ] }
 serde.workspace = true
+sha2.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["base64", "hex", "json"] }
 thiserror.workspace = true

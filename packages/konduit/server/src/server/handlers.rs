@@ -12,6 +12,7 @@ use konduit_tmp::{
     SquashStatus, TxHelp,
 };
 use rand_core::{OsRng, RngCore};
+use sha2::{Digest, Sha256};
 use std::{
     ops::Deref,
     time::{SystemTime, UNIX_EPOCH},
@@ -34,6 +35,12 @@ pub enum Error {
     InvalidSessionSignature,
     #[error("session claim conflicts with active generation")]
     SessionConflict,
+    #[error("invalid channel operation")]
+    InvalidChannelOperation,
+    #[error("operation id conflicts with an existing request")]
+    OperationConflict,
+    #[error("channel connector unavailable")]
+    ChannelConnectorUnavailable,
     #[error("other")]
     Other,
 }
@@ -52,6 +59,9 @@ impl ResponseError for Error {
             Error::InvalidSessionTimestamp => StatusCode::BAD_REQUEST,
             Error::InvalidSessionSignature => StatusCode::UNAUTHORIZED,
             Error::SessionConflict => StatusCode::CONFLICT,
+            Error::InvalidChannelOperation => StatusCode::BAD_REQUEST,
+            Error::OperationConflict => StatusCode::CONFLICT,
+            Error::ChannelConnectorUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             Error::Other => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -100,9 +110,181 @@ pub async fn claim_session(
             expires_at_epoch_millis,
         })),
         Err(db::LeaseClaimError::Conflict) => Err(Error::SessionConflict),
-        Err(db::LeaseClaimError::UnknownWallet) => Err(Error::Data(data::Error::NoChannel)),
         Err(db::LeaseClaimError::Database(error)) => Err(Error::Data(error.into())),
     }
+}
+
+pub async fn submit_channel_operation(
+    keytag: AuthKeytag,
+    lease: LeaseToken,
+    data: Data,
+    request: web::Json<server::channel_operations::Request>,
+) -> Result<HttpResponse, Error> {
+    let operation_id = parse_operation_id(&request.operation_id)?;
+    let expected_transaction_id = parse_hash(&request.expected_transaction_id)?;
+    let transaction = parse_transaction(&request.transaction)?;
+    let transaction_digest = Sha256::digest(&transaction).into();
+    let now = epoch_millis()?;
+    let local = data
+        .db()
+        .reserve_channel_operation(
+            &operation_id,
+            &keytag,
+            &lease.0,
+            now,
+            expected_transaction_id,
+            transaction_digest,
+            transaction,
+        )
+        .map_err(map_operation_db_error)?;
+    if local.status != "reserved" {
+        return Ok(HttpResponse::Ok().json(operation_response(&request.operation_id, local)));
+    }
+    let remote = data
+        .channel_operations()
+        .submit(&request)
+        .await
+        .map_err(|error| {
+            log::error!("channel connector submit failed: {error:#}");
+            Error::ChannelConnectorUnavailable
+        })?;
+    validate_remote_operation(&request, &remote)?;
+    let updated = data
+        .db()
+        .update_channel_operation(
+            &operation_id,
+            &keytag,
+            remote.status,
+            remote
+                .transaction_id
+                .as_deref()
+                .map(parse_hash)
+                .transpose()?,
+            remote.depth,
+        )
+        .map_err(map_operation_db_error)?;
+    Ok(HttpResponse::Ok().json(operation_response(&request.operation_id, updated)))
+}
+
+pub async fn channel_operation(
+    keytag: AuthKeytag,
+    data: Data,
+    operation_id: web::Path<String>,
+) -> Result<HttpResponse, Error> {
+    let operation_key = parse_operation_id(&operation_id)?;
+    let local = data
+        .db()
+        .channel_operation(&operation_key, &keytag)
+        .map_err(map_operation_db_error)?
+        .ok_or(Error::Data(data::Error::NoChannel))?;
+    if matches!(local.status.as_str(), "settled" | "rejected") {
+        return Ok(HttpResponse::Ok().json(operation_response(&operation_id, local)));
+    }
+    let remote = data
+        .channel_operations()
+        .lookup(&operation_id)
+        .await
+        .map_err(|error| {
+            log::error!("channel connector lookup failed: {error:#}");
+            Error::ChannelConnectorUnavailable
+        })?;
+    if remote.operation_id != *operation_id
+        || remote.expected_transaction_id != hex::encode(local.expected_transaction_id)
+    {
+        return Err(Error::InvalidChannelOperation);
+    }
+    let updated = data
+        .db()
+        .update_channel_operation(
+            &operation_key,
+            &keytag,
+            remote.status,
+            remote
+                .transaction_id
+                .as_deref()
+                .map(parse_hash)
+                .transpose()?,
+            remote.depth,
+        )
+        .map_err(map_operation_db_error)?;
+    Ok(HttpResponse::Ok().json(operation_response(&operation_id, updated)))
+}
+
+fn operation_response(
+    operation_id: &str,
+    operation: db::ChannelOperationValue,
+) -> server::channel_operations::Response {
+    server::channel_operations::Response {
+        operation_id: operation_id.to_owned(),
+        expected_transaction_id: hex::encode(operation.expected_transaction_id),
+        transaction_id: operation.transaction_id.map(hex::encode),
+        status: if operation.status == "reserved" {
+            "pending".into()
+        } else {
+            operation.status
+        },
+        depth: operation.depth,
+    }
+}
+
+fn validate_remote_operation(
+    request: &server::channel_operations::Request,
+    response: &server::channel_operations::Response,
+) -> Result<(), Error> {
+    if response.operation_id != request.operation_id
+        || response.expected_transaction_id != request.expected_transaction_id
+    {
+        return Err(Error::InvalidChannelOperation);
+    }
+    Ok(())
+}
+
+fn map_operation_db_error(error: db::Error) -> Error {
+    match error {
+        db::Error::OperationConflict => Error::OperationConflict,
+        other => Error::Data(other.into()),
+    }
+}
+
+fn epoch_millis() -> Result<u64, Error> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| Error::Other)?
+        .as_millis() as u64)
+}
+
+fn parse_operation_id(value: &str) -> Result<[u8; 16], Error> {
+    if value.len() != 36
+        || ![8, 13, 18, 23]
+            .into_iter()
+            .all(|index| value.as_bytes()[index] == b'-')
+    {
+        return Err(Error::InvalidChannelOperation);
+    }
+    let compact = value.replace('-', "");
+    let mut result = [0; 16];
+    hex::decode_to_slice(compact, &mut result).map_err(|_| Error::InvalidChannelOperation)?;
+    Ok(result)
+}
+
+fn parse_hash(value: &str) -> Result<[u8; 32], Error> {
+    if value.len() != 64
+        || value
+            .bytes()
+            .any(|byte| !byte.is_ascii_digit() && !(b'a'..=b'f').contains(&byte))
+    {
+        return Err(Error::InvalidChannelOperation);
+    }
+    let mut result = [0; 32];
+    hex::decode_to_slice(value, &mut result).map_err(|_| Error::InvalidChannelOperation)?;
+    Ok(result)
+}
+
+fn parse_transaction(value: &str) -> Result<Vec<u8>, Error> {
+    if value.len() > 512 * 1024 || value.len() % 2 != 0 {
+        return Err(Error::InvalidChannelOperation);
+    }
+    hex::decode(value).map_err(|_| Error::InvalidChannelOperation)
 }
 
 pub async fn fx(mediation: Mediation, data: Data) -> Result<Mediate<fx_client::State>, Error> {
@@ -261,6 +443,25 @@ mod tests {
         }
     }
 
+    struct PanicChannelOperations;
+
+    #[async_trait::async_trait]
+    impl crate::server::channel_operations::Api for PanicChannelOperations {
+        async fn submit(
+            &self,
+            _request: &crate::server::channel_operations::Request,
+        ) -> anyhow::Result<crate::server::channel_operations::Response> {
+            panic!("unexpected channel submit")
+        }
+
+        async fn lookup(
+            &self,
+            _operation_id: &str,
+        ) -> anyhow::Result<crate::server::channel_operations::Response> {
+            panic!("unexpected channel lookup")
+        }
+    }
+
     fn handler_data(definition: AssetDefinition) -> (web::Data<server::Data>, Keytag) {
         use cardano_sdk::{Address, Credential, Hash, Network, VerificationKey};
         use konduit_data::{SigningKey, Squash, SquashBody};
@@ -306,6 +507,7 @@ mod tests {
             std::sync::Arc::new(tokio::sync::RwLock::new(fx())),
             std::sync::Arc::new(info),
             std::sync::Arc::new(PanicAdmin),
+            std::sync::Arc::new(PanicChannelOperations),
         );
         (web::Data::new(data), keytag)
     }
@@ -379,6 +581,12 @@ mod tests {
             .await
             .unwrap();
             assert_eq!(response.1.amount, expected);
+            assert_eq!(
+                response.1.amount,
+                response.1.payment_amount + response.1.routing_fee_amount + response.1.adaptor_fee
+            );
+            assert_eq!(response.1.invoice_amount_msat, 100_001_000);
+            assert_eq!(response.1.invoice_hash, None);
         }
     }
 }

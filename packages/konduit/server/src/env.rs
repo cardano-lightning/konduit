@@ -16,6 +16,8 @@ pub const ASSET_CONFIG: &str = "KONDUIT_ASSET_CONFIG";
 /// # Server config
 pub const SERVER_HOST: &str = "KONDUIT_SERVER_HOST";
 pub const SERVER_PORT: &str = "KONDUIT_SERVER_PORT";
+pub const CHANNEL_CONNECTOR_URL: &str = "KONDUIT_CHANNEL_CONNECTOR_URL";
+pub const CHANNEL_CONNECTOR_TOKEN: &str = "KONDUIT_CHANNEL_CONNECTOR_TOKEN";
 
 /// # Channel params
 pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";
