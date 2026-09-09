@@ -1,5 +1,6 @@
 use cardano_connector_utxorpc::{BloxbeanPayload, MappedUtxo};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Serialize)]
 pub struct HealthResponse {
@@ -32,6 +33,12 @@ pub struct BloxbeanJson {
     pub coins_per_utxo_size: String,
     pub collateral_percent: u64,
     pub max_collateral_inputs: u64,
+    pub price_mem: String,
+    pub price_step: String,
+    pub min_fee_ref_script_cost_per_byte: String,
+    pub max_tx_ex_mem: String,
+    pub max_tx_ex_steps: String,
+    pub cost_models_raw: BTreeMap<String, Vec<i64>>,
 }
 
 impl From<BloxbeanPayload> for BloxbeanJson {
@@ -48,6 +55,12 @@ impl From<BloxbeanPayload> for BloxbeanJson {
             coins_per_utxo_size: value.coins_per_utxo_size.to_string(),
             collateral_percent: value.collateral_percent,
             max_collateral_inputs: value.max_collateral_inputs,
+            price_mem: value.price_mem,
+            price_step: value.price_step,
+            min_fee_ref_script_cost_per_byte: value.min_fee_ref_script_cost_per_byte,
+            max_tx_ex_mem: value.max_tx_ex_mem.to_string(),
+            max_tx_ex_steps: value.max_tx_ex_steps.to_string(),
+            cost_models_raw: value.cost_models_raw,
         }
     }
 }

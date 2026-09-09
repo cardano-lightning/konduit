@@ -313,6 +313,12 @@ components:
         - coins_per_utxo_size
         - collateral_percent
         - max_collateral_inputs
+        - price_mem
+        - price_step
+        - min_fee_ref_script_cost_per_byte
+        - max_tx_ex_mem
+        - max_tx_ex_steps
+        - cost_models_raw
       properties:
         min_fee_a:
           type: integer
@@ -351,6 +357,52 @@ components:
         max_collateral_inputs:
           type: integer
           minimum: 0
+        price_mem:
+          type: string
+          pattern: "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+          maxLength: 64
+        price_step:
+          type: string
+          pattern: "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+          maxLength: 64
+        min_fee_ref_script_cost_per_byte:
+          type: string
+          pattern: "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+          maxLength: 64
+        max_tx_ex_mem:
+          type: string
+          pattern: "^[1-9][0-9]{0,18}$"
+          maxLength: 19
+        max_tx_ex_steps:
+          type: string
+          pattern: "^[1-9][0-9]{0,18}$"
+          maxLength: 19
+        cost_models_raw:
+          type: object
+          additionalProperties: false
+          required: [PlutusV3]
+          properties:
+            PlutusV1:
+              type: array
+              minItems: 1
+              maxItems: 1024
+              items:
+                type: integer
+                format: int64
+            PlutusV2:
+              type: array
+              minItems: 1
+              maxItems: 1024
+              items:
+                type: integer
+                format: int64
+            PlutusV3:
+              type: array
+              minItems: 1
+              maxItems: 1024
+              items:
+                type: integer
+                format: int64
     BalanceResponse:
       type: object
       required: [lovelace]
