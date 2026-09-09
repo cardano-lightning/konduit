@@ -128,14 +128,50 @@ fn with_(
   }
 }
 
-const b64 =
-  #"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-
 const b32 = #"0000000000000000000000000000000000000000000000000000000000000000"
 
-const key = b32
+// Ed25519 fixtures use seed bytes 00..1f and CBOR (tag, body), with indefinite
+// nonempty arrays and definite empty arrays. Cheque bodies sign SHA2-256(b32).
+const key = #"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8"
 
-const sig = b64
+const sig =
+  #"9546a3c9e0f1786d73aedbb634ed603dae9140b17221d9b422b1403049ab382d3a7dff0696562bd11bdff7d0165d9f2450c8fb8885a6b13a3ee7ec09b0ae260d"
+
+const sig_squash_1 =
+  #"08c985183453e0a7f3208b11d27922e291726a83044529f6641bebdd60a1f960ad94bdf1b38312402ad214255982ad3eeaf83ef2de7c3915fab598be5f14d004"
+
+const sig_squash_2 =
+  #"8864713eb2727be0799b68e3e64b6d8c5e2c2e4f90af6bf16f926241bf117e355d3eb6da9ac3702b1267788f1ab5e0e0a3cdfff2687b9e6465222434fc08470a"
+
+const sig_squash_exclude =
+  #"950344709cecf0ca187338ccc3c47df751f3d5d577594f4a937311db7ce6244f7103a304f6036f0d33f90de852857931a40e2ae516d01bdd03d5b48139c6a303"
+
+const sig_squash_big =
+  #"af9bf18331efa7e398cf430e75c57c58f511a44ae3125b902202c54709c644fdec4b826b08dbd01c407f3be2862e46f5fe1e89e79984e361dc7c1c7f4cdd8609"
+
+const sig_cheque_2 =
+  #"e60c1aa1f02e7c13844200399d27e187be8bdd619e4f4ea84ee8b62dff6aeaa9786b39af770a2b896f400e43de59a0db6f4bba57f4fc5eaee9788dd91e80df02"
+
+const sig_cheque_4 =
+  #"ddee8c1807c071feff04797e301e7e46b7ac2d14ffb3538802e0fa162b5a6b62c8191c8ef9f0d47c3f100c093ff7f690edefec02de60bb474c5ec0ca747d1a09"
+
+const sig_cheque_6 =
+  #"ed61cbe06d0eab0d7a32749383f75205b63e7d1994cad99d0b347f884bc44224f0ed9775c927c0ea4dea2496f1b84a45a75031f5e4e3ad11869a9310222ed40c"
+
+const sig_cheque_80 =
+  #"24dc6b6d2472828f1854f5a455e8b81e67c7496af19c67f2eef3bfdd2ba965735c638398e0d79e9e7da1423d00a943a6155767e58bb47e2cf8b250360e68020d"
+
+const sig_cheque_84 =
+  #"bd2dfbec4b5d36535f9d8cd1e7521e10a29211a3faffda807196bec9d2a82124e74b9f501afa918b33b9a8c891c05d4827b7babf030268a873f0fdd7be9e5501"
+
+const sig_cheque_88 =
+  #"ecf93572185accdc0c13c088a3c4f4080834a33144d02e81e5536292c7fd8ad99b43c55afa81ea9ee458be72a0d328dbfdd16c29081b3850b5c1ea5ecd1c9509"
+
+const sig_cheque_92 =
+  #"bd96d70edcea01acbcb17999ad42594310c97cd73ddef8103f1358e5359592a424562da1977d8695c40a8d75b2a8b091af5f308600879138e7fa5e1d648b1b0d"
+
+const sig_cheque_96 =
+  #"18046059783ddf0fce70ca66b7db5c84b8fe2056742aa09959d1ddf29451d0ad0e7ac0a1c42c36ec930a8cd0cfa92028669478b296182d8d93eafea631ec3207"
 
 const now = 1_765_889_000_000
 
@@ -159,7 +195,9 @@ test test_account_null() {
 test test_account_scenario_0() {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(1, 100), (2, 100), (3, 12), (4, 12)]
-  let unlockeds = [((2, 100, later, b32), b64), ((4, 12, later, b32), b64)]
+  let unlockeds = [
+    ((2, 100, later, b32), sig_cheque_2), ((4, 12, later, b32), sig_cheque_4),
+  ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 224
 }
@@ -168,8 +206,8 @@ test test_account_scenario_1() {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12), (6, 111)]
   let unlockeds = [
-    ((2, 100, later, b32), b64), ((4, 12, later, b32), b64),
-    ((6, 111, later, b32), b64),
+    ((2, 100, later, b32), sig_cheque_2), ((4, 12, later, b32), sig_cheque_4),
+    ((6, 111, later, b32), sig_cheque_6),
   ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
@@ -179,8 +217,8 @@ test test_ooo_useds_outs() fail {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(3, 12), (2, 100), (4, 12), (6, 111)]
   let unlockeds = [
-    ((2, 100, later, b32), b64), ((4, 12, later, b32), b64),
-    ((6, 111, later, b32), b64),
+    ((2, 100, later, b32), sig_cheque_2), ((4, 12, later, b32), sig_cheque_4),
+    ((6, 111, later, b32), sig_cheque_6),
   ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
@@ -190,8 +228,8 @@ test test_ooo_useds_outs_1() fail {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (6, 111), (4, 12)]
   let unlockeds = [
-    ((2, 100, later, b32), b64), ((4, 12, later, b32), b64),
-    ((6, 111, later, b32), b64),
+    ((2, 100, later, b32), sig_cheque_2), ((4, 12, later, b32), sig_cheque_4),
+    ((6, 111, later, b32), sig_cheque_6),
   ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
@@ -200,57 +238,66 @@ test test_ooo_useds_outs_1() fail {
 test test_useds_out_too_long() fail {
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12), (6, 111)]
-  let unlockeds = [((2, 100, later, b32), b64), ((4, 12, later, b32), b64)]
+  let unlockeds = [
+    ((2, 100, later, b32), sig_cheque_2), ((4, 12, later, b32), sig_cheque_4),
+  ]
   let tot = account_(useds_in, useds_out, null_squash, unlockeds)
   tot == 235
 }
 
 test test_with_squash() {
-  let squash = ((1000, 1, []), sig)
+  let squash = ((1000, 1, []), sig_squash_1)
   let useds_in = [(1, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12)]
-  let unlockeds = [((2, 100, later, b32), b64), ((4, 12, later, b32), b64)]
+  let unlockeds = [
+    ((2, 100, later, b32), sig_cheque_2), ((4, 12, later, b32), sig_cheque_4),
+  ]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1124
 }
 
 test test_used_already_squashed() fail {
-  let squash = ((1000, 2, []), sig)
+  let squash = ((1000, 2, []), sig_squash_2)
   let useds_in = [(2, 100), (3, 12)]
   let useds_out = [(2, 100), (3, 12), (4, 12)]
-  let unlockeds = [((4, 12, later, b32), b64)]
+  let unlockeds = [((4, 12, later, b32), sig_cheque_4)]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1124
 }
 
 test test_used_not_squashed() {
-  let squash = ((1000, 3, [2]), sig)
+  let squash = ((1000, 3, [2]), sig_squash_exclude)
   let useds_in = [(2, 100)]
   let useds_out = [(2, 100), (4, 12)]
-  let unlockeds = [((4, 12, later, b32), b64)]
+  let unlockeds = [((4, 12, later, b32), sig_cheque_4)]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1112
 }
 
 test test_unlocked_already_used() {
-  let squash = ((1000, 3, [2]), sig)
+  let squash = ((1000, 3, [2]), sig_squash_exclude)
   let useds_in = [(2, 100)]
   let useds_out = [(2, 100)]
-  let unlockeds = [((2, 100, later, b32), b64)]
+  let unlockeds = [((2, 100, later, b32), sig_cheque_2)]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 1100
 }
 
 test test_big_scenario() {
-  let squash = ((10000000, 100, [80, 82, 84, 86, 88, 90, 92, 94, 96]), sig)
+  let squash = (
+    (10000000, 100, [80, 82, 84, 86, 88, 90, 92, 94, 96]),
+    sig_squash_big,
+  )
   let useds_in = [(81, 1), (82, 1), (83, 1), (85, 1), (86, 1), (87, 1)]
   let useds_out = [
     (80, 100), (82, 1), (84, 100), (86, 1), (88, 100), (92, 100), (96, 100),
   ]
   let unlockeds = [
-    ((80, 100, later, b32), b64), ((84, 100, later, b32), b64),
-    ((88, 100, later, b32), b64), ((92, 100, later, b32), b64),
-    ((96, 100, later, b32), b64),
+    ((80, 100, later, b32), sig_cheque_80),
+    ((84, 100, later, b32), sig_cheque_84),
+    ((88, 100, later, b32), sig_cheque_88),
+    ((92, 100, later, b32), sig_cheque_92),
+    ((96, 100, later, b32), sig_cheque_96),
   ]
   let tot = account_(useds_in, useds_out, squash, unlockeds)
   tot == 10000502

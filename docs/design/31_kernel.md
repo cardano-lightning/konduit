@@ -726,13 +726,25 @@ Redeemer arguments: `receipt`
 
 Redeemer params: `m_receipt`
 
-- respond.0 : Stage in is closed : `Closed(subbed, _)`
+- respond.0 : Stage in is closed : `Closed(subbed, useds, elapse_at)`
 - respond.1 : Stage out is responded : `Responded(p_amount, pendings)`
 - respond.2 : Funds decrease by `subbed = value_in - value_out`
 - respond.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
 - respond.4 : `(owed, mbound) = account_m(receipt, p_amount, pendings)`
-- respond.6 : `owed >= subbed_out`
-- respond.3 : Return `(sub_vkey, None, mbound)`
+- respond.5 : `owed >= subbed_out`
+- respond.6 : The transaction upper bound is finite and `upper_bound <= elapse_at`.
+- respond.7 : Return `sub_vkey`.
+
+Cardano Plutus V3 transaction upper bounds are exclusive. A response interval
+that ends at `elapse_at` is permitted, but the response cannot execute at or
+after that time. `Elapse` permits recovery with a lower bound at `elapse_at`.
+
+Response accounting merges the signed squash, recorded `Used` entries, and new
+cheques. It skips recorded entries already included in the squash. It includes
+every remaining recorded amount, including entries after the last new cheque.
+Recorded unlocked credit remains valid after the original cheque timeout.
+New cheques must not duplicate recorded credit or amounts already included in
+the squash.
 
 ### Unlock
 

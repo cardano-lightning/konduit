@@ -188,10 +188,16 @@ impl Channel {
     }
 
     pub fn respond(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
-        let Stage::Closed(subbed, useds, _) = self.stage() else {
+        let Stage::Closed(subbed, useds, elapse_at) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Respond")));
         };
+        if *upper > *elapse_at {
+            return Err((
+                Box::new(self),
+                StepError::Other("Respond upper bound exceeds elapse_at".to_string()),
+            ));
+        }
         let (cheques, pendings, useds_amount) = receipt.prep_respond(useds, upper);
         let squash = receipt.squash().clone();
         let absolute_owed = squash.amount() + useds_amount;
@@ -319,5 +325,45 @@ impl Channel {
             Stage::Closed(_, _, _) => self.respond(receipt, upper),
             Stage::Responded(_, _) => self.unlock(receipt, upper),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use konduit_data::{AssetId, Indexes, SigningKey, Squash, SquashBody};
+
+    use super::*;
+
+    fn respond_at(upper: Duration) -> SteppedElseChannel {
+        let signing_key = SigningKey::from([7; 32]);
+        let tag = Tag::from(b"respond-deadline".as_slice());
+        let constants = Constants {
+            tag: tag.clone(),
+            add_vkey: signing_key.verifying_key(),
+            sub_vkey: signing_key.verifying_key(),
+            close_period: Duration::from_secs(1),
+            asset: AssetId::Ada,
+        };
+        let channel = Channel::new(
+            constants,
+            Variables::new(100, Stage::Closed(0, vec![], Duration::from_millis(1_000))),
+        );
+        let squash = Squash::make(
+            &signing_key,
+            &tag,
+            SquashBody::new(0, 0, Indexes::empty()).unwrap(),
+        );
+
+        channel.respond(&Receipt::new(squash), &upper)
+    }
+
+    #[test]
+    fn respond_accepts_through_deadline_and_rejects_after() {
+        assert!(respond_at(Duration::from_millis(999)).is_ok());
+        assert!(respond_at(Duration::from_millis(1_000)).is_ok());
+        assert!(matches!(
+            respond_at(Duration::from_millis(1_001)),
+            Err((_, StepError::Other(_)))
+        ));
     }
 }

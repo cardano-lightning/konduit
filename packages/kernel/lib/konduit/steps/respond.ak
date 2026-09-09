@@ -1,3 +1,4 @@
+use aiken/collection/list
 use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
 use cardano/assets.{Value}
@@ -19,7 +20,9 @@ pub fn do(
   cheques: List<t.Cheque>,
 ) -> VerificationKey {
   let (tag, add_vkey, sub_vkey, _close_period, asset) = constants
-  expect t.Closed(subbed_in, useds_in, _) = stage_in
+  expect t.Closed(subbed_in, useds_in, elapse_at) = stage_in
+  expect Finite(upper) = upper_bound
+  expect upper <= elapse_at
   expect t.Responded(pends_amount, pends) = stage_out
   expect preserve_lovelace(value_in, value_out, asset)
   let subbed_out = subbed_in + amount_in(value_in, asset) - amount_out(
@@ -60,7 +63,7 @@ fn account(
     upper_bound <= timeout
   }
   let with = with_(before, wellsinged, _, _, _, _, _, _, _, _)
-  let owed, _useds, _index, _exclude, p_total, pendings <- foldl6(
+  let owed, useds, index, exclude, p_total, pendings <- foldl6(
     cheques,
     owed,
     useds,
@@ -72,6 +75,13 @@ fn account(
   )
   expect p_total == 0
   expect pendings == []
+  let owed, _useds, _index, _exclude <- reduce_useds(
+    useds,
+    None,
+    owed,
+    index,
+    exclude,
+  )
   owed
 }
 
@@ -100,7 +110,7 @@ fn with_(
       )
       let owed, useds, index, exclude <- reduce_useds(
         useds,
-        new_index,
+        Some(new_index),
         owed,
         index,
         exclude,
@@ -114,7 +124,7 @@ fn with_(
       let (new_index, amount, timeout, lock) = body
       let owed, useds, index, exclude <- reduce_useds(
         useds,
-        new_index,
+        Some(new_index),
         owed,
         index,
         exclude,
@@ -132,7 +142,7 @@ type Fn<result> =
 
 fn reduce_useds(
   self: List<t.Used>,
-  ub: Index,
+  ub: Option<Index>,
   total: Amount,
   lb: Index,
   exclude: t.Exclude,
@@ -142,101 +152,22 @@ fn reduce_useds(
     [] -> return(total, [], lb, exclude)
     [x, ..tail] -> {
       let (index, amount) = x
-      if index > ub {
+      let stop = when ub is {
+        Some(ub) -> index > ub
+        None -> False
+      }
+      if stop {
         return(total, self, lb, exclude)
       } else {
-        let lb, exclude <- next_index(lb, exclude, index)
-        reduce_useds(tail, ub, total + amount, lb, exclude, return)
+        // Used entries are ordered. Skip credit already included in the squash.
+        let exclude = xlist.drop_until_int(exclude, index)
+        if index > lb || list.head(exclude) == Some(index) {
+          let lb, exclude <- next_index(lb, exclude, index)
+          reduce_useds(tail, ub, total + amount, lb, exclude, return)
+        } else {
+          reduce_useds(tail, ub, total, lb, exclude, return)
+        }
       }
     }
   }
-}
-
-test test_reduce_useds_0() {
-  let useds = []
-  let ub = 1
-  let total = 0
-  let lb = 0
-  let exclude = []
-  let total, _useds, _index, _exclude <- reduce_useds(
-    useds,
-    ub,
-    total,
-    lb,
-    exclude,
-  )
-  total == 0
-}
-
-test test_reduce_useds_1() {
-  let useds = [(1, 100)]
-  let ub = 1
-  let total = 0
-  let lb = 0
-  let exclude = []
-  let total, useds, index, _exclude <- reduce_useds(
-    useds,
-    ub,
-    total,
-    lb,
-    exclude,
-  )
-  expect total == 100
-  expect useds == []
-  expect index == 1
-  expect exclude == []
-}
-
-test test_reduce_useds_2() {
-  let useds = [(1, 100), (2, 100)]
-  let ub = 1
-  let total = 0
-  let lb = 0
-  let exclude = []
-  let total, useds, index, _exclude <- reduce_useds(
-    useds,
-    ub,
-    total,
-    lb,
-    exclude,
-  )
-  expect total == 100
-  expect useds == [(2, 100)]
-  expect index == 1
-}
-
-test test_reduce_useds_3() {
-  let useds = [(1, 100), (2, 100), (4, 100)]
-  let ub = 3
-  let total = 0
-  let lb = 0
-  let exclude = []
-  let total, useds, index, _exclude <- reduce_useds(
-    useds,
-    ub,
-    total,
-    lb,
-    exclude,
-  )
-  expect total == 200
-  expect useds == [(4, 100)]
-  expect index == 2
-}
-
-test test_reduce_useds_exclude() {
-  let useds = [(1, 100), (2, 100), (4, 100)]
-  let ub = 5
-  let total = 0
-  let lb = 3
-  let exclude = [1, 2]
-  let total, useds, index, _exclude <- reduce_useds(
-    useds,
-    ub,
-    total,
-    lb,
-    exclude,
-  )
-  expect total == 300
-  expect useds == []
-  expect index == 4
 }
