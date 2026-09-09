@@ -532,6 +532,9 @@ mod tests {
         params.cost_models.as_mut().unwrap().plutus_v1 = Some(cardano::CostModel {
             values: vec![-3, 2, -1],
         });
+        params.cost_models.as_mut().unwrap().plutus_v2 = Some(cardano::CostModel {
+            values: vec![8, -5, 4],
+        });
 
         let payload = bloxbean(&params).expect("payload");
         assert_eq!(payload.min_fee_a, 44);
@@ -543,6 +546,7 @@ mod tests {
         assert_eq!(payload.max_tx_ex_mem, 14_000_000);
         assert_eq!(payload.max_tx_ex_steps, 10_000_000_000);
         assert_eq!(payload.cost_models_raw["PlutusV1"], vec![-3, 2, -1]);
+        assert_eq!(payload.cost_models_raw["PlutusV2"], vec![8, -5, 4]);
         assert_eq!(payload.cost_models_raw["PlutusV3"], vec![1, 2, 3]);
     }
 

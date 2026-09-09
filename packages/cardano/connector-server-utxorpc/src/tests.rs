@@ -138,6 +138,7 @@ fn payload() -> BloxbeanPayload {
         max_tx_ex_steps: 10_000_000_000,
         cost_models_raw: BTreeMap::from([
             ("PlutusV1".into(), vec![-3, 2, -1]),
+            ("PlutusV2".into(), vec![8, -5, 4]),
             ("PlutusV3".into(), PLUTUS_V3_02_VAN_ROSSEM.to_vec()),
         ]),
     }
@@ -150,6 +151,9 @@ struct ConsumerProtocolParameters {
 
 #[derive(serde::Deserialize)]
 struct ConsumerBloxbeanPayload {
+    min_fee_a: u64,
+    key_deposit: String,
+    coins_per_utxo_size: String,
     price_mem: String,
     price_step: String,
     min_fee_ref_script_cost_per_byte: String,
@@ -231,12 +235,16 @@ async fn protocol_parameters_from_ledger() {
     .await;
     assert_eq!(res.status(), StatusCode::OK);
     let body: ConsumerProtocolParameters = test::read_body_json(res).await;
+    assert_eq!(body.payload.min_fee_a, 44);
+    assert_eq!(body.payload.key_deposit, "2000000");
+    assert_eq!(body.payload.coins_per_utxo_size, "4310");
     assert_eq!(body.payload.price_mem, "0.0577");
     assert_eq!(body.payload.price_step, "0.0000721");
     assert_eq!(body.payload.min_fee_ref_script_cost_per_byte, "15");
     assert_eq!(body.payload.max_tx_ex_mem, "14000000");
     assert_eq!(body.payload.max_tx_ex_steps, "10000000000");
     assert_eq!(body.payload.cost_models_raw["PlutusV1"], vec![-3, 2, -1]);
+    assert_eq!(body.payload.cost_models_raw["PlutusV2"], vec![8, -5, 4]);
     assert_eq!(
         body.payload.cost_models_raw["PlutusV3"],
         PLUTUS_V3_02_VAN_ROSSEM,
