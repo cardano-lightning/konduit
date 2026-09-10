@@ -2,9 +2,11 @@
 //! this is cos the trait is not dyn compat.
 //! so it doesnt work in various places.
 
-use cardano_connector_direct::Blockfrost;
 use cardano_sdk::Network;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "direct-embedded")]
+use cardano_connector_direct::Blockfrost;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Config {
@@ -12,6 +14,7 @@ pub enum Config {
 }
 
 impl Config {
+    #[cfg(feature = "direct-embedded")]
     pub fn build(&self) -> Blockfrost {
         match self {
             Config::Blockfrost { key, .. } => Blockfrost::new(key.clone()),

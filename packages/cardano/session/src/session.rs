@@ -1,7 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
 use cardano_connector::CardanoConnector;
-use cardano_connector_direct::Blockfrost;
 use cardano_sdk::{
     Address, Hash, Input, NetworkId, Output, PlutusScript, ProtocolParameters, Signature,
     Transaction, Value, VerificationKey,
@@ -9,7 +9,9 @@ use cardano_sdk::{
     transaction::state::ReadyForSigning,
 };
 use cardano_wallet::{Embedded, Wallet};
-use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "direct-embedded")]
+use cardano_connector_direct::Blockfrost;
 
 use crate::{Addressbook, Config, NetworkParameters, Tip, Waiter, addressbook, waiter};
 
@@ -101,6 +103,7 @@ impl<C: CardanoConnector, W: Wallet> Wallet for Session<C, W> {
     }
 }
 
+#[cfg(feature = "direct-embedded")]
 impl Session<Blockfrost, Embedded<Blockfrost>> {
     pub async fn init(config: Config) -> Result<Self, Error> {
         let cardano = Arc::new(config.cardano.build());
@@ -108,7 +111,6 @@ impl Session<Blockfrost, Embedded<Blockfrost>> {
         Session::new(cardano, wallet, Waiter::new(config.wait), config.submit_via).await
     }
 
-    #[cfg(feature = "direct-embedded")]
     pub async fn direct_embedded(blockfrost_project_id: impl Into<String>) -> Result<Self, Error> {
         let cardano = Arc::new(Blockfrost::new(blockfrost_project_id.into()));
         let wallet = Embedded::new(cardano.clone(), cardano_wallet::Config::default(), None);
