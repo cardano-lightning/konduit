@@ -23,6 +23,10 @@ type Data = web::Data<server::Data>;
 const SESSION_TIMESTAMP_SKEW_MILLIS: u64 = 5 * 60 * 1000;
 const SESSION_LEASE_MILLIS: u64 = 2 * 60 * 1000;
 
+fn session_timestamp_valid(timestamp: u64, now: u64) -> bool {
+    timestamp.abs_diff(now) <= SESSION_TIMESTAMP_SKEW_MILLIS
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("mediation: {0}")]
@@ -90,7 +94,7 @@ pub async fn claim_session(
         .duration_since(UNIX_EPOCH)
         .map_err(|_| Error::Other)?
         .as_millis() as u64;
-    if claim.timestamp > now || now - claim.timestamp > SESSION_TIMESTAMP_SKEW_MILLIS {
+    if !session_timestamp_valid(claim.timestamp, now) {
         return Err(Error::InvalidSessionTimestamp);
     }
     let expected_adaptor: [u8; 32] = data.info().channel_parameters.adaptor_key.into();
@@ -399,6 +403,27 @@ mod tests {
             100_000.0,
             BTreeMap::from([("custom".into(), 2.0)]),
         )
+    }
+
+    #[test]
+    fn session_timestamp_allows_clock_skew_in_both_directions() {
+        let now = 1_000_000;
+        assert!(session_timestamp_valid(
+            now - SESSION_TIMESTAMP_SKEW_MILLIS,
+            now
+        ));
+        assert!(session_timestamp_valid(
+            now + SESSION_TIMESTAMP_SKEW_MILLIS,
+            now
+        ));
+        assert!(!session_timestamp_valid(
+            now - SESSION_TIMESTAMP_SKEW_MILLIS - 1,
+            now
+        ));
+        assert!(!session_timestamp_valid(
+            now + SESSION_TIMESTAMP_SKEW_MILLIS + 1,
+            now
+        ));
     }
 
     #[test]
