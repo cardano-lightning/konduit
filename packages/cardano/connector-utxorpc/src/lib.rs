@@ -61,6 +61,8 @@ use utxorpc::{CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, Client
 
 const PAGE_SIZE: u32 = 100;
 pub(crate) const RPC_TIMEOUT: Duration = Duration::from_secs(10);
+const TIP_FETCH_ATTEMPTS: usize = 5;
+const TIP_FETCH_RETRY_DELAY: Duration = Duration::from_millis(250);
 
 pub(crate) async fn dolos<T, E>(
     request: impl Future<Output = Result<T, E>>,
@@ -116,17 +118,33 @@ impl UtxoRpc {
             .ok_or_else(|| anyhow!("Dolos returned no tip"))?;
 
         if tip.height == 0 {
-            tip.height = dolos(sync.fetch_block(vec![tip.clone()]))
-                .await?
-                .map_err(|error| anyhow!(error))
-                .context("failed to fetch Dolos tip block")?
-                .into_iter()
-                .next()
-                .and_then(|block| block.parsed)
-                .and_then(|block| block.header)
-                .map(|header| header.height)
-                .filter(|height| *height != 0)
-                .ok_or_else(|| anyhow!("Dolos tip block returned no height"))?;
+            for attempt in 0..TIP_FETCH_ATTEMPTS {
+                match dolos(sync.fetch_block(vec![tip.clone()])).await? {
+                    Ok(blocks) => {
+                        tip.height = blocks
+                            .into_iter()
+                            .next()
+                            .and_then(|block| block.parsed)
+                            .and_then(|block| block.header)
+                            .map(|header| header.height)
+                            .filter(|height| *height != 0)
+                            .unwrap_or_default();
+                        if tip.height != 0 {
+                            break;
+                        }
+                    }
+                    Err(error) if attempt + 1 == TIP_FETCH_ATTEMPTS => {
+                        return Err(anyhow!(error)).context("failed to fetch Dolos tip block");
+                    }
+                    Err(_) => {}
+                }
+                if attempt + 1 < TIP_FETCH_ATTEMPTS {
+                    tokio::time::sleep(TIP_FETCH_RETRY_DELAY).await;
+                }
+            }
+            if tip.height == 0 {
+                return Err(anyhow!("Dolos tip block returned no height"));
+            }
         }
 
         Ok(tip)
