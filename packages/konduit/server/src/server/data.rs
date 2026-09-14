@@ -1,7 +1,8 @@
 use crate::{
     Channel, admin,
-    channel::{self, apply_locked, apply_squash},
-    db, time,
+    channel::{self, apply_locked, apply_secrets, apply_squash, apply_timeout},
+    db,
+    time::{self, now},
 };
 use bln_client::types::{Invoice, RouteHint};
 use konduit_data::{Duration, Locked, Secret, Squash};
@@ -132,6 +133,7 @@ impl Data {
     }
 
     pub fn squash_proposal(&self, keytag: &Keytag) -> Result<SquashProposal, Error> {
+        self.db().update(keytag, apply_timeout(now()?))?;
         Ok(self.channel(keytag)?.propose_squash()?)
     }
 
@@ -233,6 +235,10 @@ impl Data {
             .await?;
         self.db().update(keytag, apply_locked(locked))?;
         let pay_res = self.bln_pay(invoice, fee_limit, rel_timeout).await?;
+        if let Some(secret) = pay_res.secret {
+            self.db()
+                .update(keytag, apply_secrets(vec![Secret(secret)]))?;
+        };
         Ok(PayResponse::from(pay_res.secret))
     }
 

@@ -227,8 +227,6 @@ impl Api for Client {
     async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
         let blocks = req.relative_timeout.as_secs() / self.config.block_time.as_secs();
 
-        println!("{:?}", req.invoice);
-
         let body = router_send::Request {
             cltv_limit: Some(blocks),
             fee_limit_msat: Some(req.fee_limit),

@@ -11,7 +11,7 @@ pub type Client<T> = http_client::Client<T, codec::Json>;
 
 pub struct Adaptor<T: Transport> {
     http_client: Client<T>,
-    info: AdaptorInfo<()>,
+    info: AdaptorInfo<TxHelp>,
     keytag: Option<(Tag, String)>,
 }
 
@@ -26,7 +26,7 @@ impl<T: Transport> Adaptor<T> {
 
         let mut adaptor = Self {
             http_client,
-            info: info.into(),
+            info,
             keytag: None,
         };
 
@@ -52,7 +52,7 @@ impl<T: Transport> Adaptor<T> {
         });
     }
 
-    pub fn info(&self) -> &AdaptorInfo<()> {
+    pub fn info(&self) -> &AdaptorInfo<TxHelp> {
         &self.info
     }
 
