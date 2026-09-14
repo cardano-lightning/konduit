@@ -21,6 +21,9 @@ pub enum Error {
     #[error("API returned an error (Status: {status}): {message}")]
     ApiError { status: u16, message: String },
 
+    #[error("Payment failed: {0}")]
+    PaymentFailed(String),
+
     #[error("Hex decoding error: {0}")]
     #[serde(skip_serializing, skip_deserializing)]
     Hex(#[from] hex::FromHexError),

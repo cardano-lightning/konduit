@@ -230,17 +230,14 @@ impl Data {
         invoice: Invoice,
         fee_limit: u64,
         rel_timeout: Duration,
-    ) -> Result<bln_client::types::PayResponse, Error> {
-        let pay_request = bln_client::types::PayRequest {
-            fee_limit,
-            relative_timeout: time::from_konduit_duration(rel_timeout),
-            invoice,
-        };
-        // TODO :: handle pre-commitment failure case
+    ) -> Result<bln_client::types::PayResponse, bln_client::Error> {
         self.bln()
-            .pay(pay_request)
+            .pay(bln_client::types::PayRequest {
+                fee_limit,
+                relative_timeout: time::from_konduit_duration(rel_timeout),
+                invoice,
+            })
             .await
-            .map_err(|err| Error::Bln(err.to_string()))
     }
 
     async fn align_commitments(
@@ -293,6 +290,8 @@ impl Data {
             .align_commitments(&definition, time::now()?, &locked, &invoice)
             .await?;
         let payment_hash = locked.lock().0;
+        let payment_index = locked.index();
+        let payment_lock = *locked.lock();
         let mut digest = Sha256::new();
         digest.update(minicbor::to_vec(&locked).map_err(|_| Error::Other)?);
         digest.update(invoice.to_string().as_bytes());
@@ -318,12 +317,27 @@ impl Data {
                     .secret,
             ));
         }
-        let pay_res = self.bln_pay(invoice, fee_limit, rel_timeout).await?;
-        if let Some(secret) = pay_res.secret {
-            self.db()
-                .update(keytag, apply_secrets(vec![Secret(secret)]))?;
-        };
-        Ok(PayResponse::from(pay_res.secret))
+        match self.bln_pay(invoice, fee_limit, rel_timeout).await {
+            Ok(pay_res) => {
+                if let Some(secret) = pay_res.secret {
+                    self.db()
+                        .update(keytag, apply_secrets(vec![Secret(secret)]))?;
+                }
+                Ok(PayResponse::from(pay_res.secret))
+            }
+            Err(bln_client::Error::PaymentFailed(reason)) => {
+                self.db().cancel_payment(
+                    &identity,
+                    &request_digest,
+                    &payment_hash,
+                    keytag,
+                    payment_index,
+                    &payment_lock,
+                )?;
+                Err(Error::Bln(format!("Payment failed: {reason}")))
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     // FIXME :: REMOVE THIS TEMPORARY PATCH!!

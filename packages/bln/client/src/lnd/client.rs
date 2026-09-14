@@ -237,11 +237,13 @@ impl Api for Client {
         let res = self.v2_router_send(body).await?;
         if res.status == "FAILED" {
             println!("{res:?}");
-            Err(Error::ApiError {
-                status: 500,
-                message: format!("LND Payment Failed: {}", res.payment_error),
-            })
-        } else if res.payment_preimage.is_empty() {
+            let reason = if res.failure_reason.is_empty() {
+                res.payment_error
+            } else {
+                res.failure_reason
+            };
+            Err(Error::PaymentFailed(reason))
+        } else if res.payment_preimage == [0; 32] {
             Err(Error::ApiError {
                 status: 503,
                 message: "Payment succeeded but no preimage returned".into(),

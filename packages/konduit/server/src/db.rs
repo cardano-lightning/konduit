@@ -1,5 +1,5 @@
 use cardano_sdk::Hash;
-use konduit_data::{AssetDefinition, Locked};
+use konduit_data::{AssetDefinition, Lock, Locked};
 use konduit_tmp::{Keytag, Receipt, SessionClaimRequest};
 use minicbor::{Decode, Encode};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
@@ -524,6 +524,41 @@ impl Db {
         }
         tx.commit()?;
         Ok(inserted)
+    }
+
+    pub fn cancel_payment(
+        &self,
+        identity: &[u8; 32],
+        request_digest: &[u8; 32],
+        payment_hash: &[u8; 32],
+        keytag: &Keytag,
+        index: u64,
+        lock: &Lock,
+    ) -> Result<(), Error> {
+        let mut expected = Vec::with_capacity(64);
+        expected.extend_from_slice(request_digest);
+        expected.extend_from_slice(payment_hash);
+        let tx = self.0.begin_write()?;
+        {
+            let mut authorizations = tx.open_table(PAYMENT_AUTHORIZATIONS)?;
+            let existing = authorizations
+                .get(identity.as_slice())?
+                .map(|value| value.value().to_vec())
+                .ok_or(Error::OperationConflict)?;
+            if existing != expected {
+                return Err(Error::OperationConflict);
+            }
+            let mut channels = tx.open_table(TABLE)?;
+            let mut channel = channels
+                .get(keytag.as_ref())?
+                .map(|value| value.value().to_channel(keytag))
+                .ok_or(Error::NoChannel)?;
+            channel.cancel_locked(index, lock)?;
+            channels.insert(keytag.as_ref(), Value::from_channel(channel))?;
+            authorizations.remove(identity.as_slice())?;
+        }
+        tx.commit()?;
+        Ok(())
     }
     pub fn update_with_lease<F>(
         &self,

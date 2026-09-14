@@ -166,6 +166,20 @@ impl Receipt {
         changed
     }
 
+    pub fn remove_locked(&mut self, index: u64, lock: &Lock) -> Result<(), Error> {
+        let position = self
+            .cheques
+            .iter()
+            .position(|cheque| {
+                cheque
+                    .as_locked()
+                    .is_some_and(|locked| locked.index() == index && locked.lock() == lock)
+            })
+            .ok_or(Error::Input)?;
+        self.cheques.remove(position);
+        Ok(())
+    }
+
     /// Drop all locked cheques for which timeout is <= now.
     /// We assume unlockeds are used, and then persisted for squash proposal.
     pub fn apply_timeout(&mut self, now: Duration) {
@@ -319,5 +333,32 @@ impl Receipt {
                 .collect::<Vec<_>>(),
             proposal: self.propose_squash_body()?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use konduit_data::{ChequeBody, SigningKey};
+
+    #[test]
+    fn terminal_failure_removes_only_matching_locked_cheque() {
+        let signing = SigningKey::from([1; 32]);
+        let tag = konduit_data::Tag::from(b"test".as_slice());
+        let squash = Squash::make(&signing, &tag, SquashBody::zero());
+        let lock = Lock([2; 32]);
+        let mut receipt = Receipt::new(squash);
+        receipt
+            .apply_locked(Locked::make(
+                &signing,
+                &tag,
+                ChequeBody::new(1, 10, Duration::from_secs(60), lock),
+            ))
+            .unwrap();
+
+        assert!(receipt.remove_locked(1, &Lock([3; 32])).is_err());
+        assert_eq!(receipt.lockeds().count(), 1);
+        receipt.remove_locked(1, &lock).unwrap();
+        assert_eq!(receipt.lockeds().count(), 0);
     }
 }
