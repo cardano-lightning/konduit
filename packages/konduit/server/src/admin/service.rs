@@ -1,24 +1,17 @@
 use std::{collections::BTreeMap, iter, sync::Arc};
 
 use crate::{
-    channel::{self, Retainer},
+    channel::{self},
     db,
 };
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
 use konduit_data::{Lock, Secret};
-use konduit_tmp::{ChannelParameters, Keytag};
-use konduit_tx::{
-    Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
-    to_verifying_key,
-};
+use konduit_tmp::Keytag;
+use konduit_tx::{Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 
-use super::{
-    SyncApi,
-    coiter::{CoItem, CoIter},
-    config::Config,
-};
+use super::{SyncApi, config::Config};
 
 #[derive(Clone)]
 pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
@@ -26,7 +19,6 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
     network_parameters: NetworkParameters,
-    channel_parameters: ChannelParameters,
     tx_preferences: AdaptorPreferences,
     script_utxo: (Input, Output),
     wallet: SigningKey,
@@ -41,7 +33,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     ) -> anyhow::Result<Self> {
         let Config {
             wallet,
-            channel_parameters,
+
             tx_preferences,
             host_address,
         } = config;
@@ -97,41 +89,10 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             cardano,
             db,
             network_parameters,
-            channel_parameters,
             tx_preferences,
             script_utxo,
             wallet,
         })
-    }
-
-    fn retainers(&self, utxos: &BTreeMap<Input, Output>) -> BTreeMap<Keytag, Vec<Retainer>> {
-        let close_period = self.channel_parameters.close_period;
-        let tag_length = self.channel_parameters.tag_length;
-        let own_vkey = VerificationKey::from(&self.wallet);
-        let candidates = utxos
-            .iter()
-            .filter_map(|u| ChannelUtxo::try_from(u).ok())
-            .filter(|u| {
-                let channel = u.data();
-                let constants = channel.constants();
-                constants.sub_vkey == to_verifying_key(own_vkey)
-                    && constants.close_period >= close_period
-                    && constants.tag.len() <= tag_length
-                    && channel.stage().is_opened()
-            })
-            .filter_map(|u| {
-                Retainer::try_from(u.data())
-                    .ok()
-                    .map(|r| (u.data().keytag(), r))
-            });
-        let mut retainers = BTreeMap::new();
-        for (keytag, retainer) in candidates {
-            retainers
-                .entry(keytag)
-                .or_insert_with(Vec::new)
-                .push(retainer);
-        }
-        retainers
     }
 
     /// These should be considered confirmed utxos,
@@ -167,6 +128,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         Ok(secrets)
     }
 
+    /// TODO :: split this off
     pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
         // This is a silly implementation.
         let keytags = self.db.keys()?;
@@ -187,21 +149,6 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
                 continue;
             }
             self.db.update(keytag, channel::apply_secrets(secrets))?;
-        }
-        Ok(())
-    }
-
-    pub async fn sync_retainers(&self) -> Result<(), anyhow::Error> {
-        // The suboptimal way.
-        let snapshot = self.snapshot().await?;
-        let left: Vec<Keytag> = self.db.keys()?;
-        let right = self.retainers(&snapshot);
-        for item in CoIter::new(left, right) {
-            let (k, v) = match item {
-                CoItem::Left(k) => (k, Vec::new()),
-                CoItem::Right(k, v) | CoItem::Both(k, v) => (k, v),
-            };
-            self.db.upsert(&k, channel::upsert_retainers(v))?;
         }
         Ok(())
     }
@@ -241,7 +188,6 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     }
 
     pub async fn sync(&self) -> Result<(), anyhow::Error> {
-        self.sync_retainers().await?;
         self.unlocks().await?;
         self.claim().await?;
         Ok(())
@@ -328,11 +274,6 @@ mod tests {
         let wallet = SigningKey::from([7; 32]);
         Config {
             wallet: wallet.clone(),
-            channel_parameters: ChannelParameters {
-                adaptor_key: wallet.to_verification_key(),
-                close_period: Duration::from_secs(60),
-                tag_length: 16,
-            },
             tx_preferences: AdaptorPreferences {
                 min_single: 1,
                 min_total: 1,
