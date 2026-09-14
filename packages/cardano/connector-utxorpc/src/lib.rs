@@ -273,7 +273,14 @@ impl UtxoRpc {
                         .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
                     Ok(SubmitCbor::Accepted(hash))
                 }
-                Err(utxorpc::Error::GrpcError(status)) => Ok(SubmitCbor::from_status(&status)),
+                Err(utxorpc::Error::GrpcError(status)) => {
+                    log::warn!(
+                        "Dolos transaction submission failed: code={:?} reason={}",
+                        status.code(),
+                        status.message()
+                    );
+                    Ok(SubmitCbor::from_status(&status))
+                }
                 Err(error) => Err(submit_error(self.config.endpoint(), error)),
             }
         })
