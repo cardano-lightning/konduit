@@ -9,7 +9,7 @@
 
 use std::cmp;
 
-use cardano_sdk::VerificationKey;
+use cardano_sdk::{Input, VerificationKey};
 use konduit_data::{Locked, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey};
 use konduit_tmp::{Keytag, Receipt, SquashProposal, from_verifying_key, receipt, to_verifying_key};
 
@@ -22,7 +22,7 @@ use konduit_data::VerifyError;
 pub enum Error {
     #[error("channel not active")]
     NotActive,
-    #[error("no retainer: channel not funded on-chain")]
+    #[error("no backing: channel not funded on-chain")]
     NoRetainer,
     #[error("no receipt: submit a null squash first")]
     NoReceipt,
@@ -50,11 +50,23 @@ impl From<VerifyError> for Error {
 pub struct Aux {
     #[n(0)]
     is_active: bool,
+    // Client can suggest a lineage they want tracked.
+    // This is only a suggestion. Server decides.
+    // It is a bit awkward that the value is sat here,
+    // since its a concern of the indexer.
+
+    // Server can insist on being provided on first handshake,
+    // and never alterable (by external). Handling a mutual requires care.
+    #[n(1)]
+    focus: Option<Input>,
 }
 
 impl Default for Aux {
     fn default() -> Self {
-        Self { is_active: true }
+        Self {
+            is_active: true,
+            focus: Default::default(),
+        }
     }
 }
 
@@ -68,9 +80,8 @@ pub struct Channel {
     tag: Tag,
     /// L1 state. Cached for serving `./auth/state`.
     /// Use external service prior to quote.
-    /// FIXME :: Does this even make sense?
     #[n(2)]
-    retainer: Option<Retainer>,
+    backing: Option<Backing>,
     /// L2 state
     #[n(3)]
     receipt: Option<Receipt>,
@@ -113,9 +124,12 @@ impl Channel {
         Self {
             key,
             tag,
-            retainer: None,
+            backing: None,
             receipt: None,
-            aux: Aux { is_active: true },
+            aux: Aux {
+                is_active: true,
+                focus: None,
+            },
             // bucket: Bucket::new(
             //     config.bucket_capacity,
             //     config.bucket_refill_rate,
@@ -127,7 +141,7 @@ impl Channel {
 
     pub fn new_with(
         keytag: &Keytag,
-        retainer: Option<Retainer>,
+        backing: Option<Backing>,
         receipt: Option<Receipt>,
         aux: Aux,
     ) -> Self {
@@ -135,7 +149,7 @@ impl Channel {
         Self {
             key: to_verifying_key(key),
             tag,
-            retainer,
+            backing,
             receipt,
             aux,
         }
@@ -155,8 +169,8 @@ impl Channel {
         &self.receipt
     }
 
-    pub fn retainer(&self) -> &Option<Retainer> {
-        &self.retainer
+    pub fn backing(&self) -> &Option<Backing> {
+        &self.backing
     }
 
     pub fn aux(&self) -> &Aux {
@@ -193,17 +207,17 @@ impl Channel {
 
     /// How much funds are currently uncommitted (available to be committed).
     /// Error if no funds can be spent because of other reasons.
-    /// Assumes retainer is in a state of prev squash ie nothing weird happened.
+    /// Assumes backing is in a state of prev squash ie nothing weird happened.
     pub fn uncommitted(&self) -> Result<u64, Error> {
         self.assert_active()?;
-        let retainer = self.retainer.as_ref().ok_or(Error::NoRetainer)?;
+        let backing = self.backing.as_ref().ok_or(Error::NoRetainer)?;
         let receipt = self.receipt.as_ref().ok_or(Error::NoReceipt)?;
         if receipt.capacity() == 0 {
             return Err(Error::Capacity);
         };
         let abs_committed = receipt.committed();
-        let rel_committed = abs_committed.saturating_sub(retainer.subbed);
-        Ok(retainer.amount.saturating_sub(rel_committed))
+        let rel_committed = abs_committed.saturating_sub(backing.subbed);
+        Ok(backing.amount.saturating_sub(rel_committed))
     }
 
     /// Error if cannot commit.
@@ -217,10 +231,10 @@ impl Channel {
 
     pub fn next_index(&self) -> Result<u64, Error> {
         self.assert_active()?;
-        let retainer = self.retainer.as_ref().ok_or(Error::NoRetainer)?;
+        let backing = self.backing.as_ref().ok_or(Error::NoRetainer)?;
         let receipt = self.receipt.as_ref().ok_or(Error::NoReceipt)?;
         Ok(cmp::max(
-            retainer.useds.last().map_or(0, |u| u.index),
+            backing.useds.last().map_or(0, |u| u.index),
             receipt.propose_index(),
         ))
     }
@@ -243,9 +257,9 @@ impl Channel {
 
     // --- Events -------------------------------------------------------------
 
-    pub fn apply_retainer(&mut self, candidates: Vec<Retainer>) -> Result<(), Error> {
+    pub fn apply_retainer(&mut self, candidates: Vec<Backing>) -> Result<(), Error> {
         // FIXME :: Handle Useds better!Currently assumes nothing weird happened.
-        self.retainer = match &self.receipt {
+        self.backing = match &self.receipt {
             None => candidates.into_iter().max_by_key(|l1| l1.amount),
             Some(receipt) => candidates.into_iter().max_by_key(|l1| {
                 (
@@ -348,9 +362,7 @@ pub fn apply_secrets(secrets: Vec<Secret>) -> impl FnOnce(Channel) -> Result<Cha
     }
 }
 
-pub fn upsert_retainers(
-    retainers: Vec<Retainer>,
-) -> impl FnOnce(Channel) -> Result<Channel, Error> {
+pub fn upsert_retainers(retainers: Vec<Backing>) -> impl FnOnce(Channel) -> Result<Channel, Error> {
     move |mut channel| {
         channel.apply_retainer(retainers)?;
         Ok(channel)
@@ -358,7 +370,7 @@ pub fn upsert_retainers(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-pub struct Retainer {
+pub struct Backing {
     #[n(0)]
     pub amount: u64,
     #[n(1)]
@@ -367,7 +379,7 @@ pub struct Retainer {
     pub useds: Vec<Used>,
 }
 
-// impl TryFrom<&L1Channel> for Retainer {
+// impl TryFrom<&L1Channel> for backing {
 //     type Error = anyhow::Error;
 //
 //     fn try_from(value: &L1Channel) -> Result<Self, Self::Error> {
@@ -375,7 +387,7 @@ pub struct Retainer {
 //             return Err(anyhow::anyhow!("Not openened"));
 //         };
 //         let amount = value.amount;
-//         Ok(Retainer {
+//         Ok(Backing {
 //             amount,
 //             subbed,
 //             useds,
@@ -383,7 +395,7 @@ pub struct Retainer {
 //     }
 // }
 
-impl TryFrom<&konduit_tx::Channel> for Retainer {
+impl TryFrom<&konduit_tx::Channel> for Backing {
     type Error = anyhow::Error;
 
     fn try_from(value: &konduit_tx::Channel) -> Result<Self, Self::Error> {
@@ -391,7 +403,7 @@ impl TryFrom<&konduit_tx::Channel> for Retainer {
             return Err(anyhow::anyhow!("Not openened"));
         };
         let amount = value.amount();
-        Ok(Retainer {
+        Ok(Backing {
             amount,
             subbed,
             useds,

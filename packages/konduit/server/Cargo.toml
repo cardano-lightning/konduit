@@ -36,6 +36,7 @@ serde_json.workspace = true
 serde_with = { workspace = true, features = ["base64", "hex", "json"] }
 thiserror.workspace = true
 tokio.workspace = true
+itertools.workspace = true
 
 [dev-dependencies]
 proptest = { workspace = true, default-features = false, features = [

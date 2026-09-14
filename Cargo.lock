@@ -2606,6 +2606,7 @@ dependencies = [
  "env_logger",
  "fx-client",
  "humantime",
+ "itertools 0.14.0",
  "konduit-data",
  "konduit-tmp",
  "konduit-tx",
