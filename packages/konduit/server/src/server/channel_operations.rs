@@ -22,7 +22,7 @@ pub struct Response {
 #[async_trait]
 pub trait Api: Send + Sync {
     async fn submit(&self, request: &Request) -> anyhow::Result<Response>;
-    async fn lookup(&self, operation_id: &str) -> anyhow::Result<Response>;
+    async fn lookup(&self, operation_id: &str) -> anyhow::Result<Option<Response>>;
 }
 
 pub struct Client {
@@ -41,6 +41,16 @@ impl Client {
     }
 }
 
+fn lookup_found(status: reqwest::StatusCode) -> anyhow::Result<bool> {
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return Ok(false);
+    }
+    if !status.is_success() {
+        anyhow::bail!("channel connector lookup failed with {status}");
+    }
+    Ok(true)
+}
+
 #[async_trait]
 impl Api for Client {
     async fn submit(&self, request: &Request) -> anyhow::Result<Response> {
@@ -56,8 +66,8 @@ impl Api for Client {
             .await?)
     }
 
-    async fn lookup(&self, operation_id: &str) -> anyhow::Result<Response> {
-        Ok(self
+    async fn lookup(&self, operation_id: &str) -> anyhow::Result<Option<Response>> {
+        let response = self
             .http
             .get(format!(
                 "{}/internal/channel-operations/{operation_id}",
@@ -65,9 +75,22 @@ impl Api for Client {
             ))
             .bearer_auth(&self.token)
             .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?)
+            .await?;
+        if !lookup_found(response.status())? {
+            return Ok(None);
+        }
+        Ok(Some(response.json().await?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lookup_found;
+
+    #[test]
+    fn lookup_preserves_missing_operation() {
+        assert!(!lookup_found(reqwest::StatusCode::NOT_FOUND).unwrap());
+        assert!(lookup_found(reqwest::StatusCode::OK).unwrap());
+        assert!(lookup_found(reqwest::StatusCode::SERVICE_UNAVAILABLE).is_err());
     }
 }

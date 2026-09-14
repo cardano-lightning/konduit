@@ -191,7 +191,8 @@ pub async fn channel_operation(
         .map_err(|error| {
             log::error!("channel connector lookup failed: {error:#}");
             Error::ChannelConnectorUnavailable
-        })?;
+        })?
+        .ok_or(Error::Data(data::Error::NoChannel))?;
     if remote.operation_id != *operation_id
         || remote.expected_transaction_id != hex::encode(local.expected_transaction_id)
     {
@@ -482,7 +483,7 @@ mod tests {
         async fn lookup(
             &self,
             _operation_id: &str,
-        ) -> anyhow::Result<crate::server::channel_operations::Response> {
+        ) -> anyhow::Result<Option<crate::server::channel_operations::Response>> {
             panic!("unexpected channel lookup")
         }
     }
