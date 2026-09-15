@@ -210,7 +210,6 @@ mod tests {
         Address, Credential, Hash, Input, Network, Output, PlutusScript, PlutusVersion,
         ProtocolParameters, SigningKey, Transaction, Value, address::kind, transaction::state,
     };
-    use konduit_data::Duration;
     use konduit_tx::{KONDUIT_VALIDATOR, adaptor::AdaptorPreferences};
     use std::{collections::BTreeMap, sync::Arc};
 
