@@ -1,0 +1,70 @@
+[package]
+name = "cln-server"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hex = { workspace = true, features = ["serde"] }
+konduit-data = { workspace = true, features = ["serde"] }
+minicbor.workspace = true
+thiserror.workspace = true
+web-time.workspace = true
+
+serde = { workspace = true }
+http-client = { workspace = true, features = [
+  "cbor",
+  "json",
+  "reqwest",
+], default-features = false }
+rand.workspace = true
+
+anyhow = { workspace = true, optional = true }
+actix-web = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = [
+  "macros",
+  "rt-multi-thread",
+  "time",
+] }
+clap = { workspace = true, optional = true, features = ["derive"] }
+toml = { workspace = true, optional = true }
+env_logger = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true, features = ["json"] }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = ["standalone", "client", "server"]
+
+# Shared by both binaries: CLI parsing, config loading, logging, async runtime.
+standalone = [
+  "dep:clap",
+  "dep:toml",
+  "dep:anyhow",
+  "dep:env_logger",
+  "dep:log",
+  "dep:tokio",
+]
+
+server = ["standalone", "dep:actix-web", "dep:serde_json"]
+client = ["standalone", "dep:reqwest"]
+
+[[bin]]
+name = "cln-server"
+path = "src/bin/server.rs"
+required-features = ["server"]
+
+[[bin]]
+name = "cln-client"
+path = "src/bin/client.rs"
+required-features = ["client"]
+
+[[example]]
+name = "consumer_gateway_merchant"
+required-features = ["server", "client"]
