@@ -10,6 +10,10 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "konduit-maintenance"
+path = "src/maintenance.rs"
+
 [dependencies]
 actix-cors.workspace = true
 actix-web.workspace = true

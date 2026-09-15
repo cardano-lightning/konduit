@@ -37,4 +37,42 @@ pub enum Error {
     Conversion(#[from] std::array::TryFromSliceError),
 }
 
+impl Error {
+    pub fn is_terminal_payment_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::PaymentFailed(_)
+                | Self::ApiError {
+                    status: 400..=499,
+                    ..
+                }
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+
+    #[test]
+    fn only_definitive_client_rejections_are_terminal() {
+        assert!(Error::PaymentFailed("failed".into()).is_terminal_payment_failure());
+        assert!(
+            Error::ApiError {
+                status: 400,
+                message: "expired".into()
+            }
+            .is_terminal_payment_failure()
+        );
+        assert!(
+            !Error::ApiError {
+                status: 503,
+                message: "unavailable".into()
+            }
+            .is_terminal_payment_failure()
+        );
+        assert!(!Error::Time.is_terminal_payment_failure());
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

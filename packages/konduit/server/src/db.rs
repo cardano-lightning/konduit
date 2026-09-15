@@ -3,6 +3,7 @@ use konduit_data::{AssetDefinition, Lock, Locked};
 use konduit_tmp::{Keytag, Receipt, SessionClaimRequest};
 use minicbor::{Decode, Encode};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
+use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 use crate::channel::{self, Aux, Channel, Retainer};
@@ -16,6 +17,13 @@ const CHANNEL_OPERATIONS: TableDefinition<&[u8], ChannelOperationValue> =
     TableDefinition::new("channel_operations");
 const PAYMENT_AUTHORIZATIONS: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("payment_authorizations");
+
+pub(crate) fn payment_identity(keytag: &Keytag, index: u64) -> [u8; 32] {
+    let mut identity = Sha256::new();
+    identity.update(keytag.as_ref());
+    identity.update(index.to_be_bytes());
+    identity.finalize().into()
+}
 
 // ---------------------------------------------------------------------------
 // Value
@@ -191,6 +199,12 @@ pub enum Error {
     LeaseInvalid,
     #[error("operation id conflicts with an existing request")]
     OperationConflict,
+    #[error("failed payment not found")]
+    PaymentNotFound,
+    #[error("multiple records match the failed payment")]
+    PaymentAmbiguous,
+    #[error("invalid persisted payment authorization")]
+    PaymentAuthorizationInvalid,
     #[error("channel: {0}")]
     Channel(#[from] channel::Error),
 }
@@ -560,6 +574,79 @@ impl Db {
         tx.commit()?;
         Ok(())
     }
+
+    pub fn cancel_failed_payment(
+        &self,
+        payment_hash: &[u8; 32],
+    ) -> Result<(Keytag, u64, u64), Error> {
+        let authorizations = {
+            let tx = self.0.begin_read()?;
+            let table = tx.open_table(PAYMENT_AUTHORIZATIONS)?;
+            table
+                .iter()?
+                .filter_map(|entry| match entry {
+                    Ok((identity, value)) if value.value().get(32..) == Some(payment_hash) => Some(
+                        Ok((identity.value().to_vec(), value.value()[..32].to_vec())),
+                    ),
+                    Ok(_) => None,
+                    Err(error) => Some(Err(Error::from(error))),
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        let [(identity, request_digest)] = authorizations.as_slice() else {
+            return Err(if authorizations.is_empty() {
+                Error::PaymentNotFound
+            } else {
+                Error::PaymentAmbiguous
+            });
+        };
+        let identity: [u8; 32] = identity
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::PaymentAuthorizationInvalid)?;
+        let request_digest: [u8; 32] = request_digest
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::PaymentAuthorizationInvalid)?;
+        let mut matches = Vec::new();
+        for keytag in self.keys()? {
+            let channel = self.get(&keytag)?.ok_or(Error::NoChannel)?;
+            if let Some(receipt) = channel.receipt() {
+                matches.extend(
+                    receipt
+                        .lockeds()
+                        .filter(|locked| {
+                            locked.lock().as_ref() == payment_hash
+                                && payment_identity(&keytag, locked.index()) == identity
+                        })
+                        .map(|locked| {
+                            (
+                                keytag.clone(),
+                                locked.index(),
+                                locked.amount(),
+                                *locked.lock(),
+                            )
+                        }),
+                );
+            }
+        }
+        let [(keytag, index, amount, lock)] = matches.as_slice() else {
+            return Err(if matches.is_empty() {
+                Error::PaymentNotFound
+            } else {
+                Error::PaymentAmbiguous
+            });
+        };
+        self.cancel_payment(
+            &identity,
+            &request_digest,
+            payment_hash,
+            keytag,
+            *index,
+            lock,
+        )?;
+        Ok((keytag.clone(), *index, *amount))
+    }
     pub fn update_with_lease<F>(
         &self,
         keytag: &Keytag,
@@ -631,7 +718,10 @@ fn hash_token(token: &[u8; 32]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use cardano_sdk::SigningKey;
-    use konduit_data::{AssetCatalog, Tag, VerifyingKey};
+    use konduit_data::{
+        AssetCatalog, ChequeBody, Duration, Lock, Locked, SigningKey as ProtocolSigningKey, Squash,
+        SquashBody, Tag, VerifyingKey,
+    };
 
     use super::*;
 
@@ -866,6 +956,74 @@ mod tests {
             Err(Error::LeaseInvalid)
         ));
         assert!(db.channel_operation(&[1; 16], &keytag).unwrap().is_some());
+    }
+
+    #[test]
+    fn maintenance_cleanup_removes_matching_lock_and_authorization() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let db = Db::open(file.path().to_str().unwrap()).unwrap();
+        let signing = ProtocolSigningKey::from_bytes([6; 32]);
+        let tag = Tag::from(b"cleanup-test".as_slice());
+        let mut channel = Channel::new(
+            signing.verifying_key(),
+            tag.clone(),
+            AssetCatalog::builtins().by_alias("ada").unwrap().clone(),
+        );
+        channel
+            .apply_retainer(vec![channel::Retainer {
+                amount: 1_000,
+                subbed: 0,
+                useds: vec![],
+            }])
+            .unwrap();
+        channel
+            .apply_squash(Squash::make(&signing, &tag, SquashBody::zero()).into_unverified())
+            .unwrap();
+        let payment_hash = [7; 32];
+        channel
+            .apply_locked(
+                Locked::make(
+                    &signing,
+                    &tag,
+                    ChequeBody::new(1, 10, Duration::from_secs(60), Lock(payment_hash)),
+                )
+                .into_unverified(),
+            )
+            .unwrap();
+        let keytag = channel.keytag();
+        let identity = payment_identity(&keytag, 1);
+        let request_digest = [8; 32];
+        db.insert(channel).unwrap();
+        let tx = db.0.begin_write().unwrap();
+        {
+            let mut table = tx.open_table(PAYMENT_AUTHORIZATIONS).unwrap();
+            let mut persisted = Vec::from(request_digest);
+            persisted.extend_from_slice(&payment_hash);
+            table
+                .insert(identity.as_slice(), persisted.as_slice())
+                .unwrap();
+        }
+        tx.commit().unwrap();
+
+        assert_eq!(
+            db.cancel_failed_payment(&payment_hash).unwrap(),
+            (keytag.clone(), 1, 10)
+        );
+        assert_eq!(
+            db.get(&keytag)
+                .unwrap()
+                .unwrap()
+                .receipt()
+                .as_ref()
+                .unwrap()
+                .lockeds()
+                .count(),
+            0
+        );
+        assert!(matches!(
+            db.cancel_failed_payment(&payment_hash),
+            Err(Error::PaymentNotFound)
+        ));
     }
 
     #[test]
