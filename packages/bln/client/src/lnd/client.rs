@@ -12,6 +12,10 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 const PAYMENT_TIMEOUT_SECONDS: u64 = 30;
+
+fn query_amount_sat(amount_msat: u64) -> u64 {
+    amount_msat.div_ceil(1_000)
+}
 #[derive(Debug)]
 pub struct Client {
     config: Config,
@@ -170,9 +174,14 @@ impl Client {
         let path = format!(
             "v1/graph/routes/{}/{}",
             hex::encode(payee),
-            amount_msat / 1000 + 1
+            query_amount_sat(amount_msat)
         );
-        self.execute(self.post(&path).json(route_hints)).await
+        self.execute(
+            self.post(&path)
+                .query(&[("use_mission_control", "true")])
+                .json(route_hints),
+        )
+        .await
     }
 
     pub async fn v1_payments(
@@ -309,5 +318,16 @@ impl Api for Client {
         Ok(RevealResponse {
             secret: cache.get(&req.lock).map(|s| s.0),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::query_amount_sat;
+
+    #[test]
+    fn query_amount_uses_exact_millisatoshi_ceiling() {
+        assert_eq!(query_amount_sat(331_000), 331);
+        assert_eq!(query_amount_sat(331_001), 332);
     }
 }
