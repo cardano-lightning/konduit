@@ -174,6 +174,8 @@ impl Data {
         amount_msat: u64,
         payee: [u8; 33],
         route_hints: Vec<RouteHint>,
+        payment_request: Option<String>,
+        final_cltv_delta: u64,
     ) -> Result<bln_client::types::QuoteResponse, Error> {
         Ok(self
             .bln()
@@ -181,6 +183,8 @@ impl Data {
                 amount_msat,
                 payee,
                 route_hints,
+                payment_request,
+                final_cltv_delta,
             })
             .await?)
     }
@@ -190,10 +194,18 @@ impl Data {
         let definition = channel.asset_definition().clone();
         let amount_msat = body.amount_msat();
         let invoice_hash = body.invoice_hash().map(hex::encode);
+        let payment_request = body.payment_request();
+        let final_cltv_delta = body.final_cltv_delta();
         let pricing = self.fx.read().await.clone();
         channel.can_commit(quote_amount(&pricing, &definition, amount_msat)?)?;
         let bln_res = self
-            .bln_quote(amount_msat, body.payee(), body.route_hints())
+            .bln_quote(
+                amount_msat,
+                body.payee(),
+                body.route_hints(),
+                payment_request,
+                final_cltv_delta,
+            )
             .await?;
         let quote_msat = amount_msat
             .checked_add(bln_res.fee_msat)

@@ -82,6 +82,8 @@ mod tests {
             amount_msat: 5000,
             payee: [0u8; 33],
             route_hints: vec![],
+            payment_request: None,
+            final_cltv_delta: 0,
         };
 
         let res = client.quote(req).await.unwrap();

@@ -1,4 +1,4 @@
-use super::types::{get_info, graph_routes, payments, router_send, stream_wrapper};
+use super::types::{get_info, graph_routes, payments, route_fee, router_send, stream_wrapper};
 use crate::{
     Api, Error,
     lnd::{Config, types::route_hints},
@@ -15,6 +15,10 @@ const PAYMENT_TIMEOUT_SECONDS: u64 = 30;
 
 fn query_amount_sat(amount_msat: u64) -> u64 {
     amount_msat.div_ceil(1_000)
+}
+
+fn relative_time_lock(time_lock: u64, block_height: u64) -> u64 {
+    time_lock.checked_sub(block_height).unwrap_or(time_lock)
 }
 #[derive(Debug)]
 pub struct Client {
@@ -191,6 +195,14 @@ impl Client {
         self.execute(self.get("v1/payments").query(query)).await
     }
 
+    pub async fn v2_estimate_route_fee(
+        &self,
+        body: route_fee::Request,
+    ) -> crate::Result<route_fee::Response> {
+        self.execute(self.post("v2/router/route/estimatefee").json(&body))
+            .await
+    }
+
     pub async fn v2_router_send(
         &self,
         body: router_send::Request,
@@ -210,6 +222,38 @@ impl Client {
 #[async_trait]
 impl Api for Client {
     async fn quote(&self, req: QuoteRequest) -> crate::Result<QuoteResponse> {
+        if let Some(payment_request) = req.payment_request.as_ref() {
+            let estimate = self
+                .v2_estimate_route_fee(route_fee::Request {
+                    payment_request: payment_request.clone(),
+                    timeout: PAYMENT_TIMEOUT_SECONDS as u32,
+                })
+                .await?;
+            if estimate.failure_reason != "FAILURE_REASON_NONE" {
+                return Err(Error::ApiError {
+                    status: 404,
+                    message: estimate.failure_reason,
+                });
+            }
+            let blocks = relative_time_lock(estimate.time_lock_delay, self.block_height().await?)
+                .checked_add(req.final_cltv_delta)
+                .ok_or(Error::Time)?;
+            let relative_timeout = self
+                .config
+                .block_time
+                .checked_mul(blocks as u32)
+                .ok_or(Error::Time)?;
+            log::info!(
+                "LND route probe: amount_msat={}, fee_msat={}, cltv_blocks={}",
+                req.amount_msat,
+                estimate.routing_fee_msat,
+                blocks,
+            );
+            return Ok(QuoteResponse {
+                relative_timeout,
+                fee_msat: estimate.routing_fee_msat,
+            });
+        }
         let routes = self
             .v1_graph_routes(req.payee, req.amount_msat, &req.route_hints.clone().into())
             .await?;
@@ -323,11 +367,17 @@ impl Api for Client {
 
 #[cfg(test)]
 mod tests {
-    use super::query_amount_sat;
+    use super::{query_amount_sat, relative_time_lock};
 
     #[test]
     fn query_amount_uses_exact_millisatoshi_ceiling() {
         assert_eq!(query_amount_sat(331_000), 331);
         assert_eq!(query_amount_sat(331_001), 332);
+    }
+
+    #[test]
+    fn accepts_absolute_or_relative_estimator_time_lock() {
+        assert_eq!(relative_time_lock(967_404, 967_157), 247);
+        assert_eq!(relative_time_lock(247, 967_157), 247);
     }
 }

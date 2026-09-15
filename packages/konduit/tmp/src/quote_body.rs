@@ -43,6 +43,23 @@ impl QuoteBody {
         }
     }
 
+    pub fn payment_request(&self) -> Option<String> {
+        match self {
+            QuoteBody::Simple(_) => None,
+            QuoteBody::Bolt11(invoice) => Some(invoice.to_string()),
+        }
+    }
+
+    pub fn final_cltv_delta(&self) -> u64 {
+        match self {
+            QuoteBody::Simple(_) => 0,
+            QuoteBody::Bolt11(invoice) => invoice
+                .min_final_cltv_expiry_delta
+                .as_ref()
+                .map_or(0, |delta| delta.0),
+        }
+    }
+
     pub fn route_hints(self) -> Vec<RouteHint> {
         match self {
             QuoteBody::Simple(simple_quote) => simple_quote.route_hints,
