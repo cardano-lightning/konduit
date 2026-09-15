@@ -227,7 +227,7 @@ pub struct Response {
 
 #[cfg(test)]
 mod tests {
-    use super::Response;
+    use super::{Request, Response};
 
     #[test]
     fn preserves_terminal_failure_reason() {
@@ -236,5 +236,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(response.failure_reason, "FAILURE_REASON_NO_ROUTE");
+    }
+
+    #[test]
+    fn sends_an_explicit_payment_timeout() {
+        let request = Request {
+            timeout_seconds: Some(30),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_value(request).unwrap()["timeout_seconds"],
+            30
+        );
     }
 }

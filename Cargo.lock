@@ -662,6 +662,7 @@ dependencies = [
  "futures",
  "hex",
  "humantime",
+ "log",
  "reqwest",
  "serde",
  "serde_json",

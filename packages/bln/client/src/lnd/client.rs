@@ -11,6 +11,7 @@ use serde::de::DeserializeOwned;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
+const PAYMENT_TIMEOUT_SECONDS: u64 = 30;
 #[derive(Debug)]
 pub struct Client {
     config: Config,
@@ -217,6 +218,12 @@ impl Api for Client {
             .block_time
             .checked_mul(blocks as u32)
             .ok_or(Error::Time)?;
+        log::info!(
+            "LND route quote: amount_msat={}, fee_msat={}, cltv_blocks={}",
+            req.amount_msat,
+            route.total_fees_msat,
+            blocks,
+        );
 
         Ok(QuoteResponse {
             relative_timeout,
@@ -227,7 +234,15 @@ impl Api for Client {
     async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
         let blocks = req.relative_timeout.as_secs() / self.config.block_time.as_secs();
 
+        log::info!(
+            "LND payment constraints: fee_limit_msat={}, cltv_limit={}, timeout_seconds={}",
+            req.fee_limit,
+            blocks,
+            PAYMENT_TIMEOUT_SECONDS,
+        );
+
         let body = router_send::Request {
+            timeout_seconds: Some(PAYMENT_TIMEOUT_SECONDS),
             cltv_limit: Some(blocks),
             fee_limit_msat: Some(req.fee_limit),
             payment_request: Some(req.invoice.into()),
