@@ -1,5 +1,5 @@
 use cardano_sdk::Hash;
-use konduit_data::{AssetDefinition, Lock, Locked};
+use konduit_data::{AssetDefinition, Lock, Locked, Secret};
 use konduit_tmp::{Keytag, Receipt, SessionClaimRequest};
 use minicbor::{Decode, Encode};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
@@ -540,6 +540,46 @@ impl Db {
         Ok(inserted)
     }
 
+    pub fn complete_payment(
+        &self,
+        identity: &[u8; 32],
+        request_digest: &[u8; 32],
+        payment_hash: &[u8; 32],
+        keytag: &Keytag,
+        secret: Secret,
+    ) -> Result<(), Error> {
+        let mut expected = Vec::with_capacity(64);
+        expected.extend_from_slice(request_digest);
+        expected.extend_from_slice(payment_hash);
+        let tx = self.0.begin_write()?;
+        {
+            let authorizations = tx.open_table(PAYMENT_AUTHORIZATIONS)?;
+            let existing = authorizations
+                .get(identity.as_slice())?
+                .map(|value| value.value().to_vec())
+                .ok_or(Error::OperationConflict)?;
+            if existing != expected {
+                return Err(Error::OperationConflict);
+            }
+            let mut channels = tx.open_table(TABLE)?;
+            let mut channel = channels
+                .get(keytag.as_ref())?
+                .map(|value| value.value().to_channel(keytag))
+                .ok_or(Error::NoChannel)?;
+            let already_complete = channel.receipt().as_ref().is_some_and(|receipt| {
+                receipt
+                    .unlockeds()
+                    .any(|unlocked| unlocked.secret() == &secret)
+            });
+            if !already_complete {
+                channel.apply_secret(secret)?;
+                channels.insert(keytag.as_ref(), Value::from_channel(channel))?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn cancel_payment(
         &self,
         identity: &[u8; 32],
@@ -719,8 +759,8 @@ fn hash_token(token: &[u8; 32]) -> [u8; 32] {
 mod tests {
     use cardano_sdk::SigningKey;
     use konduit_data::{
-        AssetCatalog, ChequeBody, Duration, Lock, Locked, SigningKey as ProtocolSigningKey, Squash,
-        SquashBody, Tag, VerifyingKey,
+        AssetCatalog, ChequeBody, Duration, Lock, Locked, Secret, SigningKey as ProtocolSigningKey,
+        Squash, SquashBody, Tag, VerifyingKey,
     };
 
     use super::*;
@@ -1024,6 +1064,64 @@ mod tests {
             db.cancel_failed_payment(&payment_hash),
             Err(Error::PaymentNotFound)
         ));
+    }
+
+    #[test]
+    fn successful_payment_persists_unlocked_cheque_idempotently() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let db = Db::open(file.path().to_str().unwrap()).unwrap();
+        let signing = ProtocolSigningKey::from_bytes([6; 32]);
+        let tag = Tag::from(b"payment-test".as_slice());
+        let mut channel = Channel::new(
+            signing.verifying_key(),
+            tag.clone(),
+            AssetCatalog::builtins().by_alias("ada").unwrap().clone(),
+        );
+        channel
+            .apply_retainer(vec![channel::Retainer {
+                amount: 1_000,
+                subbed: 0,
+                useds: vec![],
+            }])
+            .unwrap();
+        channel
+            .apply_squash(Squash::make(&signing, &tag, SquashBody::zero()).into_unverified())
+            .unwrap();
+        let secret = Secret([7; 32]);
+        let payment_hash = Lock::from(&secret).0;
+        channel
+            .apply_locked(
+                Locked::make(
+                    &signing,
+                    &tag,
+                    ChequeBody::new(1, 10, Duration::from_secs(60), Lock(payment_hash)),
+                )
+                .into_unverified(),
+            )
+            .unwrap();
+        let keytag = channel.keytag();
+        let identity = payment_identity(&keytag, 1);
+        let request_digest = [8; 32];
+        db.insert(channel).unwrap();
+        let tx = db.0.begin_write().unwrap();
+        {
+            let mut table = tx.open_table(PAYMENT_AUTHORIZATIONS).unwrap();
+            let mut persisted = Vec::from(request_digest);
+            persisted.extend_from_slice(&payment_hash);
+            table
+                .insert(identity.as_slice(), persisted.as_slice())
+                .unwrap();
+        }
+        tx.commit().unwrap();
+
+        db.complete_payment(&identity, &request_digest, &payment_hash, &keytag, secret)
+            .unwrap();
+        db.complete_payment(&identity, &request_digest, &payment_hash, &keytag, secret)
+            .unwrap();
+
+        let receipt = db.get(&keytag).unwrap().unwrap().receipt().clone().unwrap();
+        assert_eq!(receipt.lockeds().count(), 0);
+        assert_eq!(receipt.unlockeds().count(), 1);
     }
 
     #[test]

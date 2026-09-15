@@ -1,6 +1,6 @@
 use crate::{
     Channel, admin,
-    channel::{self, apply_secrets, apply_squash, apply_timeout},
+    channel::{self, apply_squash, apply_timeout},
     db,
     time::{self, now},
 };
@@ -322,18 +322,32 @@ impl Data {
             locked,
         )?;
         if !inserted {
-            return Ok(PayResponse::from(
-                self.bln()
-                    .reveal(bln_client::types::RevealRequest { lock: payment_hash })
-                    .await?
-                    .secret,
-            ));
+            let secret = self
+                .bln()
+                .reveal(bln_client::types::RevealRequest { lock: payment_hash })
+                .await?
+                .secret;
+            if let Some(secret) = secret {
+                self.db().complete_payment(
+                    &identity,
+                    &request_digest,
+                    &payment_hash,
+                    keytag,
+                    Secret(secret),
+                )?;
+            }
+            return Ok(PayResponse::from(secret));
         }
         match self.bln_pay(invoice, fee_limit, rel_timeout).await {
             Ok(pay_res) => {
                 if let Some(secret) = pay_res.secret {
-                    self.db()
-                        .update(keytag, apply_secrets(vec![Secret(secret)]))?;
+                    self.db().complete_payment(
+                        &identity,
+                        &request_digest,
+                        &payment_hash,
+                        keytag,
+                        Secret(secret),
+                    )?;
                 }
                 Ok(PayResponse::from(pay_res.secret))
             }
