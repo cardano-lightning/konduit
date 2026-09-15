@@ -72,7 +72,7 @@ decode-invoice invoice:
 
 # List invoices
 invoices short="":
-    @just node={{node}} _request GET "/v1/invoices" | jq 'if .invoices then (if "{{short}}" == "--short" then .invoices[] | {state: .state, memo: .memo, value: .value, settled: .settled} else . end) else . end'
+    @just node={{node}} _request GET "/v1/invoices?reversed=true&index_offset=0&num_max_invoices=100" | jq 'if .invoices then (if "{{short}}" == "--short" then .invoices[] | {state: .state, memo: .memo, value: .value, settled: .settled} else . end) else . end'
 
 # Add a new invoice (amt msat)
 add-invoice amt_msat memo="":

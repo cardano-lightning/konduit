@@ -2520,6 +2520,7 @@ dependencies = [
  "anyhow",
  "bln-sdk",
  "cardano-connector",
+ "cardano-connector-direct",
  "cardano-sdk",
  "clap",
  "dotenvy",

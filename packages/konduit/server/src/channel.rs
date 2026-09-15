@@ -10,7 +10,7 @@
 use std::cmp;
 
 use cardano_sdk::VerificationKey;
-use konduit_data::{Locked, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey};
+use konduit_data::{Duration, Locked, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey};
 use konduit_tmp::{Keytag, Receipt, SquashProposal, from_verifying_key, receipt, to_verifying_key};
 
 use minicbor::{Decode, Encode};
@@ -261,6 +261,15 @@ impl Channel {
         Ok(())
     }
 
+    /// Apply timeout: pop lockeds that have timed-out
+    pub fn apply_timeout(&mut self, cutoff: Duration) -> Result<(), Error> {
+        let Some(receipt) = self.receipt.as_mut() else {
+            return Err(Error::NoReceipt);
+        };
+        receipt.apply_timeout(cutoff);
+        Ok(())
+    }
+
     /// Apply a consumer-signed squash.
     /// Creates the receipt if this is the first squash; advances it otherwise.
     /// Will error if the squash is not later than current
@@ -326,6 +335,13 @@ impl Channel {
 //         Ok((channel, None))
 //     }
 // }
+
+pub fn apply_timeout(cutoff: Duration) -> impl FnOnce(Channel) -> Result<Channel, Error> {
+    move |mut channel| {
+        channel.apply_timeout(cutoff)?;
+        Ok(channel)
+    }
+}
 
 pub fn apply_locked(locked: Locked) -> impl FnOnce(Channel) -> Result<Channel, Error> {
     move |mut channel| {
