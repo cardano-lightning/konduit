@@ -27,10 +27,7 @@ serde_json.workspace = true
 serde = { workspace = true }
 inquire = { workspace = true }
 toml.workspace = true
-tokio = { workspace = true, version = "1", features = [
-  "rt-multi-thread",
-  "macros",
-] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 konduit-session = { workspace = true, features = ["cli"] }
 konduit-tx2.workspace = true
 clap.workspace = true

@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use http_client::Transport;
-use konduit_tmp::{to_signing_key, to_verifying_key};
+use konduit_tmp::{TxHelp, to_signing_key, to_verifying_key};
 use web_time::{SystemTime, UNIX_EPOCH};
 
 pub struct Client<'a, T: Transport> {
@@ -27,7 +27,7 @@ where
         }
     }
 
-    pub fn info(&self) -> &AdaptorInfo<()> {
+    pub fn info(&self) -> &AdaptorInfo<TxHelp> {
         self.adaptor.info()
     }
 

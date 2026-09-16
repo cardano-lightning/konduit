@@ -27,11 +27,14 @@ cli = [
   "dep:tokio",
   "http-client/reqwest",
   "serde_json",
+  "cardano-connector-direct",
+  "konduit-data/serde",
 ]
 
 [dependencies]
 anyhow.workspace = true
 bln-sdk.workspace = true
+cardano-connector-direct = { workspace = true, optional = true }
 cardano-connector.workspace = true
 cardano-sdk.workspace = true
 http-client = { workspace = true, features = ["json", "cbor"] }

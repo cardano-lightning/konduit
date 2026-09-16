@@ -242,6 +242,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
 
     pub async fn sync(&self) -> Result<(), anyhow::Error> {
         self.sync_retainers().await?;
+        self.unlocks().await?;
         self.claim().await?;
         Ok(())
     }

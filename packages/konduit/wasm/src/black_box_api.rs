@@ -157,7 +157,8 @@ impl Konduit {
     /// adaptor info and other non-authenticated operations.
     #[wasm_bindgen(getter, js_name = "adaptorInfo")]
     pub fn adaptor_info(&self) -> wasm::Result<AdaptorInfo> {
-        Ok(self.adaptor.as_ref()?.info().clone().into())
+        let ir = core::AdaptorInfo::<()>::from(self.adaptor.as_ref()?.info().clone());
+        Ok(ir.into())
     }
 
     /// Configure an (unauthenticated) adaptor, without a defined tag yet. Suitable to get the

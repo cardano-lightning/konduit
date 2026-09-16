@@ -73,6 +73,10 @@ pub fn tx(
         .map(|o| crate::Open::new(o.amount, o.constant(*wallet), None))
         .collect::<Vec<_>>();
 
+    if opens.is_empty() && steppeds.inputs().is_empty() {
+        return Err(anyhow::anyhow!("Empty tx"));
+    }
+
     let wallet_address: Address<kind::Any> =
         wallet.to_address(network_parameters.network_id).into();
 
