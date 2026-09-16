@@ -43,4 +43,4 @@ cardano-wallet.workspace = true
 serde.workspace = true
 cardano-sdk.workspace = true
 thiserror.workspace = true
-konduit-tx2.workspace = true
+konduit-tx2 = { workspace = true, features = ["serde"] }
