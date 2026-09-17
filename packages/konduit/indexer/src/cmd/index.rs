@@ -8,9 +8,9 @@ use std::path::PathBuf;
 )]
 pub struct Args {
     #[arg(long, env = "KUPO_HOST", default_value = "127.0.0.1")]
-    pub host: String,
+    pub kupo_host: String,
     #[arg(long, env = "KUPO_PORT", default_value_t = 1442)]
-    pub port: u16,
+    pub kupo_port: u16,
     /// Path to the SQLite database file. Created if it doesn't exist.
     /// Ignored when `--in-memory` is set.
     #[arg(long, env = "INDEXER_DB_PATH", default_value = "konduit.sqlite3")]
@@ -27,7 +27,7 @@ pub struct Args {
 
 pub fn run(args: Args) -> anyhow::Result<()> {
     use konduit_indexer::{indexer::Indexer, store::sqlite::SqliteStore};
-    let base_url = format!("http://{}:{}", args.host, args.port);
+    let base_url = format!("http://{}:{}", args.kupo_host, args.kupo_port);
     let kupo = kupo_client::blocking::Client::new(&base_url)?;
     let store = {
         let conn = if args.in_memory {

@@ -36,6 +36,7 @@
         inputs.rust-flake.flakeModules.nixpkgs
       ];
       systems = ["x86_64-linux" "aarch64-darwin"];
+
       perSystem = {
         lib,
         config,
@@ -44,15 +45,19 @@
         system,
         ...
       }: let
+        shellHookCommon = ''
+          ${config.pre-commit.installationScript}
+          export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
+        '';
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
         wasm-pack = pkgs.callPackage ./flake/wasm-pack.nix {};
 
+        kupo = inputs'.kupo.packages.kupo;
+
         packages =
           [
-            # aiken
             inputs'.aiken.packages.aiken
-            # kupo
-            inputs'.kupo.packages.kupo
+            kupo
             # JS
             pkgs.yarn
             pkgs.nodejs
@@ -75,9 +80,8 @@
         devShell = {
           name = "konduit-shell";
           shellHook = ''
-              ${config.pre-commit.installationScript}
             echo 1>&2 "Welcome to the development shell!"
-              export RUST_SRC_PATH="${config.rust-project.toolchain}/lib/rustlib/src/rust/library";
+            ${shellHookCommon}
           '';
           inherit packages;
 
@@ -154,40 +158,62 @@
 
         cardano-node = inputs.capkgs.packages.${system}.cardano-node-input-output-hk-cardano-node-10-2-1-52b708f;
 
-        process-compose-testnet-yaml = pkgs.callPackage ./flake/process-compose/testnet.nix {
-          inherit cardonnay cardano-node cardano-cli;
+        process-compose-dev-env-yaml = pkgs.callPackage ./flake/process-compose/dev-env.nix {
+          inherit cardonnay cardano-node cardano-cli kupo;
         };
 
-        process-compose = pkgs.writeShellApplication {
-          name = "process-compose";
+        process-compose-dev-env = pkgs.writeShellApplication {
+          name = "process-compose-dev-env";
           runtimeInputs = [];
           text = ''
-            ${pkgs.process-compose}/bin/process-compose up -f ${process-compose-testnet-yaml} -L "$RUN_DIR"/process-compose-testnet;
+            ${pkgs.process-compose}/bin/process-compose up -f ${process-compose-dev-env-yaml} -L "$RUN_DIR/process-compose-dev-env";
           '';
         };
 
-        devShellExtra =
+        devShellExtras =
           devShell
           // {
             name = "konduit-shell-with-extras";
 
             shellHook = ''
-              ${devShell.shellHook}
               echo 1>&2 "Welcome to the development shell with extras!"
+
+              ${shellHookCommon}
+
               export ROOT_DIR="$(git rev-parse --show-toplevel)"
               export RUN_DIR="$ROOT_DIR/.run"
 
               # Vars required by testnet part of the process compose:
+
               export TESTNET_DIR="$RUN_DIR/testnet"
               export CARDONNAY_TESTNET_ID="9"
               export CARDANO_NODE_NETWORK_ID=42
+
+              export KUPO_INDEXER_DIR="$RUN_DIR/kupo-indexer"
+              export KUPO_INDEXER_PORT=1442
+
+              export KUPO_UTXO_DIR="$RUN_DIR/kupo-utxo"
+              export KUPO_UTXO_PORT=1443
+
+              export KONDUIT_INDEXER_DIR="$RUN_DIR/konduit-indexer"
+              export KONDUIT_INDEXER_DB_PATH="$KONDUIT_INDEXER_DIR/konduit-indexer.db"
+
+
+              # This exposes CARDANO_NODE_SOCKET_PATH to the shell
               source <(cardonnay control print-env -i "$CARDONNAY_TESTNET_ID" -w "$TESTNET_DIR")
+
+              # Removes the socket file name from the path, leaving only the directory
+              NODE_SOCKET_DIR="''${CARDANO_NODE_SOCKET_PATH%/*}"
+              NODE_SOCKET_NAME="''${CARDANO_NODE_SOCKET_PATH##*/}"
+              export CARDANO_NODE_CONFIG_PATH="$NODE_SOCKET_DIR/config-''${NODE_SOCKET_NAME%.socket}.json"
+
+              export KONDUIT_VALIDATOR_HASH="$(cat $ROOT_DIR/packages/kernel/plutus.json | jq -r '.validators[0].hash')"
 
               # This **will be** initialized by the testnet process compose when executed
               export FAUCET_ADDR_FILE="$TESTNET_DIR/faucet.addr"
               export FAUCET_SKEY_FILE="$TESTNET_DIR/faucet.skey"
 
-              export PROCESS_COMPOSE_YAML=${process-compose-testnet-yaml}
+              export PROCESS_COMPOSE_YAML=${process-compose-dev-env-yaml}
             '';
 
             packages =
@@ -196,7 +222,7 @@
                 cardano-node
                 cardano-cli
                 cardonnay
-                process-compose
+                process-compose-dev-env
 
                 (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
                   inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
@@ -290,7 +316,7 @@
         };
         devShells = {
           default = pkgs.mkShell devShell;
-          extras = pkgs.mkShell devShellExtra;
+          extras = pkgs.mkShell devShellExtras;
         };
       };
       flake = {
