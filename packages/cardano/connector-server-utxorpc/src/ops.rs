@@ -299,12 +299,18 @@ impl OpsStore {
             let lease_expired = record
                 .submit_started_at
                 .is_some_and(|started| now.saturating_sub(started) >= 30);
-            if record.state != InternalState::Prepared
-                && !(record.state == InternalState::Submitting && lease_expired)
-            {
+            let can_submit = match record.state {
+                InternalState::Prepared => true,
+                InternalState::Submitting => lease_expired,
+                InternalState::Accepted => record.submit_started_at.is_none() || lease_expired,
+                _ => false,
+            };
+            if !can_submit {
                 Ok(None)
             } else {
-                record.state = InternalState::Submitting;
+                if record.state == InternalState::Prepared {
+                    record.state = InternalState::Submitting;
+                }
                 record.submit_started_at = Some(now);
                 record.attempts = record.attempts.saturating_add(1);
                 record.revision = record.revision.saturating_add(1);
@@ -448,9 +454,6 @@ impl OpsStore {
                     record.state = InternalState::Prepared;
                     self.put(key, record).await?;
                 }
-                if record.state == InternalState::Accepted {
-                    return Ok(0);
-                }
                 if submit && record.cbor.is_some() {
                     let Some(claimed) = self.claim_submit(key).await? else {
                         return Ok(0);
@@ -460,24 +463,20 @@ impl OpsStore {
                         return Ok(0);
                     };
                     let cbor = hex::decode(cbor_hex).map_err(|_| ApiError::unexpected())?;
-                    let clear_lease = match ledger.submit_cbor(&cbor).await? {
+                    match ledger.submit_cbor(&cbor).await? {
                         SubmitCbor::Accepted(hash) if hash == txid => {
                             record.state = InternalState::Accepted;
-                            true
                         }
                         SubmitCbor::Accepted(_) => return Err(ApiError::unavailable()),
                         SubmitCbor::Rejected => {
                             record.state = InternalState::Rejected;
                             record.cbor = None;
                             record.depth = 0;
-                            true
+                            record.submit_started_at = None;
                         }
                         SubmitCbor::AlreadyKnown
                         | SubmitCbor::InputsSpent
-                        | SubmitCbor::Indeterminate => false,
-                    };
-                    if clear_lease {
-                        record.submit_started_at = None;
+                        | SubmitCbor::Indeterminate => {}
                     }
                     self.put(key, record).await?;
                 }

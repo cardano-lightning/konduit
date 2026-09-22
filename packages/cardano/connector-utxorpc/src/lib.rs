@@ -306,7 +306,15 @@ impl UtxoRpc {
             })
             .ok_or_else(|| anyhow!("Dolos returned no Cardano evaluation"))?;
         if !response.errors.is_empty() {
-            return Err(anyhow!("Dolos rejected transaction evaluation"));
+            let detail = response
+                .errors
+                .iter()
+                .map(|error| error.msg.replace(['\r', '\n'], " "))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(anyhow!(
+                "Dolos rejected transaction evaluation: {detail:.2048}"
+            ));
         }
         response
             .redeemers
