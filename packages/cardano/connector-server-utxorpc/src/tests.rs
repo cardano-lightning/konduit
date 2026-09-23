@@ -204,8 +204,12 @@ fn default_ledger() -> FakeLedger {
 }
 
 #[actix_web::test]
-async fn health_and_network() {
-    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
+async fn health_uses_dolos_without_querying_history() {
+    let history = FakeHistory {
+        ready: false,
+        ..FakeHistory::default()
+    };
+    let app = test::init_service(app(state(default_ledger(), history))).await;
     let health = test::call_service(&app, TestRequest::get().uri("/health").to_request()).await;
     assert_eq!(health.status(), StatusCode::OK);
     let body: serde_json::Value = test::read_body_json(health).await;

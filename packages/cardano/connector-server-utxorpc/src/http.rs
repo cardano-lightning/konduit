@@ -125,8 +125,6 @@ async fn health<L: Ledger, H: History>(
 ) -> Result<HttpResponse, ApiError> {
     bounded(async {
         state.ledger.ready().await?;
-        let (height, _) = state.ledger.tip().await?;
-        state.history.ready(height).await?;
         state.ops.ready().await?;
         json_bounded(&HealthResponse { status: "ok" })
     })
