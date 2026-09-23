@@ -556,7 +556,7 @@ async fn settled_depth_is_preserved() {
 }
 
 #[actix_web::test]
-async fn indeterminate_submission_holds_lease() {
+async fn indeterminate_submission_keeps_input_conflicts_pending_until_expiry() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440007";
     let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
@@ -572,7 +572,7 @@ async fn indeterminate_submission_holds_lease() {
         .persist_new(key, txid, signed, uuid.to_owned())
         .await
         .unwrap();
-    let ledger = FakeLedger {
+    let mut ledger = FakeLedger {
         submit_result: Some(SubmitCbor::Indeterminate),
         ..default_ledger()
     };
@@ -584,6 +584,23 @@ async fn indeterminate_submission_holds_lease() {
     assert!(record.submit_started_at.is_some());
     assert!(store.claim_submit(key).await.unwrap().is_none());
     assert_eq!(ledger.submits.load(Ordering::Relaxed), 1);
+
+    record.submit_started_at = Some(0);
+    store.put(key, &mut record).await.unwrap();
+    ledger.submit_result = Some(SubmitCbor::InputsSpent);
+    store
+        .reconcile_one(&ledger, key, &mut record, 100, 50_000, true)
+        .await
+        .unwrap();
+    assert_eq!(OpsStore::response(&record).status, "pending");
+    assert!(record.cbor.is_some());
+
+    store
+        .reconcile_one(&ledger, key, &mut record, 100, 60_000, true)
+        .await
+        .unwrap();
+    assert_eq!(OpsStore::response(&record).status, "rejected");
+    assert!(record.cbor.is_none());
 }
 
 #[actix_web::test]
@@ -626,7 +643,7 @@ async fn spent_inputs_reject_without_retry() {
 }
 
 #[actix_web::test]
-async fn accepted_submission_retries_after_lease_without_regressing_status() {
+async fn accepted_submission_is_not_retried_after_lease_expiry() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440009";
     let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
@@ -642,9 +659,7 @@ async fn accepted_submission_retries_after_lease_without_regressing_status() {
         .persist_new(key, txid, signed, uuid.to_owned())
         .await
         .unwrap();
-    record.state = InternalState::Accepted;
-    store.put(key, &mut record).await.unwrap();
-    let ledger = FakeLedger {
+    let mut ledger = FakeLedger {
         submit_result: Some(SubmitCbor::Accepted(txid)),
         ..default_ledger()
     };
@@ -654,16 +669,21 @@ async fn accepted_submission_retries_after_lease_without_regressing_status() {
         .await
         .unwrap();
     assert_eq!(record.state, InternalState::Accepted);
-    assert_eq!(record.attempts, 1);
-    assert!(record.submit_started_at.is_some());
+    assert_eq!(OpsStore::response(&record).status, "accepted");
     assert_eq!(ledger.submits.load(Ordering::Relaxed), 1);
+
+    // A duplicate can see inputs reserved by the original mempool transaction.
+    record.submit_started_at = Some(0);
+    store.put(key, &mut record).await.unwrap();
+    ledger.submit_result = Some(SubmitCbor::InputsSpent);
 
     store
         .reconcile_one(&ledger, key, &mut record, 100, 50_000, true)
         .await
         .unwrap();
     assert_eq!(record.state, InternalState::Accepted);
-    assert_eq!(record.attempts, 1);
+    assert_eq!(OpsStore::response(&record).status, "accepted");
+    assert!(record.cbor.is_some());
     assert_eq!(ledger.submits.load(Ordering::Relaxed), 1);
 }
 

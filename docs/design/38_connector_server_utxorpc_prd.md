@@ -465,6 +465,11 @@ Duplicate, already-known, or inputs-spent responses after an indeterminate first
 submission are not proof of rejection. The server must keep the operation
 pending until chain evidence or the transaction validity bound resolves it.
 
+Once Dolos acknowledges acceptance, absence from `ReadTx` is not a reason to
+resubmit: the transaction may still be in its mempool. The submission lease
+applies only to unacknowledged attempts. Accepted operations continue checking
+for chain inclusion or validity expiry.
+
 The server may resubmit only the identical persisted CBOR. It must retain that
 CBOR until the operation is settled or rejected.
 

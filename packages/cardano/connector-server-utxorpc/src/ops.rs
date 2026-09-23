@@ -302,7 +302,9 @@ impl OpsStore {
             let can_submit = match record.state {
                 InternalState::Prepared => true,
                 InternalState::Submitting => lease_expired,
-                InternalState::Accepted => record.submit_started_at.is_none() || lease_expired,
+                // No block inclusion yet does not revoke the node's acceptance.
+                // Resubmission can conflict with the same transaction in its mempool.
+                InternalState::Accepted => false,
                 _ => false,
             };
             if !can_submit {
@@ -468,6 +470,8 @@ impl OpsStore {
                             record.state = InternalState::Accepted;
                         }
                         SubmitCbor::Accepted(_) => return Err(ApiError::unavailable()),
+                        // A lost acknowledgement can leave these inputs in our own mempool tx.
+                        SubmitCbor::InputsSpent if record.attempts > 1 => {}
                         SubmitCbor::Rejected | SubmitCbor::InputsSpent => {
                             record.state = InternalState::Rejected;
                             record.cbor = None;
