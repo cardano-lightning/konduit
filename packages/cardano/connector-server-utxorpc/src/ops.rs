@@ -468,15 +468,16 @@ impl OpsStore {
                             record.state = InternalState::Accepted;
                         }
                         SubmitCbor::Accepted(_) => return Err(ApiError::unavailable()),
-                        SubmitCbor::Rejected => {
+                        SubmitCbor::Rejected | SubmitCbor::InputsSpent => {
                             record.state = InternalState::Rejected;
                             record.cbor = None;
                             record.depth = 0;
                             record.submit_started_at = None;
                         }
-                        SubmitCbor::AlreadyKnown
-                        | SubmitCbor::InputsSpent
-                        | SubmitCbor::Indeterminate => {}
+                        SubmitCbor::AlreadyKnown => {
+                            record.state = InternalState::Accepted;
+                        }
+                        SubmitCbor::Indeterminate => {}
                     }
                     self.put(key, record).await?;
                 }

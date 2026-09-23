@@ -587,6 +587,45 @@ async fn indeterminate_submission_holds_lease() {
 }
 
 #[actix_web::test]
+async fn spent_inputs_reject_without_retry() {
+    let store = tmp_db();
+    let uuid = "550e8400-e29b-41d4-a716-446655440011";
+    let key = OpsStore::client_key(&parse_uuid(uuid).unwrap());
+    let txid = [20u8; 32];
+    let signed = SignedTx {
+        hash: txid,
+        digest: [21u8; 32],
+        ttl: Some(60_000),
+        bytes: vec![9, 9, 9],
+        creates_pinned_channel: false,
+    };
+    let mut record = store
+        .persist_new(key, txid, signed, uuid.to_owned())
+        .await
+        .unwrap();
+    let ledger = FakeLedger {
+        submit_result: Some(SubmitCbor::InputsSpent),
+        ..default_ledger()
+    };
+
+    store
+        .reconcile_one(&ledger, key, &mut record, 100, 50_000, true)
+        .await
+        .unwrap();
+    assert_eq!(record.state, InternalState::Rejected);
+    assert!(record.cbor.is_none());
+    assert!(record.submit_started_at.is_none());
+    assert_eq!(ledger.submits.load(Ordering::Relaxed), 1);
+
+    store
+        .reconcile_one(&ledger, key, &mut record, 100, 50_000, true)
+        .await
+        .unwrap();
+    assert_eq!(record.state, InternalState::Rejected);
+    assert_eq!(ledger.submits.load(Ordering::Relaxed), 1);
+}
+
+#[actix_web::test]
 async fn accepted_submission_retries_after_lease_without_regressing_status() {
     let store = tmp_db();
     let uuid = "550e8400-e29b-41d4-a716-446655440009";
