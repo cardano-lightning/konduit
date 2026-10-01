@@ -3,8 +3,8 @@ info:
   title: Cardano Connector Server API
   version: 1.0.0
   description: |
-    Mainnet-only HTTP facade over Dolos (UTxO RPC) and a bounded Koios
-    transaction history capability.
+    Mainnet-only HTTP facade over Dolos (UTxO RPC), including authoritative
+    exact transaction confirmations, and bounded Koios address history.
 servers:
   - url: http://localhost:8787
     description: Local development server
@@ -120,6 +120,13 @@ paths:
     get:
       summary: Transaction by id
       operationId: getTransaction
+      description: |
+        Reads confirmed native transaction evidence from Dolos, including consumed
+        parent outputs and the actual position in the containing block. Preserves
+        native consumed-input and output order, validity bounds, and datum/script
+        metadata. Failed phase-2 transactions expose collateral consumption and
+        collateral return only. Missing or inconsistent confirmed evidence returns
+        503; there is no Koios fallback. An absent transaction returns null.
       parameters:
         - $ref: "#/components/parameters/TransactionId"
       responses:

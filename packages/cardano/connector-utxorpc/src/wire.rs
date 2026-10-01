@@ -31,6 +31,119 @@ pub struct MappedUtxo {
     pub reference_script_version: Option<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MappedTransaction {
+    pub transaction_id: [u8; 32],
+    pub block_height: u64,
+    pub block_slot: u64,
+    pub index: u64,
+    pub invalid_before: Option<u64>,
+    pub invalid_after: Option<u64>,
+    pub inputs: Vec<MappedUtxo>,
+    pub outputs: Vec<MappedUtxo>,
+}
+
+pub(crate) struct NativeTransaction<'a> {
+    pub inputs: Vec<([u8; 32], u32)>,
+    pub invalid_before: Option<u64>,
+    pub invalid_after: Option<u64>,
+    outputs: Vec<Option<MintedTransactionOutput<'a>>>,
+    collateral_return: Option<MintedTransactionOutput<'a>>,
+    pub success: bool,
+}
+
+impl<'a> NativeTransaction<'a> {
+    pub fn decode(bytes: &'a [u8], hash: &[u8; 32]) -> anyhow::Result<Self> {
+        let mut decoder = cbor::Decoder::new(bytes);
+        let length = decoder
+            .array()?
+            .ok_or_else(|| anyhow!("indefinite native transaction"))?;
+        if length != 3 && length != 4 {
+            return Err(anyhow!("unsupported native transaction shape"));
+        }
+        let start = decoder.position();
+        let body: pallas_primitives::conway::MintedTransactionBody<'a> = decoder
+            .decode()
+            .context("invalid native transaction body")?;
+        let actual: [u8; 32] = Hash::<32>::new(&bytes[start..decoder.position()]).into();
+        if actual != *hash {
+            return Err(anyhow!("native transaction hash mismatch"));
+        }
+        // Witnesses and auxiliary data do not determine the transaction identity.
+        decoder
+            .skip()
+            .context("invalid native transaction witnesses")?;
+        let success = if length == 4 {
+            decoder
+                .bool()
+                .context("invalid native transaction success flag")?
+        } else {
+            true
+        };
+        decoder
+            .skip()
+            .context("invalid native transaction auxiliary data")?;
+        if decoder.position() != bytes.len() {
+            return Err(anyhow!("trailing native transaction bytes"));
+        }
+        if length == 3 && (body.collateral.is_some() || body.collateral_return.is_some()) {
+            return Err(anyhow!(
+                "legacy native transaction has collateral without success evidence"
+            ));
+        }
+        let consumed: &[_] = if success {
+            &body.inputs
+        } else {
+            body.collateral
+                .as_ref()
+                .ok_or_else(|| anyhow!("failed transaction has no collateral inputs"))?
+        };
+        let mut seen = BTreeSet::new();
+        let inputs = consumed
+            .iter()
+            .map(|input| {
+                let reference = (*input.transaction_id, u32::try_from(input.index)?);
+                if !seen.insert(reference) {
+                    return Err(anyhow!("duplicate native consumed input"));
+                }
+                Ok(reference)
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(Self {
+            inputs,
+            invalid_before: body.validity_interval_start,
+            invalid_after: body.ttl,
+            outputs: body.outputs.into_iter().map(Some).collect(),
+            collateral_return: body.collateral_return,
+            success,
+        })
+    }
+
+    pub fn output(&mut self, hash: [u8; 32], index: u32) -> anyhow::Result<MappedUtxo> {
+        let output = if self.success {
+            self.outputs.get_mut(index as usize).and_then(Option::take)
+        } else if index as usize == self.outputs.len() {
+            self.collateral_return.take()
+        } else {
+            None
+        }
+        .ok_or_else(|| anyhow!("referenced native output is absent or not live"))?;
+        mapped_from_minted(hash, index, output)
+    }
+
+    pub fn outputs(&mut self, hash: [u8; 32]) -> anyhow::Result<Vec<MappedUtxo>> {
+        if self.success {
+            (0..self.outputs.len())
+                .map(|index| self.output(hash, u32::try_from(index)?))
+                .collect()
+        } else if self.collateral_return.is_some() {
+            Ok(vec![self.output(hash, u32::try_from(self.outputs.len())?)?])
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
 pub fn predicate_for_exact_address(address: &[u8]) -> query::UtxoPredicate {
     query::UtxoPredicate {
         r#match: Some(query::AnyUtxoPattern {
@@ -368,6 +481,163 @@ mod tests {
     fn addr_bytes() -> Vec<u8> {
         let payment = key_credential!("11111111111111111111111111111111111111111111111111111111");
         Vec::from(&address!(payment))
+    }
+
+    fn transaction_fixture(success: Option<bool>, collateral_return: bool) -> (Vec<u8>, [u8; 32]) {
+        let mut output = cbor::Encoder::new(Vec::new());
+        output
+            .map(4)
+            .unwrap()
+            .u8(0)
+            .unwrap()
+            .bytes(&addr_bytes())
+            .unwrap();
+        output.u8(1).unwrap().u64(5_000_000).unwrap();
+        output.u8(2).unwrap().array(2).unwrap().u8(1).unwrap();
+        output
+            .tag(cbor::data::Tag::new(24))
+            .unwrap()
+            .bytes(&[0x18, 0x2a])
+            .unwrap();
+        let mut script = cbor::Encoder::new(Vec::new());
+        script
+            .array(2)
+            .unwrap()
+            .u8(3)
+            .unwrap()
+            .bytes(&[0xaa, 0xbb])
+            .unwrap();
+        output
+            .u8(3)
+            .unwrap()
+            .tag(cbor::data::Tag::new(24))
+            .unwrap()
+            .bytes(&script.into_writer())
+            .unwrap();
+        let output = output.into_writer();
+        let mut body = cbor::Encoder::new(Vec::new());
+        body.map(if success.is_some() {
+            if collateral_return { 7 } else { 6 }
+        } else {
+            5
+        })
+        .unwrap();
+        body.u8(0).unwrap().array(2).unwrap();
+        for index in [0, 1] {
+            body.array(2)
+                .unwrap()
+                .bytes(&[0x11; 32])
+                .unwrap()
+                .u8(index)
+                .unwrap();
+        }
+        body.u8(1).unwrap().array(2).unwrap();
+        body.writer_mut().extend_from_slice(&output);
+        let wallet_output = TransactionOutput::Legacy(LegacyTransactionOutput {
+            address: addr_bytes().into(),
+            amount: LegacyValue::Coin(3_000_000),
+            datum_hash: Some([0xcc; 32].into()),
+        })
+        .to_cbor();
+        body.writer_mut().extend_from_slice(&wallet_output);
+        body.u8(2).unwrap().u64(170_000).unwrap();
+        body.u8(3).unwrap().u64(200).unwrap();
+        body.u8(8).unwrap().u64(100).unwrap();
+        if success.is_some() {
+            body.u8(13)
+                .unwrap()
+                .array(1)
+                .unwrap()
+                .array(2)
+                .unwrap()
+                .bytes(&[0x22; 32])
+                .unwrap()
+                .u8(7)
+                .unwrap();
+        }
+        if collateral_return {
+            body.u8(16).unwrap();
+            body.writer_mut().extend_from_slice(&wallet_output);
+        }
+        let body = body.into_writer();
+        let hash = Hash::<32>::new(&body).into();
+        let mut tx = cbor::Encoder::new(Vec::new());
+        tx.array(if success.is_some() { 4 } else { 3 }).unwrap();
+        tx.writer_mut().extend_from_slice(&body);
+        tx.map(0).unwrap();
+        if let Some(success) = success {
+            tx.bool(success).unwrap();
+        }
+        tx.null().unwrap();
+        (tx.into_writer(), hash)
+    }
+
+    #[test]
+    fn native_transaction_order_and_complete_output_evidence() {
+        let (bytes, hash) = transaction_fixture(Some(true), false);
+        let mut tx = NativeTransaction::decode(&bytes, &hash).unwrap();
+        assert_eq!(tx.inputs, vec![([0x11; 32], 0), ([0x11; 32], 1)]);
+        assert_eq!(
+            (tx.invalid_before, tx.invalid_after),
+            (Some(100), Some(200))
+        );
+        let outputs = tx.outputs(hash).unwrap();
+        assert_eq!(
+            outputs
+                .iter()
+                .map(|output| output.output_index)
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+        assert_eq!(outputs[0].datum_inline, Some(vec![0x18, 0x2a]));
+        assert_eq!(
+            outputs[0].datum_hash,
+            Some(Hash::<32>::new([0x18, 0x2a]).into())
+        );
+        assert_eq!(outputs[0].reference_script, Some(vec![0xaa, 0xbb]));
+        assert_eq!(outputs[0].reference_script_version, Some(3));
+        assert_eq!(
+            outputs[0].reference_script_hash,
+            Some(script_hash(3, &[0xaa, 0xbb]))
+        );
+        assert_eq!(outputs[1].datum_hash, Some([0xcc; 32]));
+        assert_eq!(outputs[1].value[0].quantity, 3_000_000);
+        let (legacy, hash) = transaction_fixture(None, false);
+        assert_eq!(
+            NativeTransaction::decode(&legacy, &hash).unwrap().inputs,
+            tx.inputs
+        );
+    }
+
+    #[test]
+    fn native_transaction_rejects_wrong_hash_and_malformed_evidence() {
+        let (bytes, hash) = transaction_fixture(Some(true), false);
+        assert!(NativeTransaction::decode(&bytes, &[0xff; 32]).is_err());
+        assert!(NativeTransaction::decode(&[], &hash).is_err());
+        assert!(NativeTransaction::decode(&bytes[..bytes.len() - 1], &hash).is_err());
+        let mut trailing = bytes;
+        trailing.push(0);
+        assert!(NativeTransaction::decode(&trailing, &hash).is_err());
+    }
+
+    #[test]
+    fn failed_transactions_consume_only_collateral_and_return_at_native_index() {
+        let (bytes, hash) = transaction_fixture(Some(false), true);
+        let mut tx = NativeTransaction::decode(&bytes, &hash).unwrap();
+        assert_eq!(tx.inputs, vec![([0x22; 32], 7)]);
+        assert!(tx.output(hash, 0).is_err());
+        assert!(tx.output(hash, 1).is_err());
+        let returned = tx.outputs(hash).unwrap();
+        assert_eq!(returned[0].output_index, 2);
+        assert_eq!(returned[0].value[0].quantity, 3_000_000);
+        // A later transaction can consume this failed parent's collateral return, not its ordinary outputs.
+        let mut parent = NativeTransaction::decode(&bytes, &hash).unwrap();
+        assert_eq!(parent.output(hash, 2).unwrap(), returned[0]);
+        assert!(parent.output(hash, 2).is_err());
+        let (bytes, hash) = transaction_fixture(Some(false), false);
+        let mut tx = NativeTransaction::decode(&bytes, &hash).unwrap();
+        assert!(tx.outputs(hash).unwrap().is_empty());
+        assert!(tx.output(hash, 2).is_err());
     }
 
     #[test]

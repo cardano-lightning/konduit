@@ -1,6 +1,6 @@
 use crate::http::{AppState, Limits, app};
 use crate::ops::{InternalState, OpsStore};
-use crate::providers::{History, Ledger};
+use crate::providers::{History, Ledger, map_dolos_tx};
 use crate::tx::{SignedTx, TEST_TX, decode_signed_tx, parse_uuid};
 use crate::wire::{TransactionSummary, Utxo};
 use actix_web::{
@@ -9,7 +9,9 @@ use actix_web::{
     web::Data,
 };
 use async_trait::async_trait;
-use cardano_connector_utxorpc::{BloxbeanPayload, EvaluationRedeemer, SubmitCbor};
+use cardano_connector_utxorpc::{
+    BloxbeanPayload, EvaluationRedeemer, MappedAsset, MappedTransaction, MappedUtxo, SubmitCbor,
+};
 use cardano_sdk::{Address, address::kind, protocol_parameters::PLUTUS_V3_02_VAN_ROSSEM};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,6 +22,8 @@ struct FakeLedger {
     ready: bool,
     utxos: Vec<Utxo>,
     txs: HashMap<[u8; 32], u64>,
+    transactions: HashMap<[u8; 32], MappedTransaction>,
+    transaction_fail: bool,
     submits: AtomicUsize,
     submit_result: Option<SubmitCbor>,
     max_tx_size: u64,
@@ -28,7 +32,6 @@ struct FakeLedger {
 
 struct FakeHistory {
     ready: bool,
-    by_id: HashMap<String, TransactionSummary>,
     by_addr: HashMap<String, Vec<TransactionSummary>>,
     fail: bool,
 }
@@ -37,7 +40,6 @@ impl Default for FakeHistory {
     fn default() -> Self {
         Self {
             ready: true,
-            by_id: HashMap::new(),
             by_addr: HashMap::new(),
             fail: false,
         }
@@ -70,6 +72,20 @@ impl Ledger for FakeLedger {
 
     async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<u64>, crate::ApiError> {
         Ok(self.txs.get(txid).copied())
+    }
+
+    async fn transaction(
+        &self,
+        txid: &[u8; 32],
+    ) -> Result<Option<TransactionSummary>, crate::ApiError> {
+        if self.transaction_fail {
+            return Err(crate::ApiError::unavailable());
+        }
+        self.transactions
+            .get(txid)
+            .cloned()
+            .map(map_dolos_tx)
+            .transpose()
     }
 
     async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, crate::ApiError> {
@@ -108,13 +124,6 @@ impl History for FakeHistory {
             return Err(crate::ApiError::unavailable());
         }
         Ok(self.by_addr.get(address).cloned().unwrap_or_default())
-    }
-
-    async fn transaction(&self, txid: &str) -> Result<Option<TransactionSummary>, crate::ApiError> {
-        if self.fail {
-            return Err(crate::ApiError::unavailable());
-        }
-        Ok(self.by_id.get(txid).cloned())
     }
 }
 
@@ -196,6 +205,8 @@ fn default_ledger() -> FakeLedger {
         ready: true,
         utxos: vec![],
         txs: HashMap::new(),
+        transactions: HashMap::new(),
+        transaction_fail: false,
         submits: AtomicUsize::new(0),
         submit_result: None,
         max_tx_size: 16_384,
@@ -280,7 +291,12 @@ async fn evaluation_is_bound_to_transaction_body_without_submission() {
 
 #[actix_web::test]
 async fn missing_transaction_is_null() {
-    let app = test::init_service(app(state(default_ledger(), FakeHistory::default()))).await;
+    let history = FakeHistory {
+        ready: false,
+        fail: true,
+        ..Default::default()
+    };
+    let app = test::init_service(app(state(default_ledger(), history))).await;
     let res = test::call_service(
         &app,
         TestRequest::get()
@@ -293,24 +309,198 @@ async fn missing_transaction_is_null() {
     assert!(body.is_null());
 }
 
+fn mapped_transaction() -> MappedTransaction {
+    let output = |hash, index, address: &str, quantity| MappedUtxo {
+        transaction_id: [hash; 32],
+        output_index: index,
+        address: address.into(),
+        value: vec![
+            MappedAsset {
+                unit: "lovelace".into(),
+                quantity,
+            },
+            MappedAsset {
+                unit: format!("{}abcd", "12".repeat(28)),
+                quantity: 40,
+            },
+        ],
+        datum_hash: Some([3; 32]),
+        datum_inline: Some(vec![0x82, 0x01, 0x02]),
+        reference_script_hash: Some([4; 28]),
+        reference_script: Some(vec![0x01]),
+        reference_script_version: Some(3),
+    };
+    MappedTransaction {
+        transaction_id: [1; 32],
+        block_height: 95,
+        block_slot: 4_492_920,
+        index: 7,
+        invalid_before: Some(4_492_800),
+        invalid_after: Some(4_492_930),
+        inputs: vec![
+            output(8, 9, "first-input", 5_000_000),
+            output(6, 2, "second-input", 6_000_000),
+        ],
+        outputs: vec![
+            output(1, 0, "first-output", 7_000_000),
+            output(1, 1, "second-output", 3_000_000),
+        ],
+    }
+}
+
 #[actix_web::test]
-async fn koios_failure_is_unavailable() {
-    let app = test::init_service(app(state(
-        default_ledger(),
-        FakeHistory {
-            fail: true,
+async fn address_history_still_uses_history_and_filters_noncanonical_transactions() {
+    let address =
+        Address::<kind::Shelley>::try_from([vec![0x61], vec![0x11; 28]].concat().as_slice())
+            .unwrap()
+            .to_string();
+    for fail in [false, true] {
+        let mut ledger = default_ledger();
+        ledger.txs.insert([1; 32], 95);
+        let canonical = map_dolos_tx(mapped_transaction()).unwrap();
+        let mut absent = canonical.clone();
+        absent.id = "02".repeat(32);
+        let history = FakeHistory {
+            by_addr: HashMap::from([(address.clone(), vec![canonical, absent])]),
+            fail,
             ..Default::default()
-        },
-    )))
-    .await;
-    let res = test::call_service(
+        };
+        let app = test::init_service(app(state(ledger, history))).await;
+        let response = test::call_service(
+            &app,
+            TestRequest::get()
+                .uri(&format!("/transactions/{address}"))
+                .to_request(),
+        )
+        .await;
+        if fail {
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        } else {
+            assert_eq!(response.status(), StatusCode::OK);
+            let body: serde_json::Value = test::read_body_json(response).await;
+            assert_eq!(body.as_array().unwrap().len(), 1);
+            assert_eq!(body[0]["id"], "01".repeat(32));
+            assert_eq!(body[0]["depth"], 5);
+        }
+    }
+}
+
+#[actix_web::test]
+async fn exact_transaction_preserves_dolos_evidence_when_history_is_unavailable() {
+    let mut ledger = default_ledger();
+    ledger.transactions.insert([1; 32], mapped_transaction());
+    ledger.txs.insert([1; 32], 95);
+    let history = FakeHistory {
+        ready: false,
+        fail: true,
+        ..Default::default()
+    };
+    let app = test::init_service(app(state(ledger, history))).await;
+    let response = test::call_service(
         &app,
         TestRequest::get()
-            .uri("/transaction/0000000000000000000000000000000000000000000000000000000000000000")
+            .uri(&format!("/transaction/{}", "01".repeat(32)))
             .to_request(),
     )
     .await;
-    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = test::read_body_json(response).await;
+    let content = |address, quantity: &str| {
+        serde_json::json!({
+            "address": address,
+            "value": [
+                {"unit": "lovelace", "quantity": quantity},
+                {"unit": format!("{}abcd", "12".repeat(28)), "quantity": "40"}
+            ],
+            "datum_hash": "03".repeat(32),
+            "datum_inline": "820102",
+            "reference_script_hash": "04".repeat(28)
+        })
+    };
+    let mut first_input = content("first-input", "5000000");
+    first_input["transaction_id"] = serde_json::json!("08".repeat(32));
+    first_input["output_index"] = serde_json::json!(9);
+    let mut second_input = content("second-input", "6000000");
+    second_input["transaction_id"] = serde_json::json!("06".repeat(32));
+    second_input["output_index"] = serde_json::json!(2);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "id": "01".repeat(32),
+            "index": 7,
+            "depth": 5,
+            "timestamp": 1_596_059_211u64,
+            "invalid_before": 4_492_800,
+            "invalid_after": 4_492_930,
+            "inputs": [first_input, second_input],
+            "outputs": [content("first-output", "7000000"), content("second-output", "3000000")]
+        })
+    );
+}
+
+#[actix_web::test]
+async fn exact_transaction_fails_closed_on_unavailable_or_malformed_ledger_evidence() {
+    for malformed in [false, true] {
+        let mut ledger = default_ledger();
+        ledger.transaction_fail = !malformed;
+        let mut tx = mapped_transaction();
+        tx.block_slot = u64::MAX;
+        ledger.transactions.insert([1; 32], tx);
+        ledger.txs.insert([1; 32], 95);
+        let app = test::init_service(app(state(ledger, FakeHistory::default()))).await;
+        let response = test::call_service(
+            &app,
+            TestRequest::get()
+                .uri(&format!("/transaction/{}", "01".repeat(32)))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+}
+
+#[actix_web::test]
+async fn exact_transaction_requires_matching_canonical_identity_and_height() {
+    for case in 0..3 {
+        let mut ledger = default_ledger();
+        let mut tx = mapped_transaction();
+        if case == 2 {
+            tx.transaction_id = [2; 32];
+        }
+        ledger.transactions.insert([1; 32], tx);
+        if case != 0 {
+            ledger.txs.insert([1; 32], if case == 1 { 94 } else { 95 });
+        }
+        let app = test::init_service(app(state(ledger, FakeHistory::default()))).await;
+        let response = test::call_service(
+            &app,
+            TestRequest::get()
+                .uri(&format!("/transaction/{}", "01".repeat(32)))
+                .to_request(),
+        )
+        .await;
+        if case == 0 {
+            assert_eq!(response.status(), StatusCode::OK);
+            let body: serde_json::Value = test::read_body_json(response).await;
+            assert!(body.is_null());
+        } else {
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        }
+    }
+}
+
+#[test]
+fn transaction_timestamp_uses_historic_mainnet_slots() {
+    for (slot, timestamp) in [
+        (0, 1_506_203_091),
+        (4_492_799, 1_596_059_071),
+        (4_492_800, 1_596_059_091),
+        (4_492_801, 1_596_059_092),
+    ] {
+        let mut tx = mapped_transaction();
+        tx.block_slot = slot;
+        assert_eq!(map_dolos_tx(tx).unwrap().timestamp, timestamp);
+    }
 }
 
 #[actix_web::test]

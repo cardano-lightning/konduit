@@ -214,10 +214,10 @@ async fn transaction<L: Ledger, H: History>(
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    parse_tx_id(&id).map_err(|_| ApiError::bad_request())?;
+    let hash = parse_tx_id(&id).map_err(|_| ApiError::bad_request())?;
     bounded(async {
         let (height, _) = state.ledger.tip().await?;
-        let tx = state.history.transaction(&id).await?;
+        let tx = state.ledger.transaction(&hash).await?;
         let tx = match tx {
             Some(tx) if tx.id == id => confirm_canonical(state.ledger.as_ref(), tx, height).await?,
             Some(_) => return Err(ApiError::unavailable()),

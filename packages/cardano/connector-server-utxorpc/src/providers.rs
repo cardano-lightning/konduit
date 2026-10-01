@@ -2,7 +2,9 @@ use crate::error::ApiError;
 use crate::tx::{parse_lowercase_hex, parse_tx_id};
 use crate::wire::{AssetObject, TransactionSummary, TxInput, TxOutput, Utxo};
 use async_trait::async_trait;
-use cardano_connector_utxorpc::{EvaluationRedeemer, SubmitCbor, UtxoRpc};
+use cardano_connector_utxorpc::{
+    EvaluationRedeemer, MappedTransaction, MappedUtxo, SubmitCbor, UtxoRpc,
+};
 use cardano_sdk::{Address, NetworkId, address::kind};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
@@ -22,6 +24,7 @@ pub trait Ledger: Send + Sync {
     ) -> Result<(String, u64, u64, cardano_connector_utxorpc::BloxbeanPayload), ApiError>;
     async fn utxos_at(&self, address: &Address<kind::Shelley>) -> Result<Vec<Utxo>, ApiError>;
     async fn read_tx(&self, txid: &[u8; 32]) -> Result<Option<u64>, ApiError>;
+    async fn transaction(&self, txid: &[u8; 32]) -> Result<Option<TransactionSummary>, ApiError>;
     async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, ApiError>;
     async fn evaluate_cbor(&self, cbor: &[u8]) -> Result<Vec<EvaluationRedeemer>, ApiError>;
     async fn max_tx_size(&self) -> Result<u64, ApiError>;
@@ -31,7 +34,6 @@ pub trait Ledger: Send + Sync {
 pub trait History: Send + Sync {
     async fn ready(&self, dolos_height: u64) -> Result<(), ApiError>;
     async fn address_history(&self, address: &str) -> Result<Vec<TransactionSummary>, ApiError>;
-    async fn transaction(&self, txid: &str) -> Result<Option<TransactionSummary>, ApiError>;
 }
 
 pub struct DolosLedger {
@@ -88,6 +90,15 @@ impl Ledger for DolosLedger {
             .await
             .map_err(ApiError::from)?
             .and_then(|tx| tx.block_ref.map(|point| point.height)))
+    }
+
+    async fn transaction(&self, txid: &[u8; 32]) -> Result<Option<TransactionSummary>, ApiError> {
+        self.inner
+            .transaction(txid)
+            .await
+            .map_err(ApiError::from)?
+            .map(map_dolos_tx)
+            .transpose()
     }
 
     async fn submit_cbor(&self, cbor: &[u8]) -> Result<SubmitCbor, ApiError> {
@@ -248,32 +259,6 @@ impl History for KoiosHistory {
         }
         Ok(out)
     }
-
-    async fn transaction(&self, txid: &str) -> Result<Option<TransactionSummary>, ApiError> {
-        parse_tx_id(txid).map_err(|_| ApiError::bad_request())?;
-        let infos: Vec<TxInfo> = self
-            .post(
-                "/tx_info",
-                serde_json::json!({
-                    "_tx_hashes": [txid],
-                    "_inputs": true,
-                    "_assets": true,
-                    "_scripts": true,
-                    "_bytecode": true
-                }),
-            )
-            .await?;
-        if infos.len() > 1 {
-            return Err(ApiError::unavailable());
-        }
-        let Some(info) = infos.into_iter().next() else {
-            return Ok(None);
-        };
-        if info.tx_hash != txid {
-            return Err(ApiError::unavailable());
-        }
-        map_tx(info).map(Some)
-    }
 }
 
 #[derive(Deserialize)]
@@ -422,6 +407,64 @@ where
     T: Deserialize<'de>,
 {
     Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+pub(crate) fn map_dolos_tx(tx: MappedTransaction) -> Result<TransactionSummary, ApiError> {
+    let timestamp = if tx.block_slot < 4_492_800 {
+        tx.block_slot
+            .checked_mul(20)
+            .and_then(|seconds| 1_506_203_091u64.checked_add(seconds))
+    } else {
+        1_596_059_091u64.checked_add(tx.block_slot - 4_492_800)
+    }
+    .ok_or_else(ApiError::unavailable)?;
+    Ok(TransactionSummary {
+        id: hex::encode(tx.transaction_id),
+        index: tx.index,
+        depth: 0,
+        block_height: tx.block_height,
+        timestamp,
+        invalid_before: tx.invalid_before,
+        invalid_after: tx.invalid_after,
+        inputs: tx
+            .inputs
+            .into_iter()
+            .map(|input| {
+                let transaction_id = hex::encode(input.transaction_id);
+                let output_index = input.output_index;
+                let output = map_dolos_output(input);
+                TxInput {
+                    transaction_id,
+                    output_index,
+                    address: output.address,
+                    consumed_by: None,
+                    value: output.value,
+                    datum_hash: output.datum_hash,
+                    datum_inline: output.datum_inline,
+                    reference_script_hash: output.reference_script_hash,
+                }
+            })
+            .collect(),
+        outputs: tx.outputs.into_iter().map(map_dolos_output).collect(),
+    })
+}
+
+fn map_dolos_output(output: MappedUtxo) -> TxOutput {
+    TxOutput {
+        address: output.address,
+        consumed_by: None,
+        value: output
+            .value
+            .into_iter()
+            .map(|asset| AssetObject {
+                unit: asset.unit,
+                quantity: asset.quantity.to_string(),
+            })
+            .collect(),
+        datum_hash: output.datum_hash.map(hex::encode),
+        datum_inline: output.datum_inline.map(hex::encode),
+        reference_script_hash: output.reference_script_hash.map(hex::encode),
+    }
 }
 
 fn map_tx(info: TxInfo) -> Result<TransactionSummary, ApiError> {

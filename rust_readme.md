@@ -7,6 +7,7 @@
 - `cardano-connector` - shared Cardano connector trait boundary
 - `cardano-connector-direct` - direct Blockfrost-backed connector implementation
 - `cardano-connector-utxorpc` - direct Dolos UTxO RPC connector implementation
+- `cardano-connector-server-utxorpc` - Mainnet HTTP facade over Dolos and Koios
 - `cardano-sdk` - Cardano primitives and transaction-building support
 - `konduit-tx` - Konduit transaction builders
 - `konduit-data` - shared Konduit protocol data and encoding
@@ -30,6 +31,13 @@
 
 ## Current Runtime Truth
 
+- `cardano-connector-server-utxorpc` serves exact `GET /transaction/{id}`
+  confirmations from Dolos native CBOR, preserving consumed-input and output
+  order, datum/script metadata, validity bounds, and the actual block ordinal.
+  Dolos must retain the transaction and consumed parents' native bytes and their
+  containing blocks. Incomplete or inconsistent confirmed evidence returns 503;
+  an absent transaction returns null. There is no Koios fallback for this route.
+  Koios remains responsible for address history and its existing readiness checks.
 - `konduit-server` performs backend construction in
   `konduit-server/src/cardano/args.rs` and then blocks startup in
   `konduit-server/src/admin/service.rs` until live protocol parameters and the
