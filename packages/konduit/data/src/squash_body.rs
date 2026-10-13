@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ChequeBody, Indexes, IndexesError, Unlocked, Verified};
 
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
 pub enum SquashBodyError {
     #[error("Duplicate index")]
     DuplicateIndex,
@@ -129,7 +129,6 @@ impl SquashBody {
                 if self.index >= index {
                     Err(SquashBodyError::DuplicateIndex)
                 } else {
-                    println!("{:?}, {:?}, {:?}", self, index, amount);
                     self.exclude
                         .extend(self.index + 1, index)
                         .map_err(SquashBodyError::Exclude)?;
