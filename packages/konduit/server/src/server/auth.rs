@@ -1,15 +1,22 @@
-//! FIXME :: this will be proper auth
+use crate::db;
+// FIXME :: this will be proper auth
 use actix_web::{
     Error, FromRequest, HttpMessage, HttpRequest,
     body::MessageBody,
-    dev::{Payload, ServiceRequest, ServiceResponse},
+    dev::{Payload, Service, ServiceRequest, ServiceResponse, Transform},
     error::ErrorForbidden,
     middleware::Next,
 };
 use konduit_tmp::Keytag;
-use std::future::{Ready, ready};
-use std::ops::Deref;
-use std::str::FromStr;
+use std::{
+    future::{Future, Ready, ready},
+    ops::Deref,
+    pin::Pin,
+    rc::Rc,
+    str::FromStr,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 const KEYTAG_HEADER: &str = "KONDUIT";
 
@@ -54,6 +61,30 @@ impl From<AuthKeytag> for Keytag {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LeaseToken(pub [u8; 32]);
+
+impl FromRequest for LeaseToken {
+    type Error = Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        ready(
+            req.extensions()
+                .get::<LeaseToken>()
+                .copied()
+                .ok_or_else(|| actix_web::error::ErrorUnauthorized("missing FERRET-SESSION lease")),
+        )
+    }
+}
+
+fn wallet_key(keytag: &Keytag) -> Option<[u8; 32]> {
+    keytag
+        .as_ref()
+        .get(..32)
+        .and_then(|bytes| bytes.try_into().ok())
+}
+
 impl FromRequest for AuthKeytag {
     type Error = Error;
     type Future = Ready<Result<Self, Self::Error>>;
@@ -70,5 +101,240 @@ impl FromRequest for AuthKeytag {
                 ))
             });
         ready(result)
+    }
+}
+
+pub struct LeaseAuth {
+    db: Arc<db::Db>,
+}
+
+impl LeaseAuth {
+    pub fn new(db: Arc<db::Db>) -> Self {
+        Self { db }
+    }
+}
+
+impl<S, B> Transform<S, ServiceRequest> for LeaseAuth
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type InitError = ();
+    type Transform = LeaseMiddleware<S>;
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        ready(Ok(LeaseMiddleware {
+            service: Rc::new(service),
+            db: self.db.clone(),
+        }))
+    }
+}
+
+pub struct LeaseMiddleware<S> {
+    service: Rc<S>,
+    db: Arc<db::Db>,
+}
+
+impl<S, B> Service<ServiceRequest> for LeaseMiddleware<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+
+    actix_web::dev::forward_ready!(service);
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let token = req
+            .headers()
+            .get("FERRET-SESSION")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| {
+                let mut token = [0; 32];
+                hex::decode_to_slice(value, &mut token).ok().map(|_| token)
+            });
+        let wallet_key = req.extensions().get::<Keytag>().and_then(wallet_key);
+        let db = self.db.clone();
+        let service = self.service.clone();
+
+        Box::pin(async move {
+            let (Some(token), Some(wallet_key)) = (token, wallet_key) else {
+                return Err(actix_web::error::ErrorUnauthorized(
+                    "missing or malformed FERRET-SESSION lease",
+                ));
+            };
+            let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(now) => now.as_millis() as u64,
+                Err(error) => {
+                    log::error!("lease validation clock failed: {error}");
+                    return Err(actix_web::error::ErrorInternalServerError(
+                        "internal server error",
+                    ));
+                }
+            };
+            match db.validate_lease(&wallet_key, &token, now) {
+                Ok(true) => {
+                    req.extensions_mut().insert(LeaseToken(token));
+                    service.call(req).await
+                }
+                Ok(false) => Err(actix_web::error::ErrorUnauthorized(
+                    "stale FERRET-SESSION lease",
+                )),
+                Err(error) => {
+                    log::error!("lease validation failed: {error}");
+                    Err(actix_web::error::ErrorInternalServerError(
+                        "internal server error",
+                    ))
+                }
+            }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{App, HttpResponse, http::StatusCode, middleware, test, web};
+    use cardano_sdk::SigningKey;
+    use konduit_data::{AssetCatalog, Tag};
+    use konduit_tmp::SessionClaimRequest;
+
+    #[actix_web::test]
+    async fn lease_auth_is_wallet_bound_and_receipt_is_unprotected() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let db = Arc::new(db::Db::open(file.path().to_str().unwrap()).unwrap());
+        let wallet_a = SigningKey::from([1; 32]);
+        let wallet_b = SigningKey::from([2; 32]);
+        let tag = Tag::from(b"lease-test".as_slice());
+        let keytag_a = Keytag::new(&wallet_a.to_verification_key(), &tag);
+        let keytag_a_header = keytag_a.to_string();
+        let keytag_b = Keytag::new(&wallet_b.to_verification_key(), &tag).to_string();
+        db.insert(
+            crate::channel::open(
+                keytag_a.clone(),
+                AssetCatalog::builtins().by_alias("ada").unwrap().clone(),
+                vec![],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let claim = SessionClaimRequest::signed(&wallet_a, [0; 32], 1, [7; 32], [8; 32], 1);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let app = test::init_service(
+            App::new().service(
+                web::scope("/ch")
+                    .wrap(middleware::from_fn(no_auth))
+                    .route(
+                        "/receipt",
+                        web::get().to(|| async { HttpResponse::Ok().finish() }),
+                    )
+                    .service(
+                        web::resource("/protected")
+                            .wrap(LeaseAuth::new(db.clone()))
+                            .route(web::post().to(|| async { HttpResponse::Ok().finish() })),
+                    ),
+            ),
+        )
+        .await;
+
+        for request in [
+            test::TestRequest::post()
+                .uri("/ch/protected")
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
+                .to_request(),
+            test::TestRequest::post()
+                .uri("/ch/protected")
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
+                .insert_header(("FERRET-SESSION", "not-hex"))
+                .to_request(),
+        ] {
+            let error = test::try_call_service(&app, request).await.unwrap_err();
+            assert_eq!(
+                error.as_response_error().status_code(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
+
+        db.claim_lease(&claim, [3; 32], now - 1).unwrap();
+        let error = test::try_call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/ch/protected")
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
+                .insert_header(("FERRET-SESSION", hex::encode([3; 32])))
+                .to_request(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.as_response_error().status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        let claim = SessionClaimRequest::signed(&wallet_a, [0; 32], 1, [7; 32], [8; 32], 2);
+        db.claim_lease(&claim, [4; 32], now + 60_000).unwrap();
+        let error = test::try_call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/ch/protected")
+                .insert_header(("KONDUIT", keytag_b))
+                .insert_header(("FERRET-SESSION", hex::encode([4; 32])))
+                .to_request(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.as_response_error().status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        let response = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/ch/protected")
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
+                .insert_header(("FERRET-SESSION", hex::encode([4; 32])))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let claim = SessionClaimRequest::signed(&wallet_a, [0; 32], 1, [7; 32], [8; 32], 3);
+        db.claim_lease(&claim, [5; 32], now + 60_000).unwrap();
+        let error = test::try_call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/ch/protected")
+                .insert_header(("KONDUIT", keytag_a_header.clone()))
+                .insert_header(("FERRET-SESSION", hex::encode([4; 32])))
+                .to_request(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.as_response_error().status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/ch/receipt")
+                .insert_header(("KONDUIT", keytag_a_header))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

@@ -23,6 +23,21 @@ single validator. Any (well-formed) UTXO at the validator address holds the
 funds and on-chain data corresponding to a channel. And conversely any (staged)
 channel corresponds to a single UTXO at tip at the validator address.
 
+## Channel asset
+
+Each channel datum fixes one `AssetId` for its full lifetime: either Ada or a
+Cardano native `(policy_id, asset_name)` pair. The validator is generic and has
+no built-in token list. It rejects a wrong or additional native asset, an
+invalid policy/name length, and values below the minimum-Ada reserve.
+
+For Ada, capacity is lovelace above the reserve. For a native asset, capacity is
+the selected token quantity; lovelace is reserve only. A native continuing
+output may increase its lovelace reserve as its datum grows, but must never
+decrease the input lovelace amount. This permits min-UTxO top-ups without
+allowing lovelace to be siphoned during a continuing spend. Aliases, decimal
+places, fingerprints, and prices are off-chain metadata and never enter the
+datum.
+
 ## Influence
 
 The design of the Konduit Kernel draws heavily on previous work of
@@ -132,8 +147,6 @@ case.
 
 ### Simplifications from CL
 
-- In the initial iteration we remove the possibility of (non ada) native asset
-  channels.
 - Only `Sha2_256` locks are available (cf Cardano Lightning with support for
   other lock types).
 
@@ -436,6 +449,7 @@ type Constants {
   add_vkey : VerificationKey,
   sub_vkey : VerificationKey,
   close_period : Int,
+  asset_id : AssetId,
 }
 
 /// ScriptHash is own_hash
@@ -643,9 +657,13 @@ address, including stake part, as the corresponding input. Moreover, the
 
 ### Assets
 
-The current version of konduit supports only Ada.
-
-Input amounts are found "permissively", while output amounts are "strict".
+The fifth channel constant is its immutable `AssetId`: `Ada` or
+`Native(policy_id, asset_name)`. Both input and continuing-output amounts are
+extracted against that identity. Ada values must contain no native assets.
+Native values must contain only the selected positive token quantity, or no
+native entry for a zero-capacity continuation. Every native continuing output
+must preserve its input lovelace and meet the minimum-Ada reserve; reserve
+lovelace is never capacity or siphonable value.
 
 ## Steps / BL Specific
 
@@ -708,13 +726,25 @@ Redeemer arguments: `receipt`
 
 Redeemer params: `m_receipt`
 
-- respond.0 : Stage in is closed : `Closed(subbed, _)`
+- respond.0 : Stage in is closed : `Closed(subbed, useds, elapse_at)`
 - respond.1 : Stage out is responded : `Responded(p_amount, pendings)`
 - respond.2 : Funds decrease by `subbed = value_in - value_out`
 - respond.3 : Subbed amount is correct `subbed_out == subbed_in + subbed`
 - respond.4 : `(owed, mbound) = account_m(receipt, p_amount, pendings)`
-- respond.6 : `owed >= subbed_out`
-- respond.3 : Return `(sub_vkey, None, mbound)`
+- respond.5 : `owed >= subbed_out`
+- respond.6 : The transaction upper bound is finite and `upper_bound <= elapse_at`.
+- respond.7 : Return `sub_vkey`.
+
+Cardano Plutus V3 transaction upper bounds are exclusive. A response interval
+that ends at `elapse_at` is permitted, but the response cannot execute at or
+after that time. `Elapse` permits recovery with a lower bound at `elapse_at`.
+
+Response accounting merges the signed squash, recorded `Used` entries, and new
+cheques. It skips recorded entries already included in the squash. It includes
+every remaining recorded amount, including entries after the last new cheque.
+Recorded unlocked credit remains valid after the original cheque timeout.
+New cheques must not duplicate recorded credit or amounts already included in
+the squash.
 
 ### Unlock
 

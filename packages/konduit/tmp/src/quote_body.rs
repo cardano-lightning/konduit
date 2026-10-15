@@ -29,10 +29,34 @@ impl QuoteBody {
         }
     }
 
+    pub fn invoice_hash(&self) -> Option<[u8; 32]> {
+        match self {
+            QuoteBody::Simple(_) => None,
+            QuoteBody::Bolt11(invoice) => Some(invoice.payment_hash),
+        }
+    }
+
     pub fn payee(&self) -> [u8; 33] {
         match self {
             QuoteBody::Simple(simple_quote) => simple_quote.payee,
             QuoteBody::Bolt11(invoice) => invoice.payee_compressed.serialize(),
+        }
+    }
+
+    pub fn payment_request(&self) -> Option<String> {
+        match self {
+            QuoteBody::Simple(_) => None,
+            QuoteBody::Bolt11(invoice) => Some(invoice.to_string()),
+        }
+    }
+
+    pub fn final_cltv_delta(&self) -> u64 {
+        match self {
+            QuoteBody::Simple(_) => 0,
+            QuoteBody::Bolt11(invoice) => invoice
+                .min_final_cltv_expiry_delta
+                .as_ref()
+                .map_or(0, |delta| delta.0),
         }
     }
 

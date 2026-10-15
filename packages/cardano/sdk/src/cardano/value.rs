@@ -569,7 +569,8 @@ impl Value<u64> {
 
         let mut chosen = vec![false; utxos.len()];
         let mut inputs = Vec::new();
-        let mut accumulated = Value::new(0);
+        let mut acc_lovelace: u128 = 0;
+        let mut acc_assets: BTreeMap<(Hash<28>, Vec<u8>), u128> = BTreeMap::new();
 
         while let Some(unit) = scarcest_unit(&remaining, utxos, &chosen, &value_of) {
             let need = remaining[&unit];
@@ -589,7 +590,13 @@ impl Value<u64> {
             inputs.push(candidate);
 
             let value = value_of(&utxos[candidate]);
-            accumulated.add(value);
+            acc_lovelace = acc_lovelace.checked_add(u128::from(value.lovelace()))?;
+            for (script, assets) in value.assets() {
+                for (name, qty) in assets {
+                    let total = acc_assets.entry((*script, name.clone())).or_default();
+                    *total = total.checked_add(u128::from(*qty))?;
+                }
+            }
 
             remaining.retain(|unit, deficit| {
                 let contributed = quantity_of(value, unit);
@@ -602,7 +609,7 @@ impl Value<u64> {
             });
         }
 
-        let excess = excess_of(&accumulated, target)?;
+        let excess = excess_of_wide(acc_lovelace, &acc_assets, target)?;
 
         Some(Selection {
             inputs: inputs.into_iter().map(|i| &utxos[i]).collect(),
@@ -655,28 +662,36 @@ fn quantity_of(value: &Value<u64>, unit: &Unit) -> u64 {
     }
 }
 
-/// Compute `accumulated - target`, returning `None` when `accumulated` does not, in fact, cover
-/// `target` for lovelace or some asset.
-fn excess_of(accumulated: &Value<u64>, target: &Value<u64>) -> Option<Value<u64>> {
-    let lovelace = accumulated.lovelace().checked_sub(target.lovelace())?;
-
-    let mut assets = accumulated.assets().clone();
-
-    for (script_hash, target_assets) in target.assets() {
-        for (asset_name, target_quantity) in target_assets {
-            if *target_quantity == 0 {
+fn excess_of_wide(
+    lovelace: u128,
+    assets: &BTreeMap<(Hash<28>, Vec<u8>), u128>,
+    target: &Value<u64>,
+) -> Option<Value<u64>> {
+    let lovelace = u64::try_from(lovelace.checked_sub(u128::from(target.lovelace()))?).ok()?;
+    let mut leftover = BTreeMap::<Hash<28>, BTreeMap<Vec<u8>, u64>>::new();
+    for ((policy, name), qty) in assets {
+        let mut remaining = *qty;
+        if let Some(taken) = target
+            .assets()
+            .get(policy)
+            .and_then(|names| names.get(name))
+        {
+            remaining = remaining.checked_sub(u128::from(*taken))?;
+        }
+        leftover
+            .entry(*policy)
+            .or_default()
+            .insert(name.clone(), u64::try_from(remaining).ok()?);
+    }
+    for (script, names) in target.assets() {
+        for (name, qty) in names {
+            if *qty == 0 {
                 continue;
             }
-
-            let quantity = assets
-                .get_mut(script_hash)
-                .and_then(|inner| inner.get_mut(asset_name))?;
-
-            *quantity = quantity.checked_sub(*target_quantity)?;
+            leftover.get(script)?.get(name)?;
         }
     }
-
-    Some(Value::new(lovelace).with_assets(assets))
+    Some(Value::new(lovelace).with_assets(leftover))
 }
 
 // ---------------------------------------------------------------- TESTS
@@ -911,5 +926,17 @@ mod tests {
 
         assert_eq!(selection.inputs, vec![&utxo]);
         assert_eq!(selection.excess, expected_excess);
+    }
+
+    #[test]
+    fn cover_sums_near_u64_max_without_wrapping() {
+        let policy = crate::Hash::<28>::new([1; 28]);
+        let a = Value::new(1).with_assets([(policy, [(b"T", u64::MAX - 1)])]);
+        let b = Value::new(1).with_assets([(policy, [(b"T", 2)])]);
+        let target = Value::new(1).with_assets([(policy, [(b"T", u64::MAX)])]);
+        let utxos = [a, b];
+        let selection = Value::cover(&target, &utxos, |v| v).unwrap();
+        assert_eq!(selection.inputs.len(), 2);
+        assert_eq!(selection.excess.assets()[&policy][b"T".as_slice()], 1);
     }
 }

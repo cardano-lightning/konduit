@@ -5,12 +5,19 @@ This part is written in Aiken. Find more on the
 
 ## Testing
 
-Some tests will fail unless they are run with `no_cypto`. No crypto skips
-signature, and hash verification steps. This allows test data to be created
-without an external source.
+Run the full suite with production signature verification:
 
-For example
-
+```sh
+aiken check
 ```
-aiken check --env no_crypto -m lib/konduit/steps/sub.{..}
+
+The payment tests use real, deterministic Ed25519 signatures. Their source
+comments describe the fixture encoding and test keys.
+
+The `no_crypto` environment bypasses signature verification. Use it only for
+focused accounting diagnostics, not security checks. Tests that reject forged
+signatures are expected to fail in that environment.
+
+```sh
+aiken check --env no_crypto -m 'konduit/steps/sub.{..}'
 ```

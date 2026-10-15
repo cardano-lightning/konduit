@@ -9,6 +9,14 @@ pub const MAX_EXCLUDE_LENGTH: usize = 10;
 
 // On-chain datatypes
 
+mod asset_id;
+pub use asset_id::{AssetError, AssetId};
+
+#[cfg(feature = "json")]
+mod asset_catalog;
+#[cfg(feature = "json")]
+pub use asset_catalog::{AssetCatalog, AssetDefinition, CatalogError, Pricing};
+
 mod cheque;
 pub use cheque::Cheque;
 

@@ -29,6 +29,7 @@ cli = [
   "serde_json",
   "cardano-connector-direct",
   "konduit-data/serde",
+  "konduit-data/json",
 ]
 
 [dependencies]
@@ -51,5 +52,4 @@ konduit-tmp.workspace = true
 env_logger.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
-proptest-derive.workspace = true
+http.workspace = true

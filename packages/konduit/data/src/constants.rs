@@ -1,4 +1,4 @@
-use crate::{Duration, Tag, VerifyingKey};
+use crate::{AssetId, Duration, Tag, VerifyingKey};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,7 @@ pub struct Constants {
     pub add_vkey: VerifyingKey,
     pub sub_vkey: VerifyingKey,
     pub close_period: Duration,
+    pub asset: AssetId,
 }
 
 impl Constants {
@@ -22,8 +23,8 @@ impl Constants {
 // =========================================================================
 // minicbor Serialization
 //
-// Encoding: CBOR tag 121 (Plutus constr 0) followed by an indefinite-length
-// array of [tag_bytes, add_vkey_bytes, sub_vkey_bytes, close_period_millis].
+// Encoding: an indefinite-length array of
+// [tag_bytes, add_vkey_bytes, sub_vkey_bytes, close_period_millis, asset].
 // =========================================================================
 impl<C> minicbor::Encode<C> for Constants {
     fn encode<W: minicbor::encode::Write>(
@@ -36,6 +37,7 @@ impl<C> minicbor::Encode<C> for Constants {
         e.encode_with(self.add_vkey, ctx)?;
         e.encode_with(self.sub_vkey, ctx)?;
         e.encode_with(self.close_period, ctx)?;
+        e.encode_with(&self.asset, ctx)?;
         e.end()?;
         Ok(())
     }
@@ -48,6 +50,7 @@ impl<'b, C> minicbor::Decode<'b, C> for Constants {
         let add_vkey: VerifyingKey = d.decode_with(ctx)?;
         let sub_vkey: VerifyingKey = d.decode_with(ctx)?;
         let close_period: Duration = d.decode_with(ctx)?;
+        let asset: AssetId = d.decode_with(ctx)?;
         if d.datatype()? != minicbor::data::Type::Break {
             return Err(minicbor::decode::Error::message(
                 "expected end of Constants array",
@@ -59,6 +62,7 @@ impl<'b, C> minicbor::Decode<'b, C> for Constants {
             add_vkey,
             sub_vkey,
             close_period,
+            asset,
         })
     }
 }
@@ -77,13 +81,17 @@ impl proptest::arbitrary::Arbitrary for Constants {
             any::<[u8; 32]>(),
             any::<[u8; 32]>(),
             any::<Duration>(),
+            any::<AssetId>(),
         )
-            .prop_map(|(tag, add_bytes, sub_bytes, close_period)| Constants {
-                tag,
-                add_vkey: VerifyingKey::from_bytes(add_bytes),
-                sub_vkey: VerifyingKey::from_bytes(sub_bytes),
-                close_period,
-            })
+            .prop_map(
+                |(tag, add_bytes, sub_bytes, close_period, asset)| Constants {
+                    tag,
+                    add_vkey: VerifyingKey::from_bytes(add_bytes),
+                    sub_vkey: VerifyingKey::from_bytes(sub_bytes),
+                    close_period,
+                    asset,
+                },
+            )
             .boxed()
     }
 }
@@ -102,13 +110,14 @@ mod via_plutus_data {
 
         fn try_from(data: &PlutusData<'a>) -> anyhow::Result<Self> {
             let fields = data.as_list().ok_or(anyhow!("Not a constructor"))?;
-            let [a, b, c, d] = <[PlutusData; 4]>::try_from(fields.collect::<Vec<_>>())
-                .map_err(|_| anyhow!("invalid 'Constants': expected 4 fields"))?;
+            let [a, b, c, d, e] = <[PlutusData; 5]>::try_from(fields.collect::<Vec<_>>())
+                .map_err(|_| anyhow!("invalid 'Constants': expected 5 fields"))?;
             Ok(Self {
                 tag: Tag::try_from(&a)?,
                 add_vkey: VerifyingKey::from_bytes(*<&[u8; 32]>::try_from(&b)?),
                 sub_vkey: VerifyingKey::from_bytes(*<&[u8; 32]>::try_from(&c)?),
                 close_period: Duration::try_from(&d)?,
+                asset: AssetId::try_from(&e)?,
             })
         }
     }
@@ -120,6 +129,7 @@ mod via_plutus_data {
                 PlutusData::bytes(value.add_vkey.to_bytes()),
                 PlutusData::bytes(value.sub_vkey.to_bytes()),
                 PlutusData::from(value.close_period),
+                PlutusData::from(value.asset),
             ])
         }
     }

@@ -8,12 +8,16 @@ use cardano_sdk::{
     Credential, Hash, Input, Output, Transaction, transaction::state::ReadyForSigning,
 };
 use cardano_wallet::Wallet;
-use konduit_tx2::{Channel, Interval, KONDUIT_VALIDATOR, StagedTx, konduit_address};
+use konduit_tx2::{
+    Channel, Interval, KONDUIT_VALIDATOR, StagedTx, channel::FromOutputError, konduit_address,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("session: {0}")]
     Cardano(#[from] cardano_session::session::Error),
+    #[error(transparent)]
+    Channel(#[from] FromOutputError),
 }
 
 pub struct Session<C, W> {
@@ -94,29 +98,25 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
             .collect()
     }
 
-    pub fn channels(&self) -> BTreeMap<Input, Channel> {
+    pub fn channels(&self) -> Result<BTreeMap<Input, Channel>, FromOutputError> {
         let konduit_credential = Credential::from_script(KONDUIT_VALIDATOR.hash);
         self.cardano
             .tip()
             .addresses()
             .filter(|address| address.payment() == konduit_credential)
             .filter_map(|address| self.cardano.utxos_at(address))
-            .flat_map(|utxos| {
-                utxos
-                    .iter()
-                    .filter_map(|(input, output)| {
-                        Channel::try_from(output)
-                            .ok()
-                            .map(|channel| (input.clone(), channel))
-                    })
-                    .collect::<Vec<_>>()
+            .flat_map(|utxos| utxos.iter())
+            .filter_map(|(input, output)| match Channel::try_from(output) {
+                Ok(channel) => Some(Ok((input.clone(), channel))),
+                Err(FromOutputError::NativeAsset) => Some(Err(FromOutputError::NativeAsset)),
+                Err(_) => None,
             })
             .collect()
     }
 
-    pub fn stage_tx(&self, window: Interval) -> StagedTx {
+    pub fn stage_tx(&self, window: Interval) -> Result<StagedTx, FromOutputError> {
         let network_id = self.cardano.network_id();
-        StagedTx::new(network_id, window, self.channels())
+        Ok(StagedTx::new(network_id, window, self.channels()?))
     }
 
     pub fn reference_utxo(&self) -> Option<(Input, Output)> {

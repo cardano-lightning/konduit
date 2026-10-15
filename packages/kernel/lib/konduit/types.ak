@@ -67,13 +67,14 @@ pub type Squash =
 pub type Tag =
   ByteArray
 
-/// Constants
-/// These are held in the datum but persist for the full instance lifecycle.
-/// ```aiken
-///    let (tag, add_vkey, sub_vkey, close_period) = constants
-/// ```
+pub type AssetId {
+  Ada
+  Native(ByteArray, ByteArray)
+}
+
+/// Constants held in the datum for the full channel lifecycle.
 pub type Constants =
-  (Tag, VerificationKey, VerificationKey, Int)
+  (Tag, VerificationKey, VerificationKey, Int, AssetId)
 
 /// STAGE
 type ElapseAt =

@@ -153,7 +153,7 @@
                 enable = true;
                 name = "clippy";
                 description = "Run clippy";
-                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path Cargo.toml";
+                entry = "${config.rust-project.toolchain}/bin/cargo clippy --manifest-path Cargo.toml";
                 pass_filenames = false;
               };
               cargo-machete = {

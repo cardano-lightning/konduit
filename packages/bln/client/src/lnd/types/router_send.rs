@@ -205,6 +205,10 @@ pub struct Response {
     /// WIP :: Trying to filter SUCCEEDED from IN-FLIGHT
     pub status: String,
 
+    /// Terminal reason reported by LND when status is FAILED.
+    #[serde(default)]
+    pub failure_reason: String,
+
     /// The payment preimage. LND returns all 0s as placeholder
     #[serde_as(as = "Hex")]
     #[serde(default)]
@@ -219,4 +223,30 @@ pub struct Response {
     #[serde_as(as = "Hex")]
     #[serde(default)]
     pub payment_hash: [u8; 32],
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Request, Response};
+
+    #[test]
+    fn preserves_terminal_failure_reason() {
+        let response: Response = serde_json::from_str(
+            r#"{"status":"FAILED","failure_reason":"FAILURE_REASON_NO_ROUTE"}"#,
+        )
+        .unwrap();
+        assert_eq!(response.failure_reason, "FAILURE_REASON_NO_ROUTE");
+    }
+
+    #[test]
+    fn sends_an_explicit_payment_timeout() {
+        let request = Request {
+            timeout_seconds: Some(30),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_value(request).unwrap()["timeout_seconds"],
+            30
+        );
+    }
 }

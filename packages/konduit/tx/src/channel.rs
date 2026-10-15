@@ -8,7 +8,7 @@ use konduit_data::{
 use konduit_tmp::{Keytag, Receipt};
 
 use crate::{
-    Bounds, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, StepError, StepTo, Stepped, from_verifying_key,
+    Bounds, KONDUIT_VALIDATOR, StepError, StepTo, Stepped, channel_asset, from_verifying_key,
     variables::Variables,
 };
 
@@ -28,6 +28,8 @@ pub enum Error {
     ParseDatum,
     #[error("Own hash is wrong")]
     OwnHash,
+    #[error("Invalid channel value: {0}")]
+    Value(#[from] channel_asset::Error),
 }
 
 impl TryFrom<&Output> for Channel {
@@ -57,17 +59,13 @@ impl TryFrom<&Output> for Channel {
         if own_hash != <[u8; 28]>::from(KONDUIT_VALIDATOR.hash) {
             return Err(Error::OwnHash);
         }
-        let amount = debuffer_amount(output.value());
+        let amount = channel_asset::amount(&constants.asset, output.value())?;
         let variables = Variables::new(amount, stage);
         Ok(Self {
             constants,
             variables,
         })
     }
-}
-
-pub fn debuffer_amount(value: &cardano_sdk::Value<u64>) -> u64 {
-    value.lovelace().saturating_sub(MIN_ADA_BUFFER)
 }
 
 /// Data obtained from parsing a channel
@@ -114,14 +112,9 @@ impl Channel {
         self.variables.amount()
     }
 
-    /// Ada channels require min ada buffer
-    pub fn buffered_amount(&self) -> u64 {
-        self.amount() + MIN_ADA_BUFFER
-    }
-
-    /// Ada channels require min ada buffer
+    /// Channel capacity plus its required Ada reserve.
     pub fn buffered_value(&self) -> Value<u64> {
-        Value::new(self.buffered_amount())
+        channel_asset::value(&self.constants.asset, self.amount())
     }
 
     /// As datum
@@ -195,10 +188,16 @@ impl Channel {
     }
 
     pub fn respond(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
-        let Stage::Closed(subbed, useds, _) = self.stage() else {
+        let Stage::Closed(subbed, useds, elapse_at) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Respond")));
         };
+        if *upper > *elapse_at {
+            return Err((
+                Box::new(self),
+                StepError::Other("Respond upper bound exceeds elapse_at".to_string()),
+            ));
+        }
         let (cheques, pendings, useds_amount) = receipt.prep_respond(useds, upper);
         let squash = receipt.squash().clone();
         let absolute_owed = squash.amount() + useds_amount;
@@ -326,5 +325,45 @@ impl Channel {
             Stage::Closed(_, _, _) => self.respond(receipt, upper),
             Stage::Responded(_, _) => self.unlock(receipt, upper),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use konduit_data::{AssetId, Indexes, SigningKey, Squash, SquashBody};
+
+    use super::*;
+
+    fn respond_at(upper: Duration) -> SteppedElseChannel {
+        let signing_key = SigningKey::from([7; 32]);
+        let tag = Tag::from(b"respond-deadline".as_slice());
+        let constants = Constants {
+            tag: tag.clone(),
+            add_vkey: signing_key.verifying_key(),
+            sub_vkey: signing_key.verifying_key(),
+            close_period: Duration::from_secs(1),
+            asset: AssetId::Ada,
+        };
+        let channel = Channel::new(
+            constants,
+            Variables::new(100, Stage::Closed(0, vec![], Duration::from_millis(1_000))),
+        );
+        let squash = Squash::make(
+            &signing_key,
+            &tag,
+            SquashBody::new(0, 0, Indexes::empty()).unwrap(),
+        );
+
+        channel.respond(&Receipt::new(squash), &upper)
+    }
+
+    #[test]
+    fn respond_accepts_through_deadline_and_rejects_after() {
+        assert!(respond_at(Duration::from_millis(999)).is_ok());
+        assert!(respond_at(Duration::from_millis(1_000)).is_ok());
+        assert!(matches!(
+            respond_at(Duration::from_millis(1_001)),
+            Err((_, StepError::Other(_)))
+        ));
     }
 }

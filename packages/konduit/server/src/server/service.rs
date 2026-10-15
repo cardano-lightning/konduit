@@ -23,10 +23,11 @@ impl Service {
     }
 
     pub async fn run(self) -> std::io::Result<()> {
-        // FIXME :: Handle error
+        let db = self.data.db();
         let data = web::Data::new(self.data);
         log::info!("Starting server on http://{}...", self.bind_address);
         HttpServer::new(move || {
+            let db = db.clone();
             App::new()
                 .wrap(Logger::default())
                 .wrap(
@@ -38,14 +39,36 @@ impl Service {
                 .app_data(data.clone())
                 .wrap(middleware::from_fn(mediation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
+                .route("/session/claim", web::post().to(handlers::claim_session))
                 .service(
-                    // FIXME : Implement auth
                     web::scope("/ch")
                         .wrap(middleware::from_fn(auth::no_auth))
                         .route("/receipt", web::get().to(handlers::receipt))
-                        .route("/squash", web::post().to(handlers::squash))
-                        .route("/quote", web::post().to(handlers::quote))
-                        .route("/pay", web::post().to(handlers::pay)),
+                        .service(
+                            web::resource("/squash")
+                                .wrap(auth::LeaseAuth::new(db.clone()))
+                                .route(web::post().to(handlers::squash)),
+                        )
+                        .service(
+                            web::resource("/quote")
+                                .wrap(auth::LeaseAuth::new(db.clone()))
+                                .route(web::post().to(handlers::quote)),
+                        )
+                        .service(
+                            web::resource("/pay")
+                                .wrap(auth::LeaseAuth::new(db.clone()))
+                                .route(web::post().to(handlers::pay)),
+                        )
+                        .service(
+                            web::resource("/submit")
+                                .wrap(auth::LeaseAuth::new(db.clone()))
+                                .route(web::post().to(handlers::submit_channel_operation)),
+                        )
+                        .service(
+                            web::resource("/operations/{operation_id}")
+                                .wrap(auth::LeaseAuth::new(db.clone()))
+                                .route(web::get().to(handlers::channel_operation)),
+                        ),
                 )
                 .service(web::scope("/opt").route("/fx", web::get().to(handlers::fx)))
                 .service(

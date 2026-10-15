@@ -4,8 +4,8 @@ use minicbor::{Decode, Encode};
 
 use cardano_sdk::{Credential, Output, Value};
 use konduit_data::{
-    Cheque, Constants, Datum, Duration, Lock, Pending, Secret, Squash, Stage, Unlocked, Unpend,
-    Used,
+    AssetId, Cheque, Constants, Datum, Duration, Lock, Pending, Secret, Squash, Stage, Unlocked,
+    Unpend, Used,
 };
 
 use crate::{
@@ -28,6 +28,8 @@ pub enum FromOutputError {
     Inline,
     #[error("Failed to parse datum")]
     ParseDatum,
+    #[error("native asset channels are not supported")]
+    NativeAsset,
     #[error("Own hash is wrong")]
     OwnHash,
 }
@@ -74,10 +76,12 @@ impl TryFrom<&Output> for Channel {
             constants,
             stage,
         } = Datum::try_from(data).map_err(|_| FromOutputError::ParseDatum)?;
+        if constants.asset != AssetId::Ada {
+            return Err(FromOutputError::NativeAsset);
+        }
         if own_hash != <[u8; 28]>::from(KONDUIT_VALIDATOR.hash) {
             return Err(FromOutputError::OwnHash);
         }
-
         let amount = debuffer_amount(output.value());
         Ok(Self {
             delegation,
@@ -223,8 +227,11 @@ impl Channel {
         self.amount() + MIN_ADA_BUFFER
     }
 
-    pub fn buffered_value(&self) -> Value<u64> {
-        Value::new(self.buffered_amount())
+    pub fn buffered_value(&self) -> Result<Value<u64>, FromOutputError> {
+        if self.constants.asset != AssetId::Ada {
+            return Err(FromOutputError::NativeAsset);
+        }
+        Ok(Value::new(self.buffered_amount()))
     }
 
     pub fn datum(&self) -> Datum {
@@ -338,9 +345,9 @@ impl Channel {
         Ok(Will::cont(output, WillCont::close()))
     }
 
-    /// Mirrors `Can::Respond`'s `before` constraint: interval upper must sit
-    /// strictly before `elapse_at`. Same value doubles as `prep_respond`'s
-    /// `upper`.
+    /// Mirrors `Can::Respond`'s deadline: the interval upper bound must be
+    /// finite and no later than `elapse_at`. The same value doubles as
+    /// `prep_respond`'s `upper`.
     fn want_respond(
         &self,
         squash: &Squash,
@@ -355,9 +362,9 @@ impl Channel {
                 reason: "respond requires an interval upper bound",
             });
         };
-        if upper >= *elapse_at {
+        if upper > *elapse_at {
             return Err(StepError::Bound {
-                reason: "respond interval not strictly before elapse_at",
+                reason: "respond interval exceeds elapse_at",
             });
         }
         let (out_cheques, pendings, useds_amount) = prep_respond(squash, cheques, useds, &upper);
@@ -491,5 +498,55 @@ impl Channel {
             Stage::Responded(pendings_amount, remaining),
         );
         Ok(Will::cont(output, WillCont::expire(unpends)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use konduit_data::{Indexes, SigningKey, SquashBody, Tag};
+
+    use super::*;
+
+    fn respond_at(upper: Option<Duration>) -> Result<Will, StepError> {
+        let signing_key = SigningKey::from([7; 32]);
+        let tag = Tag::from(b"respond-deadline".as_slice());
+        let constants = Constants {
+            tag: tag.clone(),
+            add_vkey: signing_key.verifying_key(),
+            sub_vkey: signing_key.verifying_key(),
+            close_period: Duration::from_secs(1),
+            asset: AssetId::Ada,
+        };
+        let channel = Channel::new_ada(
+            None,
+            constants,
+            100,
+            Stage::Closed(0, vec![], Duration::from_millis(1_000)),
+        );
+        let squash = Squash::make(
+            &signing_key,
+            &tag,
+            SquashBody::new(0, 0, Indexes::empty()).unwrap(),
+        )
+        .into_unverified();
+
+        channel.resolve(
+            Want::Respond {
+                squash,
+                cheques: vec![],
+            },
+            &Interval { lower: None, upper },
+        )
+    }
+
+    #[test]
+    fn respond_requires_finite_upper_bound_no_later_than_deadline() {
+        assert!(respond_at(Some(Duration::from_millis(999))).is_ok());
+        assert!(respond_at(Some(Duration::from_millis(1_000))).is_ok());
+        assert!(matches!(
+            respond_at(Some(Duration::from_millis(1_001))),
+            Err(StepError::Bound { .. })
+        ));
+        assert!(matches!(respond_at(None), Err(StepError::Bound { .. })));
     }
 }

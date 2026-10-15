@@ -92,7 +92,7 @@ impl Cli {
             Cmd::Channels { no_labels } => {
                 // "known" = at least one of the channel's vkeys resolves to a label
                 let channels: Vec<(String, konduit_tx2::channel::Channel)> = session
-                    .channels()
+                    .channels()?
                     .into_iter()
                     .filter_map(|(input, channel)| {
                         let label = known_keys.channel_label(channel.constants())?;
@@ -107,7 +107,7 @@ impl Cli {
                 print_json(&channels)
             }
             Cmd::Tx => {
-                let mut staged = session.stage_tx(default_interval());
+                let mut staged = session.stage_tx(default_interval())?;
 
                 let receipts = match &receipts {
                     Some(path) => crate::receipt::load_receipts(path)?,

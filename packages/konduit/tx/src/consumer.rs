@@ -1,18 +1,19 @@
 use crate::{
-    Bounds, ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script,
-    to_verifying_key,
+    Bounds, ChannelUtxo, NetworkParameters, SteppedUtxo, SteppedUtxos, Utxos,
+    find_reference_script, to_verifying_key,
 };
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
-use konduit_data::{Constants, Duration, Stage, Tag};
-use std::collections::BTreeMap;
+use konduit_data::{AssetId, Constants, Duration, Stage, Tag};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub struct OpenIntent {
     pub tag: Tag,
     pub sub_vkey: VerificationKey,
     pub close_period: Duration,
     pub amount: u64,
+    pub asset: AssetId,
 }
 
 impl OpenIntent {
@@ -22,12 +23,13 @@ impl OpenIntent {
             add_vkey: to_verifying_key(add_vkey),
             sub_vkey: to_verifying_key(self.sub_vkey),
             close_period: self.close_period,
+            asset: self.asset,
         }
     }
 }
 
 pub enum Intent {
-    Add(u64),
+    Add { amount: u64, asset: AssetId },
     Close,
 }
 
@@ -48,13 +50,30 @@ pub fn tx(
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
         .filter(|u| u.data().constants().add_vkey == to_verifying_key(*wallet));
 
-    let steppeds = consumer_channels
-        .filter_map(|u| match u.data().stage() {
-            Stage::Opened(_, _) => match intents.get(&u.data().constants().tag)? {
-                Intent::Add(amount) => u.add(*amount).ok(),
-                Intent::Close => u
-                    .close(&bounds.upper.expect("Must have upper bound for close"))
-                    .ok(),
+    let mut unmatched_adds = intents
+        .iter()
+        .filter_map(|(tag, intent)| match intent {
+            Intent::Add { .. } => Some(tag.clone()),
+            Intent::Close => None,
+        })
+        .collect::<BTreeSet<_>>();
+
+    let mut steppeds = Vec::<SteppedUtxo>::new();
+    for u in consumer_channels {
+        let tag = u.data().constants().tag.clone();
+        let channel_asset = u.data().constants().asset.clone();
+        let stepped = match u.data().stage() {
+            Stage::Opened(_, _) => match intents.get(&tag) {
+                Some(Intent::Add { amount, asset }) if asset == &channel_asset => {
+                    unmatched_adds.remove(&tag);
+                    Some(u.add(*amount).map_err(|(_, error)| error)?)
+                }
+                Some(Intent::Add { .. }) => None,
+                Some(Intent::Close) => Some(
+                    u.close(&bounds.upper.expect("Must have upper bound for close"))
+                        .map_err(|(_, error)| error)?,
+                ),
+                None => None,
             },
             Stage::Closed(_, _, _) => bounds.lower.and_then(|lower| u.elapse(&lower).ok()),
             Stage::Responded(_, pendings) => {
@@ -64,8 +83,14 @@ pub fn tx(
                     bounds.lower.and_then(|lower| u.expire(&lower).ok())
                 }
             }
-        })
-        .collect::<Vec<_>>();
+        };
+        if let Some(stepped) = stepped {
+            steppeds.push(stepped);
+        }
+    }
+    if !unmatched_adds.is_empty() {
+        anyhow::bail!("add intent did not match a channel: {unmatched_adds:?}");
+    }
     let steppeds = SteppedUtxos::from(steppeds);
 
     let opens = opens

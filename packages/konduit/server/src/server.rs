@@ -12,4 +12,6 @@ pub mod handlers;
 mod auth;
 
 mod mediation;
+
+pub mod channel_operations;
 pub use mediation::MediaType;

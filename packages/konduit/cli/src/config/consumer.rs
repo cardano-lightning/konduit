@@ -1,13 +1,13 @@
 use crate::config::connector::Connector;
 use cardano_sdk::{Address, NetworkId, SigningKey, address::kind};
 use core::fmt;
-use std::fmt::Display;
-
+use std::{fmt::Display, path::PathBuf};
 #[derive(Debug, Clone)]
 pub struct Config {
     pub connector: Connector,
     pub wallet: SigningKey,
     pub host_address: Address<kind::Shelley>,
+    pub asset_config: Option<PathBuf>,
 }
 
 impl Config {
@@ -22,6 +22,9 @@ impl Display for Config {
         writeln!(f, "== {} ==", Self::LABEL)?;
         writeln!(f, "{}", self.connector)?;
         writeln!(f, "host_address = {}", self.host_address)?;
+        if let Some(path) = &self.asset_config {
+            writeln!(f, "asset_config = {}", path.display())?;
+        }
         writeln!(f, "own_address = {}", address)?;
         writeln!(f, "own_key = {}", key)?;
         Ok(())

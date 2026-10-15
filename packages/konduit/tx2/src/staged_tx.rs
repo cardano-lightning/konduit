@@ -31,6 +31,8 @@ pub enum BuildError {
     #[error("no utxo on record for a willed input")]
     MissingUtxo,
     #[error(transparent)]
+    Channel(#[from] FromOutputError),
+    #[error(transparent)]
     Fuel(#[from] fuel::SelectError),
     #[error("cannot balance tx")]
     Balancing,
@@ -134,18 +136,18 @@ impl StagedTx {
         signers
     }
 
-    fn channel_output(&self, channel: &Channel) -> Output {
-        Output::new(
+    fn channel_output(&self, channel: &Channel) -> Result<Output, FromOutputError> {
+        Ok(Output::new(
             konduit_address(self.network_id, channel.delegation().as_ref()).into(),
-            channel.buffered_value(),
+            channel.buffered_value()?,
         )
         .with_datum({
             let bytes = minicbor::to_vec(channel.datum()).expect("encode");
             minicbor::decode(&bytes).expect("valid cbor round-trips into PlutusData")
-        })
+        }))
     }
 
-    pub fn outputs(&self) -> Vec<Output> {
+    pub fn outputs(&self) -> Result<Vec<Output>, FromOutputError> {
         let cont = self.wills.values().filter_map(|will| match will {
             Will::Cont {
                 output: channel, ..
@@ -200,7 +202,7 @@ impl StagedTx {
             spent_value.add(output.value());
         }
 
-        let outputs = self.outputs();
+        let outputs = self.outputs()?;
         let produced_value = outputs.iter().fold(Value::new(0), |mut acc, output| {
             acc.add(output.value());
             acc

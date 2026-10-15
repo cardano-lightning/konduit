@@ -168,6 +168,39 @@ impl Konduit {
         self.adaptor = Ok(adaptor.into());
     }
 
+    /// Claim a FERRET-SESSION lease. Returns JSON `{ lease, expiresAtEpochMillis }`.
+    #[wasm_bindgen(js_name = "claimSession")]
+    pub async fn claim_session(
+        &self,
+        generation: u64,
+        backup_hash_hex: &str,
+        device_public_key_hex: &str,
+    ) -> wasm::Result<String> {
+        if generation == 0 {
+            return Err(anyhow!("session generation must be at least 1").into());
+        }
+        let backup = parse_hash32(backup_hash_hex)?;
+        let device = parse_hash32(device_public_key_hex)?;
+        let adaptor_key: [u8; 32] = self
+            .adaptor
+            .as_ref()?
+            .info()
+            .channel_parameters
+            .adaptor_key
+            .into();
+        let now = get_current_time().as_millis() as u64;
+        let claim = konduit_tmp::SessionClaimRequest::signed(
+            self.wallet.signing_key(),
+            adaptor_key,
+            generation,
+            backup,
+            device,
+            now,
+        );
+        let response = self.adaptor.as_ref()?.claim_session(&claim).await?;
+        serde_json::to_string(&response).map_err(|error| anyhow!(error).into())
+    }
+
     /// Recover a previously known tag, if any.
     #[wasm_bindgen(js_name = "setChannelTag")]
     pub fn set_channel_tag(&mut self, tag: &Tag) -> wasm::Result<()> {
@@ -209,9 +242,14 @@ impl Konduit {
             .collect())
     }
 
-    /// Open a channel with the given tag and initial deposit.
+    /// Open a channel with the given tag, raw asset amount, and immutable asset identity.
     #[wasm_bindgen(js_name = "openChannel")]
-    pub async fn open_channel(&self, tag: &Tag, amount: u64) -> wasm::Result<Hash32> {
+    pub async fn open_channel(
+        &self,
+        tag: &Tag,
+        amount: u64,
+        asset: &wasm::AssetId,
+    ) -> wasm::Result<Hash32> {
         let tag: core::Tag = tag.clone().into();
 
         log::debug!("open_channel: for tag = {}", tag);
@@ -225,6 +263,7 @@ impl Konduit {
             sub_vkey: adaptor_key,
             close_period,
             amount,
+            asset: asset.clone().into(),
         }];
 
         let open_tx: Hash32 = self
@@ -242,9 +281,9 @@ impl Konduit {
         Ok(open_tx)
     }
 
-    /// Add funds to an existing channel.
+    /// Add raw asset funds to an existing channel.
     #[wasm_bindgen(js_name = "addToChannel")]
-    pub async fn add_to_channel(&self, amount: u64) -> wasm::Result<Hash32> {
+    pub async fn add_to_channel(&self, amount: u64, asset: &wasm::AssetId) -> wasm::Result<Hash32> {
         let tag: core::Tag = self
             .adaptor
             .as_ref()?
@@ -261,7 +300,13 @@ impl Konduit {
                 self.wallet.signing_key(),
                 self.wallet.stake_credential().as_ref(),
                 vec![],
-                From::from([(tag, core::consumer::Intent::Add(amount))]),
+                From::from([(
+                    tag,
+                    core::consumer::Intent::Add {
+                        amount,
+                        asset: asset.clone().into(),
+                    },
+                )]),
                 &self.script_deployment_address.clone(),
             )
             .await?
@@ -336,6 +381,13 @@ fn get_current_time() -> Duration {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_else(|e| unreachable!("couldn't compute duration since UNIX epoch: {e} !?"))
+}
+
+fn parse_hash32(hex: &str) -> wasm::Result<[u8; 32]> {
+    let bytes = hex::decode(hex).map_err(|error| anyhow!(error))?;
+    bytes
+        .try_into()
+        .map_err(|_| anyhow!("expected 32-byte hex").into())
 }
 
 #[wasm_bindgen]

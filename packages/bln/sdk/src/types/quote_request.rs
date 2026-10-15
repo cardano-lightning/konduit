@@ -5,4 +5,6 @@ pub struct QuoteRequest {
     pub amount_msat: u64,
     pub payee: [u8; 33],
     pub route_hints: Vec<RouteHint>,
+    pub payment_request: Option<String>,
+    pub final_cltv_delta: u64,
 }

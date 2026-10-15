@@ -1,8 +1,8 @@
-use std::{cmp, collections::BTreeMap};
+use std::collections::BTreeMap;
 
 use cardano_sdk::{
-    Address, ChangeStrategy, PlutusData, SlotBound, Transaction, address::kind,
-    transaction::state::ReadyForSigning,
+    Address, ChangeStrategy, Hash, Output, PlutusData, SlotBound, Transaction, Value,
+    address::kind, transaction::state::ReadyForSigning,
 };
 use konduit_data::Duration;
 
@@ -25,21 +25,32 @@ pub fn tx(
             "Reference script required when stepping channels"
         ));
     }
-    let gain = steppeds.gain() - opens.iter().map(|x| x.buffered_amount()).sum::<u64>() as i64;
-    let fuel_amount = cmp::max(FEE_BUFFER, FEE_BUFFER.saturating_sub_signed(gain));
-    let fuel_inputs = fuel::select(fuel, fuel_amount)?;
+    let outputs: Vec<_> = steppeds
+        .outputs()
+        .into_iter()
+        .chain(opens.iter().map(|o| o.output(network_id)))
+        .collect();
+    let stepped_utxos = steppeds.utxos();
+    let target = wallet_target(
+        stepped_utxos.values().map(|output| output.value()),
+        outputs.iter().map(|output| output.value()),
+    )?;
+    let collateral = (!steppeds.inputs().is_empty())
+        .then(|| fuel::select_collateral(fuel, FEE_BUFFER))
+        .transpose()?;
+    let spendable_fuel = fuel
+        .iter()
+        .filter(|(input, _)| collateral.as_ref() != Some(input))
+        .map(|(input, output)| (input.clone(), output.clone()))
+        .collect();
+    let fuel_inputs = fuel::select(&spendable_fuel, &target)?;
     let inputs = steppeds
         .inputs()
         .iter()
         .map(|i| (i.0.clone(), Some(PlutusData::from(i.1.clone()))))
         .chain(fuel_inputs.iter().map(|i| (i.clone(), None)))
         .collect::<Vec<_>>();
-    let outputs: Vec<_> = steppeds
-        .outputs()
-        .into_iter()
-        .chain(opens.iter().map(|o| o.output(network_id)))
-        .collect();
-    let collaterals = fuel_inputs.clone();
+    let collaterals = collateral.into_iter().collect::<Vec<_>>();
     let specified_signatories = steppeds.specified_signatories();
     let bounds = steppeds.bounds();
 
@@ -52,8 +63,7 @@ pub fn tx(
         .upper
         .map_or(SlotBound::None, |d| SlotBound::Exclusive(to_slot(d)));
 
-    let utxos = steppeds
-        .utxos()
+    let utxos = stepped_utxos
         .iter()
         .chain(fuel.iter())
         .map(|t| (t.0.clone(), t.1.clone()))
@@ -74,4 +84,115 @@ pub fn tx(
                 .ok()
         },
     )
+}
+
+fn wallet_target<'a>(
+    inputs: impl Iterator<Item = &'a Value<u64>>,
+    outputs: impl Iterator<Item = &'a Value<u64>>,
+) -> anyhow::Result<Value<u64>> {
+    let mut lovelace = 0_i128;
+    let mut assets = BTreeMap::<(Hash<28>, Vec<u8>), i128>::new();
+    for value in inputs {
+        accumulate(&mut lovelace, &mut assets, value, -1)?;
+    }
+    for value in outputs {
+        accumulate(&mut lovelace, &mut assets, value, 1)?;
+    }
+
+    let mut target_assets = BTreeMap::<Hash<28>, BTreeMap<Vec<u8>, u64>>::new();
+    let mut change_assets = BTreeMap::<Hash<28>, BTreeMap<Vec<u8>, u64>>::new();
+    for ((policy, name), quantity) in assets {
+        if quantity > 0 {
+            target_assets.entry(policy).or_default().insert(
+                name,
+                u64::try_from(quantity)
+                    .map_err(|_| anyhow::anyhow!("wallet target asset overflow"))?,
+            );
+        } else if quantity < 0 {
+            change_assets.entry(policy).or_default().insert(
+                name,
+                u64::try_from(-quantity)
+                    .map_err(|_| anyhow::anyhow!("wallet change asset overflow"))?,
+            );
+        }
+    }
+    let mut target = Value::new(0).with_assets(target_assets);
+    let change = Value::new(0).with_assets(change_assets);
+    let change_min = if change.assets().iter().any(|(_, names)| !names.is_empty()) {
+        i128::from(Output::new(Address::default(), change).min_acceptable_value())
+    } else {
+        0
+    };
+    let required_change = i128::from(FEE_BUFFER)
+        .checked_add(lovelace)
+        .and_then(|value| value.checked_add(change_min))
+        .ok_or_else(|| anyhow::anyhow!("wallet target lovelace overflow"))?;
+    let lovelace = required_change.max(0).max(i128::from(
+        Output::new(Address::default(), target.clone()).min_acceptable_value(),
+    ));
+    let lovelace =
+        u64::try_from(lovelace).map_err(|_| anyhow::anyhow!("wallet target lovelace overflow"))?;
+    target.with_lovelace(lovelace);
+    Ok(target)
+}
+
+fn accumulate(
+    lovelace: &mut i128,
+    assets: &mut BTreeMap<(Hash<28>, Vec<u8>), i128>,
+    value: &Value<u64>,
+    sign: i128,
+) -> anyhow::Result<()> {
+    *lovelace = lovelace
+        .checked_add(i128::from(value.lovelace()) * sign)
+        .ok_or_else(|| anyhow::anyhow!("transaction lovelace total overflow"))?;
+    for (policy, names) in value.assets() {
+        for (name, quantity) in names {
+            let total = assets.entry((*policy, name.clone())).or_default();
+            *total = total
+                .checked_add(i128::from(*quantity) * sign)
+                .ok_or_else(|| anyhow::anyhow!("transaction asset total overflow"))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wallet_target_covers_only_value_deficits() {
+        let policy = Hash::<28>::new([1; 28]);
+        let input = Value::new(2_000_000).with_assets([(policy, [(b"TOKEN", 20)])]);
+        let output = Value::new(2_000_000).with_assets([(policy, [(b"TOKEN", 25)])]);
+        let target = wallet_target([&input].into_iter(), [&output].into_iter()).unwrap();
+        assert_eq!(target.lovelace(), FEE_BUFFER);
+        assert_eq!(target.assets()[&policy][b"TOKEN".as_slice()], 5);
+
+        let open = Value::new(2_000_000).with_assets([(policy, [(b"TOKEN", 25)])]);
+        let target = wallet_target([].into_iter(), [&open].into_iter()).unwrap();
+        assert_eq!(target.lovelace(), FEE_BUFFER + 2_000_000);
+        assert_eq!(target.assets()[&policy][b"TOKEN".as_slice()], 25);
+    }
+
+    #[test]
+    fn wallet_target_covers_token_change_minimum_ada() {
+        let open = Value::new(0)
+            .with_assets((0..32).map(|policy| (Hash::<28>::new([policy; 28]), [(b"TOKEN", 1)])));
+        let target = wallet_target([].into_iter(), [&open].into_iter()).unwrap();
+        let minimum = Output::new(Address::default(), target.clone()).min_acceptable_value();
+        assert!(minimum > FEE_BUFFER);
+        assert_eq!(target.lovelace(), minimum);
+    }
+
+    #[test]
+    fn wallet_target_reserves_token_change_after_fee() {
+        let input = Value::new(2_000_000)
+            .with_assets((0..32).map(|policy| (Hash::<28>::new([policy; 28]), [(b"TOKEN", 1)])));
+        let output = Value::new(2_000_000);
+        let target = wallet_target([&input].into_iter(), [&output].into_iter()).unwrap();
+        let change = Value::new(0).with_assets(input.assets().clone());
+        let change_min = Output::new(Address::default(), change).min_acceptable_value();
+        assert_eq!(target.lovelace(), FEE_BUFFER + change_min);
+    }
 }

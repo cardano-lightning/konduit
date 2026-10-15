@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, iter, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+    sync::Arc,
+};
 
 use crate::{
     channel::{self, Retainer},
@@ -6,8 +10,10 @@ use crate::{
 };
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
-use konduit_data::{Lock, Secret};
+use cardano_sdk::{
+    Address, Credential, Hash, Input, Output, SigningKey, VerificationKey, address::kind,
+};
+use konduit_data::{AssetCatalog, AssetDefinition, AssetId, Lock, Secret};
 use konduit_tmp::{ChannelParameters, Keytag};
 use konduit_tx::{
     Bounds, ChannelUtxo, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences,
@@ -25,11 +31,34 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
+    assets: Arc<AssetCatalog>,
     network_parameters: NetworkParameters,
     channel_parameters: ChannelParameters,
     tx_preferences: AdaptorPreferences,
     script_utxo: (Input, Output),
     wallet: SigningKey,
+}
+
+fn keep_keytag(
+    identities: &mut BTreeMap<Keytag, AssetId>,
+    quarantined: &mut BTreeSet<Keytag>,
+    keytag: Keytag,
+    asset: AssetId,
+) -> bool {
+    if quarantined.contains(&keytag) {
+        return false;
+    }
+    match identities.entry(keytag.clone()) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            entry.insert(asset);
+            true
+        }
+        std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &asset => true,
+        std::collections::btree_map::Entry::Occupied(_) => {
+            quarantined.insert(keytag);
+            false
+        }
+    }
 }
 
 impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
@@ -38,6 +67,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
         cardano: Arc<Connector>,
         db: Arc<db::Db>,
+        assets: Arc<AssetCatalog>,
     ) -> anyhow::Result<Self> {
         let Config {
             wallet,
@@ -56,9 +86,13 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         };
         // Treat reference script utxo as constant.
         // If this moves, the service needs to be restarted.
+        let exact_host: Address<kind::Any> = host_address.clone().into();
         let host_utxos = cardano
             .utxos_at(&host_address.payment(), host_address.delegation().as_ref())
-            .await?;
+            .await?
+            .into_iter()
+            .filter(|(_, output)| output.address() == &exact_host)
+            .collect::<BTreeMap<_, _>>();
         let script_candidates = host_utxos
             .iter()
             .filter_map(|(input, output)| {
@@ -96,6 +130,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             bln,
             cardano,
             db,
+            assets,
             network_parameters,
             channel_parameters,
             tx_preferences,
@@ -104,7 +139,10 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         })
     }
 
-    fn retainers(&self, utxos: &BTreeMap<Input, Output>) -> BTreeMap<Keytag, Vec<Retainer>> {
+    fn retainers(
+        &self,
+        utxos: &BTreeMap<Input, Output>,
+    ) -> anyhow::Result<BTreeMap<Keytag, (AssetDefinition, Vec<Retainer>)>> {
         let close_period = self.channel_parameters.close_period;
         let tag_length = self.channel_parameters.tag_length;
         let own_vkey = VerificationKey::from(&self.wallet);
@@ -118,20 +156,33 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
                     && constants.close_period >= close_period
                     && constants.tag.len() <= tag_length
                     && channel.stage().is_opened()
-            })
-            .filter_map(|u| {
-                Retainer::try_from(u.data())
-                    .ok()
-                    .map(|r| (u.data().keytag(), r))
             });
         let mut retainers = BTreeMap::new();
-        for (keytag, retainer) in candidates {
-            retainers
-                .entry(keytag)
-                .or_insert_with(Vec::new)
-                .push(retainer);
+        let mut identities = BTreeMap::new();
+        let mut quarantined = BTreeSet::new();
+        for utxo in candidates {
+            let keytag = utxo.data().keytag();
+            let asset = utxo.data().constants().asset.clone();
+            let Some(definition) = self.assets.by_asset(&asset).cloned() else {
+                continue;
+            };
+            if !keep_keytag(&mut identities, &mut quarantined, keytag.clone(), asset) {
+                retainers.remove(&keytag);
+                continue;
+            }
+            let Ok(retainer) = Retainer::try_from(utxo.data()) else {
+                continue;
+            };
+            match retainers.entry(keytag) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert((definition, vec![retainer]));
+                }
+                std::collections::btree_map::Entry::Occupied(mut entry) => {
+                    entry.get_mut().1.push(retainer);
+                }
+            }
         }
-        retainers
+        Ok(retainers)
     }
 
     /// These should be considered confirmed utxos,
@@ -195,13 +246,22 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         // The suboptimal way.
         let snapshot = self.snapshot().await?;
         let left: Vec<Keytag> = self.db.keys()?;
-        let right = self.retainers(&snapshot);
+        let right = self.retainers(&snapshot)?;
         for item in CoIter::new(left, right) {
-            let (k, v) = match item {
-                CoItem::Left(k) => (k, Vec::new()),
-                CoItem::Right(k, v) | CoItem::Both(k, v) => (k, v),
+            match item {
+                CoItem::Left(k) => self.db.update(&k, channel::close)?,
+                CoItem::Right(k, (definition, retainers)) => {
+                    self.db.insert(channel::open(k, definition, retainers)?)?;
+                }
+                CoItem::Both(k, (definition, retainers)) => {
+                    match self.db.update(&k, channel::update(definition, retainers)) {
+                        Err(db::Error::Channel(channel::Error::AssetDefinitionMismatch)) => {
+                            self.db.update(&k, channel::close)?
+                        }
+                        result => result?,
+                    }
+                }
             };
-            self.db.upsert(&k, channel::upsert_retainers(v))?;
         }
         Ok(())
     }
@@ -211,10 +271,11 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         let keys: Vec<Keytag> = self.db.keys()?;
         let receipts = keys
             .into_iter()
-            .filter_map(|k| {
-                let channel = self.db.get(&k).ok().flatten()?;
-                let receipt = channel.receipt().as_ref()?;
-                Some((k, receipt.to_owned()))
+            .filter_map(|keytag| {
+                let channel = self.db.get(&keytag).ok().flatten()?;
+                self.assets.by_asset(channel.asset())?;
+                let receipt = channel.receipt().as_ref()?.to_owned();
+                Some((keytag, (channel.asset().clone(), receipt)))
             })
             .collect::<BTreeMap<_, _>>();
         // FIXME :: This is the fudge. We treat tip as snapshot.
@@ -264,9 +325,12 @@ mod tests {
         Address, Credential, Hash, Input, Network, Output, PlutusScript, PlutusVersion,
         ProtocolParameters, SigningKey, Transaction, Value, address::kind, transaction::state,
     };
-    use konduit_data::Duration;
+    use konduit_data::{AssetCatalog, Duration, Tag};
     use konduit_tx::{KONDUIT_VALIDATOR, adaptor::AdaptorPreferences};
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        sync::Arc,
+    };
 
     struct FakeConnector {
         network: Network,
@@ -336,6 +400,7 @@ mod tests {
             tx_preferences: AdaptorPreferences {
                 min_single: 1,
                 min_total: 1,
+                asset_minimums: BTreeMap::new(),
             },
             host_address: test_host_address(),
         }
@@ -360,6 +425,37 @@ mod tests {
         BTreeMap::from([(Input::new(Hash::<32>::from([9; 32]), 0), script_output())])
     }
 
+    #[test]
+    fn conflicting_keytag_is_quarantined_without_affecting_other_keytags() {
+        let wallet = SigningKey::from([3; 32]);
+        let tag = Tag::from(b"shared-keytag".as_slice());
+        let keytag = Keytag::new(&wallet.to_verification_key(), &tag);
+        let other = Keytag::new(
+            &SigningKey::from([4; 32]).to_verification_key(),
+            &Tag::from(b"other-keytag".as_slice()),
+        );
+        let catalog = AssetCatalog::builtins();
+        let ada = catalog.by_alias("ada").unwrap().asset.clone();
+        let usdm = catalog.by_alias("usdm").unwrap().asset.clone();
+        let mut identities = BTreeMap::new();
+        let mut quarantined = BTreeSet::new();
+
+        assert!(keep_keytag(
+            &mut identities,
+            &mut quarantined,
+            keytag.clone(),
+            ada
+        ));
+        assert!(!keep_keytag(
+            &mut identities,
+            &mut quarantined,
+            keytag.clone(),
+            usdm.clone()
+        ));
+        assert!(quarantined.contains(&keytag));
+        assert!(keep_keytag(&mut identities, &mut quarantined, other, usdm));
+    }
+
     #[tokio::test]
     async fn new_fails_when_protocol_parameters_cannot_be_loaded() {
         let connector = Arc::new(FakeConnector::new(
@@ -372,6 +468,7 @@ mod tests {
             Arc::new(bln_client::mock::Client::new()),
             connector,
             Arc::new(tmp_db()),
+            Arc::new(AssetCatalog::builtins()),
         )
         .await
         .err()
@@ -396,6 +493,7 @@ mod tests {
             Arc::new(bln_client::mock::Client::new()),
             connector,
             Arc::new(tmp_db()),
+            Arc::new(AssetCatalog::builtins()),
         )
         .await
         .err()
@@ -418,6 +516,7 @@ mod tests {
             Arc::new(bln_client::mock::Client::new()),
             connector,
             Arc::new(tmp_db()),
+            Arc::new(AssetCatalog::builtins()),
         )
         .await;
 

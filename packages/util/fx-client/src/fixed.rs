@@ -18,7 +18,7 @@ impl Client {
 #[async_trait]
 impl Api for Client {
     async fn get(&self) -> super::Result<State> {
-        let new = State::new(self.base.clone(), self.ada, self.bitcoin);
+        let new = State::new(self.base, self.ada, self.bitcoin, Default::default());
         Ok(new)
     }
 }

@@ -29,6 +29,7 @@ impl AdaptorInfo {
             },
             tos: TosInfo { flat_fee: fee },
             tx_help: (),
+            asset_catalog_digest: None,
         })
     }
 
@@ -50,5 +51,10 @@ impl AdaptorInfo {
     #[wasm_bindgen(getter, js_name = "fee")]
     pub fn _wasm_fee(&self) -> u64 {
         self.tos.flat_fee
+    }
+
+    #[wasm_bindgen(getter, js_name = "assetCatalogDigest")]
+    pub fn _wasm_asset_catalog_digest(&self) -> Option<String> {
+        self.asset_catalog_digest.clone()
     }
 }

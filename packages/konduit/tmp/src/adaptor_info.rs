@@ -15,6 +15,9 @@ pub struct AdaptorInfo<T> {
     // Tx building
     #[n(2)]
     pub tx_help: T,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[n(3)]
+    pub asset_catalog_digest: Option<String>,
 }
 
 impl From<AdaptorInfo<TxHelp>> for AdaptorInfo<()> {
@@ -23,6 +26,7 @@ impl From<AdaptorInfo<TxHelp>> for AdaptorInfo<()> {
             tos: info.tos,
             channel_parameters: info.channel_parameters,
             tx_help: (),
+            asset_catalog_digest: info.asset_catalog_digest,
         }
     }
 }

@@ -217,21 +217,32 @@ Admin endpoints should not be proxied publicly.
 
 ## Operations
 
-Deployment workflow:
+Generic-asset cutover workflow:
 
-1. pull and inspect desired source revision
-2. build from a pinned commit SHA
-3. run targeted verification
-4. install new binary / config
-5. restart service
-6. confirm health before considering rollout complete
+1. retain the old binary, database, configuration, and validator reference
+2. disable consumer write endpoints on the old service and reject new opens,
+   quotes, payments, and squash requests
+3. drain in-flight payments and off-chain receipt updates
+4. close every legacy channel, then fully settle or elapse every closed channel;
+   a merely `Closed` output is not drained
+5. verify that the old validator has no channel UTxOs, then wait through the
+   operator's rollback/finality threshold
+6. stop the old service
+7. deploy and confirm the generic validator
+8. install the new binary and configure a fresh database, USD FX base, and one
+   versioned asset-catalog artifact shared by the clients it serves
+9. start `konduit.service`, then verify the configured Cardano network,
+   reference script, catalog, and service health
+10. verify the catalog digest exposed during adaptor discovery before permitting
+    clients to open channels
 
-Rollback workflow:
-
-1. stop `konduit.service`
-2. restore prior known-good binary and config
-3. restart `konduit.service`
-4. verify health through localhost and proxy checks
+Before any generic channel opens, rollback by stopping the new service and
+restoring the retained legacy binary, database, configuration, and validator.
+After generic channels exist, never restore a legacy binary that cannot decode
+them. Roll back only to a release that declares the same validator, database,
+and catalog schema versions; otherwise keep writes disabled and roll forward to
+a fixed compatible release. Every routine deployment must retain the prior
+compatible binary and database snapshot until the finality threshold passes.
 
 ## Observability
 

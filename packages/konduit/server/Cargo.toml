@@ -10,6 +10,10 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "konduit-maintenance"
+path = "src/maintenance.rs"
+
 [dependencies]
 actix-cors.workspace = true
 actix-web.workspace = true
@@ -24,17 +28,26 @@ clap = { workspace = true, features = ["env"] }
 dotenvy.workspace = true
 env_logger.workspace = true
 fx-client = { workspace = true, features = ["cli", "namespaced"] }
+hex = { workspace = true, features = ["serde"] }
 humantime.workspace = true
-konduit-data = { workspace = true, features = ["serde"] }
+konduit-data = { workspace = true, features = ["json"] }
 konduit-tmp.workspace = true
 konduit-tx.workspace = true
 log.workspace = true
 minicbor.workspace = true
 redb.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+rand_core.workspace = true
+rustls = { version = "0.23", default-features = false, features = [
+  "ring",
+  "std",
+] }
 serde.workspace = true
+sha2.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["base64", "hex", "json"] }
 thiserror.workspace = true
+subtle.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]

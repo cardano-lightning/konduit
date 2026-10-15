@@ -32,6 +32,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 amount_msat,
                 payee: payee.serialize(),
                 route_hints: vec![],
+                payment_request: None,
+                final_cltv_delta: 0,
             };
 
             match client.quote(req).await {

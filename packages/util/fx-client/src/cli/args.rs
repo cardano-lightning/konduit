@@ -18,7 +18,7 @@ pub struct FxArgs {
     #[cfg_attr(feature = "namespaced", arg(long("fx-every")))]
     pub every: Duration,
 
-    #[arg(long, env = "FX_BASE_CURRENCY", value_enum, default_value = "eur")]
+    #[arg(long, env = "FX_BASE_CURRENCY", value_enum, default_value = "usd")]
     #[cfg_attr(feature = "namespaced", arg(long("fx-base-currency")))]
     pub base_currency: BaseCurrency,
 

@@ -64,7 +64,7 @@ fn mk_with(
         t.Respond(squash, more) ->
           respond.do(ub, c, v_in, s_in, v_out, s_out, squash, more)
         t.Unlock(unpend) -> unlock.do(ub, c, v_in, s_in, v_out, s_out, unpend)
-        t.Expire(unpend) -> expire.do(lb, c, s_in, v_out, s_out, unpend)
+        t.Expire(unpend) -> expire.do(lb, c, v_in, s_in, v_out, s_out, unpend)
       }
       let vkeys = vkeys |> xlist.ordered_insert(vkey)
       return(inputs, outputs, vkeys)

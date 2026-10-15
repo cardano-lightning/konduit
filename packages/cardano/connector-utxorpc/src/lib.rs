@@ -1,8 +1,11 @@
 mod config;
 mod mapping;
 mod params;
+mod wire;
 
 pub use config::Config;
+pub use params::BloxbeanPayload;
+pub use wire::{MappedAsset, MappedTransaction, MappedUtxo};
 
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
@@ -13,14 +16,64 @@ use cardano_sdk::{
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tonic::Code;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubmitCbor {
+    Accepted([u8; 32]),
+    AlreadyKnown,
+    InputsSpent,
+    Indeterminate,
+    Rejected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvaluationRedeemer {
+    pub purpose: String,
+    pub index: u32,
+    pub memory: u64,
+    pub steps: u64,
+}
+
+impl SubmitCbor {
+    fn from_status(status: &tonic::Status) -> Self {
+        let message = status.message().to_ascii_lowercase();
+        if message.contains("input")
+            && (message.contains("spent") || message.contains("not present"))
+        {
+            Self::InputsSpent
+        } else if message.contains("already known") || message.contains("duplicate") {
+            Self::AlreadyKnown
+        } else if matches!(
+            status.code(),
+            Code::InvalidArgument | Code::FailedPrecondition | Code::OutOfRange
+        ) {
+            Self::Rejected
+        } else {
+            Self::Indeterminate
+        }
+    }
+}
+
 use utxorpc::{CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, ClientBuilder};
 
 const PAGE_SIZE: u32 = 100;
+pub(crate) const RPC_TIMEOUT: Duration = Duration::from_secs(10);
+const TIP_FETCH_ATTEMPTS: usize = 5;
+const TIP_FETCH_RETRY_DELAY: Duration = Duration::from_millis(250);
+
+pub(crate) async fn dolos<T, E>(
+    request: impl Future<Output = Result<T, E>>,
+) -> anyhow::Result<Result<T, E>> {
+    tokio::time::timeout(RPC_TIMEOUT, request)
+        .await
+        .map_err(|_| anyhow!("Dolos RPC timed out"))
+}
 
 pub struct UtxoRpc {
     config: Config,
-    query: Mutex<CardanoQueryClient>,
     submit: Mutex<CardanoSubmitClient>,
 }
 
@@ -31,12 +84,10 @@ impl UtxoRpc {
             .map_err(|error| anyhow!(error))
             .with_context(|| format!("invalid UTxO RPC endpoint {}", config.endpoint()))?;
 
-        let query = builder.build::<CardanoQueryClient>().await;
         let submit = builder.build::<CardanoSubmitClient>().await;
 
         Ok(Self {
             config,
-            query: Mutex::new(query),
             submit: Mutex::new(submit),
         })
     }
@@ -45,18 +96,82 @@ impl UtxoRpc {
         &self.config
     }
 
-    async fn read_tip(&self) -> anyhow::Result<utxorpc::spec::sync::BlockRef> {
+    async fn query_client(&self) -> anyhow::Result<CardanoQueryClient> {
+        Ok(ClientBuilder::new()
+            .uri(self.config.endpoint())
+            .map_err(|error| anyhow!(error))?
+            .build::<CardanoQueryClient>()
+            .await)
+    }
+
+    pub async fn tip(&self) -> anyhow::Result<utxorpc::spec::sync::BlockRef> {
         let mut sync = ClientBuilder::new()
             .uri(self.config.endpoint())
             .map_err(|error| anyhow!(error))?
             .build::<CardanoSyncClient>()
             .await;
 
-        sync.read_tip()
-            .await
+        let mut tip = dolos(sync.read_tip())
+            .await?
             .map_err(|error| anyhow!(error))
-            .with_context(|| format!("failed to read Dolos tip from {}", self.config.endpoint()))?
-            .ok_or_else(|| anyhow!("Dolos returned no tip"))
+            .context("failed to read Dolos tip")?
+            .ok_or_else(|| anyhow!("Dolos returned no tip"))?;
+
+        if tip.height == 0 {
+            for attempt in 0..TIP_FETCH_ATTEMPTS {
+                match dolos(sync.fetch_block(vec![tip.clone()])).await? {
+                    Ok(blocks) => {
+                        tip.height = blocks
+                            .into_iter()
+                            .next()
+                            .and_then(|block| block.parsed)
+                            .and_then(|block| block.header)
+                            .map(|header| header.height)
+                            .filter(|height| *height != 0)
+                            .unwrap_or_default();
+                        if tip.height != 0 {
+                            break;
+                        }
+                    }
+                    Err(error) if attempt + 1 == TIP_FETCH_ATTEMPTS => {
+                        return Err(anyhow!(error)).context("failed to fetch Dolos tip block");
+                    }
+                    Err(_) => {}
+                }
+                if attempt + 1 < TIP_FETCH_ATTEMPTS {
+                    tokio::time::sleep(TIP_FETCH_RETRY_DELAY).await;
+                }
+            }
+            if tip.height == 0 {
+                return Err(anyhow!("Dolos tip block returned no height"));
+            }
+        }
+
+        Ok(tip)
+    }
+
+    pub async fn history_start_height(&self) -> anyhow::Result<u64> {
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let mut sync = ClientBuilder::new()
+                .uri(self.config.endpoint())
+                .map_err(|error| anyhow!(error))?
+                .build::<CardanoSyncClient>()
+                .await;
+            let page = sync
+                .dump_history(None, 1)
+                .await
+                .map_err(|error| anyhow!(error))
+                .context("failed to read Dolos history start")?;
+            page.items
+                .into_iter()
+                .next()
+                .and_then(|block| block.parsed)
+                .and_then(|block| block.header)
+                .map(|header| header.height)
+                .ok_or_else(|| anyhow!("Dolos returned no history start"))
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos history lookup timed out"))?
     }
 
     async fn load_utxos(
@@ -64,23 +179,307 @@ impl UtxoRpc {
         payment: &Credential,
         delegation: Option<&Credential>,
     ) -> anyhow::Result<BTreeMap<Input, Output>> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         let predicate =
             mapping::predicate_for_credentials(self.config.network(), payment, delegation);
-        collect_utxos_pages(payment, delegation, &mut *query, |query, start| {
+        collect_utxos_pages(payment, delegation, &mut query, |query, start| {
             let predicate = predicate.clone();
             let endpoint = self.config.endpoint().to_owned();
             let network = self.config.network();
             Box::pin(async move {
-                query
-                    .search_utxos(predicate, start, PAGE_SIZE)
-                    .await
+                dolos(query.search_utxos(predicate, start, PAGE_SIZE))
+                    .await?
                     .map_err(|error| anyhow!(error))
                     .with_context(|| format!("failed to search UTxOs from {endpoint} on {network}"))
             })
         })
         .await
     }
+
+    pub async fn read_params_raw(&self) -> anyhow::Result<utxorpc::spec::cardano::PParams> {
+        let mut query = self.query_client().await?;
+        params::cardano_pparams(&mut query).await
+    }
+
+    pub async fn read_era_summary_raw(
+        &self,
+    ) -> anyhow::Result<utxorpc::spec::query::read_era_summary_response::Summary> {
+        let mut query = self.query_client().await?;
+        dolos(query.read_era_summary())
+            .await?
+            .map_err(|error| anyhow!(error))
+            .context("failed to read era summary from UTxO RPC")
+    }
+
+    pub async fn bloxbean_parameters(&self) -> anyhow::Result<(String, u64, u64, BloxbeanPayload)> {
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let tip = self.tip().await?;
+            let params = self.read_params_raw().await?;
+            let eras = self.read_era_summary_raw().await?;
+            let (era, epoch) = params::era_epoch(&eras, tip.slot)?;
+            let payload = params::bloxbean(&params)?;
+            Ok((era, epoch, tip.slot, payload))
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos parameter lookup timed out"))?
+    }
+
+    pub async fn utxos_at_address(&self, address: &[u8]) -> anyhow::Result<Vec<MappedUtxo>> {
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let mut query = self.query_client().await?;
+            let predicate = wire::predicate_for_exact_address(address);
+            let endpoint = self.config.endpoint().to_owned();
+            let mut start = None;
+            let mut all = Vec::new();
+            loop {
+                let page = query
+                    .search_utxos(predicate.clone(), start.clone(), PAGE_SIZE)
+                    .await
+                    .map_err(|error| anyhow!(error))
+                    .with_context(|| format!("failed to search UTxOs from {endpoint}"))?;
+                start = page.next.clone();
+                for utxo in page.items {
+                    all.push(wire::map_wire_utxo(utxo)?);
+                }
+                if start.is_none() {
+                    return Ok(all);
+                }
+            }
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos UTxO lookup timed out"))?
+    }
+
+    pub async fn read_tx(
+        &self,
+        hash: &[u8],
+    ) -> anyhow::Result<Option<utxorpc::ChainTx<utxorpc::spec::cardano::Tx>>> {
+        let mut query = self.query_client().await?;
+        dolos(read_native_tx(&mut query, hash)).await?
+    }
+
+    pub async fn transaction(&self, hash: &[u8; 32]) -> anyhow::Result<Option<MappedTransaction>> {
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let mut query = self.query_client().await?;
+            let Some(tx) = read_native_tx(&mut query, hash).await? else {
+                return Ok(None);
+            };
+            let mut native = wire::NativeTransaction::decode(tx.native.as_ref(), hash)?;
+            let mut sync = ClientBuilder::new()
+                .uri(self.config.endpoint())
+                .map_err(|error| anyhow!(error))?
+                .build::<CardanoSyncClient>()
+                .await;
+            let (block_height, block_slot, index) =
+                confirmed_position(&mut sync, &tx, hash, native.success).await?;
+            let mut parents = BTreeMap::new();
+            for (parent, _) in &native.inputs {
+                if !parents.contains_key(parent) {
+                    let tx = read_native_tx(&mut query, parent)
+                        .await
+                        .context("failed to read consumed input parent")?
+                        .ok_or_else(|| anyhow!("consumed input parent is unavailable"))?;
+                    parents.insert(*parent, tx);
+                }
+            }
+            let mut decoded = BTreeMap::new();
+            for (hash, tx) in &parents {
+                let native = wire::NativeTransaction::decode(tx.native.as_ref(), hash)?;
+                confirmed_position(&mut sync, tx, hash, native.success).await?;
+                decoded.insert(*hash, native);
+            }
+            let inputs = native
+                .inputs
+                .iter()
+                .map(|(hash, index)| {
+                    decoded
+                        .get_mut(hash)
+                        .ok_or_else(|| anyhow!("missing consumed input parent"))?
+                        .output(*hash, *index)
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let outputs = native.outputs(*hash)?;
+            Ok(Some(MappedTransaction {
+                transaction_id: *hash,
+                block_height,
+                block_slot,
+                index,
+                invalid_before: native.invalid_before,
+                invalid_after: native.invalid_after,
+                inputs,
+                outputs,
+            }))
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos transaction lookup timed out"))?
+    }
+
+    pub async fn submit_cbor(&self, tx: &[u8]) -> anyhow::Result<SubmitCbor> {
+        tokio::time::timeout(RPC_TIMEOUT, async {
+            let mut submit = self.submit.lock().await;
+            match submit.submit_tx(tx.to_vec()).await {
+                Ok(hash) => {
+                    let hash: [u8; 32] = hash
+                        .as_ref()
+                        .try_into()
+                        .map_err(|_| anyhow!("Dolos submit returned unexpected hash length"))?;
+                    Ok(SubmitCbor::Accepted(hash))
+                }
+                Err(utxorpc::Error::GrpcError(status)) => {
+                    log::warn!(
+                        "Dolos transaction submission failed: code={:?} reason={}",
+                        status.code(),
+                        status.message()
+                    );
+                    Ok(SubmitCbor::from_status(&status))
+                }
+                Err(error) => Err(submit_error(self.config.endpoint(), error)),
+            }
+        })
+        .await
+        .map_err(|_| anyhow!("Dolos RPC timed out"))?
+    }
+
+    pub async fn evaluate_cbor(&self, tx: &[u8]) -> anyhow::Result<Vec<EvaluationRedeemer>> {
+        let tx = Some(utxorpc::spec::submit::AnyChainTx {
+            r#type: Some(utxorpc::spec::submit::any_chain_tx::Type::Raw(
+                tx.to_vec().into(),
+            )),
+        });
+        let request = utxorpc::spec::submit::EvalTxRequest { tx };
+        let mut submit = self.submit.lock().await;
+        let response = dolos(submit.inner.eval_tx(request))
+            .await??
+            .into_inner()
+            .report
+            .and_then(|report| report.chain)
+            .map(|chain| match chain {
+                utxorpc::spec::submit::any_chain_eval::Chain::Cardano(report) => report,
+            })
+            .ok_or_else(|| anyhow!("Dolos returned no Cardano evaluation"))?;
+        if !response.errors.is_empty() {
+            let detail = response
+                .errors
+                .iter()
+                .map(|error| error.msg.replace(['\r', '\n'], " "))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(anyhow!(
+                "Dolos rejected transaction evaluation: {detail:.2048}"
+            ));
+        }
+        response
+            .redeemers
+            .into_iter()
+            .map(|redeemer| {
+                let units = redeemer
+                    .ex_units
+                    .ok_or_else(|| anyhow!("evaluation omitted execution units"))?;
+                let purpose =
+                    utxorpc::spec::cardano::RedeemerPurpose::try_from(redeemer.purpose)
+                        .map_err(|_| anyhow!("evaluation returned an unknown redeemer purpose"))?;
+                Ok(EvaluationRedeemer {
+                    purpose: format!("{purpose:?}").to_ascii_lowercase(),
+                    index: redeemer.index,
+                    memory: units.memory,
+                    steps: units.steps,
+                })
+            })
+            .collect()
+    }
+}
+
+async fn read_native_tx(
+    query: &mut CardanoQueryClient,
+    hash: &[u8],
+) -> anyhow::Result<Option<utxorpc::ChainTx<utxorpc::spec::cardano::Tx>>> {
+    // utxorpc 0.13's query_tx_from_any_chain discards native_bytes.
+    let request = utxorpc::spec::query::ReadTxRequest {
+        hash: hash.to_vec().into(),
+        field_mask: None,
+    };
+    let tx = match query.inner.read_tx(request).await {
+        Ok(response) => response.into_inner().tx,
+        Err(status) if status.code() == Code::NotFound => return Ok(None),
+        Err(status) => {
+            return Err(anyhow!(status)).context("failed to read transaction from UTxO RPC");
+        }
+    };
+    Ok(tx.map(|tx| utxorpc::ChainTx {
+        parsed: tx.chain.map(|chain| match chain {
+            utxorpc::spec::query::any_chain_tx::Chain::Cardano(tx) => tx,
+        }),
+        native: tx.native_bytes,
+        block_ref: tx.block_ref,
+    }))
+}
+
+async fn confirmed_position(
+    sync: &mut CardanoSyncClient,
+    tx: &utxorpc::ChainTx<utxorpc::spec::cardano::Tx>,
+    hash: &[u8; 32],
+    success: bool,
+) -> anyhow::Result<(u64, u64, u64)> {
+    let point = tx
+        .block_ref
+        .as_ref()
+        .ok_or_else(|| anyhow!("transaction has no confirmed block evidence"))?;
+    if point.hash.len() != 32 || point.height == 0 {
+        return Err(anyhow!("invalid transaction block identity"));
+    }
+    if tx
+        .parsed
+        .as_ref()
+        .is_some_and(|parsed| parsed.hash.as_ref() != hash)
+    {
+        return Err(anyhow!("parsed/native transaction identity mismatch"));
+    }
+    let blocks = sync
+        .fetch_block(vec![utxorpc::spec::sync::BlockRef {
+            hash: point.hash.clone(),
+            height: point.height,
+            slot: point.slot,
+            ..Default::default()
+        }])
+        .await
+        .map_err(|error| anyhow!(error))
+        .context("failed to fetch containing block")?;
+    if blocks.len() != 1 {
+        return Err(anyhow!("containing block is unavailable or ambiguous"));
+    }
+    let block = blocks
+        .into_iter()
+        .next()
+        .and_then(|block| block.parsed)
+        .ok_or_else(|| anyhow!("containing block is missing parsed header/body"))?;
+    let header = block
+        .header
+        .ok_or_else(|| anyhow!("containing block has no header"))?;
+    if header.hash != point.hash || header.height != point.height || header.slot != point.slot {
+        return Err(anyhow!("containing block identity mismatch"));
+    }
+    let body = block
+        .body
+        .ok_or_else(|| anyhow!("containing block has no body"))?;
+    let mut index = None;
+    for (position, member) in body.tx.iter().enumerate() {
+        if member.hash.len() != 32 {
+            return Err(anyhow!("invalid containing block transaction identity"));
+        }
+        if member.hash.as_ref() == hash {
+            if member.successful != success {
+                return Err(anyhow!("native/block transaction success mismatch"));
+            }
+            if index.replace(u64::try_from(position)?).is_some() {
+                return Err(anyhow!("duplicate containing block transaction identity"));
+            }
+        }
+    }
+    Ok((
+        header.height,
+        header.slot,
+        index.ok_or_else(|| anyhow!("transaction is absent from containing block"))?,
+    ))
 }
 
 async fn collect_utxos_pages<S, F>(
@@ -142,39 +541,39 @@ fn submit_error(endpoint: &str, error: utxorpc::Error) -> anyhow::Error {
 pub async fn live_network(endpoint: &str) -> anyhow::Result<Network> {
     let builder = ClientBuilder::new()
         .uri(endpoint)
-        .map_err(|error| anyhow!(error))
-        .with_context(|| format!("invalid UTxO RPC endpoint {endpoint}"))?;
+        .map_err(|_| anyhow!("invalid Dolos endpoint"))?;
 
     let mut query = builder.build::<CardanoQueryClient>().await;
 
-    let response = query
-        .inner
-        .read_genesis(utxorpc::spec::query::ReadGenesisRequest { field_mask: None })
-        .await
-        .map_err(|error| anyhow!(error))
-        .with_context(|| format!("failed to read Dolos genesis from {endpoint}"))?
-        .into_inner();
+    let response = dolos(
+        query
+            .inner
+            .read_genesis(utxorpc::spec::query::ReadGenesisRequest { field_mask: None }),
+    )
+    .await?
+    .map_err(|error| anyhow!(error))
+    .context("failed to read Dolos genesis")?
+    .into_inner();
 
     let genesis = match response.config {
         Some(utxorpc::spec::query::read_genesis_response::Config::Cardano(genesis)) => genesis,
         None => return Err(anyhow!("UTxO RPC returned no Cardano genesis config")),
     };
 
-    network_from_genesis(&genesis)
-        .with_context(|| format!("failed to derive live Cardano network from {endpoint}"))
+    network_from_genesis(&genesis).context("failed to derive live Cardano network from dolos")
 }
 
 pub fn ensure_network_matches(
     configured: Network,
     live: Network,
-    endpoint: &str,
+    _endpoint: &str,
 ) -> anyhow::Result<()> {
     if configured == live {
         return Ok(());
     }
 
     Err(anyhow!(
-        "configured Cardano network {configured} does not match live Dolos network {live} at {endpoint}"
+        "configured Cardano network {configured} does not match live Dolos network {live} at dolos"
     ))
 }
 
@@ -210,7 +609,7 @@ impl CardanoConnector for UtxoRpc {
     }
 
     async fn health(&self) -> anyhow::Result<String> {
-        let tip = self.read_tip().await?;
+        let tip = self.tip().await?;
 
         Ok(format!(
             "utxorpc endpoint={} network={} tip_slot={} tip_hash={}",
@@ -222,7 +621,7 @@ impl CardanoConnector for UtxoRpc {
     }
 
     async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
-        let mut query = self.query.lock().await;
+        let mut query = self.query_client().await?;
         params::read(&mut query).await
     }
 
@@ -240,10 +639,8 @@ impl CardanoConnector for UtxoRpc {
     ) -> anyhow::Result<()> {
         let mut submit = self.submit.lock().await;
         let tx = transaction.to_cbor();
-
-        submit
-            .submit_tx(tx)
-            .await
+        dolos(submit.submit_tx(tx))
+            .await?
             .map_err(|error| submit_error(self.config.endpoint(), error))?;
 
         Ok(())
@@ -253,8 +650,8 @@ impl CardanoConnector for UtxoRpc {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_utxos_pages, ensure_network_matches, network_from_genesis, next_start_token,
-        submit_error,
+        SubmitCbor, collect_utxos_pages, ensure_network_matches, network_from_genesis,
+        next_start_token, submit_error,
     };
     use cardano_sdk::{
         Datum, Network, Output, PlutusData, Value, address_test, cbor::ToCbor, key_credential,
@@ -361,6 +758,14 @@ mod tests {
     }
 
     #[test]
+    fn missing_input_message_is_inputs_spent() {
+        let status = tonic::Status::failed_precondition(
+            "some transaction input is not present in the UTxO set",
+        );
+        assert_eq!(SubmitCbor::from_status(&status), SubmitCbor::InputsSpent);
+    }
+
+    #[test]
     fn network_from_genesis_allows_empty_network_id() {
         let network = network_from_genesis(&genesis("", Network::PREPROD_MAGIC as u32))
             .expect("empty network id should still map");
@@ -382,11 +787,35 @@ mod tests {
 
     #[test]
     fn ensure_network_matches_rejects_mismatch() {
-        let error =
-            ensure_network_matches(Network::Preview, Network::Preprod, "http://127.0.0.1:1337")
-                .expect_err("network mismatch should fail");
+        let endpoint = "http://user:password@127.0.0.1:1337";
+        let error = ensure_network_matches(Network::Preview, Network::Preprod, endpoint)
+            .expect_err("network mismatch should fail");
 
         assert!(error.to_string().contains("does not match"));
+        assert!(error.to_string().contains("at dolos"));
+        assert!(!error.to_string().contains(endpoint));
+    }
+
+    #[test]
+    fn submit_status_classifies_chain_outcomes() {
+        assert_eq!(
+            SubmitCbor::from_status(&tonic::Status::failed_precondition(
+                "transaction is already known; inputs spent"
+            )),
+            SubmitCbor::InputsSpent
+        );
+        assert_eq!(
+            SubmitCbor::from_status(&tonic::Status::already_exists("transaction already known")),
+            SubmitCbor::AlreadyKnown
+        );
+        assert_eq!(
+            SubmitCbor::from_status(&tonic::Status::invalid_argument("invalid transaction")),
+            SubmitCbor::Rejected
+        );
+        assert_eq!(
+            SubmitCbor::from_status(&tonic::Status::unavailable("upstream unavailable")),
+            SubmitCbor::Indeterminate
+        );
     }
 
     #[tokio::test]

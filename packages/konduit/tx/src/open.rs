@@ -1,7 +1,9 @@
-use cardano_sdk::{Address, Credential, NetworkId, Output, PlutusData, address::kind};
-use konduit_data::{Constants, Stage};
+use std::cmp;
 
-use crate::{Channel, Variables, konduit_address};
+use cardano_sdk::{Address, Credential, NetworkId, Output, PlutusData, address::kind};
+use konduit_data::{AssetId, Constants, Stage};
+
+use crate::{Channel, MIN_ADA_BUFFER, Variables, konduit_address};
 
 #[derive()]
 pub struct Open(Channel, Option<Credential>);
@@ -25,19 +27,22 @@ impl Open {
         self.1.as_ref()
     }
 
-    pub fn buffered_amount(&self) -> u64 {
-        self.data().buffered_amount()
-    }
-
     pub fn address(&self, network_id: NetworkId) -> Address<kind::Shelley> {
         konduit_address(network_id, self.delegation())
     }
 
     pub fn output(&self, network_id: NetworkId) -> Output {
-        Output::new(
-            self.address(network_id).into(),
-            self.data().buffered_value(),
-        )
-        .with_datum(PlutusData::from(self.data().datum()))
+        let address = self.address(network_id).into();
+        let value = self.data().buffered_value();
+        let datum = PlutusData::from(self.data().datum());
+        if self.data().constants().asset == AssetId::Ada {
+            return Output::new(address, value).with_datum(datum);
+        }
+        let min_lovelace = Output::new(address.clone(), value.clone())
+            .with_datum(datum.clone())
+            .min_acceptable_value();
+        let mut value = value;
+        value.with_lovelace(cmp::max(MIN_ADA_BUFFER, min_lovelace));
+        Output::new(address, value).with_datum(datum)
     }
 }
