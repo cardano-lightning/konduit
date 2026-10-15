@@ -7,12 +7,12 @@ use konduit_data::{AssetCatalog, Duration, Lock, SquashBody};
 use konduit_tmp::{Keytag, SessionClaimRequest, TxHelp};
 use konduit_tx::consumer::{Intent, OpenIntent};
 use serde_json::json;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::BTreeMap,
     io::{self, Write},
     path::PathBuf,
 };
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
     Adaptor,
@@ -282,6 +282,7 @@ impl Cli {
                     sub_vkey,
                     close_period,
                     amount: *amount,
+                    asset: konduit_data::AssetId::Ada,
                 };
 
                 (vec![open], BTreeMap::new(), ref_script_host)
@@ -332,9 +333,7 @@ impl Cli {
             }
         }
         let parsed_invoice = match &args.cmd {
-            L2Cmd::Quote { invoice } | L2Cmd::Pay { invoice } => {
-                Some(invoice.parse::<Invoice>()?)
-            }
+            L2Cmd::Quote { invoice } | L2Cmd::Pay { invoice } => Some(invoice.parse::<Invoice>()?),
             _ => None,
         };
         let mut last_claim_timestamp = 0;

@@ -184,7 +184,13 @@ mod tests {
                     close_period: konduit_data::Duration::from_secs(0),
                     tag_length: 0,
                 },
-                tx_help: (),
+                tx_help: TxHelp {
+                    host_address: cardano_sdk::Address::new(
+                        cardano_sdk::Network::Preview.into(),
+                        cardano_sdk::Credential::from_key(cardano_sdk::Hash::<28>::from([1; 28])),
+                    ),
+                    validator: konduit_tx::KONDUIT_VALIDATOR.hash,
+                },
                 asset_catalog_digest: None,
             },
             keytag: None,
