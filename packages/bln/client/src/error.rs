@@ -50,6 +50,8 @@ impl Error {
     }
 }
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[cfg(test)]
 mod tests {
     use super::Error;
@@ -74,5 +76,3 @@ mod tests {
         assert!(!Error::Time.is_terminal_payment_failure());
     }
 }
-
-pub type Result<T> = std::result::Result<T, Error>;

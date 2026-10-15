@@ -353,8 +353,8 @@ impl UtxoRpc {
             .into_inner()
             .report
             .and_then(|report| report.chain)
-            .and_then(|chain| match chain {
-                utxorpc::spec::submit::any_chain_eval::Chain::Cardano(report) => Some(report),
+            .map(|chain| match chain {
+                utxorpc::spec::submit::any_chain_eval::Chain::Cardano(report) => report,
             })
             .ok_or_else(|| anyhow!("Dolos returned no Cardano evaluation"))?;
         if !response.errors.is_empty() {

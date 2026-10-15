@@ -316,9 +316,11 @@ impl Data {
             &identity,
             &request_digest,
             &payment_hash,
-            keytag,
-            lease_token,
-            time::now()?.as_millis() as u64,
+            db::LeaseCheck {
+                keytag,
+                token: lease_token,
+                now_epoch_millis: time::now()?.as_millis() as u64,
+            },
             locked,
         )?;
         if !inserted {

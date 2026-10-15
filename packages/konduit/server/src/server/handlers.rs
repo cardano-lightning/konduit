@@ -133,9 +133,11 @@ pub async fn submit_channel_operation(
         .db()
         .reserve_channel_operation(
             &operation_id,
-            &keytag,
-            &lease.0,
-            now,
+            db::LeaseCheck {
+                keytag: &keytag,
+                token: &lease.0,
+                now_epoch_millis: now,
+            },
             expected_transaction_id,
             transaction_digest,
             transaction,
@@ -286,7 +288,7 @@ fn parse_hash(value: &str) -> Result<[u8; 32], Error> {
 }
 
 fn parse_transaction(value: &str) -> Result<Vec<u8>, Error> {
-    if value.len() > 512 * 1024 || value.len() % 2 != 0 {
+    if value.len() > 512 * 1024 || !value.len().is_multiple_of(2) {
         return Err(Error::InvalidChannelOperation);
     }
     hex::decode(value).map_err(|_| Error::InvalidChannelOperation)

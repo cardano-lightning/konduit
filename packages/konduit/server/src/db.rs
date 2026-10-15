@@ -18,6 +18,13 @@ const CHANNEL_OPERATIONS: TableDefinition<&[u8], ChannelOperationValue> =
 const PAYMENT_AUTHORIZATIONS: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("payment_authorizations");
 
+#[derive(Clone, Copy)]
+pub struct LeaseCheck<'a> {
+    pub keytag: &'a Keytag,
+    pub token: &'a [u8; 32],
+    pub now_epoch_millis: u64,
+}
+
 pub(crate) fn payment_identity(keytag: &Keytag, index: u64) -> [u8; 32] {
     let mut identity = Sha256::new();
     identity.update(keytag.as_ref());
@@ -384,13 +391,16 @@ impl Db {
     pub fn reserve_channel_operation(
         &self,
         operation_id: &[u8; 16],
-        keytag: &Keytag,
-        token: &[u8; 32],
-        now_epoch_millis: u64,
+        lease: LeaseCheck<'_>,
         expected_transaction_id: [u8; 32],
         transaction_digest: [u8; 32],
         transaction: Vec<u8>,
     ) -> Result<ChannelOperationValue, Error> {
+        let LeaseCheck {
+            keytag,
+            token,
+            now_epoch_millis,
+        } = lease;
         let wallet_key: [u8; 32] = keytag
             .as_ref()
             .get(..32)
@@ -485,11 +495,14 @@ impl Db {
         identity: &[u8; 32],
         request_digest: &[u8; 32],
         payment_hash: &[u8; 32],
-        keytag: &Keytag,
-        token: &[u8; 32],
-        now_epoch_millis: u64,
+        lease: LeaseCheck<'_>,
         locked: Locked,
     ) -> Result<bool, Error> {
+        let LeaseCheck {
+            keytag,
+            token,
+            now_epoch_millis,
+        } = lease;
         let wallet_key: [u8; 32] = keytag
             .as_ref()
             .get(..32)
@@ -953,46 +966,27 @@ mod tests {
         let original = claim(1, 1);
         db.claim_lease(&original, [4; 32], 100).unwrap();
         let keytag = db.keys().unwrap().pop().unwrap();
+        let lease = LeaseCheck {
+            keytag: &keytag,
+            token: &[4; 32],
+            now_epoch_millis: 99,
+        };
         let first = db
-            .reserve_channel_operation(&[1; 16], &keytag, &[4; 32], 99, [2; 32], [3; 32], vec![4])
+            .reserve_channel_operation(&[1; 16], lease, [2; 32], [3; 32], vec![4])
             .unwrap();
         assert_eq!(
             first,
-            db.reserve_channel_operation(
-                &[1; 16],
-                &keytag,
-                &[4; 32],
-                99,
-                [2; 32],
-                [3; 32],
-                vec![4]
-            )
-            .unwrap()
+            db.reserve_channel_operation(&[1; 16], lease, [2; 32], [3; 32], vec![4])
+                .unwrap()
         );
         assert!(matches!(
-            db.reserve_channel_operation(
-                &[1; 16],
-                &keytag,
-                &[4; 32],
-                99,
-                [2; 32],
-                [3; 32],
-                vec![5]
-            ),
+            db.reserve_channel_operation(&[1; 16], lease, [2; 32], [3; 32], vec![5]),
             Err(Error::OperationConflict)
         ));
 
         db.claim_lease(&claim(2, 2), [5; 32], 200).unwrap();
         assert!(matches!(
-            db.reserve_channel_operation(
-                &[6; 16],
-                &keytag,
-                &[4; 32],
-                99,
-                [2; 32],
-                [3; 32],
-                vec![4]
-            ),
+            db.reserve_channel_operation(&[6; 16], lease, [2; 32], [3; 32], vec![4]),
             Err(Error::LeaseInvalid)
         ));
         assert!(db.channel_operation(&[1; 16], &keytag).unwrap().is_some());

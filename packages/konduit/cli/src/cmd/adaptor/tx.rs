@@ -81,9 +81,8 @@ impl Cmd {
             min_total: preferences_ada.1,
             asset_minimums: receipts
                 .values()
-                .filter_map(|(asset, _)| {
-                    (*asset != AssetId::Ada).then(|| (asset.clone(), preferences_ada))
-                })
+                .filter(|(asset, _)| *asset != AssetId::Ada)
+                .map(|(asset, _)| (asset.clone(), preferences_ada))
                 .collect(),
         };
         let mut tx = konduit_tx::adaptor::tx(
