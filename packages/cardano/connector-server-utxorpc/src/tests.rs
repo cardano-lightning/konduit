@@ -132,6 +132,7 @@ fn payload() -> BloxbeanPayload {
         min_fee_a: 44,
         min_fee_b: 155381,
         max_tx_size: 16384,
+        max_val_size: 5000,
         key_deposit: 2_000_000,
         pool_deposit: 500_000_000,
         min_pool_cost: 170_000_000,
@@ -161,6 +162,7 @@ struct ConsumerProtocolParameters {
 #[derive(serde::Deserialize)]
 struct ConsumerBloxbeanPayload {
     min_fee_a: u64,
+    max_val_size: String,
     key_deposit: String,
     coins_per_utxo_size: String,
     price_mem: String,
@@ -251,6 +253,7 @@ async fn protocol_parameters_from_ledger() {
     assert_eq!(res.status(), StatusCode::OK);
     let body: ConsumerProtocolParameters = test::read_body_json(res).await;
     assert_eq!(body.payload.min_fee_a, 44);
+    assert_eq!(body.payload.max_val_size, "5000");
     assert_eq!(body.payload.key_deposit, "2000000");
     assert_eq!(body.payload.coins_per_utxo_size, "4310");
     assert_eq!(body.payload.price_mem, "0.0577");

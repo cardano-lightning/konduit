@@ -180,6 +180,7 @@ pub struct BloxbeanPayload {
     pub min_fee_a: u64,
     pub min_fee_b: u64,
     pub max_tx_size: u64,
+    pub max_val_size: u64,
     pub key_deposit: u64,
     pub pool_deposit: u64,
     pub min_pool_cost: u64,
@@ -218,6 +219,11 @@ pub fn bloxbean(params: &cardano::PParams) -> anyhow::Result<BloxbeanPayload> {
         .ok_or_else(|| anyhow!("UTxO RPC protocol parameters missing protocol version"))?;
     if params.max_tx_size == 0 {
         return Err(anyhow!("UTxO RPC protocol parameters missing max_tx_size"));
+    }
+    if params.max_value_size == 0 {
+        return Err(anyhow!(
+            "UTxO RPC protocol parameters invalid max_value_size"
+        ));
     }
     if params.collateral_percentage == 0 {
         return Err(anyhow!(
@@ -279,6 +285,7 @@ pub fn bloxbean(params: &cardano::PParams) -> anyhow::Result<BloxbeanPayload> {
         min_fee_a: big_int_to_u64(params.min_fee_coefficient.as_ref(), "min_fee_coefficient")?,
         min_fee_b: big_int_to_u64(params.min_fee_constant.as_ref(), "min_fee_constant")?,
         max_tx_size: params.max_tx_size,
+        max_val_size: params.max_value_size,
         key_deposit: big_int_to_u64(params.stake_key_deposit.as_ref(), "stake_key_deposit")?,
         pool_deposit: big_int_to_u64(params.pool_deposit.as_ref(), "pool_deposit")?,
         min_pool_cost: big_int_to_u64(params.min_pool_cost.as_ref(), "min_pool_cost")?,
@@ -393,6 +400,7 @@ mod tests {
             _ => panic!("cardano"),
         };
         pparams.max_tx_size = 16_384;
+        pparams.max_value_size = 5000;
         pparams.stake_key_deposit = Some(bigint(2_000_000));
         pparams.pool_deposit = Some(bigint(500_000_000));
         pparams.min_pool_cost = Some(bigint(170_000_000));
@@ -529,6 +537,7 @@ mod tests {
     #[test]
     fn bloxbean_exports_exact_live_values() {
         let mut params = bloxbean_params();
+        params.max_value_size = 6123;
         params.cost_models.as_mut().unwrap().plutus_v1 = Some(cardano::CostModel {
             values: vec![-3, 2, -1],
         });
@@ -538,6 +547,7 @@ mod tests {
 
         let payload = bloxbean(&params).expect("payload");
         assert_eq!(payload.min_fee_a, 44);
+        assert_eq!(payload.max_val_size, 6123);
         assert_eq!(payload.coins_per_utxo_size, 4310);
         assert_eq!(payload.protocol_major_ver, 10);
         assert_eq!(payload.price_mem, "0.0577");
@@ -548,6 +558,16 @@ mod tests {
         assert_eq!(payload.cost_models_raw["PlutusV1"], vec![-3, 2, -1]);
         assert_eq!(payload.cost_models_raw["PlutusV2"], vec![8, -5, 4]);
         assert_eq!(payload.cost_models_raw["PlutusV3"], vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn bloxbean_rejects_zero_max_value_size() {
+        let mut params = bloxbean_params();
+        params.max_value_size = 0;
+        assert_eq!(
+            bloxbean(&params).unwrap_err().to_string(),
+            "UTxO RPC protocol parameters invalid max_value_size"
+        );
     }
 
     #[test]

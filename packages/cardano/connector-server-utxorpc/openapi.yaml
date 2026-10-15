@@ -312,6 +312,7 @@ components:
         - min_fee_a
         - min_fee_b
         - max_tx_size
+        - max_val_size
         - key_deposit
         - pool_deposit
         - min_pool_cost
@@ -336,6 +337,11 @@ components:
         max_tx_size:
           type: integer
           minimum: 0
+        max_val_size:
+          description: Maximum serialized Value size in bytes, derived from live UTxO RPC max_value_size.
+          type: string
+          pattern: "^[1-9][0-9]*$"
+          maxLength: 20
         key_deposit:
           type: string
           maxLength: 20
