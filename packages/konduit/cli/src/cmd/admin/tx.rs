@@ -125,7 +125,8 @@ mod tests {
     use cardano_connector::CardanoConnector;
     use cardano_sdk::{
         Address, Credential, Hash, Input, Network, Output, PlutusVersion, ProtocolParameters,
-        SigningKey, Transaction, Value, address::kind, plutus_script, transaction::state,
+        PublicNetwork, SigningKey, Transaction, Value, address::kind, plutus_script,
+        transaction::state,
     };
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
@@ -137,7 +138,7 @@ mod tests {
     }
 
     struct FakeConnector {
-        network: Network,
+        network: PublicNetwork,
         expected_payment: Credential,
         utxos: BTreeMap<Input, Output>,
         state: Arc<Mutex<ConnectorState>>,
@@ -146,7 +147,7 @@ mod tests {
     impl FakeConnector {
         fn new(expected_payment: Credential, utxos: BTreeMap<Input, Output>) -> Self {
             Self {
-                network: Network::Preview,
+                network: PublicNetwork::Preview,
                 expected_payment,
                 utxos,
                 state: Arc::new(Mutex::new(ConnectorState::default())),
@@ -156,7 +157,7 @@ mod tests {
 
     impl CardanoConnector for FakeConnector {
         fn network(&self) -> Network {
-            self.network
+            self.network.into()
         }
 
         async fn health(&self) -> anyhow::Result<String> {
@@ -193,7 +194,7 @@ mod tests {
     fn payment_address(wallet: &SigningKey) -> Address<kind::Shelley> {
         wallet
             .to_verification_key()
-            .to_address(Network::Preview.into())
+            .to_address(PublicNetwork::Preview.into())
     }
 
     fn wallet_utxos(address: &Address<kind::Shelley>) -> BTreeMap<Input, Output> {
@@ -230,7 +231,7 @@ mod tests {
         let connector = FakeConnector::new(own_address.payment(), wallet_utxos(&own_address));
         let destination = wallet
             .to_verification_key()
-            .to_address(Network::Preview.into());
+            .to_address(PublicNetwork::Preview.into());
         let args = SendArgs {
             spend_all: false,
             to: vec![super::AddressAmount(destination, 2)],

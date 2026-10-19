@@ -35,10 +35,7 @@ impl Cmd {
 
         match self {
             Cmd::Address => {
-                let network_id = config
-                    .connector
-                    .network_id()
-                    .expect("connector network should always be available from config");
+                let network_id = config.connector.network().into();
                 print!(
                     "{}",
                     config.wallet.to_verification_key().to_address(network_id)

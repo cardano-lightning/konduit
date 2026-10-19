@@ -2,8 +2,8 @@ use crate::{endpoints, types::TransactionSummary};
 use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
-    Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, Transaction,
-    VerificationKey, cbor::ToCbor, transaction::state,
+    Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, PublicNetwork,
+    Transaction, VerificationKey, cbor::ToCbor, transaction::state,
 };
 use http_client::{Transport, codec};
 use std::collections::BTreeMap;
@@ -13,7 +13,7 @@ pub type Client<Transport> = http_client::Client<Transport, codec::Json>;
 /// A facade to a remote Cardano connector, abstracted over an Client.
 pub struct Connector<T: Transport> {
     http_client: Client<T>,
-    network: Network,
+    network: PublicNetwork,
 }
 
 impl<T: Transport> Connector<T>
@@ -21,7 +21,7 @@ where
     T::Error: Into<anyhow::Error>,
 {
     pub async fn new(http_client: Client<T>) -> anyhow::Result<Self> {
-        let network = Network::try_from(
+        let network = PublicNetwork::try_from(
             http_client
                 .get::<endpoints::network::Response>("/network")
                 .await
@@ -73,7 +73,7 @@ where
     T::Error: Into<anyhow::Error>,
 {
     fn network(&self) -> Network {
-        self.network
+        self.network.into()
     }
 
     async fn health(&self) -> anyhow::Result<String> {

@@ -829,6 +829,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cardano-connector-node"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-connector",
+ "cardano-sdk",
+ "hex",
+ "konduit-data",
+ "konduit-tmp",
+ "konduit-tx",
+ "minicbor",
+ "num",
+ "pallas-codec",
+ "pallas-network",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "cardano-connector-utxorpc"
 version = "0.0.0"
 dependencies = [
@@ -2501,6 +2521,7 @@ dependencies = [
  "anyhow",
  "cardano-connector",
  "cardano-connector-direct",
+ "cardano-connector-node",
  "cardano-connector-utxorpc",
  "cardano-sdk",
  "clap",
@@ -2600,6 +2621,7 @@ dependencies = [
  "bln-client",
  "cardano-connector",
  "cardano-connector-direct",
+ "cardano-connector-node",
  "cardano-connector-utxorpc",
  "cardano-sdk",
  "clap",
@@ -3070,6 +3092,25 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "zeroize",
+]
+
+[[package]]
+name = "pallas-network"
+version = "0.35.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4146073d190abd9b752768966b68bef527e21aa16f4555d35a7d7cd43c91a24"
+dependencies = [
+ "byteorder",
+ "hex",
+ "itertools 0.13.0",
+ "pallas-codec",
+ "pallas-crypto",
+ "rand 0.8.6",
+ "serde",
+ "socket2 0.5.10",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

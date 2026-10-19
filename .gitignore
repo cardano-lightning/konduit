@@ -22,3 +22,7 @@ target/
 # Envs
 .env
 .env.*
+
+# Local devel process-compose
+.pc.log
+.run

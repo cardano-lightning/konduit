@@ -1,5 +1,5 @@
 use crate::config::connector::Connector;
-use cardano_sdk::{Address, NetworkId, SigningKey, address::kind};
+use cardano_sdk::{Address, SigningKey, address::kind};
 use core::fmt;
 use std::fmt::Display;
 
@@ -18,7 +18,7 @@ impl Config {
 
 impl Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let network_id = self.connector.network_id().unwrap_or(NetworkId::MAINNET);
+        let network_id = self.connector.network().into();
         let address = self.wallet.to_verification_key().to_address(network_id);
         writeln!(f, "== {} ==", Self::LABEL)?;
         writeln!(f, "{}", self.connector)?;

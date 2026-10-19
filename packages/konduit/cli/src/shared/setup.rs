@@ -13,3 +13,13 @@ pub trait Setup {
         Ok(())
     }
 }
+
+// fn setup_from_env<T: DefaultPath + Fill<Error = anyhow::Error> + serde::Serialize + Sized>(
+//     env: T,
+// ) -> anyhow::Result<()> {
+//     if std::io::stdout().is_terminal() {
+//         println!("./{}", T::DEFAULT_PATH);
+//     }
+//     println!("{:#}", toml::to_string(&env.fill()?)?.replace(" = ", "="));
+//     Ok(())
+// }

@@ -53,6 +53,7 @@
     text = ''
       set -x
       cp "$(cardonnay inspect faucet -i 9 -w "$TESTNET_DIR" | jq -r .skey_file)" "$FAUCET_SKEY_FILE"
+      cat "$FAUCET_SKEY_FILE" | jq -r '.cborHex | ltrimstr("5820")' > "$FAUCET_WALLET_FILE"
       cardonnay inspect faucet -i 9 -w "$TESTNET_DIR" | jq -r .address > "$FAUCET_ADDR_FILE"
     '';
   };

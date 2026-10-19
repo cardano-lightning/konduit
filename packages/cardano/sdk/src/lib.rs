@@ -19,7 +19,7 @@ pub use cardano::{
     execution_units::ExecutionUnits,
     hash::Hash,
     input::Input,
-    network::Network,
+    network::{Network, PublicNetwork},
     network_id::NetworkId,
     output::Output,
     output::change_strategy::ChangeStrategy,
