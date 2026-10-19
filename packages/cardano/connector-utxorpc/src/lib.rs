@@ -7,8 +7,8 @@ pub use config::Config;
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
-    Credential, Input, Network, Output, ProtocolParameters, Transaction, cbor::ToCbor,
-    transaction::state,
+    Credential, Input, Network, Output, ProtocolParameters, PublicNetwork, Transaction,
+    cbor::ToCbor, transaction::state,
 };
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -139,7 +139,7 @@ fn submit_error(endpoint: &str, error: utxorpc::Error) -> anyhow::Error {
     anyhow!(error).context(format!("failed to submit transaction via {endpoint}"))
 }
 
-pub async fn live_network(endpoint: &str) -> anyhow::Result<Network> {
+pub async fn live_network(endpoint: &str) -> anyhow::Result<PublicNetwork> {
     let builder = ClientBuilder::new()
         .uri(endpoint)
         .map_err(|error| anyhow!(error))
@@ -165,8 +165,8 @@ pub async fn live_network(endpoint: &str) -> anyhow::Result<Network> {
 }
 
 pub fn ensure_network_matches(
-    configured: Network,
-    live: Network,
+    configured: PublicNetwork,
+    live: PublicNetwork,
     endpoint: &str,
 ) -> anyhow::Result<()> {
     if configured == live {
@@ -178,14 +178,15 @@ pub fn ensure_network_matches(
     ))
 }
 
-fn network_from_genesis(genesis: &utxorpc::spec::cardano::Genesis) -> anyhow::Result<Network> {
-    let network = match u64::from(genesis.network_magic) {
-        Network::MAINNET_MAGIC => Network::Mainnet,
-        Network::PREPROD_MAGIC => Network::Preprod,
-        Network::PREVIEW_MAGIC => Network::Preview,
-        other => {
+fn network_from_genesis(
+    genesis: &utxorpc::spec::cardano::Genesis,
+) -> anyhow::Result<PublicNetwork> {
+    let network_magic = u64::from(genesis.network_magic);
+    let network = match Network::new(network_magic).try_into() {
+        Ok(public) => public,
+        Err(_) => {
             return Err(anyhow!(
-                "unsupported Cardano network magic {other} in Dolos genesis"
+                "unsupported Cardano network magic {network_magic} in Dolos genesis"
             ));
         }
     };
@@ -194,9 +195,9 @@ fn network_from_genesis(genesis: &utxorpc::spec::cardano::Genesis) -> anyhow::Re
     let normalized_network_id = raw_network_id.to_ascii_lowercase();
 
     match (normalized_network_id.as_str(), network) {
-        ("mainnet", Network::Mainnet)
-        | ("testnet", Network::Preprod)
-        | ("testnet", Network::Preview)
+        ("mainnet", PublicNetwork::Mainnet)
+        | ("testnet", PublicNetwork::Preprod)
+        | ("testnet", PublicNetwork::Preview)
         | ("", _) => Ok(network),
         (normalized, derived) => Err(anyhow!(
             "Dolos genesis network_id {raw_network_id} (normalized: {normalized}) is inconsistent with network magic for {derived}"
@@ -206,7 +207,7 @@ fn network_from_genesis(genesis: &utxorpc::spec::cardano::Genesis) -> anyhow::Re
 
 impl CardanoConnector for UtxoRpc {
     fn network(&self) -> Network {
-        self.config.network()
+        self.config.network().into()
     }
 
     async fn health(&self) -> anyhow::Result<String> {
@@ -257,7 +258,7 @@ mod tests {
         submit_error,
     };
     use cardano_sdk::{
-        Datum, Network, Output, PlutusData, Value, address_test, cbor::ToCbor, key_credential,
+        Datum, Output, PlutusData, PublicNetwork, Value, address_test, cbor::ToCbor, key_credential,
     };
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
@@ -330,15 +331,16 @@ mod tests {
 
     #[test]
     fn network_from_genesis_maps_preview_magic() {
-        let network = network_from_genesis(&genesis("testnet", Network::PREVIEW_MAGIC as u32))
-            .expect("preview magic should map");
+        let network =
+            network_from_genesis(&genesis("testnet", PublicNetwork::PREVIEW_MAGIC as u32))
+                .expect("preview magic should map");
 
-        assert_eq!(network, Network::Preview);
+        assert_eq!(network, PublicNetwork::Preview);
     }
 
     #[test]
     fn network_from_genesis_rejects_inconsistent_network_id() {
-        let error = network_from_genesis(&genesis("mainnet", Network::PREPROD_MAGIC as u32))
+        let error = network_from_genesis(&genesis("mainnet", PublicNetwork::PREPROD_MAGIC as u32))
             .expect_err("inconsistent genesis should fail");
 
         assert!(error.to_string().contains("inconsistent"));
@@ -346,26 +348,28 @@ mod tests {
 
     #[test]
     fn network_from_genesis_accepts_case_insensitive_mainnet_id() {
-        let network = network_from_genesis(&genesis("Mainnet", Network::MAINNET_MAGIC as u32))
-            .expect("mainnet id casing should be accepted");
+        let network =
+            network_from_genesis(&genesis("Mainnet", PublicNetwork::MAINNET_MAGIC as u32))
+                .expect("mainnet id casing should be accepted");
 
-        assert_eq!(network, Network::Mainnet);
+        assert_eq!(network, PublicNetwork::Mainnet);
     }
 
     #[test]
     fn network_from_genesis_accepts_trimmed_case_insensitive_testnet_id() {
-        let network = network_from_genesis(&genesis(" Testnet ", Network::PREVIEW_MAGIC as u32))
-            .expect("testnet id casing should be accepted");
+        let network =
+            network_from_genesis(&genesis(" Testnet ", PublicNetwork::PREVIEW_MAGIC as u32))
+                .expect("testnet id casing should be accepted");
 
-        assert_eq!(network, Network::Preview);
+        assert_eq!(network, PublicNetwork::Preview);
     }
 
     #[test]
     fn network_from_genesis_allows_empty_network_id() {
-        let network = network_from_genesis(&genesis("", Network::PREPROD_MAGIC as u32))
+        let network = network_from_genesis(&genesis("", PublicNetwork::PREPROD_MAGIC as u32))
             .expect("empty network id should still map");
 
-        assert_eq!(network, Network::Preprod);
+        assert_eq!(network, PublicNetwork::Preprod);
     }
 
     #[test]
@@ -382,9 +386,12 @@ mod tests {
 
     #[test]
     fn ensure_network_matches_rejects_mismatch() {
-        let error =
-            ensure_network_matches(Network::Preview, Network::Preprod, "http://127.0.0.1:1337")
-                .expect_err("network mismatch should fail");
+        let error = ensure_network_matches(
+            PublicNetwork::Preview,
+            PublicNetwork::Preprod,
+            "http://127.0.0.1:1337",
+        )
+        .expect_err("network mismatch should fail");
 
         assert!(error.to_string().contains("does not match"));
     }

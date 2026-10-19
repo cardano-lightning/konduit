@@ -68,6 +68,11 @@
             wasm-pack
             clang-unwrapped
             pkgs.cargo-machete
+            # TOOLS NEEDED BY SOME RUST BUILDS
+            pkgs.perl
+            pkgs.cmake
+            pkgs.go
+            pkgs.nasm
             # PRE-COMMIT
             pkgs.prek
             # UTILS
@@ -77,13 +82,17 @@
             pkgs.d2
           ]
           ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
+
         devShell = {
           name = "konduit-shell";
           shellHook = ''
             echo 1>&2 "Welcome to the development shell!"
             ${shellHookCommon}
           '';
-          inherit packages;
+
+          packages =
+            packages
+            ++ [pkgs.process-compose];
 
           nativeBuildInputs =
             [config.treefmt.build.wrapper]
@@ -94,38 +103,6 @@
             ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates);
 
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
-        };
-
-        # Jail which is shared between a real opencode
-        # agent and a bash jail sandbox used for testing the jailed env itself.
-        commonJail = {
-          baseJailOptions = let
-            jail = inputs.jailed-agents.lib.${pkgs.system}.internals.jail;
-          in [
-            jail.combinators.network
-            jail.combinators.time-zone
-            jail.combinators.no-new-session
-            jail.combinators.mount-cwd
-            (jail.combinators.try-fwd-env "PKG_CONFIG_PATH")
-            (jail.combinators.try-fwd-env "LD_LIBRARY_PATH")
-          ];
-
-          extraReadwriteDirs = [
-            "~/projects/cl/konduit/paluh/indexer"
-            "~/.config/opencode"
-            "~/.local/share/opencode"
-            "~/.cache/opencode"
-          ];
-          extraPkgs =
-            packages
-            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates)
-            ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates)
-            ++ [
-              config.treefmt.build.wrapper
-              pkgs.libiconv
-              pkgs.coreutils
-              pkgs.gcc
-            ];
         };
 
         # A package to setup testnet in the dev shell extras
@@ -170,6 +147,65 @@
           '';
         };
 
+        devShellExtraPackages =
+          devShell.packages
+          ++ [
+            cardano-cli
+            cardano-node
+            cardonnay
+            config.treefmt.build.wrapper
+            kupo
+            process-compose-dev-env
+            pkgs.coreutils
+            pkgs.gcc
+            pkgs.libiconv
+            pkgs.process-compose
+            wasm-pack
+          ];
+
+        # Jail which is shared between a real opencode
+        # agent and a bash jail sandbox used for testing the jailed env itself.
+        commonJail = {
+          baseJailOptions = let
+            jail = inputs.jailed-agents.lib.${pkgs.system}.internals.jail;
+          in [
+            jail.combinators.network
+            jail.combinators.time-zone
+            jail.combinators.no-new-session
+            jail.combinators.mount-cwd
+            (jail.combinators.try-fwd-env "PKG_CONFIG_PATH")
+            (jail.combinators.try-fwd-env "LD_LIBRARY_PATH")
+            (jail.combinators.try-fwd-env "RUST_SRC_PATH")
+            (jail.combinators.try-fwd-env "CARDANO_NODE_SOCKET_PATH")
+            (jail.combinators.try-fwd-env "CARDANO_NODE_CONFIG_PATH")
+            (jail.combinators.try-fwd-env "KONDUIT_VALIDATOR_HASH")
+            (jail.combinators.try-fwd-env "CARDANO_NODE_NETWORK_ID")
+            (jail.combinators.try-fwd-env "CARDONNAY_TESTNET_ID")
+            (jail.combinators.try-fwd-env "FAUCET_ADDR_FILE")
+            (jail.combinators.try-fwd-env "FAUCET_SKEY_FILE")
+            (jail.combinators.try-fwd-env "FAUCET_WALLET_FILE")
+            (jail.combinators.try-fwd-env "KONDUIT_INDEXER_DB_PATH")
+            (jail.combinators.try-fwd-env "KONDUIT_INDEXER_DIR")
+            (jail.combinators.try-fwd-env "KONDUIT_INDEXER_PORT")
+            (jail.combinators.try-fwd-env "KUPO_INDEXER_DIR")
+            (jail.combinators.try-fwd-env "KUPO_INDEXER_PORT")
+            (jail.combinators.try-fwd-env "KUPO_UTXO_DIR")
+            (jail.combinators.try-fwd-env "KUPO_UTXO_PORT")
+          ];
+
+          extraReadwriteDirs = [
+            "~/projects/cl/konduit"
+            # "~/projects/cl/konduit/paluh/indexer"
+            "~/.config/opencode"
+            "~/.local/share/opencode"
+            "~/.cache/opencode"
+          ];
+          extraPkgs =
+            devShellExtraPackages
+            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates)
+            ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates);
+        };
+
         devShellExtras =
           devShell
           // {
@@ -180,14 +216,18 @@
 
               ${shellHookCommon}
 
+              # Most (not all yet) setup of the process-compose subprocesses is
+              # done through the env variables. Please use this convention
+              # so we can have more testing flexibility around the local dev env.
+
               export ROOT_DIR="$(git rev-parse --show-toplevel)"
               export RUN_DIR="$ROOT_DIR/.run"
 
               # Vars required by testnet part of the process compose:
 
               export TESTNET_DIR="$RUN_DIR/testnet"
+
               export CARDONNAY_TESTNET_ID="9"
-              export CARDANO_NODE_NETWORK_ID=42
 
               export KUPO_INDEXER_DIR="$RUN_DIR/kupo-indexer"
               export KUPO_INDEXER_PORT=1442
@@ -207,23 +247,27 @@
               NODE_SOCKET_NAME="''${CARDANO_NODE_SOCKET_PATH##*/}"
               export CARDANO_NODE_CONFIG_PATH="$NODE_SOCKET_DIR/config-''${NODE_SOCKET_NAME%.socket}.json"
 
+              CONFIG_DIR=$(dirname "$CARDANO_NODE_CONFIG_PATH")
+              SHELLEY_GENESIS=$(jq -r .ShelleyGenesisFile "$CARDANO_NODE_CONFIG_PATH")
+              export CARDANO_NODE_NETWORK_ID=$(jq -r .networkMagic "$CONFIG_DIR/$SHELLEY_GENESIS")
+
               export KONDUIT_VALIDATOR_HASH="$(cat $ROOT_DIR/packages/kernel/plutus.json | jq -r '.validators[0].hash')"
 
               # This **will be** initialized by the testnet process compose when executed
               export FAUCET_ADDR_FILE="$TESTNET_DIR/faucet.addr"
+              # Faucet skey in a cardano-cli JSON format.
               export FAUCET_SKEY_FILE="$TESTNET_DIR/faucet.skey"
+              # The same as above key but in a raw 64 hex format
+              export FAUCET_WALLET_FILE="$TESTNET_DIR/faucet.wallet"
 
               export PROCESS_COMPOSE_YAML=${process-compose-dev-env-yaml}
+              # This var is looked up by the process compose itself.
+              export PC_PORT_NUM=8100
             '';
 
             packages =
-              devShell.packages
+              devShellExtraPackages
               ++ [
-                cardano-node
-                cardano-cli
-                cardonnay
-                process-compose-dev-env
-
                 (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
                   inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
                 })

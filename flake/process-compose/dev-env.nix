@@ -89,6 +89,9 @@
     runtimeInputs = [cardonnay];
     text = ''
       set -x
+      export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-./.run/cargo-target-indexer}"
+      mkdir -p "$CARGO_TARGET_DIR"
+      mkdir -p "$(dirname "$KONDUIT_INDEXER_DB_PATH")"
       cargo run -p konduit-indexer --features=cli -- \
         index \
         --kupo-port "$KUPO_INDEXER_PORT" \

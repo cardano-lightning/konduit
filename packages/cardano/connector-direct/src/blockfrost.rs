@@ -7,7 +7,8 @@ use blockfrost_openapi::models::{
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
     Address, Credential, Hash, Input, Network, Output, PlutusData, PlutusScript, PlutusVersion,
-    ProtocolParameters, Transaction, Value, address::kind, cbor, cbor::ToCbor, transaction::state,
+    ProtocolParameters, PublicNetwork, Transaction, Value, address::kind, cbor, cbor::ToCbor,
+    transaction::state,
 };
 use futures::stream::{self, StreamExt};
 use std::collections::BTreeMap;
@@ -18,7 +19,7 @@ pub struct Blockfrost {
     api: BlockfrostAPI,
     base_url: String,
     client: reqwest::Client,
-    network: Network,
+    network: PublicNetwork,
     project_id: String,
 }
 
@@ -26,7 +27,7 @@ pub type ProjectId = String;
 
 impl Blockfrost {
     pub fn new(project_id: ProjectId) -> Self {
-        let network = Network::try_from(&project_id[0..7])
+        let network = PublicNetwork::try_from(&project_id[0..7])
             .unwrap_or_else(|e| panic!("failed to infer network from Blockfrost's id: {e}"));
         let base_url = format!("https://cardano-{}.blockfrost.io/api/v0", network);
         let api = BlockfrostAPI::new(project_id.as_str(), Default::default());
@@ -141,7 +142,7 @@ impl Blockfrost {
 
 impl CardanoConnector for Blockfrost {
     fn network(&self) -> Network {
-        self.network
+        self.network.into()
     }
 
     async fn health(&self) -> anyhow::Result<String> {
@@ -192,9 +193,9 @@ impl CardanoConnector for Blockfrost {
         //             .collect::<anyhow::Result<Vec<i64>>>()?,
         //     );
         let pp = match self.network {
-            Network::Mainnet => ProtocolParameters::mainnet(),
-            Network::Preview => ProtocolParameters::preview(),
-            Network::Preprod => ProtocolParameters::preprod(),
+            PublicNetwork::Mainnet => ProtocolParameters::mainnet(),
+            PublicNetwork::Preview => ProtocolParameters::preview(),
+            PublicNetwork::Preprod => ProtocolParameters::preprod(),
         };
         Ok(pp)
     }

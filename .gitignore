@@ -25,3 +25,6 @@ target/
 
 # db
 _konduit.redb
+# Local devel process-compose
+.pc.log
+.run
