@@ -2180,6 +2180,7 @@
       "inputs": {
         "aiken": "aiken",
         "capkgs": "capkgs",
+        "cardano-node": "cardano-node",
         "cardonnay-src": "cardonnay-src",
         "flake-parts": "flake-parts",
         "git-hooks-nix": "git-hooks-nix",

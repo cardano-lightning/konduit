@@ -1,3 +1,4 @@
+use crate::output::{self, OutputJson};
 use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::Credential;
@@ -16,6 +17,10 @@ pub struct Cmd {
     /// squash_body,signature;cheque_body,signature,secret;cheque,secret;
     #[arg(long, value_parser=parse_keytag_receipt)]
     pub receipt: Vec<(Keytag, Receipt)>,
+
+    /// Emit machine-readable JSON instead of human-readable text
+    #[arg(long, default_value_t = false)]
+    pub output_json: bool,
 }
 
 impl Cmd {
@@ -63,8 +68,16 @@ impl Cmd {
             &utxos,
             &upper,
         )?;
-        println!("Tx id :: {}", tx.id());
+        let tx_id = tx.id().to_string();
         tx.sign(&config.wallet);
-        connector.submit(&tx).await
+        connector.submit(&tx).await?;
+        let output = OutputJson(self.output_json);
+        if output.is_json() {
+            let dto = output::TxOutput::from_id(tx_id);
+            output::render(output, &dto)?;
+        } else {
+            println!("Tx id :: {}", tx_id);
+        }
+        Ok(())
     }
 }

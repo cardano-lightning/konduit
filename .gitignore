@@ -16,6 +16,12 @@
 debug/
 target/
 
+# Node
+node_modules/
+.yarn/*
+!.yarn/cache
+*.tsbuildinfo
+
 # Devel process-compose
 .run
 

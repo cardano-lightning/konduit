@@ -773,6 +773,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
 name = "bytes"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -821,6 +827,26 @@ dependencies = [
  "hex",
  "reqwest",
  "serde",
+]
+
+[[package]]
+name = "cardano-connector-node"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-connector",
+ "cardano-sdk",
+ "hex",
+ "konduit-data",
+ "konduit-tmp",
+ "konduit-tx",
+ "minicbor",
+ "num",
+ "pallas-codec",
+ "pallas-network",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -2539,6 +2565,7 @@ dependencies = [
  "anyhow",
  "cardano-connector",
  "cardano-connector-direct",
+ "cardano-connector-node",
  "cardano-connector-utxorpc",
  "cardano-sdk",
  "clap",
@@ -2550,6 +2577,7 @@ dependencies = [
  "konduit-tx",
  "minicbor",
  "serde",
+ "serde_json",
  "serde_with",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
@@ -2623,7 +2651,11 @@ dependencies = [
  "konduit-data",
  "kupo-client",
  "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_with",
  "thiserror 2.0.18",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -2658,6 +2690,7 @@ dependencies = [
  "bln-client",
  "cardano-connector",
  "cardano-connector-direct",
+ "cardano-connector-node",
  "cardano-connector-utxorpc",
  "cardano-sdk",
  "clap",
@@ -2826,6 +2859,12 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "libyaml-rs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e126dda6f34391ab7b444f9922055facc83c07a910da3eb16f1e4d9c45dc777"
 
 [[package]]
 name = "lightning-invoice"
@@ -3171,6 +3210,25 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "zeroize",
+]
+
+[[package]]
+name = "pallas-network"
+version = "0.35.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4146073d190abd9b752768966b68bef527e21aa16f4555d35a7d7cd43c91a24"
+dependencies = [
+ "byteorder",
+ "hex",
+ "itertools 0.13.0",
+ "pallas-codec",
+ "pallas-crypto",
+ "rand 0.8.6",
+ "serde",
+ "socket2 0.5.10",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5785,6 +5843,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
 dependencies = [
  "tap",
+]
+
+[[package]]
+name = "yaml_serde"
+version = "0.10.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33b729a08a9a6be689bbad3e2bf8015926db54b6622cc89c3a5f7dc174b9e918"
+dependencies = [
+ "indexmap 2.14.0",
+ "itoa",
+ "libyaml-rs",
+ "ryu",
+ "serde",
 ]
 
 [[package]]

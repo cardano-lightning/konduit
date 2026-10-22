@@ -4,6 +4,8 @@
   inputs = {
     aiken.url = "github:aiken-lang/aiken";
     capkgs.url = "github:input-output-hk/capkgs";
+    # Provides the NixOS module for the node the deployment guest runs.
+    cardano-node.url = "github:IntersectMBO/cardano-node/11.0.1";
     cardonnay-src = {
       url = "github:IntersectMBO/cardonnay?ref=v0.3.6";
       flake = false;
@@ -62,6 +64,10 @@
             pkgs.yarn
             pkgs.nodejs
             pkgs.typescript-language-server
+            pkgs.yarn-berry
+            pkgs.yarn-berry_4.yarn-berry-fetcher
+            pkgs.yarn-bash-completion
+
             # RUST
             pkgs.openssl
             config.rust-project.toolchain
@@ -195,6 +201,10 @@
 
           extraReadwriteDirs = [
             "~/projects/cl/konduit"
+            "~/projects/cl/konduit-js"
+            "~/projects/marlowe/marlowe-plutus/"
+            "~/projects/marlowe/marlowe-deploy/"
+            "/tmp"
             # "~/projects/cl/konduit/paluh/indexer"
             "~/.config/opencode"
             "~/.local/share/opencode"
@@ -237,6 +247,14 @@
 
               export KONDUIT_INDEXER_DIR="$RUN_DIR/konduit-indexer"
               export KONDUIT_INDEXER_DB_PATH="$KONDUIT_INDEXER_DIR/konduit-indexer.db"
+
+              export KONDUIT_SERVER_DIR="$RUN_DIR/konduit-server"
+              export KONDUIT_SERVER_DB_PATH="$KONDUIT_SERVER_DIR/konduit-server.db"
+              export KONDUIT_SERVER_HOST="127.0.0.1"
+              export KONDUIT_SERVER_PORT=5663
+              # The server refreshes its FX state on a timer, and a zero
+              # interval makes it panic on start.
+              export KONDUIT_FX_EVERY="10m"
 
 
               # This exposes CARDANO_NODE_SOCKET_PATH to the shell
@@ -282,6 +300,11 @@
       in {
         rust-project = {
           crates = {
+            konduit-indexer = {
+              # The binary is behind the cli feature, so a plain build of the
+              # crate would not produce it.
+              crane.args.cargoBuildExtraArgs = "--features cli";
+            };
             konduit-server = {
               crane = {
                 args = {
@@ -363,8 +386,40 @@
           extras = pkgs.mkShell devShellExtras;
         };
       };
-      flake = {
-        nixosModules.default = import ./flake/nixos.nix inputs.self;
+      flake = let
+        nixos = import ./flake/nixos/outputs.nix {
+          self = inputs.self;
+          nixpkgs = inputs'.nixpkgs;
+        };
+
+        # The guest shares a preprod snapshot and the server secrets from the
+        # host, so both are read from the environment and passed on as plain
+        # strings: a Nix path would be copied into the store.
+        requiredEnv = name: let
+          value = builtins.getEnv name;
+        in
+          if value == ""
+          then throw "${name} is not set"
+          else value;
+      in {
+        nixosModules =
+          nixos.nixosModules
+          // {
+            default = import ./flake/nixos.nix inputs.self;
+          };
+
+        # A VM running cardano-node, Kupo, the konduit indexer and the konduit
+        # backend against preprod. See ./flake/nixos/README.md.
+        nixosConfigurations.preprod = nixos.mkPreprodDeployment {
+          cardanoNodeModule = inputs'.cardano-node.nixosModules.cardano-node;
+          cardanoCli = inputs'.cardano-node.packages.${system}.cardano-cli;
+          kupoPackage = inputs'.kupo.packages.kupo;
+          indexerPackage = inputs.self.packages.${system}.konduit-indexer;
+          serverPackage = inputs.self.packages.${system}.konduit-server;
+          hostSnapshot = requiredEnv "KONDUIT_PREPROD_DB";
+          hostUid = lib.toInt (requiredEnv "KONDUIT_PREPROD_DB_OWNER_UID");
+          hostEnvFile = requiredEnv "KONDUIT_SERVER_ENV_FILE";
+        };
       };
     };
 }

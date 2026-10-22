@@ -51,6 +51,18 @@ impl Consumer {
             channels,
         })
     }
+
+    pub fn wallet(&self) -> &Utxos {
+        &self.wallet
+    }
+
+    pub fn reference_script(&self) -> Option<&Utxo> {
+        self.reference_script.as_ref()
+    }
+
+    pub fn channels(&self) -> &BTreeMap<Input, Channel> {
+        &self.channels
+    }
 }
 
 impl fmt::Display for Consumer {
@@ -109,6 +121,18 @@ impl Adaptor {
             channels,
         })
     }
+
+    pub fn wallet(&self) -> &Utxos {
+        &self.wallet
+    }
+
+    pub fn reference_script(&self) -> Option<&Utxo> {
+        self.reference_script.as_ref()
+    }
+
+    pub fn channels(&self) -> &BTreeMap<Input, Channel> {
+        &self.channels
+    }
 }
 
 impl fmt::Display for Adaptor {
@@ -153,6 +177,14 @@ impl Admin {
             wallet,
             reference_script,
         })
+    }
+
+    pub fn wallet(&self) -> &Utxos {
+        &self.wallet
+    }
+
+    pub fn reference_script(&self) -> Option<&Utxo> {
+        self.reference_script.as_ref()
     }
 }
 

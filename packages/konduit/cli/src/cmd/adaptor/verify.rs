@@ -1,7 +1,9 @@
 use konduit_data::{Locked, Squash};
 use konduit_tmp::Keytag;
 use konduit_tx::to_verifying_key;
+use serde::{Deserialize, Serialize};
 
+use crate::output::{self, OutputJson};
 use crate::{
     cmd::parsers::{parse_locked, parse_squash},
     config::adaptor::Config,
@@ -18,6 +20,9 @@ pub enum Cmd {
         /// Squash either (hex) cbor or CSV of body-as-cbor and signature
         #[arg(long, value_parser = parse_squash )]
         squash: Squash,
+        /// Emit machine-readable JSON instead of human-readable text
+        #[arg(long, default_value_t = false)]
+        output_json: bool,
     },
     /// Verify a locked cheque
     Locked {
@@ -27,25 +32,48 @@ pub enum Cmd {
         /// Will parse either <cheque_body,signature> of the cbor of `Cheque::Locked`
         #[arg(long, value_parser = parse_locked )]
         locked: Locked,
+        /// Emit machine-readable JSON instead of human-readable text
+        #[arg(long, default_value_t = false)]
+        output_json: bool,
     },
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifyResult {
+    pub valid: bool,
+}
+
 impl Cmd {
     pub(crate) fn run(self, _config: &Config) -> anyhow::Result<()> {
         match self {
-            Cmd::Squash { keytag, squash } => {
+            Cmd::Squash {
+                keytag,
+                squash,
+                output_json,
+            } => {
                 let (key, tag) = keytag.split();
-                println!(
-                    "{}",
-                    squash.try_verify(&to_verifying_key(key), &tag).is_ok()
-                );
+                let valid = squash.try_verify(&to_verifying_key(key), &tag).is_ok();
+                if output_json {
+                    let dto = VerifyResult { valid };
+                    output::render(OutputJson(true), &dto)?;
+                } else {
+                    println!("{}", valid);
+                }
                 Ok(())
             }
-            Cmd::Locked { keytag, locked } => {
+            Cmd::Locked {
+                keytag,
+                locked,
+                output_json,
+            } => {
                 let (key, tag) = keytag.split();
-                println!(
-                    "{}",
-                    locked.try_verify(&to_verifying_key(key), &tag).is_ok()
-                );
+                let valid = locked.try_verify(&to_verifying_key(key), &tag).is_ok();
+                if output_json {
+                    let dto = VerifyResult { valid };
+                    output::render(OutputJson(true), &dto)?;
+                } else {
+                    println!("{}", valid);
+                }
                 Ok(())
             }
         }

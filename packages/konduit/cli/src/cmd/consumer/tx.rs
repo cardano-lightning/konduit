@@ -1,3 +1,4 @@
+use crate::output::{self, OutputJson};
 use crate::{cardano::ADA, config::consumer::Config};
 use cardano_sdk::VerificationKey;
 use konduit_client::l1;
@@ -21,6 +22,10 @@ pub struct Cmd {
     /// Close channel
     #[arg(long, value_names = ["TAG"])]
     close: Vec<Tag>,
+
+    /// Emit machine-readable JSON instead of human-readable text
+    #[arg(long, default_value_t = false)]
+    output_json: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +109,12 @@ impl Cmd {
             .execute(&config.wallet, None, opens, intents, &config.host_address)
             .await?;
 
-        println!("\"{id}\"");
+        if self.output_json {
+            let dto = output::TxOutput::from_id(id.to_string());
+            output::render(OutputJson(true), &dto)?;
+        } else {
+            println!("\"{id}\"");
+        }
 
         Ok(())
     }

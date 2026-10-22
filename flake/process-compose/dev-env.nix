@@ -33,6 +33,10 @@
       : "''${KONDUIT_INDEXER_DB_PATH:?}"
       : "''${KUPO_UTXO_DIR:?}"
       : "''${KUPO_UTXO_PORT:?}"
+      : "''${KONDUIT_SERVER_DB_PATH:?}"
+      : "''${KONDUIT_SERVER_HOST:?}"
+      : "''${KONDUIT_SERVER_PORT:?}"
+      : "''${KONDUIT_FX_EVERY:?}"
     '';
   };
 
@@ -96,6 +100,48 @@
         index \
         --kupo-port "$KUPO_INDEXER_PORT" \
         --db-path "$KONDUIT_INDEXER_DB_PATH"
+    '';
+  };
+
+  konduit-server = writeShellApplication {
+    name = "konduit-server";
+    runtimeInputs = [];
+    text = ''
+      set -x
+      # The server refuses to start without an adaptor signing key. It is a dev
+      # secret, so it is not kept in the .env files of the repo.
+      : "''${KONDUIT_SIGNING_KEY:?konduit-server needs KONDUIT_SIGNING_KEY}"
+
+      export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-./.run/cargo-target-server}"
+      mkdir -p "$CARGO_TARGET_DIR"
+      mkdir -p "$(dirname "$KONDUIT_SERVER_DB_PATH")"
+
+      # Cardano: the local testnet. Variables exported here win over the .env
+      # and .env.adaptor files the server loads itself.
+      export KONDUIT_CARDANO_BACKEND="node"
+      export KONDUIT_NODE_SOCKET="$CARDANO_NODE_SOCKET_PATH"
+      export KONDUIT_NODE_NETWORK_MAGIC="$CARDANO_NODE_NETWORK_ID"
+      # A local testnet is not a public network, but the value is parsed even
+      # though the node backend never looks at it.
+      export KONDUIT_NETWORK="''${KONDUIT_NETWORK_NAME:-preview}"
+
+      # BLN: mandatory. Falls back to the mock backend unless the dev env
+      # points at an LND.
+      if [ -n "''${LND_BASE_URL:-}" ] && [ -n "''${LND_MACAROON:-}" ]; then
+        unset BLN_MOCK
+      else
+        export BLN_MOCK="true"
+      fi
+
+      # FX: fixed rates unless the dev env brings a live source.
+      export FX_EVERY="''${KONDUIT_FX_EVERY:-10m}"
+      export FX_ADA="''${FX_ADA:-''${KONDUIT_FX_ADA:-0.6}}"
+      export FX_BITCOIN="''${FX_BITCOIN:-''${KONDUIT_FX_BITCOIN:-60000}}"
+
+      export KONDUIT_DB_PATH="$KONDUIT_SERVER_DB_PATH"
+
+      # Started from the repo root, so the server picks up .env and .env.adaptor.
+      cargo run -p konduit-server
     '';
   };
 in
@@ -164,6 +210,16 @@ in
             run_on_start = true;
             max_concurrent = 1;
           };
+        };
+
+        konduit-server = {
+          depends_on = {
+            "validate-dev-env".condition = "process_completed_successfully";
+            "initialize-testnet".condition = "process_healthy";
+          };
+          command = "${konduit-server}/bin/konduit-server";
+          log_location = "./.run/konduit-server.log";
+          namespace = "server";
         };
       };
   }
