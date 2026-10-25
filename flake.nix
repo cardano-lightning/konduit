@@ -229,7 +229,6 @@
             "~/projects/marlowe/marlowe-plutus/"
             "~/projects/marlowe/marlowe-deploy/"
             "/tmp"
-            # "~/projects/cl/konduit/paluh/indexer"
             "~/.config/opencode"
             "~/.local/share/opencode"
             "~/.cache/opencode"
