@@ -97,7 +97,7 @@ impl Client {
         let quote = self
             .gateway
             .quote(&wire::quote::Request {
-                payee: payme.payee.clone(),
+                payee: payme.payee,
                 amount: payme.amount,
             })
             .await?;
@@ -110,7 +110,7 @@ impl Client {
             self.gateway.propose_index(),
             pay_amount,
             timeout,
-            payme.lock.clone(),
+            payme.lock,
         );
         let locked = self.signer.locked(self.gateway.tag().clone(), body);
 
@@ -128,7 +128,7 @@ impl Client {
         let res = self.gateway.commit(&req).await?;
 
         let secret = res.secret.ok_or(Error::NoSecret)?;
-        self.gateway.apply_secret(secret.clone())?;
+        self.gateway.apply_secret(secret)?;
         Ok(secret)
     }
 }

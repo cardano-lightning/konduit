@@ -45,7 +45,7 @@ impl Keytag {
 
 impl From<(&VerifyingKey, &Tag)> for Keytag {
     fn from((key, tag): (&VerifyingKey, &Tag)) -> Self {
-        let mut bytes = <[u8; 32]>::from(key.clone()).to_vec();
+        let mut bytes = <[u8; 32]>::from(*key).to_vec();
         bytes.extend_from_slice(tag.as_ref());
         Self(bytes)
     }

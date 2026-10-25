@@ -135,6 +135,6 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Cmd::Init { force } => init_config(&cli.config, force),
-        Cmd::Run {} => run(cli.config).await,
+        Cmd::Run => run(cli.config).await,
     }
 }

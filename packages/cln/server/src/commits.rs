@@ -11,6 +11,12 @@ use konduit_data::Lock;
 #[derive(Debug, Clone)]
 pub struct Commit();
 
+impl Default for Commit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Commit {
     pub fn new() -> Self {
         Self()
@@ -27,6 +33,12 @@ pub enum Error {
 
 pub struct Commits {
     commits: Mutex<BTreeMap<Lock, Commit>>,
+}
+
+impl Default for Commits {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Commits {

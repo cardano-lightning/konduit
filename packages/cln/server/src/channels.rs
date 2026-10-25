@@ -26,6 +26,12 @@ pub enum Error {
     NoRoute(VerifyingKey),
 }
 
+impl Default for Channels {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Channels {
     pub fn new() -> Self {
         Self {
@@ -42,6 +48,6 @@ impl Channels {
     }
 
     pub fn get(&self, peer: &VerifyingKey) -> Result<&Arc<Channel>, Error> {
-        self.channels.get(peer).ok_or(Error::NoRoute(peer.clone()))
+        self.channels.get(peer).ok_or(Error::NoRoute(*peer))
     }
 }

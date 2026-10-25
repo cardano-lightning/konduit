@@ -51,7 +51,7 @@ impl Ctx {
     ) -> Result<wire::commit::Response, Error> {
         self.inbounds.apply_locked(keytag, req.inbound.clone())?;
         let res = self.outbounds.commit(req).await?;
-        if let Some(secret) = res.secret.clone() {
+        if let Some(secret) = res.secret {
             self.inbounds.apply_secret(keytag, secret)?;
         }
         Ok(res)
@@ -83,12 +83,7 @@ impl Ctx {
         self.inbounds
             .keytags()
             .iter()
-            .map(|kt| {
-                (
-                    kt.clone(),
-                    self.inbounds.wire_receipt(&kt).ok().map(WireReceipt::from),
-                )
-            })
+            .map(|kt| (kt.clone(), self.inbounds.wire_receipt(kt).ok()))
             .collect()
     }
 }

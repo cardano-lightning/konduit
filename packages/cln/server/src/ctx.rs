@@ -124,16 +124,16 @@ impl Ctx {
     }
 
     pub async fn quote(&self, req: wire::quote::Request) -> Result<wire::quote::Response, Error> {
-        let payee = req.payee.clone();
+        let payee = req.payee;
         if payee == self.signer.verifying_key() {
             Ok(wire::quote::Response {
                 fee: 0,
-                timeout: self.timeout().clone(),
+                timeout: *self.timeout(),
             })
         } else {
             let res = self.channels.get(&payee)?.quote(&req).await?;
             let fee = res.fee + self.fee();
-            let timeout = res.timeout.saturating_add(self.timeout().clone());
+            let timeout = res.timeout.saturating_add(*self.timeout());
             Ok(wire::quote::Response { fee, timeout })
         }
     }
@@ -153,7 +153,7 @@ impl Ctx {
         //
         // - Timeout.
         // - If routed, then fee.
-        let timeout = inbound.timeout().saturating_sub(self.timeout().clone());
+        let timeout = inbound.timeout().saturating_sub(*self.timeout());
         if timeout < now() {
             return Err(Error::InsufficientTime);
         }
@@ -185,16 +185,11 @@ impl Ctx {
         let channel = self.channels.get(&key)?;
 
         // 3. Make outbound Locked.
-        let body = ChequeBody::new(
-            channel.propose_index(),
-            amount,
-            timeout,
-            inbound.lock().clone(),
-        );
+        let body = ChequeBody::new(channel.propose_index(), amount, timeout, *inbound.lock());
         let locked = self.signer.locked(channel.tag().clone(), body);
 
         // 4. Record commit to Lock.
-        self.commits.insert(inbound.lock().clone(), Commit::new())?;
+        self.commits.insert(*inbound.lock(), Commit::new())?;
         channel.apply_locked(locked.clone())?;
 
         // 5. Dispatch and await.
@@ -221,7 +216,7 @@ impl Ctx {
         let mut results = Vec::new();
         for (key, channel) in self.channels.iter() {
             let result = self.sync_channel(channel).await;
-            results.push((key.clone(), result));
+            results.push((*key, result));
         }
         results
     }

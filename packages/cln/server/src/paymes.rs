@@ -82,7 +82,7 @@ impl Paymes {
         let lock = Lock::from(secret);
         let timeout = now() + self.config.default_timeout;
         self.paymes()
-            .insert(lock.clone(), Entry::new(amount, timeout, secret));
+            .insert(lock, Entry::new(amount, timeout, secret));
         Payme {
             amount,
             lock,

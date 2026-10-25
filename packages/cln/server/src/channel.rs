@@ -135,7 +135,8 @@ impl Channel {
     }
 
     pub fn apply_timeout(&self, now: konduit_data::Duration) -> Result<(), Error> {
-        Ok(self.receipt().apply_timeout(now))
+        self.receipt().apply_timeout(now);
+        Ok(())
     }
 
     pub fn apply_sync(&self, theirs: Receipt) -> Result<(), Error> {
