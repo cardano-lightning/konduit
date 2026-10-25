@@ -2,7 +2,7 @@ use konduit_tmp::{Keytag, Receipt};
 use minicbor::{Decode, Encode};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
-use crate::channel::{self, Aux, Channel, Retainer};
+use crate::channel::{self, Aux, Backing, Channel};
 
 mod args;
 pub use args::DbArgs as Args;
@@ -16,7 +16,7 @@ const TABLE: TableDefinition<&[u8], Value> = TableDefinition::new("channels");
 #[derive(Debug, Clone, Encode, Decode, Default)]
 pub struct Value {
     #[n(0)]
-    retainer: Option<Retainer>,
+    retainer: Option<Backing>,
     #[n(1)]
     receipt: Option<Receipt>,
     #[n(2)]
@@ -61,7 +61,7 @@ impl Value {
     }
 
     pub fn from_channel(val: Channel) -> Self {
-        let retainer = val.retainer().to_owned();
+        let retainer = val.backing().to_owned();
         let receipt = val.receipt().to_owned();
         let aux = val.aux().to_owned();
         Self {

@@ -1,5 +1,5 @@
 use clap::Parser;
-use konduit_server::{admin, args, server};
+use konduit_server::{admin, args, index, server};
 use konduit_tmp::AdaptorInfo;
 use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
@@ -55,7 +55,29 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|s| anyhow::anyhow!(s))?
         .build()?;
 
-    // ADMIN
+    let info = Arc::new(AdaptorInfo::from(args.common.clone()));
+
+    // ADMIN :: Index
+    let index_every = args.admin.admin_every;
+    let index = Arc::new(index::Index::new(
+        cardano.clone(),
+        db.clone(),
+        info.channel_parameters.clone(),
+    ));
+    let sync_index = Arc::clone(&index);
+
+    actix_web::rt::spawn(async move {
+        let mut ticker = interval(index_every);
+        loop {
+            ticker.tick().await;
+            match sync_index.sync().await {
+                Ok(()) => log::info!("Index sync ok"),
+                Err(e) => log::error!("Index sync failed: {e:#}"),
+            }
+        }
+    });
+
+    // ADMIN :: Tx
     let admin_every = args.admin.admin_every;
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(
@@ -84,7 +106,6 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let info = Arc::new(AdaptorInfo::from(args.common));
     let server_data = server::Data::new(bln, db, fx_state, info, admin);
     let server = server::Service::new(args.server, server_data);
 
