@@ -6,7 +6,7 @@
 mod support;
 
 use anyhow::anyhow;
-use cardano_connector::{CardanoConnector, chain_now};
+use cardano_connector::CardanoConnector;
 use cardano_connector_node::Node;
 use cardano_sdk::{
     Address, Credential, Hash, Input, NetworkId, Output, ProtocolParameters, SigningKey, Slot,
@@ -164,7 +164,7 @@ async fn deploy_then_open() {
     );
 
     assert_eq!(data.amount(), CHANNEL_AMOUNT_LOVELACE);
-    assert!(matches!(data.stage(), konduit_data::Stage::Opened(0, vec)));
+    assert!(matches!(data.stage(), konduit_data::Stage::Opened(0, _)));
 
     // Note: spending a channel UTxO (closing as the consumer or stepping as
     // the adaptor) requires the validator's Plutus V3 script to actually
@@ -248,8 +248,8 @@ async fn consumer_execute(
         opens,
         intents,
         &utxos,
-        Bounds::around_tip(
-            chain_now(node).await?,
+        Bounds::around_now(
+            cardano_sdk::PosixMilliseconds::now(),
             params.slot_length_ms(),
             Slot::new(Bounds::MARGIN_SLOTS),
         ),

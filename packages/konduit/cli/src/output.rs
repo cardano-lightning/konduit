@@ -133,7 +133,7 @@ impl KeytagOutput {
         let keytag = Keytag::new(key, tag);
         Self {
             keytag: keytag.to_string(),
-            verification_key: hex::encode(<[u8; 32]>::from(key.clone())),
+            verification_key: hex::encode(<[u8; 32]>::from(*key)),
             tag: tag.to_string(),
         }
     }
@@ -390,10 +390,7 @@ impl ConsumerTipOutput {
             .as_ref()
             .map(|(i, o)| ReferenceScriptDto::from_utxo(i, o))
             .transpose()?;
-        let channels = channels
-            .iter()
-            .map(|(_input, channel)| ChannelOutput::from_konduit(channel))
-            .collect();
+        let channels = channels.values().map(ChannelOutput::from_konduit).collect();
         Ok(Self {
             wallet,
             reference_script,
@@ -421,10 +418,7 @@ impl AdaptorTipOutput {
             .as_ref()
             .map(|(i, o)| ReferenceScriptDto::from_utxo(i, o))
             .transpose()?;
-        let channels = channels
-            .iter()
-            .map(|(_input, channel)| ChannelOutput::from_konduit(channel))
-            .collect();
+        let channels = channels.values().map(ChannelOutput::from_konduit).collect();
         Ok(Self {
             wallet,
             reference_script,

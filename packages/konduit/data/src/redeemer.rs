@@ -459,7 +459,7 @@ impl proptest::arbitrary::Arbitrary for Redeemer {
 mod via_plutus_data {
     use super::*;
     use anyhow::anyhow;
-    use cardano_sdk::{constr, PlutusData};
+    use cardano_sdk::{PlutusData, constr};
 
     // --- Eol ---
 
@@ -690,7 +690,7 @@ mod via_plutus_data {
 #[allow(unused_imports)]
 mod roundtrip {
     use super::*;
-    use cardano_sdk::{cbor::ToCbor, PlutusData};
+    use cardano_sdk::{PlutusData, cbor::ToCbor};
     use proptest::prelude::*;
 
     proptest! {

@@ -1,7 +1,7 @@
 use crate::output::{self, OutputJson};
 use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
-use cardano_connector::{CardanoConnector, chain_now};
-use cardano_sdk::{Credential, Slot};
+use cardano_connector::CardanoConnector;
+use cardano_sdk::{Credential, PosixMilliseconds, Slot};
 use konduit_tmp::{Keytag, Receipt};
 use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 use std::collections::BTreeMap;
@@ -34,8 +34,8 @@ impl Cmd {
             min_total: 1_000_000,
         };
         let protocol_parameters = connector.protocol_parameters().await?;
-        let bounds = Bounds::around_tip(
-            chain_now(&connector).await?,
+        let bounds = Bounds::around_now(
+            PosixMilliseconds::now(),
             protocol_parameters.slot_length_ms(),
             Slot::new(Bounds::MARGIN_SLOTS),
         );

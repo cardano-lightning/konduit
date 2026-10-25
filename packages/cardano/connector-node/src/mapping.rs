@@ -7,6 +7,9 @@ use pallas_network::miniprotocols::localstate::queries_v16::{
 };
 use std::collections::BTreeMap;
 
+type NativeAsset = (Vec<u8>, u64);
+type NativeAssets = Vec<(Hash<28>, Vec<NativeAsset>)>;
+
 /// Translate a `cardano_sdk::Credential` (payment) — and optional delegation —
 /// into the raw Shelley address bytes the local-state query protocol expects
 /// as part of a `GetUTxOByAddress` request. The node matches the address bytes
@@ -39,8 +42,7 @@ fn map_utxo(
     utxo: &queries_v16::UTxO,
     output: &TransactionOutput,
 ) -> anyhow::Result<(Input, Output)> {
-    let index =
-        u64::try_from(utxo.index).map_err(|error| anyhow!("invalid UTxO index: {error}"))?;
+    let index = u64::from(utxo.index);
     let input = Input::new(Hash::from(utxo.transaction_id), index);
     let output = match output {
         TransactionOutput::Current(post) => map_post_alonso(post)?,
@@ -86,19 +88,16 @@ fn map_legacy(legacy: &queries_v16::LegacyTransactionOutput) -> anyhow::Result<O
 fn map_value(value: &queries_v16::Value) -> anyhow::Result<Value<u64>> {
     match value {
         queries_v16::Value::Coin(coin) => {
-            let lovelace = u64::try_from(*coin)
-                .map_err(|error| anyhow!("invalid lovelace amount: {error}"))?;
+            let lovelace = u64::from(*coin);
             Ok(Value::new(lovelace))
         }
         queries_v16::Value::Multiasset(coin, multiasset) => {
-            let lovelace = u64::try_from(*coin)
-                .map_err(|error| anyhow!("invalid lovelace amount: {error}"))?;
-            let mut assets: Vec<(Hash<28>, Vec<(Vec<u8>, u64)>)> = Vec::new();
+            let lovelace = u64::from(*coin);
+            let mut assets: NativeAssets = Vec::new();
             for (policy, inner) in multiasset.iter() {
-                let mut entries: Vec<(Vec<u8>, u64)> = Vec::new();
+                let mut entries: Vec<NativeAsset> = Vec::new();
                 for (name, amount) in inner.iter() {
-                    let quantity = u64::try_from(*amount)
-                        .map_err(|error| anyhow!("invalid native asset quantity: {error}"))?;
+                    let quantity = u64::from(*amount);
                     entries.push((name.to_vec(), quantity));
                 }
                 assets.push((Hash::from(*policy), entries));

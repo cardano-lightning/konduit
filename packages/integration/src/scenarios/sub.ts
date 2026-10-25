@@ -127,35 +127,35 @@ const ADMIN_TOPUP_LOVELACE = 200n * ADA;
 const SECRET_HEX = "00".repeat(32);
 
 /**
- * Cheque lifetime, counted from the *chain's* clock.
+ * Cheque lifetime, counted from the current time.
  *
  * `konduit-cli consumer make locked --duration` resolves the duration against
- * the chain's current time, which is the only clock that matters: the
- * validator compares a cheque's timeout with the transaction's validity
- * range, and that range lives in the chain's clock too.
+ * the current time, which is the only clock that matters: the validator
+ * compares a cheque's timeout with the transaction's validity range, and that
+ * range is anchored at the same instant.
  */
 const CHEQUE_DURATION = "1h";
 
 /**
- * How far ahead of the chain's clock a cheque's timeout has to be.
+ * How far ahead of the current time a cheque's timeout has to be.
  *
- * The transaction's validity range reaches `chain_now + 30 slots`, and the
+ * The transaction's validity range reaches `now + 300 slots`, and the
  * adaptor *drops* every cheque whose timeout is not beyond that bound — so a
  * cheque that is about to expire would quietly settle less than it should.
  * Five minutes is comfortably above the validity window on every chain we
- * know of (30 slots of 200ms on the fast testnet, 30 seconds on the public
+ * know of (300 slots of 200ms on the fast testnet, five minutes on the public
  * networks) while still well inside the cheque's lifetime.
  */
 const CHEQUE_TIMEOUT_MARGIN_MS = 5 * 60 * 1000;
 
 /**
- * Index of the throw-away cheque used to read the chain's clock.
+ * Index of the throw-away cheque used to read the current time.
  *
  * It must not collide with a real cheque's index: the probe is signed by the
  * consumer for the same channel, so it has to be unmistakably not one of
  * them.
  */
-const CHAIN_CLOCK_PROBE_INDEX = 0xffff_ffff;
+const CLOCK_PROBE_INDEX = 0xffff_ffff;
 
 /** Squash covers indexes `[0, SQUASH_INDEX]`; cheque indexes start above it. */
 const SQUASH_INDEX = 0;
@@ -367,7 +367,7 @@ export const runSub = async (
     index: number;
     bodyCborHex: string;
     signatureHex: string;
-    /** Absolute timeout, in the chain's clock. */
+    /** Absolute timeout, in POSIX milliseconds. */
     timeoutMs: number;
   }> = [];
   for (const cheque of CHEQUES) {
@@ -430,23 +430,23 @@ export const runSub = async (
   console.log("[sub] step 6/8 :: adaptor executes the receipt");
 
   // The cheque's timeout is absolute, and the validator compares it with the
-  // transaction's validity range — both live in the *chain's* clock. The
+  // transaction's validity range — both are anchored at the current time. The
   // adaptor silently drops every cheque that is not beyond the validity
   // range, so a cheque that is about to expire would settle less than it
   // should (or nothing at all) instead of failing loudly. Check the absolute
-  // timeouts against the chain's clock before handing the receipt over.
-  const chainNow = await chainNowMs(env, opts, tag);
+  // timeouts against the current time before handing the receipt over.
+  const now = await nowMs(env, opts, tag);
   for (const cheque of cheques) {
-    if (cheque.timeoutMs <= chainNow + CHEQUE_TIMEOUT_MARGIN_MS) {
+    if (cheque.timeoutMs <= now + CHEQUE_TIMEOUT_MARGIN_MS) {
       throw new Error(
-        `cheque #${cheque.index} expires at ${cheque.timeoutMs} (POSIX ms), but the chain's ` +
-          `clock is already at ${chainNow} — the margin is ${CHEQUE_TIMEOUT_MARGIN_MS}ms. ` +
+        `cheque #${cheque.index} expires at ${cheque.timeoutMs} (POSIX ms), but the clock ` +
+          `is already at ${now} — the margin is ${CHEQUE_TIMEOUT_MARGIN_MS}ms. ` +
           `The adaptor would drop the cheque and the sub would settle less than expected.`,
       );
     }
   }
   console.log(
-    `[sub]   chain clock=${chainNow} ms, cheque timeouts ${cheques
+    `[sub]   now=${now} ms, cheque timeouts ${cheques
       .map((c) => c.timeoutMs)
       .join(", ")} ms`,
   );
@@ -711,18 +711,18 @@ const payoutOfTx = (utxos: UtxoMap, txId: string): bigint => {
 };
 
 /**
- * The chain's current time, in POSIX milliseconds.
+ * The current time, in POSIX milliseconds.
  *
  * `konduit-cli consumer make locked --duration <d>` resolves the duration
- * against the *chain's* clock (`chain_now + d`) — the validator compares a
- * cheque's timeout with the transaction's validity range, and that range
- * lives in the chain's clock too. A zero-length duration therefore hands us
- * that clock verbatim: the probe's timeout *is* the chain's current time.
+ * against the current time — the validator compares a cheque's timeout with
+ * the transaction's validity range, and that range is anchored at the same
+ * instant. A zero-length duration therefore hands us that clock verbatim:
+ * the probe's timeout *is* the current time.
  *
  * The probe is a throw-away cheque — it never leaves this process and is
  * never part of a receipt.
  */
-const chainNowMs = async (
+const nowMs = async (
   env: KonduitTestEnv,
   opts: KonduitCliOptions,
   tag: string,
@@ -732,7 +732,7 @@ const chainNowMs = async (
       env.wallets.consumer,
       {
         tag,
-        index: CHAIN_CLOCK_PROBE_INDEX,
+        index: CLOCK_PROBE_INDEX,
         amount: 0,
         durationMs: 0,
         secretHex: SECRET_HEX,
@@ -740,7 +740,7 @@ const chainNowMs = async (
       opts,
     ),
     (error) =>
-      `consumer make locked (chain clock probe) failed: ${describeError(error)}`,
+      `consumer make locked (clock probe) failed: ${describeError(error)}`,
   );
   return probe.timeout_ms;
 };

@@ -5,8 +5,8 @@ use crate::core::{
     consumer::{self, Intent, OpenIntent},
 };
 use anyhow::anyhow;
-use cardano_connector::{CardanoConnector, chain_now};
-use cardano_sdk::Slot;
+use cardano_connector::CardanoConnector;
+use cardano_sdk::{PosixMilliseconds, Slot};
 use konduit_tmp::to_verifying_key;
 use konduit_tx::ChannelUtxo;
 use std::collections::BTreeMap;
@@ -109,8 +109,8 @@ where
                 .chain(utxos_konduit)
                 .chain(utxos_wallet)
                 .collect(),
-            Bounds::around_tip(
-                chain_now(self.connector).await?,
+            Bounds::around_now(
+                PosixMilliseconds::now(),
                 network_parameters.protocol_parameters.slot_length_ms(),
                 Slot::new(Bounds::MARGIN_SLOTS),
             ),

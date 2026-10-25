@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use blockfrost::{BlockfrostAPI, BlockfrostError, Pagination};
 use blockfrost_openapi::models::{
     address_utxo_content_inner::AddressUtxoContentInner,
@@ -7,7 +7,7 @@ use blockfrost_openapi::models::{
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
     Address, Credential, Hash, Input, Milliseconds, Network, Output, PlutusData, PlutusScript,
-    PlutusVersion, PosixMilliseconds, ProtocolParameters, PublicNetwork, Slot, Transaction, Value,
+    PlutusVersion, PosixMilliseconds, ProtocolParameters, PublicNetwork, Transaction, Value,
     address::kind, cbor, cbor::ToCbor, transaction::state,
 };
 use futures::stream::{self, StreamExt};
@@ -212,19 +212,6 @@ impl CardanoConnector for Blockfrost {
         }
 
         Ok(pp)
-    }
-
-    async fn tip_slot(&self) -> anyhow::Result<Slot> {
-        let block = self
-            .api
-            .blocks_latest()
-            .await
-            .map_err(|error| anyhow!(error))
-            .context("failed to read the latest block from Blockfrost")?;
-        let slot = block
-            .slot
-            .ok_or_else(|| anyhow!("Blockfrost's latest block carries no slot"))?;
-        Ok(Slot::new(slot as u64))
     }
 
     async fn utxos_at(

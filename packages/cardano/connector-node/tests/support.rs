@@ -30,6 +30,7 @@ pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 pub struct TestEnv {
     pub socket: PathBuf,
     pub network_magic: u64,
+    #[allow(dead_code)]
     pub faucet_address: Address<kind::Shelley>,
     pub faucet_signing_key: SigningKey,
 }
@@ -212,34 +213,10 @@ pub async fn transfer_ada(
     Ok(tx_id)
 }
 
-/// Wait until no UTxO matching `payment`/`delegation` exists. Useful for
-/// asserting a UTxO has been spent (e.g. the channel being closed).
-pub async fn wait_until_empty(
-    node: &Node,
-    payment: &Credential,
-    delegation: Option<&Credential>,
-    deadline: Duration,
-) -> anyhow::Result<()> {
-    let start = Instant::now();
-    loop {
-        let utxos = node.utxos_at(payment, delegation).await?;
-        if utxos.is_empty() {
-            return Ok(());
-        }
-        if start.elapsed() >= deadline {
-            return Err(anyhow!(
-                "wait_until_empty timed out after {:?} for {payment:?}; saw {} utxos",
-                deadline,
-                utxos.len()
-            ));
-        }
-        tokio::time::sleep(DEFAULT_POLL_INTERVAL).await;
-    }
-}
-
 /// Deploy the konduit validator referenced script to `host_address`. The
 /// admin pays for it from its own UTxOs. Returns the tx id so callers can
 /// correlate with on-chain state.
+#[allow(dead_code)]
 pub async fn deploy_validator(
     node: &Node,
     admin_key: &SigningKey,
@@ -270,6 +247,7 @@ pub async fn deploy_validator(
 }
 
 /// Convenience: poll until at least one UTxO matches the predicate.
+#[allow(dead_code)]
 pub async fn wait_for_utxo_matching<F>(
     node: &Node,
     payment: &Credential,

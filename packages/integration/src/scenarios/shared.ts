@@ -378,8 +378,8 @@ export const ensureFunded = async (
       faucet,
       env.faucet.skeyFile,
       [{ address: recipient, amount: Number(topupLovelace) }],
-      null,
       cardano.networkMagic,
+      null,
       cardano.debug,
     ),
     (error) =>

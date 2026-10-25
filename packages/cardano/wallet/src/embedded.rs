@@ -227,7 +227,7 @@ mod tests {
 
     fn test_embedded(utxos: Map<Input, Output>) -> Embedded<FakeConnector> {
         let connector = Arc::new(FakeConnector {
-            network: Network::Preprod,
+            network: Network::PREPROD,
             utxos,
             submitted: std::sync::Mutex::new(None),
         });

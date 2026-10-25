@@ -7,7 +7,7 @@ pub use config::Config;
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
-    Credential, Input, Network, Output, ProtocolParameters, PublicNetwork, Slot, Transaction,
+    Credential, Input, Network, Output, ProtocolParameters, PublicNetwork, Transaction,
     cbor::ToCbor, transaction::state,
 };
 use std::collections::BTreeMap;
@@ -225,11 +225,6 @@ impl CardanoConnector for UtxoRpc {
     async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
         let mut query = self.query.lock().await;
         params::read(&mut query).await
-    }
-
-    async fn tip_slot(&self) -> anyhow::Result<Slot> {
-        let tip = self.read_tip().await?;
-        Ok(Slot::new(tip.slot))
     }
 
     async fn utxos_at(

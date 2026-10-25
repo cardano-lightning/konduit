@@ -6,9 +6,8 @@ use cardano_sdk::{Milliseconds, PosixMilliseconds, Slot};
 ///
 /// The bounds are *timestamps*, not durations: they are compared against the
 /// validity range the ledger hands to a Plutus script, and against the
-/// timestamps stored in a channel's datum. They are anchored at the chain's
-/// current tip — see [`Bounds::around_tip`] — so that they live in the
-/// chain's clock rather than in the wallet's wall clock.
+/// timestamps stored in a channel's datum. They are anchored at the current
+/// time — see [`Bounds::around_now`].
 #[derive(Debug, Clone, Default)]
 pub struct Bounds {
     pub lower: Option<PosixMilliseconds>,
@@ -17,7 +16,7 @@ pub struct Bounds {
 
 impl Bounds {
     /// How many slots a transaction's validity window spans on either side
-    /// of the chain's tip.
+    /// of the current slot.
     ///
     /// The window has to be wide enough for the transaction to be *included*:
     /// it is built (the Plutus scripts are evaluated locally, which takes a
@@ -65,22 +64,22 @@ impl Bounds {
         Self { lower, upper }
     }
 
-    /// A validity window around the chain's current tip.
+    /// A validity window around the current time.
     ///
     /// The margin is expressed in *slots*, not in time: a chain with 200ms
     /// slots and one with 20s slots then get the same number of slots to
     /// include the transaction in, while a window expressed in minutes would
     /// be 5400 slots ahead on a fast chain — too far ahead for the node to
     /// schedule.
-    pub fn around_tip(
-        tip_time: PosixMilliseconds,
+    pub fn around_now(
+        now: PosixMilliseconds,
         slot_length_ms: Milliseconds,
         margin_slots: Slot,
     ) -> Self {
         let margin = slot_length_ms * u64::from(margin_slots);
         Bounds {
-            lower: Some(tip_time - margin),
-            upper: Some(tip_time + margin),
+            lower: Some(now - margin),
+            upper: Some(now + margin),
         }
     }
 }
@@ -90,14 +89,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn around_tip_spans_the_margin_on_both_sides() {
-        let tip = PosixMilliseconds::new(1_000_000);
+    fn around_now_spans_the_margin_on_both_sides() {
+        let now = PosixMilliseconds::new(1_000_000);
         let margin = Milliseconds::new(200 * Bounds::MARGIN_SLOTS);
         let bounds =
-            Bounds::around_tip(tip, Milliseconds::new(200), Slot::new(Bounds::MARGIN_SLOTS));
+            Bounds::around_now(now, Milliseconds::new(200), Slot::new(Bounds::MARGIN_SLOTS));
 
-        assert_eq!(bounds.lower, Some(tip - margin));
-        assert_eq!(bounds.upper, Some(tip + margin));
+        assert_eq!(bounds.lower, Some(now - margin));
+        assert_eq!(bounds.upper, Some(now + margin));
     }
 
     #[test]
@@ -105,6 +104,7 @@ mod tests {
         // 300 slots of a 200ms chain is a minute — ten times the worst block
         // delay we have seen on the local testnet. A margin that only spans a
         // couple of slots lets a transaction expire before it is included.
-        assert!(Bounds::MARGIN_SLOTS * 200 >= 60_000);
+        let slot_length_ms: u64 = 200;
+        assert!(slot_length_ms * Bounds::MARGIN_SLOTS >= 60_000);
     }
 }

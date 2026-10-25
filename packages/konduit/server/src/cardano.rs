@@ -3,7 +3,7 @@ pub use args::CardanoArgs as Args;
 
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
-    Credential, Input, Network, Output, ProtocolParameters, Slot, Transaction, transaction::state,
+    Credential, Input, Network, Output, ProtocolParameters, Transaction, transaction::state,
 };
 use std::collections::BTreeMap;
 
@@ -35,14 +35,6 @@ impl CardanoConnector for Cardano {
             Self::Blockfrost(connector) => connector.protocol_parameters().await,
             Self::UtxoRpc(connector) => connector.protocol_parameters().await,
             Self::Node(connector) => connector.protocol_parameters().await,
-        }
-    }
-
-    async fn tip_slot(&self) -> anyhow::Result<Slot> {
-        match self {
-            Self::Blockfrost(connector) => connector.tip_slot().await,
-            Self::UtxoRpc(connector) => connector.tip_slot().await,
-            Self::Node(connector) => connector.tip_slot().await,
         }
     }
 

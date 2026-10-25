@@ -195,7 +195,7 @@ mod verification_key {
 
     impl From<&VerificationKey> for VerifyingKey {
         fn from(verification_key: &VerificationKey) -> Self {
-            VerifyingKey(verification_key.clone().into())
+            VerifyingKey((*verification_key).into())
         }
     }
 

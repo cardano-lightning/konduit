@@ -10,7 +10,7 @@ use cardano_connector_utxorpc::{
     Config as UtxoRpcRuntimeConfig, UtxoRpc, ensure_network_matches, live_network,
 };
 use cardano_sdk::{
-    Credential, Input, Network, Output, ProtocolParameters, Slot, Transaction,
+    Credential, Input, Network, Output, ProtocolParameters, Transaction,
     transaction::state::ReadyForSigning,
 };
 use std::collections::BTreeMap;
@@ -115,14 +115,6 @@ impl CardanoConnector for Connector {
             Self::Blockfrost(c) => c.protocol_parameters().await,
             Self::UtxoRpc(c) => c.protocol_parameters().await,
             Self::Node(c) => c.protocol_parameters().await,
-        }
-    }
-
-    async fn tip_slot(&self) -> Result<Slot> {
-        match self {
-            Self::Blockfrost(c) => c.tip_slot().await,
-            Self::UtxoRpc(c) => c.tip_slot().await,
-            Self::Node(c) => c.tip_slot().await,
         }
     }
 

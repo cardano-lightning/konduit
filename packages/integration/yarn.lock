@@ -56,9 +56,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@konduit/bln@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/bln::locator=%40konduit%2Fintegration%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@konduit/bln@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/bln::locator=%40konduit%2Fintegration%40workspace%3A."
+"@konduit/bln@github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/bln":
+  version: 0.0.0
+  resolution: "@konduit/bln@https://github.com/cardano-lightning/konduit-js.git#workspace=%40konduit%2Fbln&commit=041e6cc6b137b136db65a44484611d6ed1c68746"
   dependencies:
     "@noble/hashes": "npm:^2.0.1"
     "@noble/secp256k1": "npm:^3.0.0"
@@ -66,21 +66,25 @@ __metadata:
     bip21: "npm:^3.0.0"
     neverthrow: "npm:^8.2.0"
     type-fest: "npm:^5.4.3"
+  checksum: 10c0/f052f089f5b1e34ab224ee4e431617c989243dde7a37e18a011a8a159a1241730b71a443febe29353dec11c7b5f26aac2dcd99a0fd288f95b0f46d7780b4f4ac
   languageName: node
-  linkType: soft
+  linkType: hard
 
-"@konduit/cardano-cli@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/cardano-cli::locator=%40konduit%2Fintegration%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@konduit/cardano-cli@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/cardano-cli::locator=%40konduit%2Fintegration%40workspace%3A."
+"@konduit/cardano-cli@github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/cardano-cli":
+  version: 0.0.0
+  resolution: "@konduit/cardano-cli@https://github.com/cardano-lightning/konduit-js.git#workspace=%40konduit%2Fcardano-cli&commit=041e6cc6b137b136db65a44484611d6ed1c68746"
   dependencies:
+    "@konduit/codec": "npm:^0.0.0"
+    "@konduit/konduit-consumer": "npm:^0.0.1"
     neverthrow: "npm:^8.2.0"
     type-fest: "npm:^5.4.3"
+  checksum: 10c0/9552a3497b932abecd1e5cfd752fa6675ad429aa8ac4bd615ec5818ac51927a491c317b0f3f48847f588a3d40a3904d9e04140d9a46ed243c36ecac8b586bc20
   languageName: node
-  linkType: soft
+  linkType: hard
 
-"@konduit/cardano-keys@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/cardano-keys::locator=%40konduit%2Fintegration%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@konduit/cardano-keys@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/cardano-keys::locator=%40konduit%2Fintegration%40workspace%3A."
+"@konduit/cardano-keys@github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/cardano-keys":
+  version: 0.0.0
+  resolution: "@konduit/cardano-keys@https://github.com/cardano-lightning/konduit-js.git#workspace=%40konduit%2Fcardano-keys&commit=041e6cc6b137b136db65a44484611d6ed1c68746"
   dependencies:
     "@noble/ciphers": "npm:^2.1.1"
     "@noble/hashes": "npm:^2.0.1"
@@ -88,20 +92,22 @@ __metadata:
     libsodium-wrappers-sumo: "npm:^0.8.1"
     neverthrow: "npm:^8.2.0"
     type-fest: "npm:^5.4.1"
+  checksum: 10c0/8ad25099c551683325c4157b8eac03854a9508eb88eca335b0d63b61b19a95995f94b232db6ca98d6f42c177874bf43e560141f2b80dd479901752558c3e7ba6
   languageName: node
-  linkType: soft
+  linkType: hard
 
-"@konduit/codec@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/codec::locator=%40konduit%2Fintegration%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@konduit/codec@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/codec::locator=%40konduit%2Fintegration%40workspace%3A."
+"@konduit/codec@github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/codec":
+  version: 0.0.0
+  resolution: "@konduit/codec@https://github.com/cardano-lightning/konduit-js.git#workspace=%40konduit%2Fcodec&commit=041e6cc6b137b136db65a44484611d6ed1c68746"
   dependencies:
     decimal.js: "npm:^10.6.0"
     decimal.js-i18n: "npm:^0.3.1"
     json-bigint: "npm:^1.0.0"
     neverthrow: "npm:^8.2.0"
     type-fest: "npm:^5.4.3"
+  checksum: 10c0/2f7da7d7556aa1a09724d79dbeb2875d878e8c0f83baef5777f7604b19c36005efb9c53d8f0787f5475bf0edb6047a9b153853809248c2ef0bf9771b0cfff611
   languageName: node
-  linkType: soft
+  linkType: hard
 
 "@konduit/integration@workspace:.":
   version: 0.0.0-use.local
@@ -121,21 +127,22 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@konduit/konduit-consumer@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/konduit-consumer::locator=%40konduit%2Fintegration%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@konduit/konduit-consumer@portal:../../../../../konduit-js/paluh/migrate-the-app/packages/konduit-consumer::locator=%40konduit%2Fintegration%40workspace%3A."
+"@konduit/konduit-consumer@github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/konduit-consumer":
+  version: 0.0.1
+  resolution: "@konduit/konduit-consumer@https://github.com/cardano-lightning/konduit-js.git#workspace=%40konduit%2Fkonduit-consumer&commit=041e6cc6b137b136db65a44484611d6ed1c68746"
   dependencies:
-    "@konduit/bln": "workspace:^"
-    "@konduit/cardano-keys": "workspace:^"
-    "@konduit/codec": "workspace:^"
+    "@konduit/bln": "npm:^0.0.0"
+    "@konduit/cardano-keys": "npm:^0.0.0"
+    "@konduit/codec": "npm:^0.0.0"
     "@noble/hashes": "npm:^2.0.1"
     "@scure/base": "npm:^2.0.0"
     decimal.js: "npm:^10.6.0"
     decimal.js-i18n: "npm:^0.3.1"
     neverthrow: "npm:^8.2.0"
     type-fest: "npm:^5.4.3"
+  checksum: 10c0/8c9460dc87d16eb983eab9b75913644b52351927e18769a4c6a40d11b00f2881c72b24a089cdc7f4940b429105758e700ac0ff83cdd2462506d4eaec33167edc
   languageName: node
-  linkType: soft
+  linkType: hard
 
 "@noble/ciphers@npm:^2.1.1":
   version: 2.4.0

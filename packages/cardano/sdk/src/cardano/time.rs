@@ -128,6 +128,19 @@ impl PosixMilliseconds {
         Self(milliseconds)
     }
 
+    /// The current time, in POSIX milliseconds.
+    ///
+    /// This is the local clock — the machine's idea of "now", not the chain's.
+    /// `web-time` is used so that the browser gets a real clock too: `std`'s
+    /// `SystemTime::now` panics on `wasm32-unknown-unknown`.
+    pub fn now() -> Self {
+        let millis = web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or_default();
+        PosixMilliseconds::new(millis)
+    }
+
     pub fn as_millis(self) -> u64 {
         self.0
     }
@@ -192,5 +205,10 @@ mod tests {
     fn slot_distance_is_saturating() {
         assert_eq!(Slot::new(10).distance_to(Slot::new(15)), 5);
         assert_eq!(Slot::new(15).distance_to(Slot::new(10)), 0);
+    }
+
+    #[test]
+    fn now_is_after_the_epoch() {
+        assert!(PosixMilliseconds::now().as_millis() > 1_000_000_000_000);
     }
 }

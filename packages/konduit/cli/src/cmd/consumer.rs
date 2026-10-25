@@ -34,7 +34,7 @@ impl Cmd {
         let config = Config::try_from(env)?;
 
         match self {
-            Cmd::Make(cmd) => cmd.run(&config).await,
+            Cmd::Make(cmd) => cmd.run(&config),
             Cmd::Show(cmd) => cmd.run(&config).await,
             Cmd::Tx(cmd) => cmd.run(&config).await,
             Cmd::Setup => unreachable!(),

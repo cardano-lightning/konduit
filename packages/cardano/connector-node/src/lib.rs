@@ -9,7 +9,7 @@ pub use config::Config;
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
-    Credential, Input, Network, Output, ProtocolParameters, Slot, Transaction, cbor::ToCbor,
+    Credential, Input, Network, Output, ProtocolParameters, Transaction, cbor::ToCbor,
     transaction::state,
 };
 use pallas_network::{
@@ -115,17 +115,6 @@ impl CardanoConnector for Node {
                 .await
                 .map_err(|error| anyhow!(error))
                 .context("failed to read protocol parameters from local node")
-        })
-        .await
-    }
-
-    async fn tip_slot(&self) -> anyhow::Result<Slot> {
-        self.with_state_query(async move |client| {
-            let point = queries_v16::get_chain_point(client)
-                .await
-                .map_err(|error| anyhow!(error))
-                .context("failed to query chain point from local node")?;
-            Ok(Slot::new(point.slot_or_default()))
         })
         .await
     }

@@ -34,6 +34,7 @@ pallas-crypto.workspace = true
 pallas-primitives.workspace = true
 rand_core.workspace = true
 uplc.workspace = true
+web-time.workspace = true
 # -F clap
 clap = { workspace = true, optional = true }
 # -F serde
