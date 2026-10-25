@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use blockfrost::{BlockfrostAPI, BlockfrostError, Pagination};
 use blockfrost_openapi::models::{
     address_utxo_content_inner::AddressUtxoContentInner,
@@ -6,14 +6,17 @@ use blockfrost_openapi::models::{
 };
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
-    Address, Credential, Hash, Input, Network, Output, PlutusData, PlutusScript, PlutusVersion,
-    ProtocolParameters, PublicNetwork, Transaction, Value, address::kind, cbor, cbor::ToCbor,
-    transaction::state,
+    Address, Credential, Hash, Input, Milliseconds, Network, Output, PlutusData, PlutusScript,
+    PlutusVersion, PosixMilliseconds, ProtocolParameters, PublicNetwork, Slot, Transaction, Value,
+    address::kind, cbor, cbor::ToCbor, transaction::state,
 };
 use futures::stream::{self, StreamExt};
 use std::collections::BTreeMap;
 
 const UNIT_LOVELACE: &str = "lovelace";
+
+/// Byron slots are 20 seconds long — a protocol constant.
+const BYRON_SLOT_LENGTH_SECS: u64 = 20;
 
 pub struct Blockfrost {
     api: BlockfrostAPI,
@@ -173,9 +176,6 @@ impl CardanoConnector for Blockfrost {
         //     .with_referenced_scripts_fee_step_size(25000) // Not in response
         //     .with_execution_price_mem(x.price_mem.ok_or(anyhow!("Expect `price_mem`"))?)
         //     .with_execution_price_cpu(x.price_step.ok_or(anyhow!("Expect `price_step`"))?)
-        //     // FIXME :: Timeslots from mainnet
-        //     .with_start_time(1506203091) // Not in response
-        //     .with_first_shelley_slot(4492800) // Not in response
         //     .with_plutus_v3_cost_model(
         //         x.cost_models_raw
         //             .ok_or(anyhow!("Expect `cost_models_raw`"))?
@@ -192,12 +192,39 @@ impl CardanoConnector for Blockfrost {
         //             })
         //             .collect::<anyhow::Result<Vec<i64>>>()?,
         //     );
-        let pp = match self.network {
+        let mut pp = match self.network {
             PublicNetwork::Mainnet => ProtocolParameters::mainnet(),
             PublicNetwork::Preview => ProtocolParameters::preview(),
             PublicNetwork::Preprod => ProtocolParameters::preprod(),
         };
+
+        // The slot length and the time anchor come from the chain's genesis,
+        // which Blockfrost serves for us.
+        if let Ok(genesis) = self.api.genesis().await {
+            let first_shelley_slot = pp.first_shelley_slot();
+            // The genesis' `system_start` is the *Byron* start; the Shelley era
+            // begins `BYRON_SLOT_LENGTH_SECS` later per Byron slot.
+            let shelley_start_secs = genesis.system_start.max(0) as u64
+                + BYRON_SLOT_LENGTH_SECS * u64::from(first_shelley_slot);
+            pp = pp
+                .with_start_time(PosixMilliseconds::new(shelley_start_secs * 1000))
+                .with_slot_length_ms(Milliseconds::new(genesis.slot_length.max(0) as u64 * 1000));
+        }
+
         Ok(pp)
+    }
+
+    async fn tip_slot(&self) -> anyhow::Result<Slot> {
+        let block = self
+            .api
+            .blocks_latest()
+            .await
+            .map_err(|error| anyhow!(error))
+            .context("failed to read the latest block from Blockfrost")?;
+        let slot = block
+            .slot
+            .ok_or_else(|| anyhow!("Blockfrost's latest block carries no slot"))?;
+        Ok(Slot::new(slot as u64))
     }
 
     async fn utxos_at(

@@ -37,9 +37,9 @@ impl ChannelOutput {
     #[wasm_bindgen(getter, js_name = "subbedAmount")]
     pub fn _wasm_subbed_amount(&self) -> u64 {
         match self.stage() {
-            core::Stage::Opened(subbed, _)
-            | core::Stage::Closed(subbed, _, _)
-            | core::Stage::Responded(subbed, _) => *subbed,
+            core::Stage::Opened(subbed, _) | core::Stage::Closed(subbed, _, _) => *subbed,
+            // `Responded` has no subbed amount — it holds the pendings total.
+            core::Stage::Responded(pends_amount, _) => *pends_amount,
         }
     }
 

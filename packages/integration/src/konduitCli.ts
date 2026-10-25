@@ -106,6 +106,17 @@ const buildRoleEnv = (
   return env;
 };
 
+/**
+ * How long a single `konduit-cli` invocation may take before it is killed.
+ *
+ * `execFileSync` blocks the whole event loop, so a child that never exits
+ * would freeze the *entire* suite — vitest's own timeouts cannot fire while
+ * the loop is blocked, and the run would hang with no output at all. Every
+ * command therefore gets a deadline; a command that trips it is reported as a
+ * `CommandError` like any other failure.
+ */
+const COMMAND_TIMEOUT_MS = 120_000;
+
 const invokeWithEnv = (
   cmd: string,
   env: Record<string, string>,
@@ -121,14 +132,19 @@ const invokeWithEnv = (
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 100 * 1024 * 1024,
+      timeout: COMMAND_TIMEOUT_MS,
+      killSignal: "SIGKILL",
     });
     return ok(stdout.toString().trim());
   } catch (e: any) {
+    const timedOut = e?.killed === true || e?.signal === "SIGKILL";
     return err({
       type: "CommandError",
-      status: BigInt(e.status ?? e.code ?? 0),
-      stdout: (e.stdout ?? "").toString(),
-      stderr: (e.stderr ?? "").toString(),
+      status: BigInt(e?.status ?? e?.code ?? 0),
+      stdout: (e?.stdout ?? "").toString(),
+      stderr: timedOut
+        ? `command timed out after ${COMMAND_TIMEOUT_MS}ms: ${cmd}`
+        : (e?.stderr ?? "").toString(),
     });
   }
 };
@@ -147,6 +163,10 @@ const runKonduitRoleCli = (
   return invokeWithEnv(cmd, env, opts.debug ?? false);
 };
 
+// REVIEW: Actually please drop this custom Json and use the one from @konduit/codec.
+// Additionally PLEASE GO OVER THE WHOLE package and remove all the `JSON.*` with
+// dedicated and safe helpers from the `codec` package - it provides strigify, parse etc.
+//
 // ---------------------------------------------------------------------------
 // Internal: minimal `Json` deserialisation helpers.
 //

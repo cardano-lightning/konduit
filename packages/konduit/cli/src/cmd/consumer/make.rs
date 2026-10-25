@@ -1,17 +1,22 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use cardano_connector::chain_now;
 use konduit_data::{ChequeBody, Duration, Indexes, Lock, Locked, Secret, Squash, SquashBody, Tag};
 use konduit_tmp::to_signing_key;
 
 use crate::config::consumer::Config;
 use crate::output::{self, OutputJson};
 
-fn duration_from_relative(duration: Duration) -> Duration {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs();
-    Duration::from_secs(now + duration.as_secs())
+/// A relative cheque timeout, counted from the *chain's* current time.
+///
+/// The validator compares a cheque's timeout with the transaction's validity
+/// range, and the latter lives in the chain's clock — so the timeout has to
+/// live there too. Counting from the wallet's wall clock would be wrong on
+/// any chain whose clock does not track it.
+async fn duration_from_relative(config: &Config, duration: Duration) -> anyhow::Result<Duration> {
+    let connector = config.connector.connector().await?;
+    let now = chain_now(&connector).await?;
+    Ok(Duration::from_millis(
+        now.as_millis().saturating_add(duration.as_millis() as u64),
+    ))
 }
 
 /// Show
@@ -65,7 +70,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    pub(crate) fn run(self, config: &Config) -> anyhow::Result<()> {
+    pub(crate) async fn run(self, config: &Config) -> anyhow::Result<()> {
         match self {
             Cmd::Squash {
                 tag,
@@ -90,17 +95,20 @@ impl Cmd {
                 lock,
                 secret,
                 output_json,
-            } => run_locked(
-                config,
-                &tag,
-                index,
-                amount,
-                timeout,
-                duration,
-                lock,
-                secret,
-                OutputJson(output_json),
-            ),
+            } => {
+                run_locked(
+                    config,
+                    &tag,
+                    index,
+                    amount,
+                    timeout,
+                    duration,
+                    lock,
+                    secret,
+                    OutputJson(output_json),
+                )
+                .await
+            }
         }
     }
 }
@@ -130,7 +138,7 @@ fn run_squash(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_locked(
+async fn run_locked(
     config: &Config,
     tag: &Tag,
     index: u64,
@@ -144,9 +152,11 @@ fn run_locked(
     let lock = lock
         .or_else(|| secret.map(Lock::from))
         .ok_or(anyhow::anyhow!("lock or secret required"))?;
-    let timeout = timeout
-        .or_else(|| duration.map(duration_from_relative))
-        .ok_or(anyhow::anyhow!("timeout or duration required"))?;
+    let timeout = match (timeout, duration) {
+        (Some(timeout), _) => timeout,
+        (None, Some(duration)) => duration_from_relative(config, duration).await?,
+        (None, None) => return Err(anyhow::anyhow!("timeout or duration required")),
+    };
     let body = ChequeBody::new(index, amount, timeout, lock);
     let locked = Locked::make(&to_signing_key(config.wallet.clone()), tag, body);
     if output.is_json() {

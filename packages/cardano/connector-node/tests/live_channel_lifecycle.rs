@@ -6,10 +6,10 @@
 mod support;
 
 use anyhow::anyhow;
-use cardano_connector::CardanoConnector;
+use cardano_connector::{CardanoConnector, chain_now};
 use cardano_connector_node::Node;
 use cardano_sdk::{
-    Address, Credential, Hash, Input, NetworkId, Output, ProtocolParameters, SigningKey,
+    Address, Credential, Hash, Input, NetworkId, Output, ProtocolParameters, SigningKey, Slot,
     address::kind,
 };
 use konduit_data::Tag;
@@ -248,7 +248,11 @@ async fn consumer_execute(
         opens,
         intents,
         &utxos,
-        Bounds::twenty_mins(),
+        Bounds::around_tip(
+            chain_now(node).await?,
+            params.slot_length_ms(),
+            Slot::new(Bounds::MARGIN_SLOTS),
+        ),
     )?;
 
     tx.sign(consumer_key);

@@ -1,4 +1,5 @@
 mod config;
+mod genesis_config;
 mod mapping;
 mod params;
 mod v3_cost_model;
@@ -8,13 +9,14 @@ pub use config::Config;
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
-    Credential, Input, Network, Output, ProtocolParameters, Transaction, cbor::ToCbor,
+    Credential, Input, Network, Output, ProtocolParameters, Slot, Transaction, cbor::ToCbor,
     transaction::state,
 };
 use pallas_network::{
     facades::NodeClient,
     miniprotocols::{
         localstate,
+        localstate::queries_v16,
         localtxsubmission::{EraTx, Response as SubmissionResponse},
     },
 };
@@ -92,11 +94,10 @@ impl CardanoConnector for Node {
 
     async fn health(&self) -> anyhow::Result<String> {
         self.with_state_query(async |client| {
-            let point =
-                pallas_network::miniprotocols::localstate::queries_v16::get_chain_point(client)
-                    .await
-                    .map_err(|error| anyhow!(error))
-                    .context("failed to read chain point from local node")?;
+            let point = queries_v16::get_chain_point(client)
+                .await
+                .map_err(|error| anyhow!(error))
+                .context("failed to read chain point from local node")?;
 
             Ok(format!(
                 "local-node socket={} network_magic={} tip={:?}",
@@ -109,12 +110,22 @@ impl CardanoConnector for Node {
     }
 
     async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
-        let network = self.network();
         self.with_state_query(async move |client| {
-            params::read(client, network)
+            params::read(client)
                 .await
                 .map_err(|error| anyhow!(error))
                 .context("failed to read protocol parameters from local node")
+        })
+        .await
+    }
+
+    async fn tip_slot(&self) -> anyhow::Result<Slot> {
+        self.with_state_query(async move |client| {
+            let point = queries_v16::get_chain_point(client)
+                .await
+                .map_err(|error| anyhow!(error))
+                .context("failed to query chain point from local node")?;
+            Ok(Slot::new(point.slot_or_default()))
         })
         .await
     }

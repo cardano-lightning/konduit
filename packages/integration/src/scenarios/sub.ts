@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import {
   type ConsumerTipOutput,
+  type KonduitCliOptions,
   consumerMakeLocked,
   consumerMakeSquash,
   consumerShowKeytagJson,
@@ -9,19 +10,44 @@ import {
   describeError,
   adaptorTxReceipt,
 } from "../konduitCli.js";
-import { totalLovelaceAt } from "../cardanoCli.js";
+
+import { isChannelClosed, type ChannelThread } from "../indexerDb.js";
+import type { UtxoMap } from "@konduit/cardano-cli";
 import type { KonduitTestEnv } from "../testEnv.js";
+import {
+  type InvariantViolation,
+  type PollFailure,
+  assertChannelMatchesChain,
+  assertDbMatchesCli,
+  assertThreadInvariants,
+  formatViolations,
+  indexedAmount,
+  openIndexerDbFor,
+  verifyIndexerDbSchema,
+  waitForIndexedChannel,
+  waitForIndexedTipAfter,
+  waitForStepInTransaction,
+  waitForThreadSteps,
+} from "./indexing.js";
 import {
   ADA,
   EXEC_FEE_BUDGET_LOVELACE,
   MIN_ADA_BUFFER_LOVELACE,
   MIN_CHANGE_LOVELACE,
   bootstrap,
+  ensureFunded,
   explainNodeRejection,
   findFreeTag,
+  pollFailure as renderPollFailure,
+  totalLovelaceAt,
+  utxosAt,
   waitFor,
   waitForValue,
 } from "./shared.js";
+import {
+  unwrapOrPanic,
+  unwrapOrPanicWith,
+} from "@konduit/konduit-consumer/neverthrow";
 
 /**
  * @file Scenario: settle L2 cheques against the channel and pull the money L1.
@@ -42,7 +68,12 @@ import {
  *        - the channel's `subbed` counter moved (the adaptor paid),
  *        - the channel's remaining `amount_lovelace` dropped by exactly the
  *          gain,
- *        - the **adaptor's own wallet** actually gained lovelace.
+ *        - the **adaptor was paid**: the sub transaction paid the adaptor's
+ *          address at least the gain, and the adaptor's balance moved by
+ *          exactly `gain - fee` (the adaptor pays the sub's execution fee out
+ *          of its own pocket, so its balance does *not* grow by the gain).
+ *   7. assert the *indexer* recorded the same thing: a `Cont::Sub` step whose
+ *      datum shows the reduced amount and the retired cheque indexes.
  *
  * Protocol arithmetic (see `Channel::sub` in `packages/konduit/tx/src/channel.rs`):
  *
@@ -53,6 +84,12 @@ import {
  * so with `subbed = 0` and no prior `useds`, `gain = squash.amount + Σ cheque
  * amounts`. The CLI additionally enforces `min_single = 10_000` per channel and
  * `min_total = 1_000_000` across the whole transaction.
+ *
+ * The db checks in step 7 are the interesting part for this scenario: a sub is
+ * the only step where the *datum itself* changes in a way the CLI cannot easily
+ * be asked about (the `useds` list and the retired `subbed`), so reading it back
+ * out of the store is the only way to confirm the indexer understood the
+ * redeemer rather than merely noticing an output.
  */
 
 // --- Scenario parameters ---------------------------------------------------
@@ -60,21 +97,20 @@ import {
 const CHANNEL_OPEN_LOVELACE = 100n * ADA;
 
 /**
- * Lovelace the consumer needs *free* (not locked in a channel) to cover the
- * open, the validator's own buffer, the ~24 ada execution fee, and a valid
- * change output.
+ * What the consumer's **largest** utxo has to cover for the open: the amount
+ * that goes into the channel, the validator's ada buffer, the fee and a
+ * change output big enough to be valid.
  */
 const CONSUMER_REQUIRED_LOVELACE =
   CHANNEL_OPEN_LOVELACE +
   MIN_ADA_BUFFER_LOVELACE +
   EXEC_FEE_BUDGET_LOVELACE +
   MIN_CHANGE_LOVELACE;
-const CONSUMER_TOPUP_LOVELACE = 300n * ADA;
+const CONSUMER_TOPUP_LOVELACE = 150n * ADA;
 
 /**
- * The adaptor only pays the execution fee here — the *gain* it receives is
- * paid out of the channel UTxO, so it cannot be used to fund its own
- * submission.
+ * The adaptor only pays the fee here — the *gain* it receives is paid out of
+ * the channel UTxO, so it cannot be used to fund its own submission.
  */
 const ADAPTOR_REQUIRED_LOVELACE =
   EXEC_FEE_BUDGET_LOVELACE + MIN_CHANGE_LOVELACE;
@@ -90,8 +126,36 @@ const ADMIN_TOPUP_LOVELACE = 200n * ADA;
  */
 const SECRET_HEX = "00".repeat(32);
 
-/** Cheque lifetime. Must exceed the tx's upper bound (`now + 20min`). */
+/**
+ * Cheque lifetime, counted from the *chain's* clock.
+ *
+ * `konduit-cli consumer make locked --duration` resolves the duration against
+ * the chain's current time, which is the only clock that matters: the
+ * validator compares a cheque's timeout with the transaction's validity
+ * range, and that range lives in the chain's clock too.
+ */
 const CHEQUE_DURATION = "1h";
+
+/**
+ * How far ahead of the chain's clock a cheque's timeout has to be.
+ *
+ * The transaction's validity range reaches `chain_now + 30 slots`, and the
+ * adaptor *drops* every cheque whose timeout is not beyond that bound — so a
+ * cheque that is about to expire would quietly settle less than it should.
+ * Five minutes is comfortably above the validity window on every chain we
+ * know of (30 slots of 200ms on the fast testnet, 30 seconds on the public
+ * networks) while still well inside the cheque's lifetime.
+ */
+const CHEQUE_TIMEOUT_MARGIN_MS = 5 * 60 * 1000;
+
+/**
+ * Index of the throw-away cheque used to read the chain's clock.
+ *
+ * It must not collide with a real cheque's index: the probe is signed by the
+ * consumer for the same channel, so it has to be unmistakably not one of
+ * them.
+ */
+const CHAIN_CLOCK_PROBE_INDEX = 0xffff_ffff;
 
 /** Squash covers indexes `[0, SQUASH_INDEX]`; cheque indexes start above it. */
 const SQUASH_INDEX = 0;
@@ -113,8 +177,31 @@ export type SubScenarioResult = {
   openTxId: string;
   subTxId: string;
   expectedGainLovelace: bigint;
-  observedGainLovelace: bigint;
+  /** What the sub transaction paid the adaptor's address. */
+  adaptorPayoutLovelace: bigint;
+  /** What the sub transaction cost the adaptor in execution fees. */
+  adaptorFeeLovelace: bigint;
+  /** What the indexer's store holds, when the db layer ran. */
+  indexed: IndexedSubResult | null;
 };
+
+/** The db-visible trace of a sub: the one place the datum really changes. */
+export type IndexedSubResult = {
+  dbPath: string;
+  channelTransactionId: string;
+  /** Amount the store reports after the sub. */
+  amountAfterSubLovelace: number | null;
+  /** Cheque indexes the store recorded as `used`. */
+  usedIndexes: number[];
+  /** What the decoded redeemer said the sub carried. */
+  redeemerSteps: string[];
+};
+
+const pollFailure = (label: string, failure: PollFailure): string =>
+  renderPollFailure(`[sub] ${label}`, failure);
+
+const violations = (label: string, found: InvariantViolation[]): string =>
+  `[sub] ${label} disagrees with the chain:\n${formatViolations(found)}`;
 
 export const runSub = async (
   env: KonduitTestEnv,
@@ -123,63 +210,98 @@ export const runSub = async (
   // 1. Bootstrap
   // ---------------------------------------------------------------------
   console.log("[sub] step 1/8 :: bootstrap");
-  const { opts, node, adaptorConstants, closePeriodMs } = await bootstrap(env, {
-    adminRequiredLovelace: ADMIN_REQUIRED_LOVELACE,
-    adminTopupLovelace: ADMIN_TOPUP_LOVELACE,
-    fundAlso: [
-      {
-        role: "consumer",
-        address: env.wallets.consumer.address,
-        requiredLovelace: CONSUMER_REQUIRED_LOVELACE,
-        topupLovelace: CONSUMER_TOPUP_LOVELACE,
-      },
-      {
-        role: "adaptor",
-        address: env.wallets.adaptor.address,
-        requiredLovelace: ADAPTOR_REQUIRED_LOVELACE,
-        topupLovelace: ADAPTOR_TOPUP_LOVELACE,
-      },
-    ],
-  });
+  const { opts, cardano, adaptorConstants, closePeriodMs } = await bootstrap(
+    env,
+    {
+      adminRequiredLovelace: ADMIN_REQUIRED_LOVELACE,
+      adminTopupLovelace: ADMIN_TOPUP_LOVELACE,
+      // The consumer is funded before the open (the only transaction it
+      // pays for); the adaptor before the receipt.
+      fundAlso: [],
+    },
+  );
+
+  await ensureFunded(
+    env,
+    env.wallets.consumer.address,
+    cardano,
+    CONSUMER_REQUIRED_LOVELACE,
+    CONSUMER_TOPUP_LOVELACE,
+    "consumer (open)",
+  );
+
+  await ensureFunded(
+    env,
+    env.wallets.adaptor.address,
+    cardano,
+    ADAPTOR_REQUIRED_LOVELACE,
+    ADAPTOR_TOPUP_LOVELACE,
+    "adaptor (receipt)",
+  );
 
   // Snapshot the adaptor's balance *before* the sub so we can prove the
   // transfer really moved value onto L1.
-  const adaptorBefore = totalLovelaceAt(env.wallets.adaptor.address, node, {
-    skipReferenceScriptUtxos: true,
-  });
-  if (adaptorBefore.isErr()) {
-    throw new Error(
-      `Failed to query adaptor balance: ${String(adaptorBefore.error)}`,
-    );
-  }
+  const adaptorBefore = unwrapOrPanic(
+    totalLovelaceAt(env.wallets.adaptor.address, cardano, {
+      skipReferenceScriptUtxos: true,
+    }),
+    "Failed to query adaptor balance",
+  );
 
   // ---------------------------------------------------------------------
   // 2. Fresh channel on a unique tag
   // ---------------------------------------------------------------------
   console.log("[sub] step 2/8 :: open a fresh channel");
+
+  // The indexer db layer is optional; without it the scenario still proves the
+  // on-chain behaviour, it just cannot prove the state was indexed.
+  const indexerHandle = await openIndexerDbFor(env);
+  const db = indexerHandle.db;
+  let indexerTipSlot = 0;
+  if (db) {
+    const schema = unwrapOrPanic(
+      verifyIndexerDbSchema(db),
+      "[sub] konduit-indexer db is not usable",
+    );
+    const tip = unwrapOrPanic(db.tip(), "[sub] cannot read the indexer tip");
+    if (tip === null) {
+      throw new Error(
+        "[sub] the konduit-indexer db has no blocks — the indexer has not " +
+          "completed a sync pass yet (see .run/konduit-indexer.log)",
+      );
+    }
+    indexerTipSlot = tip.slotNo;
+    console.log(
+      `[sub]   indexer db ready (${env.indexerDb.dbPath}, revision ${schema.schemaVersion}, tip slot ${indexerTipSlot})`,
+    );
+  } else {
+    console.log(
+      `[sub]   indexer db checks skipped: ${indexerHandle.skipReason}`,
+    );
+  }
+
   const tag = await findFreeTag(async () =>
     consumerShowTipJson(env.wallets.consumer, opts),
   );
   console.log(`[sub]   tag=0x${tag}`);
 
-  const openResult = await consumerTxOpen(
-    env.wallets.consumer,
-    [
-      {
-        tag,
-        subVkeyHex: adaptorConstants.sub_vkey,
-        closePeriodMs,
-        ada: Number(CHANNEL_OPEN_LOVELACE / ADA),
-      },
-    ],
-    opts,
+  const openResult = unwrapOrPanicWith(
+    consumerTxOpen(
+      env.wallets.consumer,
+      [
+        {
+          tag,
+          subVkeyHex: adaptorConstants.sub_vkey,
+          closePeriodMs,
+          ada: Number(CHANNEL_OPEN_LOVELACE / ADA),
+        },
+      ],
+      opts,
+    ),
+    (error) => `consumer tx open failed: ${describeError(error)}`,
   );
-  if (openResult.isErr()) {
-    throw new Error(
-      `consumer tx open failed: ${describeError(openResult.error)}`,
-    );
-  }
-  console.log(`[sub]   open tx=${openResult.value.tx_id}`);
+
+  console.log(`[sub]   open tx=${openResult.tx_id}`);
 
   const openedTip = await waitFor(
     "channel-open",
@@ -194,6 +316,49 @@ export const runSub = async (
     `[sub]   channel open (amount=${channelAmountAfterOpen} buffered=${openedChannel.buffered_lovelace} subbed=${subbedOf(openedChannel)})`,
   );
 
+  // The db view of the fresh channel, kept for the post-sub comparison.
+  let thread: ChannelThread | null = null;
+  if (db) {
+    console.log("[sub]   checking the indexer inserted the channel…");
+    // Prove the indexer is still making progress before blaming it for a
+    // missing row: its tip only advances when a sync pass commits.
+    unwrapOrPanicWith(
+      await waitForIndexedTipAfter(
+        db,
+        indexerTipSlot + 1,
+        env.indexerDb.timeoutMs,
+        env.indexerDb.pollMs,
+      ),
+      (error) =>
+        `[sub] the konduit-indexer never advanced past slot ${indexerTipSlot}: ${error.reason}`,
+    );
+    thread = unwrapOrPanicWith(
+      await waitForIndexedChannel(
+        db,
+        env,
+        { addVkeyHex: openedChannel.add_vkey, tagHex: openedChannel.tag },
+        openResult.tx_id,
+      ),
+      (failure) => pollFailure("indexing the channel row", failure),
+    );
+    unwrapOrPanicWith(
+      assertChannelMatchesChain(thread.channel, {
+        openTxId: openResult.tx_id,
+        addVkeyHex: openedChannel.add_vkey,
+        subVkeyHex: adaptorConstants.sub_vkey,
+        tagHex: openedChannel.tag,
+        scriptHashHex: env.validatorHashHex,
+        // The store records the UTxO value, which includes the validator's ADA
+        // buffer — hence the CLI's `buffered_lovelace`.
+        lovelace: openedChannel.buffered_lovelace,
+      }),
+      (found) => violations("the indexed channel row", found),
+    );
+    console.log(
+      `[sub]   ✓ channel indexed at slot ${thread.channel.blockSlotNo} (lovelace=${thread.channel.lovelace})`,
+    );
+  }
+
   // ---------------------------------------------------------------------
   // 3. Consumer issues locked cheques (L2 promises)
   // ---------------------------------------------------------------------
@@ -202,31 +367,32 @@ export const runSub = async (
     index: number;
     bodyCborHex: string;
     signatureHex: string;
+    /** Absolute timeout, in the chain's clock. */
+    timeoutMs: number;
   }> = [];
   for (const cheque of CHEQUES) {
-    const locked = await consumerMakeLocked(
-      env.wallets.consumer,
-      {
-        tag,
-        index: cheque.index,
-        amount: Number(cheque.lovelace),
-        durationMs: CHEQUE_DURATION,
-        secretHex: SECRET_HEX,
-      },
-      opts,
+    const locked = unwrapOrPanicWith(
+      await consumerMakeLocked(
+        env.wallets.consumer,
+        {
+          tag,
+          index: cheque.index,
+          amount: Number(cheque.lovelace),
+          durationMs: CHEQUE_DURATION,
+          secretHex: SECRET_HEX,
+        },
+        opts,
+      ),
+      (error) => `consumer make locked failed: ${describeError(error)}`,
     );
-    if (locked.isErr()) {
-      throw new Error(
-        `consumer make locked failed: ${describeError(locked.error)}`,
-      );
-    }
     console.log(
-      `[sub]   cheque #${cheque.index} amount=${cheque.lovelace} timeout_ms=${locked.value.timeout_ms}`,
+      `[sub]   cheque #${cheque.index} amount=${cheque.lovelace} timeout_ms=${locked.timeout_ms}`,
     );
     cheques.push({
       index: cheque.index,
-      bodyCborHex: locked.value.body_cbor_hex,
-      signatureHex: locked.value.signature_hex,
+      bodyCborHex: locked.body_cbor_hex,
+      signatureHex: locked.signature_hex,
+      timeoutMs: locked.timeout_ms,
     });
   }
 
@@ -234,40 +400,56 @@ export const runSub = async (
   // 4. Consumer squashes the earlier indices
   // ---------------------------------------------------------------------
   console.log("[sub] step 4/8 :: consumer squashes");
-  const squash = await consumerMakeSquash(
-    env.wallets.consumer,
-    {
-      tag,
-      amount: Number(SQUASH_LOVELACE),
-      index: SQUASH_INDEX,
-    },
-    opts,
+  const squash = unwrapOrPanicWith(
+    await consumerMakeSquash(
+      env.wallets.consumer,
+      {
+        tag,
+        amount: Number(SQUASH_LOVELACE),
+        index: SQUASH_INDEX,
+      },
+      opts,
+    ),
+    (error) => `consumer make squash failed: ${describeError(error)}`,
   );
-  if (squash.isErr()) {
-    throw new Error(
-      `consumer make squash failed: ${describeError(squash.error)}`,
-    );
-  }
-  console.log(
-    `[sub]   squash amount=${squash.value.amount} index=${squash.value.index}`,
-  );
+  console.log(`[sub]   squash amount=${squash.amount} index=${squash.index}`);
 
   // ---------------------------------------------------------------------
   // 5. Consumer hands the adaptor a keytag binding them together
   // ---------------------------------------------------------------------
   console.log("[sub] step 5/8 :: resolve the channel keytag");
-  const keytag = await consumerShowKeytagJson(env.wallets.consumer, tag, opts);
-  if (keytag.isErr()) {
-    throw new Error(
-      `consumer show keytag failed: ${describeError(keytag.error)}`,
-    );
-  }
-  console.log(`[sub]   keytag=${keytag.value.keytag.slice(0, 16)}…`);
+  const keytag = unwrapOrPanicWith(
+    await consumerShowKeytagJson(env.wallets.consumer, tag, opts),
+    (error) => `consumer show keytag failed: ${describeError(error)}`,
+  );
+  console.log(`[sub]   keytag=${keytag.keytag.slice(0, 16)}…`);
 
   // ---------------------------------------------------------------------
   // 6. Adaptor executes the sub — this is the actual L1 money movement
   // ---------------------------------------------------------------------
   console.log("[sub] step 6/8 :: adaptor executes the receipt");
+
+  // The cheque's timeout is absolute, and the validator compares it with the
+  // transaction's validity range — both live in the *chain's* clock. The
+  // adaptor silently drops every cheque that is not beyond the validity
+  // range, so a cheque that is about to expire would settle less than it
+  // should (or nothing at all) instead of failing loudly. Check the absolute
+  // timeouts against the chain's clock before handing the receipt over.
+  const chainNow = await chainNowMs(env, opts, tag);
+  for (const cheque of cheques) {
+    if (cheque.timeoutMs <= chainNow + CHEQUE_TIMEOUT_MARGIN_MS) {
+      throw new Error(
+        `cheque #${cheque.index} expires at ${cheque.timeoutMs} (POSIX ms), but the chain's ` +
+          `clock is already at ${chainNow} — the margin is ${CHEQUE_TIMEOUT_MARGIN_MS}ms. ` +
+          `The adaptor would drop the cheque and the sub would settle less than expected.`,
+      );
+    }
+  }
+  console.log(
+    `[sub]   chain clock=${chainNow} ms, cheque timeouts ${cheques
+      .map((c) => c.timeoutMs)
+      .join(", ")} ms`,
+  );
 
   // Persist the exact receipt before submitting. When the node rejects the
   // transaction with an opaque machine error, this is what you need in order to
@@ -276,38 +458,37 @@ export const runSub = async (
   //   konduit-cli adaptor tx --receipt "$(cat <file>)"
   //
   const receiptArg = [
-    keytag.value.keytag,
-    `${squash.value.body_cbor_hex},${squash.value.signature_hex}`,
+    keytag.keytag,
+    `${squash.body_cbor_hex},${squash.signature_hex}`,
     ...cheques.map((c) => `${c.bodyCborHex},${c.signatureHex},${SECRET_HEX}`),
   ].join(";");
   const receiptPath = dumpReceipt(env, tag, receiptArg);
 
-  const receiptResult = await adaptorTxReceipt(
-    env.wallets.adaptor,
-    [
-      {
-        keytagHex: keytag.value.keytag,
-        squashBodyCborHex: squash.value.body_cbor_hex,
-        squashSignatureHex: squash.value.signature_hex,
-        // Passing the secret turns each `Locked` into an `Unlocked`, which is
-        // what `Receipt::prep_sub` needs to compute the gain.
-        cheques: cheques.map((c) => ({
-          bodyCborHex: c.bodyCborHex,
-          signatureHex: c.signatureHex,
-          secretHex: SECRET_HEX,
-        })),
-      },
-    ],
-    opts,
+  const receiptResult = unwrapOrPanicWith(
+    await adaptorTxReceipt(
+      env.wallets.adaptor,
+      [
+        {
+          keytagHex: keytag.keytag,
+          squashBodyCborHex: squash.body_cbor_hex,
+          squashSignatureHex: squash.signature_hex,
+          // Passing the secret turns each `Locked` into an `Unlocked`, which is
+          // what `Receipt::prep_sub` needs to compute the gain.
+          cheques: cheques.map((c) => ({
+            bodyCborHex: c.bodyCborHex,
+            signatureHex: c.signatureHex,
+            secretHex: SECRET_HEX,
+          })),
+        },
+      ],
+      opts,
+    ),
+    (error) =>
+      `adaptor tx receipt failed: ${describeError(error)}\n` +
+      `  receipt written to: ${receiptPath}` +
+      explainNodeRejection(error),
   );
-  if (receiptResult.isErr()) {
-    throw new Error(
-      `adaptor tx receipt failed: ${describeError(receiptResult.error)}\n` +
-        `  receipt written to: ${receiptPath}` +
-        explainNodeRejection(receiptResult.error),
-    );
-  }
-  console.log(`[sub]   sub tx=${receiptResult.value.tx_id}`);
+  console.log(`[sub]   sub tx=${receiptResult.tx_id}`);
 
   // ---------------------------------------------------------------------
   // 7. Assert the channel recorded the sub
@@ -367,42 +548,211 @@ export const runSub = async (
   // ---------------------------------------------------------------------
   // 8. Assert the adaptor actually received the money on L1
   // ---------------------------------------------------------------------
-  console.log("[sub] step 8/8 :: verify the adaptor wallet gained lovelace");
-  const expectedAdaptorBalance = adaptorBefore.value + EXPECTED_GAIN_LOVELACE;
-  const adaptorAfter = await waitForValue(
-    "adaptor-balance",
+  console.log("[sub] step 8/8 :: verify the adaptor was paid");
+
+  // The gain is paid out of the channel UTxO into the adaptor's own output —
+  // but the adaptor also pays the fee of the sub transaction out of its own
+  // pocket. Its balance therefore moves by `gain - fee`, *not* by `gain`.
+  //
+  // What can be asserted exactly:
+  //   * the sub transaction paid the adaptor's address at least the gain.
+  //     Together with step 7 — the channel lost exactly the gain — this proves
+  //     the value moved out of the channel and into the adaptor's output, and
+  //   * the adaptor's balance moved by exactly `gain - fee`, with the fee
+  //     inside the budgeted fee.
+  const payout = await waitForValue(
+    "adaptor-payout",
     async () => {
-      const r = totalLovelaceAt(env.wallets.adaptor.address, node, {
-        skipReferenceScriptUtxos: true,
-      });
-      return r.isOk() ? r.value : 0n;
+      const utxos = utxosAt(env.wallets.adaptor.address, cardano);
+      return utxos.isOk() ? payoutOfTx(utxos.value, receiptResult.tx_id) : 0n;
     },
-    (value) => value >= expectedAdaptorBalance,
+    (value) => value >= EXPECTED_GAIN_LOVELACE,
     env.defaultTimeoutMs,
     env.defaultPollMs,
   );
-  const observedGain = adaptorAfter - adaptorBefore.value;
-  console.log(
-    `[sub]   adaptor balance ${adaptorBefore.value} -> ${adaptorAfter} (+${observedGain})`,
+
+  const adaptorAfter = unwrapOrPanic(
+    totalLovelaceAt(env.wallets.adaptor.address, cardano, {
+      skipReferenceScriptUtxos: true,
+    }),
+    "Failed to query the adaptor's balance",
   );
+  const fee = adaptorBefore + EXPECTED_GAIN_LOVELACE - adaptorAfter;
+  if (fee <= 0n) {
+    throw new Error(
+      `the adaptor's balance moved from ${adaptorBefore} to ${adaptorAfter}, ` +
+        `which is more than the gain (${EXPECTED_GAIN_LOVELACE}) — the sub paid out more than it should`,
+    );
+  }
+  if (fee > EXEC_FEE_BUDGET_LOVELACE) {
+    throw new Error(
+      `the sub transaction cost the adaptor ${fee} lovelace in fees, which is over the ` +
+        `budgeted execution fee (${EXEC_FEE_BUDGET_LOVELACE})`,
+    );
+  }
+  console.log(
+    `[sub]   adaptor paid ${payout} lovelace (gain ${EXPECTED_GAIN_LOVELACE} + fee ${fee}); ` +
+      `balance ${adaptorBefore} -> ${adaptorAfter}`,
+  );
+
+  // ---------------------------------------------------------------------
+  // 9. Assert the indexer stored the same sub
+  // ---------------------------------------------------------------------
+  let indexed: IndexedSubResult | null = null;
+  if (db && thread) {
+    console.log("[sub] step 9/9 :: checking the indexer recorded the sub");
+    const subStep = unwrapOrPanicWith(
+      await waitForStepInTransaction(
+        db,
+        env,
+        thread,
+        receiptResult.tx_id,
+        "Cont:Sub",
+      ),
+      (failure) => pollFailure("indexing the sub step", failure),
+    );
+    const reloaded = unwrapOrPanicWith(
+      await waitForThreadSteps(
+        db,
+        env,
+        { addVkeyHex: openedChannel.add_vkey, tagHex: openedChannel.tag },
+        1,
+      ),
+      (failure) =>
+        pollFailure("reloading the indexed thread after the sub", failure),
+    );
+    unwrapOrPanicWith(assertThreadInvariants(reloaded), (found) =>
+      violations("the indexed thread after the sub", found),
+    );
+    unwrapOrPanicWith(
+      assertDbMatchesCli(reloaded, {
+        stageLabel: "opened",
+        // The store records the UTxO value, which includes the validator's ADA
+        // buffer — hence the CLI's `buffered_lovelace`.
+        bufferedLovelace: subbedChannel.buffered_lovelace,
+      }),
+      (found) => violations("the indexed thread after the sub", found),
+    );
+
+    // A sub is the one step that *retires cheque indexes*, so this is the only
+    // place the store's copy of the state carries information the CLI cannot be
+    // asked about directly. Assert the same indexes the CLI reported.
+    const indexedUseds =
+      reloaded.currentStage?.label === "Opened"
+        ? reloaded.currentStage.useds.map((u) => Number(u.index))
+        : [];
+    for (const cheque of CHEQUES) {
+      if (!indexedUseds.includes(cheque.index)) {
+        throw new Error(
+          `[sub] the indexer's useds do not contain cheque index ${cheque.index}: [${indexedUseds.join(",")}]`,
+        );
+      }
+    }
+    if (indexedUseds.includes(SQUASH_INDEX)) {
+      throw new Error(
+        `[sub] squashed index ${SQUASH_INDEX} reappeared in the indexer's useds: [${indexedUseds.join(",")}]`,
+      );
+    }
+    // The sub must not have closed anything.
+    if (isChannelClosed(reloaded)) {
+      throw new Error(
+        "[sub] the indexer reports the channel as closed after a sub",
+      );
+    }
+    if (subStep.lovelace !== subbedChannel.buffered_lovelace) {
+      throw new Error(
+        `[sub] the indexed sub step holds ${subStep.lovelace} lovelace, expected ${subbedChannel.buffered_lovelace}`,
+      );
+    }
+
+    indexed = {
+      dbPath: env.indexerDb.dbPath,
+      channelTransactionId: thread.channel.transactionIdHex,
+      amountAfterSubLovelace: indexedAmount(reloaded),
+      usedIndexes: indexedUseds,
+      redeemerSteps: subStep.redeemerSteps,
+    };
+    console.log(
+      `[sub]   ✓ sub step indexed at slot ${subStep.blockSlotNo} ` +
+        `(redeemer=${subStep.redeemerSteps.join("+")}, amount=${indexed.amountAfterSubLovelace}, useds=[${indexedUseds.join(",")}])`,
+    );
+  }
 
   console.log(`[sub] ✓ scenario complete (tag=0x${tag})`);
 
   return {
     tag,
-    openTxId: openResult.value.tx_id,
-    subTxId: receiptResult.value.tx_id,
+    openTxId: openResult.tx_id,
+    subTxId: receiptResult.tx_id,
     expectedGainLovelace: EXPECTED_GAIN_LOVELACE,
-    observedGainLovelace: observedGain,
+    adaptorPayoutLovelace: payout,
+    adaptorFeeLovelace: fee,
+    indexed,
   };
 };
 
 // --- helpers ---------------------------------------------------------------
 
 /**
- * Write the single-line `--receipt` argument next to the other e2e artefacts so
- * a rejected transaction can be replayed by hand. Best effort: never let
- * diagnostics turn a passing scenario into a failing one.
+ * Sum the value of the outputs transaction `txId` created.
+ *
+ * The UTxO map is keyed by `txid#ix`, so this attributes an output to the
+ * transaction that created it — which is what tells "the adaptor was paid by
+ * *this* sub" apart from "the adaptor holds some ada".
+ */
+const payoutOfTx = (utxos: UtxoMap, txId: string): bigint => {
+  let total = 0n;
+  for (const [reference, output] of utxos) {
+    if (reference.startsWith(`${txId}#`)) {
+      total += BigInt(output.value.lovelace);
+    }
+  }
+  return total;
+};
+
+/**
+ * The chain's current time, in POSIX milliseconds.
+ *
+ * `konduit-cli consumer make locked --duration <d>` resolves the duration
+ * against the *chain's* clock (`chain_now + d`) — the validator compares a
+ * cheque's timeout with the transaction's validity range, and that range
+ * lives in the chain's clock too. A zero-length duration therefore hands us
+ * that clock verbatim: the probe's timeout *is* the chain's current time.
+ *
+ * The probe is a throw-away cheque — it never leaves this process and is
+ * never part of a receipt.
+ */
+const chainNowMs = async (
+  env: KonduitTestEnv,
+  opts: KonduitCliOptions,
+  tag: string,
+): Promise<number> => {
+  const probe = unwrapOrPanicWith(
+    await consumerMakeLocked(
+      env.wallets.consumer,
+      {
+        tag,
+        index: CHAIN_CLOCK_PROBE_INDEX,
+        amount: 0,
+        durationMs: 0,
+        secretHex: SECRET_HEX,
+      },
+      opts,
+    ),
+    (error) =>
+      `consumer make locked (chain clock probe) failed: ${describeError(error)}`,
+  );
+  return probe.timeout_ms;
+};
+
+/**
+ * Write the receipt next to the other e2e artefacts so a rejected transaction
+ * can be replayed by hand. Best effort: never let diagnostics turn a passing
+ * scenario into a failing one.
+ *
+ * The receipt argument goes into its own file: the `--receipt` value is a
+ * single `;`-separated string, and the CLI parses it strictly — a file with
+ * comment lines in front of it would be rejected with `invalid tag`.
  */
 const dumpReceipt = (
   env: KonduitTestEnv,
@@ -410,9 +760,11 @@ const dumpReceipt = (
   receiptArg: string,
 ): string => {
   const dir = `${env.repoRoot}/.run/e2e`;
+  const argPath = `${dir}/receipt-${tag}.arg`;
   const path = `${dir}/receipt-${tag}.txt`;
   try {
     fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(argPath, `${receiptArg}\n`);
     fs.writeFileSync(
       path,
       [
@@ -423,9 +775,7 @@ const dumpReceipt = (
         `# expected gain  = ${EXPECTED_GAIN_LOVELACE} lovelace`,
         "#",
         "# replay:",
-        `#   konduit-cli adaptor tx --receipt "$(cat ${path})"`,
-        "",
-        receiptArg,
+        `#   konduit-cli adaptor tx --receipt "$(cat ${argPath})"`,
         "",
       ].join("\n"),
     );

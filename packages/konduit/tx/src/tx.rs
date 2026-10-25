@@ -1,10 +1,9 @@
 use std::{cmp, collections::BTreeMap};
 
 use cardano_sdk::{
-    Address, ChangeStrategy, PlutusData, SlotBound, Transaction, address::kind,
+    Address, ChangeStrategy, PlutusData, PosixMilliseconds, SlotBound, Transaction, address::kind,
     transaction::state::ReadyForSigning,
 };
-use konduit_data::Duration;
 
 use crate::{Lovelace, NetworkParameters, Open, SteppedUtxos, Utxo, Utxos, fuel};
 
@@ -43,14 +42,17 @@ pub fn tx(
     let specified_signatories = steppeds.specified_signatories();
     let bounds = steppeds.bounds();
 
-    let to_slot = |d: Duration| network_parameters.protocol_parameters.posix_to_slot(*d);
+    let to_slot = |time: PosixMilliseconds| {
+        let slot = network_parameters.protocol_parameters.posix_to_slot(time);
+        u64::from(slot)
+    };
 
     let lower_bound = bounds
         .lower
-        .map_or(SlotBound::None, |d| SlotBound::Inclusive(to_slot(d)));
+        .map_or(SlotBound::None, |time| SlotBound::Inclusive(to_slot(time)));
     let upper_bound = bounds
         .upper
-        .map_or(SlotBound::None, |d| SlotBound::Exclusive(to_slot(d)));
+        .map_or(SlotBound::None, |time| SlotBound::Exclusive(to_slot(time)));
 
     let utxos = steppeds
         .utxos()

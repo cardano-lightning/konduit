@@ -18,8 +18,8 @@ target/
 
 # Node
 node_modules/
-.yarn/*
-!.yarn/cache
+**/.yarn/*
+!**/.yarn/cache
 *.tsbuildinfo
 
 # Devel process-compose

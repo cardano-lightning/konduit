@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use cardano_sdk::{
-    Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
+    Address, PosixMilliseconds, Transaction, VerificationKey, address::kind,
+    transaction::state::ReadyForSigning,
 };
-use konduit_data::Duration;
 use konduit_tmp::{Keytag, Receipt};
 
 use crate::{
@@ -35,7 +35,7 @@ pub fn tx(
     wallet: &VerificationKey,
     receipts: &BTreeMap<Keytag, Receipt>,
     utxos: &Utxos,
-    upper: &Duration,
+    upper: &PosixMilliseconds,
 ) -> anyhow::Result<Transaction<ReadyForSigning>> {
     let reference_utxo = find_reference_script(utxos);
     if reference_utxo.is_none() {

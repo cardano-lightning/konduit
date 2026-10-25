@@ -150,7 +150,7 @@ mod tests {
     use cardano_connector::CardanoConnector;
     use cardano_sdk::{
         Address, Credential, Hash, Input, Network, Output, PlutusVersion, ProtocolParameters,
-        PublicNetwork, SigningKey, Transaction, Value, address::kind, plutus_script,
+        PublicNetwork, SigningKey, Slot, Transaction, Value, address::kind, plutus_script,
         transaction::state,
     };
     use std::collections::BTreeMap;
@@ -195,6 +195,15 @@ mod tests {
                 .expect("state lock")
                 .protocol_parameter_calls += 1;
             Ok(ProtocolParameters::preview())
+        }
+
+        async fn tip_slot(&self) -> anyhow::Result<Slot> {
+            // The fake chain's tip: the slot the wall clock maps to, given the
+            // fake chain's own slot length and time anchor. Computed from a
+            // fresh set of parameters so that the call counter of
+            // `protocol_parameters` reflects the calls made by the code under
+            // test only.
+            Ok(ProtocolParameters::preview().posix_to_slot(cardano_connector::wall_clock_now()))
         }
 
         async fn utxos_at(

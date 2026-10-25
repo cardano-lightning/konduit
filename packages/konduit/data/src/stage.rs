@@ -29,9 +29,9 @@ impl Stage {
 // minicbor Serialization
 //
 // Encoding:
-//   Opened    → CBOR tag 121 (constr 0) + indef-array [amount, list(useds)]
-//   Closed    → CBOR tag 122 (constr 1) + indef-array [amount, list(useds), duration]
-//   Responded → CBOR tag 123 (constr 2) + indef-array [amount, list(pendings)]
+//   Opened    → CBOR tag 121 (constr 0) + indef-array [subbed, list(useds)]
+//   Closed    → CBOR tag 122 (constr 1) + indef-array [subbed, list(useds), duration]
+//   Responded → CBOR tag 123 (constr 2) + indef-array [pends_amount, list(pendings)]
 //
 // The inner Vec<Used>/Vec<Pending> use plutus_list encoding
 // (empty → definite array(0), non-empty → indefinite array).
@@ -47,25 +47,25 @@ where
         ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         match self {
-            Stage::Opened(amount, useds) => {
+            Stage::Opened(subbed, useds) => {
                 e.tag(minicbor::data::Tag::new(121))?;
                 e.begin_array()?;
-                e.encode_with(amount, ctx)?;
+                e.encode_with(subbed, ctx)?;
                 crate::cbor_with::plutus_list::encode(useds, e, ctx)?;
                 e.end()?;
             }
-            Stage::Closed(amount, useds, duration) => {
+            Stage::Closed(subbed, useds, duration) => {
                 e.tag(minicbor::data::Tag::new(122))?;
                 e.begin_array()?;
-                e.encode_with(amount, ctx)?;
+                e.encode_with(subbed, ctx)?;
                 crate::cbor_with::plutus_list::encode(useds, e, ctx)?;
                 e.encode_with(duration, ctx)?;
                 e.end()?;
             }
-            Stage::Responded(amount, pendings) => {
+            Stage::Responded(pends_amount, pendings) => {
                 e.tag(minicbor::data::Tag::new(123))?;
                 e.begin_array()?;
-                e.encode_with(amount, ctx)?;
+                e.encode_with(pends_amount, ctx)?;
                 crate::cbor_with::plutus_list::encode(pendings, e, ctx)?;
                 e.end()?;
             }
@@ -94,7 +94,7 @@ where
         d.array()?;
         match variant {
             0 => {
-                let amount: u64 = d.decode_with(ctx)?;
+                let subbed: u64 = d.decode_with(ctx)?;
                 let useds: Vec<Used> = crate::cbor_with::plutus_list::decode(d, ctx)?;
                 if d.datatype()? != minicbor::data::Type::Break {
                     return Err(minicbor::decode::Error::message(
@@ -102,10 +102,10 @@ where
                     ));
                 }
                 d.skip()?;
-                Ok(Stage::Opened(amount, useds))
+                Ok(Stage::Opened(subbed, useds))
             }
             1 => {
-                let amount: u64 = d.decode_with(ctx)?;
+                let subbed: u64 = d.decode_with(ctx)?;
                 let useds: Vec<Used> = crate::cbor_with::plutus_list::decode(d, ctx)?;
                 let duration: Duration = d.decode_with(ctx)?;
                 if d.datatype()? != minicbor::data::Type::Break {
@@ -114,10 +114,10 @@ where
                     ));
                 }
                 d.skip()?;
-                Ok(Stage::Closed(amount, useds, duration))
+                Ok(Stage::Closed(subbed, useds, duration))
             }
             2 => {
-                let amount: u64 = d.decode_with(ctx)?;
+                let pends_amount: u64 = d.decode_with(ctx)?;
                 let pendings: Vec<Pending> = crate::cbor_with::plutus_list::decode(d, ctx)?;
                 if d.datatype()? != minicbor::data::Type::Break {
                     return Err(minicbor::decode::Error::message(
@@ -125,7 +125,7 @@ where
                     ));
                 }
                 d.skip()?;
-                Ok(Stage::Responded(amount, pendings))
+                Ok(Stage::Responded(pends_amount, pendings))
             }
             _ => unreachable!(),
         }
@@ -146,18 +146,18 @@ impl proptest::arbitrary::Arbitrary for Stage {
                 any::<u64>(),
                 proptest::collection::vec(any::<Used>(), 0..=crate::MAX_UNSQUASHED)
             )
-                .prop_map(|(a, b)| Stage::Opened(a, b)),
+                .prop_map(|(subbed, useds)| Stage::Opened(subbed, useds)),
             (
                 any::<u64>(),
                 proptest::collection::vec(any::<Used>(), 0..=crate::MAX_UNSQUASHED),
                 any::<Duration>()
             )
-                .prop_map(|(a, b, c)| Stage::Closed(a, b, c)),
+                .prop_map(|(subbed, useds, duration)| Stage::Closed(subbed, useds, duration)),
             (
                 any::<u64>(),
                 proptest::collection::vec(any::<Pending>(), 0..=crate::MAX_UNSQUASHED)
             )
-                .prop_map(|(a, b)| Stage::Responded(a, b)),
+                .prop_map(|(pends_amount, pendings)| Stage::Responded(pends_amount, pendings)),
         ]
         .boxed()
     }
@@ -189,18 +189,18 @@ mod via_plutus_data {
             };
 
             fn try_opened(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Stage> {
-                let [a, b] = <[PlutusData; 2]>::try_from(fields)
+                let [subbed, b] = <[PlutusData; 2]>::try_from(fields)
                     .map_err(|vec| anyhow!("expected 2 fields, found {}", vec.len()))?;
                 let useds: Vec<Used> = b
                     .as_list()
                     .ok_or(anyhow!("Expected list"))?
                     .map(|x| Used::try_from(&x))
                     .collect::<anyhow::Result<Vec<Used>>>()?;
-                Ok(Stage::Opened(u64::try_from(&a)?, useds))
+                Ok(Stage::Opened(u64::try_from(&subbed)?, useds))
             }
 
             fn try_closed(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Stage> {
-                let [a, b, c] = <[PlutusData; 3]>::try_from(fields)
+                let [subbed, b, c] = <[PlutusData; 3]>::try_from(fields)
                     .map_err(|vec| anyhow!("expected 3 fields, found {}", vec.len()))?;
                 let useds: Vec<Used> = b
                     .as_list()
@@ -208,21 +208,21 @@ mod via_plutus_data {
                     .map(|x| Used::try_from(&x))
                     .collect::<anyhow::Result<Vec<Used>>>()?;
                 Ok(Stage::Closed(
-                    u64::try_from(&a)?,
+                    u64::try_from(&subbed)?,
                     useds,
                     Duration::try_from(&c)?,
                 ))
             }
 
             fn try_responded(fields: Vec<PlutusData<'_>>) -> anyhow::Result<Stage> {
-                let [a, b] = <[PlutusData; 2]>::try_from(fields)
+                let [pends_amount, b] = <[PlutusData; 2]>::try_from(fields)
                     .map_err(|vec| anyhow!("expected 2 fields, found {}", vec.len()))?;
                 let pendings: Vec<Pending> = b
                     .as_list()
                     .ok_or(anyhow!("Expected list"))?
                     .map(|x| Pending::try_from(&x))
                     .collect::<anyhow::Result<Vec<Pending>>>()?;
-                Ok(Stage::Responded(u64::try_from(&a)?, pendings))
+                Ok(Stage::Responded(u64::try_from(&pends_amount)?, pendings))
             }
         }
     }
@@ -230,9 +230,13 @@ mod via_plutus_data {
     impl<'a> From<Stage> for PlutusData<'a> {
         fn from(value: Stage) -> Self {
             match value {
-                Stage::Opened(a, b) => constr!(0, a, PlutusData::list(b)),
-                Stage::Closed(a, b, c) => constr!(1, a, PlutusData::list(b), c),
-                Stage::Responded(a, b) => constr!(2, a, PlutusData::list(b)),
+                Stage::Opened(subbed, b) => constr!(0, subbed, PlutusData::list(b)),
+                Stage::Closed(subbed, b, c) => {
+                    constr!(1, subbed, PlutusData::list(b), c)
+                }
+                Stage::Responded(pends_amount, b) => {
+                    constr!(2, pends_amount, PlutusData::list(b))
+                }
             }
         }
     }

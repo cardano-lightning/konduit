@@ -3,7 +3,7 @@ use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{
     Address, Credential, Input, Network, NetworkId, Output, ProtocolParameters, PublicNetwork,
-    Transaction, VerificationKey, cbor::ToCbor, transaction::state,
+    Slot, Transaction, VerificationKey, cbor::ToCbor, transaction::state,
 };
 use http_client::{Transport, codec};
 use std::collections::BTreeMap;
@@ -87,6 +87,13 @@ where
 
     async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
         Ok(self.network.into())
+    }
+
+    async fn tip_slot(&self) -> anyhow::Result<Slot> {
+        // The server does not expose a tip; callers fall back to the wallet's
+        // wall clock, which is correct for the public networks (their clock
+        // tracks the wall clock and their slots are one second long).
+        Err(anyhow!("the konduit server does not expose the chain tip"))
     }
 
     /// If delegation is None then it _should_ be ignored:

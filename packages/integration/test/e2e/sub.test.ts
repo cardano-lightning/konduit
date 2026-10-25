@@ -5,14 +5,15 @@ import {
   type KonduitTestEnv,
 } from "../../src/testEnv.js";
 import { runSub } from "../../src/scenarios/sub.js";
+import { EXEC_FEE_BUDGET_LOVELACE } from "../../src/scenarios/shared.js";
 
 describe("konduit e2e :: sub (L2 cheques -> L1 transfer)", () => {
-  // Skip rather than fail when the dev-env is not running — otherwise the
-  // suite just burns time on a confusing connection error.
+  // Fail fast rather than wasting time..
   const daemonAlive = pingProcessCompose();
   if (!daemonAlive) {
-    it.skip("process-compose daemon is not reachable on port 8100", () => {});
-    return;
+    throw new Error(
+      "process-compose daemon is not reachable on port 8100; run `pnpm dev-env` first",
+    );
   }
 
   let env: KonduitTestEnv;
@@ -32,9 +33,15 @@ describe("konduit e2e :: sub (L2 cheques -> L1 transfer)", () => {
       expect(result.openTxId).toMatch(/^[0-9a-f]{64}$/);
       expect(result.subTxId).toMatch(/^[0-9a-f]{64}$/);
 
-      // The money really moved: the adaptor's wallet grew by at least the gain.
-      expect(result.observedGainLovelace).toBeGreaterThanOrEqual(
+      // The money really moved: the sub paid the adaptor at least the gain.
+      expect(result.adaptorPayoutLovelace).toBeGreaterThanOrEqual(
         result.expectedGainLovelace,
+      );
+      // … and the adaptor paid for it with the execution fee, which is why
+      // its balance does not grow by the whole gain.
+      expect(result.adaptorFeeLovelace).toBeGreaterThan(0n);
+      expect(result.adaptorFeeLovelace).toBeLessThanOrEqual(
+        EXEC_FEE_BUDGET_LOVELACE,
       );
     },
     10 * 60 * 1000,

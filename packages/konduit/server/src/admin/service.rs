@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
+use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, Slot, VerificationKey};
 use konduit_data::{Lock, Secret};
 use konduit_tmp::Keytag;
 use konduit_tx::{Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
@@ -172,7 +172,13 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             .chain(snapshot)
             .chain(self.wallet_utxos().await?)
             .collect::<BTreeMap<_, _>>();
-        let upper_bound = Bounds::twenty_mins().upper.expect("This returns `Some`!!");
+        let upper_bound = Bounds::around_tip(
+            cardano_connector::chain_now(self.cardano.as_ref()).await?,
+            self.network_parameters.protocol_parameters.slot_length_ms(),
+            Slot::new(Bounds::MARGIN_SLOTS),
+        )
+        .upper
+        .expect("a validity window always has an upper bound");
         let mut tx = konduit_tx::adaptor::tx(
             &self.network_parameters,
             &self.tx_preferences,
@@ -208,7 +214,7 @@ mod tests {
     use cardano_connector::CardanoConnector;
     use cardano_sdk::{
         Address, Credential, Hash, Input, Network, Output, PlutusScript, PlutusVersion,
-        ProtocolParameters, PublicNetwork, SigningKey, Transaction, Value, address::kind,
+        ProtocolParameters, PublicNetwork, SigningKey, Slot, Transaction, Value, address::kind,
         transaction::state,
     };
     use konduit_tx::{KONDUIT_VALIDATOR, adaptor::AdaptorPreferences};
@@ -244,6 +250,18 @@ mod tests {
 
         async fn protocol_parameters(&self) -> anyhow::Result<ProtocolParameters> {
             self.protocol_parameters.clone().map_err(anyhow::Error::msg)
+        }
+
+        async fn tip_slot(&self) -> anyhow::Result<Slot> {
+            // The fake chain's tip: the slot the wall clock maps to, given the
+            // fake chain's own slot length and time anchor. Without this the
+            // service would fall back to the wall clock, which is a different
+            // code path than the one the real connectors take.
+            let params = self
+                .protocol_parameters
+                .as_ref()
+                .map_err(|error| anyhow::Error::msg(error.clone()))?;
+            Ok(params.posix_to_slot(cardano_connector::wall_clock_now()))
         }
 
         async fn utxos_at(

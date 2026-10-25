@@ -28,9 +28,34 @@
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs @ {flake-parts, ...}:
+  # The cardano-node binaries in the preprod guest are substitutable from the
+  # IOG cache, which turns the longest build of that guest into a download.
+  # nix only honours the nixConfig of the top level flake, so the settings of
+  # the cardano-node input have to be repeated here.
+  nixConfig = {
+    extra-substituters = ["https://cache.iog.io"];
+    extra-trusted-public-keys = ["hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
+  };
+
+  outputs = inputs @ {flake-parts, ...}: let
+    # Architectures the preprod guest can be built for.
+    #
+    # The guest is built for the architecture of the machine that evaluates
+    # this flake, so that it can use hardware virtualization (KVM on Linux,
+    # HVF on macOS). kupo's flake builds x86_64-linux only, so this list has
+    # a single entry until kupo gains another architecture.
+    #
+    # To support another architecture: add it here, add it to `systems`
+    # below (so the konduit indexer and server are built for it) and make
+    # sure kupo builds for it.
+    guestSystems = ["x86_64-linux"];
+  in
     flake-parts.lib.mkFlake {inherit inputs;}
-    {
+    ({
+      lib,
+      self,
+      ...
+    }: {
       imports = [
         inputs.git-hooks-nix.flakeModule
         inputs.treefmt-nix.flakeModule
@@ -61,7 +86,6 @@
             inputs'.aiken.packages.aiken
             kupo
             # JS
-            pkgs.yarn
             pkgs.nodejs
             pkgs.typescript-language-server
             pkgs.yarn-berry
@@ -247,6 +271,20 @@
 
               export KONDUIT_INDEXER_DIR="$RUN_DIR/konduit-indexer"
               export KONDUIT_INDEXER_DB_PATH="$KONDUIT_INDEXER_DIR/konduit-indexer.db"
+              # Read-only knobs for the integration suite's db-check layer
+              # (packages/integration). The suite opens $KONDUIT_INDEXER_DB_PATH
+              # read-only and asserts the indexer persisted each channel/step.
+              # `auto` below is expressed as an unset variable: the checks run
+              # whenever the db file exists, and skip with a printed reason when
+              # it does not.
+              # export KONDUIT_INDEXER_DB_CHECKS=1   # 1 | 0 | unset (auto)
+              export KONDUIT_INDEXER_DB_TIMEOUT_MS=120000
+              export KONDUIT_INDEXER_DB_POLL_MS=1000
+              export KONDUIT_INDEXER_DB_BUSY_TIMEOUT_MS=5000
+              export KONDUIT_INDEXER_SCHEMA_DIR="$ROOT_DIR/packages/konduit/indexer/sqlite"
+              # Echo every konduit-cli / cardano-cli command line and every SQL
+              # statement the integration suite runs.
+              # export KONDUIT_E2E_DEBUG=1
 
               export KONDUIT_SERVER_DIR="$RUN_DIR/konduit-server"
               export KONDUIT_SERVER_DB_PATH="$KONDUIT_SERVER_DIR/konduit-server.db"
@@ -387,9 +425,15 @@
         };
       };
       flake = let
+        # The machine that evaluates this flake decides the architecture of
+        # the guest. NixOS guests are always Linux, so a macOS host builds a
+        # Linux guest of the same architecture.
+        hostSystem = builtins.currentSystem;
+        guestSystem = lib.replaceStrings ["-darwin"] ["-linux"] hostSystem;
+
         nixos = import ./flake/nixos/outputs.nix {
-          self = inputs.self;
-          nixpkgs = inputs'.nixpkgs;
+          self = self;
+          nixpkgs = inputs.nixpkgs;
         };
 
         # The guest shares a preprod snapshot and the server secrets from the
@@ -405,21 +449,38 @@
         nixosModules =
           nixos.nixosModules
           // {
-            default = import ./flake/nixos.nix inputs.self;
+            default = import ./flake/nixos.nix self;
           };
 
         # A VM running cardano-node, Kupo, the konduit indexer and the konduit
         # backend against preprod. See ./flake/nixos/README.md.
-        nixosConfigurations.preprod = nixos.mkPreprodDeployment {
-          cardanoNodeModule = inputs'.cardano-node.nixosModules.cardano-node;
-          cardanoCli = inputs'.cardano-node.packages.${system}.cardano-cli;
-          kupoPackage = inputs'.kupo.packages.kupo;
-          indexerPackage = inputs.self.packages.${system}.konduit-indexer;
-          serverPackage = inputs.self.packages.${system}.konduit-server;
-          hostSnapshot = requiredEnv "KONDUIT_PREPROD_DB";
-          hostUid = lib.toInt (requiredEnv "KONDUIT_PREPROD_DB_OWNER_UID");
-          hostEnvFile = requiredEnv "KONDUIT_SERVER_ENV_FILE";
-        };
+        nixosConfigurations.preprod =
+          if !(lib.elem guestSystem guestSystems)
+          then
+            throw ''
+              konduit: there is no preprod guest for '${guestSystem}' (this machine is '${hostSystem}').
+
+              Supported guest architectures: ${lib.concatStringsSep ", " guestSystems}.
+
+              The guest is built for the architecture of the machine that evaluates
+              this flake, so that it can use hardware virtualization. Supporting
+              '${guestSystem}' needs:
+                - kupo built for '${guestSystem}' (its flake builds x86_64-linux only)
+                - '${guestSystem}' listed in `systems` in flake.nix, so that the
+                  konduit indexer and the konduit server are built for it
+            ''
+          else
+            nixos.mkPreprodDeployment {
+              system = guestSystem;
+              cardanoNodeModule = inputs.cardano-node.nixosModules.cardano-node;
+              cardanoCli = inputs.cardano-node.packages.${guestSystem}.cardano-cli;
+              kupoPackage = inputs.kupo.packages.${guestSystem}.kupo;
+              indexerPackage = self.packages.${guestSystem}.konduit-indexer;
+              serverPackage = self.packages.${guestSystem}.konduit-server;
+              hostSnapshot = requiredEnv "KONDUIT_PREPROD_DB";
+              hostUid = lib.toInt (requiredEnv "KONDUIT_PREPROD_DB_OWNER_UID");
+              hostEnvFile = requiredEnv "KONDUIT_SERVER_ENV_FILE";
+            };
       };
-    };
+    });
 }

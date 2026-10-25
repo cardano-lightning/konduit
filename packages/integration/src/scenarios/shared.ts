@@ -9,12 +9,25 @@ import {
   describeError,
 } from "../konduitCli.js";
 import {
-  type CardanoNode,
-  fundFromFaucet,
-  totalLovelaceAt,
-} from "../cardanoCli.js";
+  queryUtxosByAddress,
+  transferFunds,
+  type TransferFundsError,
+  type UtxoMap,
+} from "@konduit/cardano-cli";
+import {
+  AddressBech32,
+  NetworkMagicNumber,
+} from "@konduit/konduit-consumer/cardano";
+import { PositiveBigInt } from "@konduit/codec/integers/big";
+import { deserialiseCbor } from "@konduit/codec/cbor/codecs/sync";
+import type { Cbor } from "@konduit/codec/cbor/core";
 import type { KonduitTestEnv } from "../testEnv.js";
-import { Result } from "neverthrow";
+import * as uint8Array from "@konduit/codec/uint8Array";
+import { err, ok, Result } from "neverthrow";
+import {
+  unwrapOrPanic,
+  unwrapOrPanicWith,
+} from "@konduit/konduit-consumer/neverthrow";
 
 /**
  * @file Primitives shared by the e2e scenarios.
@@ -29,22 +42,28 @@ export const MIN_ADA_BUFFER_LOVELACE = 2n * ADA;
 /** `konduit_tx::FEE_BUFFER` — lovelace the tx builder always keeps for fees. */
 export const FEE_BUFFER_LOVELACE = 3n * ADA;
 /**
- * Measured cost of the *script execution* portion of a konduit transaction.
+ * Budget for the *whole* fee of one script transaction.
  *
- * `Transaction::build` evaluates the Plutus scripts locally and prices the
- * resulting execution units into the fee. On the local `conway_fast` testnet
- * (`priceMemory = 0.0577`, `priceSteps = 0.0000721` lovelace per unit) a single
- * `open` transaction comes out at roughly **24 ada** of fee — orders of
- * magnitude more than the base fee (155,381 + 44/byte).
+ * A konduit transaction carries the validator as a **reference script**, and
+ * the ledger charges for every byte of it: 15 lovelace per byte, plus the
+ * base fee (44 lovelace per byte of the transaction plus a flat 155 381) and
+ * the script's own execution units. The konduit validator is ~5.5 kB, so the
+ * reference-script part alone is ~82 000 lovelace.
  *
- * This is why the wallets need far more head-room than the raw amounts being
- * moved suggest: the locked channel value does not help pay for the
- * transaction that spends it, only the consumer's *free* balance does.
+ * Measured on the local testnet (`conway_fast`): a `sub` transaction costs
+ * **319 759 lovelace** — about 0.32 ada — of which ~15 000 is the script's
+ * execution units and ~82 000 the reference script.
  *
- * Measured via `cardano-sdk`'s `with_change`:
- *   `change=10_650_007 fee=23_762_409` → `insufficient balance`.
+ * (This used to be budgeted at 30 ada, because the node connector fed the
+ * ledger's `adaPerUTxOByte` — 4310, the price of *storing* a utxo — into the
+ * reference-script rate. Every transaction was charged 23.6 ada of pure
+ * script fee. See `packages/cardano/connector-node/src/params.rs`.)
+ *
+ * The budget is three times the measurement, so a chain that is a bit more
+ * expensive does not fail the scenario — but a *much* more expensive one
+ * does, loudly, which is what we want.
  */
-export const EXEC_FEE_BUDGET_LOVELACE = 30n * ADA;
+export const EXEC_FEE_BUDGET_LOVELACE = 1n * ADA;
 /** Cardano requires every change output to hold at least `minUTxO` worth of ADA. */
 export const MIN_CHANGE_LOVELACE = 3n * ADA;
 
@@ -150,7 +169,24 @@ export const waitForValue = async <T>(
 // Options
 // ---------------------------------------------------------------------------
 
-const debugEnabled = (): boolean => process.env.KONDUIT_E2E_DEBUG === "1";
+/** Re-render a structured poll failure from the db layer. */
+export const pollFailure = (
+  prefix: string,
+  failure: {
+    reason: string;
+    attempts: number;
+    elapsedMs: number;
+  },
+): string =>
+  `${prefix} timed out after ${failure.attempts} poll(s) / ${failure.elapsedMs}ms; ` +
+  `last seen: ${failure.reason}`;
+
+/** Re-render structured invariant violations from the db layer. */
+export const invariantViolations = (
+  prefix: string,
+  format: (violations: Array<{ invariant: string; detail: string }>) => string,
+  found: Array<{ invariant: string; detail: string }>,
+): string => `${prefix}\n${format(found)}`;
 
 export const buildKonduitCliOptions = (
   env: KonduitTestEnv,
@@ -159,65 +195,235 @@ export const buildKonduitCliOptions = (
   backend: "node",
   nodeSocket: env.cardanoNodeSocket,
   networkId: env.networkId,
-  debug: debugEnabled(),
+  debug: env.debug,
 });
 
-export const buildCardanoNode = (env: KonduitTestEnv): CardanoNode => ({
-  nodeSocket: env.cardanoNodeSocket,
-  networkMagic: env.networkId,
-  debug: debugEnabled(),
-});
+// ---------------------------------------------------------------------------
+// Chain access
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything the `@konduit/cardano-cli` helpers need to talk to our chain.
+ *
+ * The node socket is deliberately *not* part of it: the upstream helpers read
+ * it from `CARDANO_NODE_SOCKET_PATH`, which `testEnv.loadTestEnv` exports.
+ */
+export type CardanoContext = {
+  /** Network magic of the chain we talk to. */
+  networkMagic: NetworkMagicNumber;
+  /** Echo every command that is executed. */
+  debug: boolean;
+};
+
+export const buildCardanoContext = (env: KonduitTestEnv): CardanoContext => {
+  const magic = unwrapOrPanic(
+    PositiveBigInt.fromBigInt(BigInt(env.networkId)),
+    `Invalid network id: ${env.networkId}`,
+  );
+  return {
+    networkMagic: NetworkMagicNumber.fromPositiveBigInt(magic),
+    debug: env.debug,
+  };
+};
+
+/**
+ * The UTxOs at `address`, keyed by their `txid#ix` reference.
+ *
+ * `totalLovelaceAt` only sums the values; keeping the references is what
+ * lets a caller attribute an output to the transaction that created it.
+ */
+export const utxosAt = (
+  address: string,
+  cardano: CardanoContext,
+): Result<UtxoMap, string> => {
+  const parsed = AddressBech32.fromString(address);
+  if (parsed.isErr()) {
+    return err(`Invalid address ${address}: ${parsed.error}`);
+  }
+  const utxos = queryUtxosByAddress(
+    parsed.value,
+    cardano.networkMagic,
+    cardano.debug,
+  );
+  if (utxos.isErr()) {
+    return err(
+      `Failed to query utxos for ${address}: ${describeError(utxos.error)}`,
+    );
+  }
+  return ok(utxos.value);
+};
+
+/**
+ * The largest spendable UTxO at `address`, in lovelace.
+ *
+ * The transaction builder pays the fee with the wallet's *largest* UTxO (it
+ * selects UTxOs until it has covered `FEE_BUFFER`, which one UTxO does), so
+ * this — not the total balance — is what decides whether the wallet can pay
+ * for a transaction. A wallet whose value is spread over many small UTxOs
+ * can hold more than it can spend.
+ */
+export const largestUtxoAt = (
+  address: string,
+  cardano: CardanoContext,
+): Result<bigint, string> => {
+  const utxos = utxosAt(address, cardano);
+  if (utxos.isErr()) {
+    return err(utxos.error);
+  }
+  let largest = 0n;
+  for (const utxo of utxos.value.values()) {
+    if (utxo.referenceScript !== null) continue;
+    const value = BigInt(utxo.value.lovelace);
+    if (value > largest) largest = value;
+  }
+  return ok(largest);
+};
+
+/**
+ * Total lovelace held at `address`.
+ *
+ * Reference-script UTxOs are included by default, but callers that want to
+ * know what is actually *spendable* can skip them.
+ */
+export const totalLovelaceAt = (
+  address: string,
+  cardano: CardanoContext,
+  opts: { skipReferenceScriptUtxos?: boolean } = {},
+): Result<bigint, string> => {
+  const utxos = utxosAt(address, cardano);
+  if (utxos.isErr()) {
+    return err(utxos.error);
+  }
+  let total = 0n;
+  for (const utxo of utxos.value.values()) {
+    if (opts.skipReferenceScriptUtxos && utxo.referenceScript !== null)
+      continue;
+    total += BigInt(utxo.value.lovelace);
+  }
+  return ok(total);
+};
+
+/** Render a funding failure the way the scenario logs want to read it. */
+const describeTransferFundsError = (error: TransferFundsError): string => {
+  switch (error.type) {
+    case "TooManyRecipients":
+      return `too many recipients (${error.requested}, max ${error.max})`;
+    case "InsufficientFunds":
+      return `insufficient funds: need ${error.requiredLovelace} lovelace, have ${error.availableLovelace}`;
+    case "UtxoQueryFailed":
+      return `utxo query failed: ${describeError(error.error)}`;
+    case "CommandFailed":
+      return `${error.step} failed: ${describeError(error.error)}`;
+    case "SubmitFailed":
+      return `submit failed: ${describeError(error.error)}`;
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Funding
 // ---------------------------------------------------------------------------
 
 /**
- * Top a wallet up from the faucet, but only when it holds less than
- * `minLovelace`. Keeps reruns cheap and idempotent.
+ * Top a wallet up from the faucet, but only when it cannot pay for the
+ * transaction it is about to make. Keeps reruns cheap and idempotent.
+ *
+ * "Cannot pay" is decided by the wallet's *largest* UTxO, not by its total
+ * balance: the transaction builder pays the fee with a single UTxO, so a
+ * wallet whose value is spread over many small UTxOs holds more than it can
+ * spend (and the transaction then fails with "not enough funds to create a
+ * sufficiently large change output").
+ *
+ * `required` is what the *next* transaction needs from that largest UTxO:
+ * the amount it moves (`konduit_tx`'s fuel), the fee, and a change output
+ * big enough to be valid. Call this **before every transaction** — the
+ * wallet shrinks with each one (the open locks the amount into the channel
+ * and pays a fee), so a check made once at the start of a scenario says
+ * nothing about the third transaction.
  */
 export const ensureFunded = async (
   env: KonduitTestEnv,
   targetAddr: string,
-  node: CardanoNode,
-  minLovelace: bigint,
+  cardano: CardanoContext,
+  required: bigint,
   topupLovelace: bigint,
   label: string,
 ): Promise<{ funded: boolean; txId?: string }> => {
-  const balance = totalLovelaceAt(targetAddr, node, {
-    skipReferenceScriptUtxos: true,
-  });
-  if (balance.isErr()) {
-    throw new Error(
-      `Failed to query utxos for ${label}: ${String(balance.error)}`,
-    );
-  }
-  if (balance.value >= minLovelace) {
+  const balance = unwrapOrPanic(
+    totalLovelaceAt(targetAddr, cardano, {
+      skipReferenceScriptUtxos: true,
+    }),
+    `Failed to query utxos for ${label}`,
+  );
+  const spendable = unwrapOrPanic(
+    largestUtxoAt(targetAddr, cardano),
+    `Failed to query utxos for ${label}`,
+  );
+  if (spendable >= required) {
     return { funded: false };
   }
   console.log(
-    `[e2e] ${label} has ${balance.value} lovelace (< ${minLovelace}); funding ${topupLovelace} from faucet`,
+    `[e2e] ${label} holds ${balance} lovelace, but its largest UTxO is only ` +
+      `${spendable} (< ${required}); funding ${topupLovelace} from faucet`,
   );
-  const fundingResult = await fundFromFaucet(
-    { address: env.faucet.address, skeyFile: env.faucet.skeyFile },
-    [{ address: targetAddr, lovelace: topupLovelace }],
-    node,
-    { timeoutMs: env.defaultTimeoutMs, pollMs: env.defaultPollMs },
+  const faucet = unwrapOrPanicWith(
+    AddressBech32.fromString(env.faucet.address),
+    (error) => `Invalid faucet address ${env.faucet.address}: ${error}`,
   );
-  if (fundingResult.isErr()) {
+  const recipient = unwrapOrPanicWith(
+    AddressBech32.fromString(targetAddr),
+    (error) => `Invalid address ${targetAddr}: ${error}`,
+  );
+  const fundingResult = unwrapOrPanicWith(
+    await transferFunds(
+      faucet,
+      env.faucet.skeyFile,
+      [{ address: recipient, amount: Number(topupLovelace) }],
+      null,
+      cardano.networkMagic,
+      cardano.debug,
+    ),
+    (error) =>
+      `Funding ${label} from faucet failed: ${describeTransferFundsError(error)}`,
+  );
+
+  // The transfer is only *submitted* here: the money becomes spendable once
+  // the transaction is confirmed and its output shows up in the UTxO set.
+  // Building the next transaction before that would pick the wallet's old
+  // UTxOs, which may be too small to pay a script transaction's fee, and
+  // fail with "not enough funds to create a sufficiently large change
+  // output".
+  //
+  // The top-up lands as a *single* utxo, so it has to be at least as large as
+  // what the next transaction needs — otherwise the wait below would never be
+  // satisfied.
+  if (topupLovelace < required) {
     throw new Error(
-      `Funding ${label} from faucet failed: ${fundingResult.error}`,
+      `ensureFunded(${label}): the top-up (${topupLovelace}) is smaller than the ` +
+        `amount the next transaction needs (${required}); the top-up lands as a ` +
+        `single utxo and would not make the wallet spendable`,
     );
   }
-  return { funded: true, txId: fundingResult.value.txId };
+  await waitForValue(
+    "funding",
+    async () => {
+      const funded = largestUtxoAt(targetAddr, cardano);
+      return funded.isOk() ? funded.value : 0n;
+    },
+    (value) => value >= required,
+    env.defaultTimeoutMs,
+    env.defaultPollMs,
+  );
+
+  return { funded: true, txId: fundingResult };
 };
 
 // ---------------------------------------------------------------------------
 // Reference script bootstrap
 // ---------------------------------------------------------------------------
 
-const resolveExpectedScriptHashHex = (): string | undefined =>
-  process.env.KONDUIT_VALIDATOR_HASH || undefined;
+const resolveExpectedScriptHashHex = (
+  env: KonduitTestEnv,
+): string | undefined => env.validatorHashHex;
 
 const waitForReferenceScript = async (
   env: KonduitTestEnv,
@@ -246,32 +452,28 @@ export const publishReferenceScriptIfNeeded = async (
   env: KonduitTestEnv,
   opts: KonduitCliOptions,
 ): Promise<{ deployed: boolean; txId?: string }> => {
-  const expectedHash = resolveExpectedScriptHashHex();
-  const tipResult = await adminShowTipJson(env.wallets.admin, opts);
-  if (tipResult.isErr()) {
-    throw new Error(
-      `admin show tip failed before deploy: ${describeError(tipResult.error)}`,
-    );
-  }
-  if (tipResult.value.reference_script) {
+  const expectedHash = resolveExpectedScriptHashHex(env);
+  const tipResult = unwrapOrPanicWith(
+    await adminShowTipJson(env.wallets.admin, opts),
+    (error) => `admin show tip failed before deploy: ${describeError(error)}`,
+  );
+  if (tipResult.reference_script) {
     if (
       expectedHash &&
-      tipResult.value.reference_script.script_hash_hex !== expectedHash
+      tipResult.reference_script.script_hash_hex !== expectedHash
     ) {
       throw new Error(
         `Reference script already deployed but its hash ` +
-          `(${tipResult.value.reference_script.script_hash_hex}) does not match the expected ${expectedHash}.`,
+          `(${tipResult.reference_script.script_hash_hex}) does not match the expected ${expectedHash}.`,
       );
     }
     return { deployed: false };
   }
   console.log("[e2e] reference script not deployed; running admin tx deploy");
-  const deployResult = await adminTxDeploy(env.wallets.admin, opts);
-  if (deployResult.isErr()) {
-    throw new Error(
-      `admin tx deploy failed: ${describeError(deployResult.error)}`,
-    );
-  }
+  const deployResult = unwrapOrPanicWith(
+    await adminTxDeploy(env.wallets.admin, opts),
+    (error) => `admin tx deploy failed: ${describeError(error)}`,
+  );
   const finalTip = await waitForReferenceScript(
     env,
     opts,
@@ -284,7 +486,7 @@ export const publishReferenceScriptIfNeeded = async (
       "admin show tip still missing reference_script after deploy",
     );
   }
-  return { deployed: true, txId: deployResult.value.tx_id };
+  return { deployed: true, txId: deployResult.tx_id };
 };
 
 // ---------------------------------------------------------------------------
@@ -293,7 +495,7 @@ export const publishReferenceScriptIfNeeded = async (
 
 export type Bootstrap = {
   opts: KonduitCliOptions;
-  node: CardanoNode;
+  cardano: CardanoContext;
   adaptorConstants: AdaptorConstantsOutput;
   closePeriodMs: number;
 };
@@ -323,12 +525,12 @@ export const bootstrap = async (
   bOpts: BootstrapOpts,
 ): Promise<Bootstrap> => {
   const opts = buildKonduitCliOptions(env);
-  const node = buildCardanoNode(env);
+  const cardano = buildCardanoContext(env);
 
   const admin = await ensureFunded(
     env,
     env.wallets.admin.address,
-    node,
+    cardano,
     bOpts.adminRequiredLovelace,
     bOpts.adminTopupLovelace,
     "admin",
@@ -350,7 +552,7 @@ export const bootstrap = async (
     const res = await ensureFunded(
       env,
       target.address,
-      node,
+      cardano,
       target.requiredLovelace,
       target.topupLovelace,
       target.role,
@@ -362,19 +564,16 @@ export const bootstrap = async (
     );
   }
 
-  const constants = await adaptorShowConstantsJson(env.wallets.adaptor, opts);
-  if (constants.isErr()) {
-    throw new Error(
-      `adaptor show constants failed: ${describeError(constants.error)}`,
-    );
-  }
-  const adaptorConstants = constants.value;
+  const adaptorConstants = unwrapOrPanicWith(
+    await adaptorShowConstantsJson(env.wallets.adaptor, opts),
+    (error) => `adaptor show constants failed: ${describeError(error)}`,
+  );
   const closePeriodMs = Number(BigInt(adaptorConstants.close_period_ms));
   console.log(
     `[e2e] adaptor sub_vkey=${adaptorConstants.sub_vkey.slice(0, 12)}… close_period_ms=${adaptorConstants.close_period_ms}`,
   );
 
-  return { opts, node, adaptorConstants, closePeriodMs };
+  return { opts, cardano, adaptorConstants, closePeriodMs };
 };
 
 // ---------------------------------------------------------------------------
@@ -391,8 +590,8 @@ export const bootstrap = async (
  *
  *   [ 2, [[ 6, [[ 1, [ 0, [ 2, [[], [<steps>]], <mem> ]] ]] ]] ]
  *
- * where `<steps>`/`<mem>` are the script's Aiken `Costs` (mem is always 0). The
- * costs are far below `maxTxExecutionUnits` on this testnet
+ * where `<steps>`/`<mem>` are the script's Aiken `Costs`. The costs are far
+ * below `maxTxExecutionUnits` on this testnet
  * ({ memory: 14_000_000, steps: 10_000_000_000 }), so this is **not** budget
  * exhaustion — the script is failing an assertion and the ledger surfaces only
  * the opaque machine error.
@@ -414,8 +613,8 @@ export const explainNodeRejection = (error: unknown): string => {
         "               (well under maxTxExecutionUnits = 14_000_000 mem / 10_000_000_000 steps,\n" +
         "                so this is an assertion failure, not budget exhaustion)\n"
       : "") +
-    "    On this branch `consumer tx --open` and `--add` succeed, while `--close`\n" +
-    "    and `adaptor tx --receipt` (a Sub) are rejected this way. See\n" +
+    "    The ledger only reports the costs the script burned before it gave up,\n" +
+    "    so the failure is inside the script — see\n" +
     "    packages/kernel/lib/konduit/steps/{add,close,sub}.ak."
   );
 };
@@ -428,12 +627,59 @@ export const explainNodeRejection = (error: unknown): string => {
 const decodeConwayMachineError = (
   hex: string,
 ): { steps: number; mem: number } | null => {
-  const m = hex.match(
-    /^82028182068182018200830282808119([0-9a-f]{4})1a([0-9a-f]{8})$/,
-  );
-  if (!m) return null;
-  return {
-    steps: parseInt(m[1]!, 16),
-    mem: parseInt(m[2]!, 16),
-  };
+  const bytes = uint8Array.stringCodec.deserialise(hex);
+  if (bytes.isErr()) return null;
+  const decoded = deserialiseCbor(bytes.value);
+  if (decoded.isErr()) return null;
+
+  const costs = findCosts(decoded.value);
+  if (costs === null) return null;
+  return { steps: Number(costs.steps), mem: Number(costs.mem) };
 };
+
+/**
+ * Find the script's costs inside a Conway machine error.
+ *
+ * The ledger encodes them as the last three items of the innermost list:
+ * an empty list, a single-element list holding the step count, and the
+ * memory usage — `[[], [steps], mem]`.
+ *
+ * The counts are CBOR unsigned integers whose *width* is the encoder's
+ * choice (one byte for a small cost, four for a large one), so the blob
+ * cannot be matched with a fixed-width pattern; it has to be parsed.
+ */
+const findCosts = (value: Cbor): { steps: bigint; mem: bigint } | null => {
+  const items = asArray(value);
+  if (items === null) return null;
+
+  if (items.length === 3) {
+    const [head, steps, mem] = items;
+    const stepItems = asArray(steps);
+    if (
+      Array.isArray(head) &&
+      head.length === 0 &&
+      stepItems !== null &&
+      stepItems.length === 1
+    ) {
+      const stepCount = asUint(stepItems[0]!);
+      const memory = asUint(mem);
+      if (stepCount !== null && memory !== null) {
+        return { steps: stepCount, mem: memory };
+      }
+    }
+  }
+
+  for (const item of items) {
+    const found = findCosts(item);
+    if (found !== null) return found;
+  }
+  return null;
+};
+
+/** A CBOR list, or `null` for anything else. */
+const asArray = (value: Cbor): Cbor[] | null =>
+  Array.isArray(value) ? value : null;
+
+/** A CBOR unsigned integer, or `null` for anything else. */
+const asUint = (value: Cbor): bigint | null =>
+  typeof value === "bigint" ? value : null;

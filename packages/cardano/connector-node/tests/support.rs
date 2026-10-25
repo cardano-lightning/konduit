@@ -8,7 +8,6 @@
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
 use cardano_connector_node::{Config, Node};
-use cardano_sdk::cbor;
 use cardano_sdk::{
     Address, Credential, Hash, Input, NetworkId, Output, ProtocolParameters, SigningKey, Value,
     address::kind,
@@ -91,9 +90,14 @@ fn faucet_signing_key_from_env() -> anyhow::Result<SigningKey> {
             .with_context(|| format!("failed to parse faucet signing key from {path}"))?;
         let cbor_bytes = hex::decode(skey_json.cbor_hex.trim())
             .with_context(|| format!("failed to hex-decode faucet signing key from {path}"))?;
-        let skey_bytes: Vec<u8> = cbor::decode(&cbor_bytes)
+        // The key file holds a CBOR byte string (`5820` + 32 bytes). Note that
+        // `Vec<u8>` would decode it as an *array* of bytes, which is not what
+        // it is.
+        let mut decoder = minicbor::Decoder::new(&cbor_bytes);
+        let skey_bytes = decoder
+            .bytes()
             .with_context(|| format!("failed to parse CBOR faucet signing key from {path}"))?;
-        return SigningKey::try_from(skey_bytes)
+        return SigningKey::try_from(skey_bytes.to_vec())
             .with_context(|| format!("failed to convert faucet signing key from {path}"));
     }
 
