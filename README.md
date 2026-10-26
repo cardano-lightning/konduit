@@ -37,8 +37,10 @@ For the base devel:
 $ nix develop
 ```
 
-For something extra, e.g. cardano-cli, use:
+For something extra, e.g. local deployment using process-compose, cardano-cli, jailed-agents/opencode use:
 
 ```
-$ nix develop .#extras
+$ nix develop .#extras --impure
 ```
+
+The `--impure` flag allows nix to read `KONDUIT_EXTRA_OPENCODE_RW_DIRS` which should be `:` separated list of directories that you want to be able to read/write from the jailed agents (beside some default ones: ~/.config/opencode, ~/.local/share/opencode, ~/.cache/opencode).
