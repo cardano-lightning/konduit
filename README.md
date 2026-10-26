@@ -44,3 +44,23 @@ $ nix develop .#extras --impure
 ```
 
 The `--impure` flag allows nix to read `KONDUIT_EXTRA_OPENCODE_RW_DIRS` which should be `:` separated list of directories that you want to be able to read/write from the jailed agents (beside some default ones: ~/.config/opencode, ~/.local/share/opencode, ~/.cache/opencode).
+
+## Integration testing
+
+In the `./packages/integration` you can find a test suite which executes a few e2e scenarios. In order to run the tests multiple services need to be running together with a local cardano node. The easiest way is to use mentioned above `nix develop .#extras --impure` and then run the following command:
+
+In one shell:
+
+```shell
+$ nix develop .#extras --impure
+$ process-compose-dev-env
+```
+
+In another shell:
+
+```shell
+$ nix develop .#extras --impure
+$ cd packages/integration
+$ yarn install
+$ vitest --disableConsoleIntercept  --run
+```
