@@ -4,6 +4,7 @@
   cardonnay,
   coreutils,
   formats,
+  jq,
   kupo,
   lib,
   postgresql,
@@ -37,6 +38,12 @@
       : "''${KONDUIT_SERVER_HOST:?}"
       : "''${KONDUIT_SERVER_PORT:?}"
       : "''${KONDUIT_FX_EVERY:?}"
+
+      # Check if .env.adaptor exists and is readable
+      if [ ! -r .env.adaptor ]; then
+        echo ".env.adaptor file is missing or not readable. Please create it with the required variables."
+        exit 1
+      fi
     '';
   };
 
@@ -103,15 +110,144 @@
     '';
   };
 
+  # Publishes the konduit reference script to the local testnet.
+  #
+  # The server refuses to start without it: the admin service looks the script
+  # up at KONDUIT_HOST_ADDRESS and errors out when it is not there. The testnet
+  # is recreated on every `process-compose up` (clear-testnet-state wipes
+  # $TESTNET_DIR), so the script has to be published again every time.
+  publish-reference-script = writeShellApplication {
+    name = "publish-reference-script";
+    runtimeInputs = [cardano-cli jq];
+    text = ''
+      set -euo pipefail
+      set -x
+
+      : "''${CARDANO_NODE_SOCKET_PATH:?}"
+      : "''${CARDANO_NODE_NETWORK_ID:?}"
+      : "''${FAUCET_ADDR_FILE:?}"
+      : "''${FAUCET_SKEY_FILE:?}"
+
+      export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-./.run/cargo-target-cli}"
+      mkdir -p "$CARGO_TARGET_DIR"
+
+      # The konduit cli reads the .env files of the repo itself, but the cardano
+      # connection has to point at the testnet of this run, not at whatever the
+      # .env files happen to carry.
+      export KONDUIT_CARDANO_BACKEND="node"
+      export KONDUIT_NODE_SOCKET="$CARDANO_NODE_SOCKET_PATH"
+      export KONDUIT_NETWORK="$CARDANO_NODE_NETWORK_ID"
+
+      # 200 ada for the admin wallet. The deployment pays the fee and the
+      # reference script output has to carry its min ada, so a few tens of
+      # ada are needed at least.
+      ADMIN_FUNDS="200000000"
+      # Below this the admin wallet cannot pay for the deployment.
+      ADMIN_MIN_LOVELACE="50000000"
+
+      konduit_cli() {
+        cargo run -q -p konduit-cli -- "$@"
+      }
+
+      # The addresses, as the cli resolves them. The cli reads the .env files
+      # of the repo itself, so these are the addresses the server uses as
+      # well: the admin wallet pays for the deployment, the host address is
+      # where the reference script ends up.
+      admin_config="$(konduit_cli admin show config)"
+      admin_address="$(sed -n 's/^address = //p' <<< "$admin_config")"
+      host_address="$(sed -n 's/^host_address = //p' <<< "$admin_config")"
+      : "''${admin_address:?publish-reference-script needs the admin address}"
+      : "''${host_address:?publish-reference-script needs the host address}"
+
+      # The reference script is published at the host address. The server
+      # looks for it there, so its presence is what this process is about.
+      script_published() {
+        cardano-cli query utxo --address "$host_address" \
+          --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --output-json \
+          | jq -e 'to_entries | map(select(.value.referenceScript != null)) | length > 0' > /dev/null
+      }
+
+      if script_published; then
+        echo "the reference script is already published at $host_address"
+        exit 0
+      fi
+
+      # The lovelace the admin wallet holds.
+      admin_balance() {
+        cardano-cli query utxo --address "$admin_address" \
+          --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --output-json \
+          | jq '[.[] | .value.lovelace] | add // 0'
+      }
+
+      if [ "$(admin_balance)" -lt "$ADMIN_MIN_LOVELACE" ]; then
+        faucet_address="$(cat "$FAUCET_ADDR_FILE")"
+        faucet_utxo="$(cardano-cli query utxo --address "$faucet_address" \
+          --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --output-json | jq -r 'keys[0] // empty')"
+        if [ -z "$faucet_utxo" ]; then
+          echo "the faucet $faucet_address has no utxo to fund $admin_address with" >&2
+          exit 1
+        fi
+
+        tx_body="$(mktemp)"
+        tx_signed="$(mktemp)"
+        cardano-cli conway transaction build \
+          --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --tx-in "$faucet_utxo" \
+          --tx-out "$admin_address+$ADMIN_FUNDS" \
+          --change-address "$faucet_address" \
+          --out-file "$tx_body"
+        cardano-cli conway transaction sign \
+          --tx-body-file "$tx_body" \
+          --signing-key-file "$FAUCET_SKEY_FILE" \
+          --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
+          --out-file "$tx_signed"
+        cardano-cli conway transaction submit \
+          --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --tx-file "$tx_signed"
+
+        # The deployment spends the funding, so wait for it to confirm.
+        for _ in $(seq 60); do
+          if [ "$(admin_balance)" -ge "$ADMIN_MIN_LOVELACE" ]; then
+            break
+          fi
+          sleep 2
+        done
+        if [ "$(admin_balance)" -lt "$ADMIN_MIN_LOVELACE" ]; then
+          echo "the funding of $admin_address did not confirm" >&2
+          exit 1
+        fi
+      fi
+
+      # Publish the reference script at the host address.
+      konduit_cli admin tx deploy
+
+      # Wait for the script to show up, the server looks for it there.
+      for _ in $(seq 60); do
+        if script_published; then
+          konduit_cli admin show tip
+          exit 0
+        fi
+        sleep 2
+      done
+
+      echo "the reference script did not show up at $host_address" >&2
+      exit 1
+    '';
+  };
+
   konduit-server = writeShellApplication {
     name = "konduit-server";
     runtimeInputs = [];
     text = ''
       set -x
-      # The server refuses to start without an adaptor signing key. It is a dev
-      # secret, so it is not kept in the .env files of the repo.
-      : "''${KONDUIT_SIGNING_KEY:?konduit-server needs KONDUIT_SIGNING_KEY}"
-
       export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-./.run/cargo-target-server}"
       mkdir -p "$CARGO_TARGET_DIR"
       mkdir -p "$(dirname "$KONDUIT_SERVER_DB_PATH")"
@@ -212,10 +348,22 @@ in
           };
         };
 
+        publish-reference-script = {
+          depends_on = {
+            "validate-dev-env".condition = "process_completed_successfully";
+            "initialize-testnet".condition = "process_healthy";
+            "set-faucet-info".condition = "process_completed_successfully";
+          };
+          command = "${publish-reference-script}/bin/publish-reference-script";
+          log_location = "./.run/publish-reference-script.log";
+          namespace = "server";
+        };
+
         konduit-server = {
           depends_on = {
             "validate-dev-env".condition = "process_completed_successfully";
             "initialize-testnet".condition = "process_healthy";
+            "publish-reference-script".condition = "process_completed_successfully";
           };
           command = "${konduit-server}/bin/konduit-server";
           log_location = "./.run/konduit-server.log";

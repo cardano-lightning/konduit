@@ -223,16 +223,23 @@
             (jail.combinators.try-fwd-env "KUPO_UTXO_PORT")
           ];
 
-          extraReadwriteDirs = [
-            "~/projects/cl/konduit"
-            "~/projects/cl/konduit-js"
-            "~/projects/marlowe/marlowe-plutus/"
-            "~/projects/marlowe/marlowe-deploy/"
-            "/tmp"
-            "~/.config/opencode"
-            "~/.local/share/opencode"
-            "~/.cache/opencode"
-          ];
+          extraReadwriteDirs = let
+            # Colon-separated list. Requires `nix develop --impure`.
+            fromEnv = let
+              raw = builtins.getEnv "KONDUIT_EXTRA_OPENCODE_RW_DIRS";
+            in
+              if raw == ""
+              then []
+              else builtins.filter (s: s != "") (lib.splitString ":" raw);
+          in
+            [
+              # Always useful / shared defaults
+              "~/.config/opencode"
+              "~/.local/share/opencode"
+              "~/.cache/opencode"
+            ]
+            ++ fromEnv;
+
           extraPkgs =
             devShellExtraPackages
             ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates)
@@ -303,9 +310,10 @@
               export CARDANO_NODE_CONFIG_PATH="$NODE_SOCKET_DIR/config-''${NODE_SOCKET_NAME%.socket}.json"
 
               CONFIG_DIR=$(dirname "$CARDANO_NODE_CONFIG_PATH")
-              SHELLEY_GENESIS=$(jq -r .ShelleyGenesisFile "$CARDANO_NODE_CONFIG_PATH")
-              export CARDANO_NODE_NETWORK_ID=$(jq -r .networkMagic "$CONFIG_DIR/$SHELLEY_GENESIS")
-
+              # This flow assumed that we have already the testnet run directory which is not the case
+              # for the initial setup. For now we will hardcode the network id to 42, but we should fix this in the future.
+              # SHELLEY_GENESIS=$(jq -r .ShelleyGenesisFile "$CARDANO_NODE_CONFIG_PATH")
+              export CARDANO_NODE_NETWORK_ID=42 # $(jq -r .networkMagic "$CONFIG_DIR/$SHELLEY_GENESIS")
               export KONDUIT_VALIDATOR_HASH="$(cat $ROOT_DIR/packages/kernel/plutus.json | jq -r '.validators[0].hash')"
 
               # This **will be** initialized by the testnet process compose when executed
