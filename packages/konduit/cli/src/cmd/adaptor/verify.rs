@@ -20,7 +20,6 @@ pub enum Cmd {
         /// Squash either (hex) cbor or CSV of body-as-cbor and signature
         #[arg(long, value_parser = parse_squash )]
         squash: Squash,
-        /// Emit machine-readable JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         output_json: bool,
     },
@@ -32,7 +31,6 @@ pub enum Cmd {
         /// Will parse either <cheque_body,signature> of the cbor of `Cheque::Locked`
         #[arg(long, value_parser = parse_locked )]
         locked: Locked,
-        /// Emit machine-readable JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         output_json: bool,
     },

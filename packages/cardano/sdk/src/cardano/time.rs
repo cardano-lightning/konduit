@@ -185,6 +185,46 @@ impl ops::Sub<Milliseconds> for PosixMilliseconds {
     }
 }
 
+/// The chain's slot ⇄ time mapping, anchored at the Shelley era.
+///
+/// The anchor is the first slot of the Shelley era and the POSIX time it sits
+/// at: the mapping counts from there, in slots of the chain's slot length.
+/// The Byron slots that precede it are outside the mapping — a validity range
+/// starts no earlier than the Shelley anchor.
+///
+/// This is the ledger's own mapping, the one it uses to turn a transaction's
+/// validity range into slots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShelleySlotConfig {
+    /// The POSIX time of [`Self::first_era_slot`].
+    pub start_time: PosixMilliseconds,
+    /// The first slot of the Shelley era — the anchor of the mapping.
+    pub first_era_slot: Slot,
+    /// The length of a slot.
+    pub slot_length_ms: Milliseconds,
+}
+
+impl ShelleySlotConfig {
+    /// The slot a POSIX time falls into.
+    ///
+    /// The time is counted from the anchor, in whole slots.
+    pub fn posix_to_slot(&self, posix: PosixMilliseconds) -> Slot {
+        let delta_ms = posix
+            .as_millis()
+            .saturating_sub(self.start_time.as_millis());
+        let slots = delta_ms / self.slot_length_ms.as_millis().max(1);
+        Slot::new(u64::from(self.first_era_slot) + slots)
+    }
+
+    /// The POSIX time of a slot.
+    ///
+    /// The inverse of [`Self::posix_to_slot`].
+    pub fn slot_to_posix(&self, slot: Slot) -> PosixMilliseconds {
+        let slots = self.first_era_slot.distance_to(slot);
+        self.start_time + self.slot_length_ms * slots
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,6 +239,34 @@ mod tests {
         let time = PosixMilliseconds::new(1_000);
         assert_eq!(time + Milliseconds::new(500), PosixMilliseconds::new(1_500));
         assert_eq!(time - Milliseconds::new(500), PosixMilliseconds::new(500));
+    }
+
+    #[test]
+    fn the_slot_config_counts_from_its_anchor() {
+        let config = ShelleySlotConfig {
+            start_time: PosixMilliseconds::new(1_000),
+            first_era_slot: Slot::new(10),
+            slot_length_ms: Milliseconds::new(200),
+        };
+
+        // The anchor's own time is the anchor's slot, and a slot lasts until
+        // the next one starts.
+        assert_eq!(
+            config.posix_to_slot(PosixMilliseconds::new(1_000)),
+            Slot::new(10)
+        );
+        assert_eq!(
+            config.posix_to_slot(PosixMilliseconds::new(1_199)),
+            Slot::new(10)
+        );
+        assert_eq!(
+            config.posix_to_slot(PosixMilliseconds::new(1_200)),
+            Slot::new(11)
+        );
+        assert_eq!(
+            config.slot_to_posix(Slot::new(11)),
+            PosixMilliseconds::new(1_200)
+        );
     }
 
     #[test]

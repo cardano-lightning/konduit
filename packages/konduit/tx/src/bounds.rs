@@ -1,6 +1,6 @@
 use std::cmp;
 
-use cardano_sdk::{Milliseconds, PosixMilliseconds, Slot};
+use cardano_sdk::{PosixMilliseconds, ShelleySlotConfig, Slot};
 
 /// The validity window of a transaction, in POSIX time.
 ///
@@ -15,26 +15,6 @@ pub struct Bounds {
 }
 
 impl Bounds {
-    /// How many slots a transaction's validity window spans on either side
-    /// of the current slot.
-    ///
-    /// The window has to be wide enough for the transaction to be *included*:
-    /// it is built (the Plutus scripts are evaluated locally, which takes a
-    /// second or two), submitted, and only then does the chain pick it up —
-    /// and a chain does not produce a block every slot. On the local testnet
-    /// (200ms slots) blocks arrive every 1–6 seconds, so 30 slots (6 seconds)
-    /// was not enough: the transaction was accepted by the node but never
-    /// made it into a block, and the channel it was supposed to close stayed
-    /// open.
-    ///
-    /// It also has to stay within what the node is willing to schedule: a
-    /// window that reaches too far ahead is rejected outright with
-    /// `EraNotPastHorizon` ("SlotNo … is not in the past horizon of the era
-    /// …"), which happens well before 1000 slots on the testnet.
-    ///
-    /// 300 slots sits between the two: 60 seconds on the testnet (ten times
-    /// the worst block delay we have seen), five minutes on a chain with
-    /// one-second slots.
     pub const MARGIN_SLOTS: u64 = 300;
 
     pub fn lower(lower: PosixMilliseconds) -> Self {
@@ -64,23 +44,27 @@ impl Bounds {
         Self { lower, upper }
     }
 
+    /// A validity window around an explicit instant.
+    ///
+    /// The bounds are the starts of the slots `margin_slots` slots away from
+    /// the instant's slot: the ledger maps the validity range back to slots,
+    /// so bounds on slot boundaries give the window we asked for. The margin
+    /// is counted in slots, not in time, so a fast chain does not get a window
+    /// thousands of slots ahead — too far ahead for the node to schedule.
+    pub fn around(now: PosixMilliseconds, config: &ShelleySlotConfig, margin_slots: Slot) -> Self {
+        let slot = u64::from(config.posix_to_slot(now));
+        let margin = u64::from(margin_slots);
+        Bounds {
+            lower: Some(config.slot_to_posix(Slot::new(slot.saturating_sub(margin)))),
+            upper: Some(config.slot_to_posix(Slot::new(slot.saturating_add(margin)))),
+        }
+    }
+
     /// A validity window around the current time.
     ///
-    /// The margin is expressed in *slots*, not in time: a chain with 200ms
-    /// slots and one with 20s slots then get the same number of slots to
-    /// include the transaction in, while a window expressed in minutes would
-    /// be 5400 slots ahead on a fast chain — too far ahead for the node to
-    /// schedule.
-    pub fn around_now(
-        now: PosixMilliseconds,
-        slot_length_ms: Milliseconds,
-        margin_slots: Slot,
-    ) -> Self {
-        let margin = slot_length_ms * u64::from(margin_slots);
-        Bounds {
-            lower: Some(now - margin),
-            upper: Some(now + margin),
-        }
+    /// "Now" is the local clock, which only approximates the chain's time.
+    pub fn around_now(config: &ShelleySlotConfig, margin_slots: Slot) -> Self {
+        Self::around(PosixMilliseconds::now(), config, margin_slots)
     }
 }
 
@@ -89,14 +73,58 @@ mod tests {
     use super::*;
 
     #[test]
-    fn around_now_spans_the_margin_on_both_sides() {
+    fn the_window_spans_the_margin_on_both_sides() {
+        // One second slots anchored at the epoch, so a millisecond timestamp
+        // maps to the slot of the same number.
+        let config = ShelleySlotConfig {
+            start_time: PosixMilliseconds::new(0),
+            first_era_slot: Slot::new(0),
+            slot_length_ms: cardano_sdk::Milliseconds::new(1_000),
+        };
         let now = PosixMilliseconds::new(1_000_000);
-        let margin = Milliseconds::new(200 * Bounds::MARGIN_SLOTS);
-        let bounds =
-            Bounds::around_now(now, Milliseconds::new(200), Slot::new(Bounds::MARGIN_SLOTS));
+        let margin = Bounds::MARGIN_SLOTS;
 
-        assert_eq!(bounds.lower, Some(now - margin));
-        assert_eq!(bounds.upper, Some(now + margin));
+        let bounds = Bounds::around(now, &config, Slot::new(margin));
+
+        assert_eq!(
+            config.posix_to_slot(bounds.lower.expect("the window has a lower bound")),
+            Slot::new(1_000 - margin)
+        );
+        assert_eq!(
+            config.posix_to_slot(bounds.upper.expect("the window has an upper bound")),
+            Slot::new(1_000 + margin)
+        );
+    }
+
+    #[test]
+    fn the_window_is_on_the_slot_grid() {
+        let config = ShelleySlotConfig {
+            start_time: PosixMilliseconds::new(0),
+            first_era_slot: Slot::new(0),
+            slot_length_ms: cardano_sdk::Milliseconds::new(1_000),
+        };
+        let now = PosixMilliseconds::new(1_000_000);
+
+        let bounds = Bounds::around(now, &config, Slot::new(Bounds::MARGIN_SLOTS));
+
+        for bound in [bounds.lower, bounds.upper].into_iter().flatten() {
+            let slot = config.posix_to_slot(bound);
+            assert_eq!(config.slot_to_posix(slot), bound);
+        }
+    }
+
+    #[test]
+    fn the_window_around_now_contains_the_current_time() {
+        let config = ShelleySlotConfig {
+            start_time: PosixMilliseconds::new(0),
+            first_era_slot: Slot::new(0),
+            slot_length_ms: cardano_sdk::Milliseconds::new(1_000),
+        };
+        let bounds = Bounds::around_now(&config, Slot::new(Bounds::MARGIN_SLOTS));
+        let now = PosixMilliseconds::now();
+
+        assert!(bounds.lower.expect("the window has a lower bound") <= now);
+        assert!(bounds.upper.expect("the window has an upper bound") >= now);
     }
 
     #[test]

@@ -9,8 +9,8 @@ use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
 use cardano_connector_node::Node;
 use cardano_sdk::{
-    Address, Credential, Hash, Input, NetworkId, Output, ProtocolParameters, SigningKey, Slot,
-    address::kind,
+    Address, Credential, Hash, Input, NetworkId, Output, ProtocolParameters, ShelleySlotConfig,
+    SigningKey, Slot, address::kind,
 };
 use konduit_data::Tag;
 use konduit_tx::{
@@ -249,8 +249,7 @@ async fn consumer_execute(
         intents,
         &utxos,
         Bounds::around_now(
-            cardano_sdk::PosixMilliseconds::now(),
-            params.slot_length_ms(),
+            &ShelleySlotConfig::from(params),
             Slot::new(Bounds::MARGIN_SLOTS),
         ),
     )?;

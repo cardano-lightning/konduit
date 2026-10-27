@@ -29,7 +29,6 @@ pub struct SendArgs {
     #[arg(long)]
     rest: Option<Address<kind::Shelley>>,
 
-    /// Emit machine-readable JSON instead of human-readable text
     #[arg(long, default_value_t = false)]
     output_json: bool,
 }
@@ -59,7 +58,6 @@ pub struct DeployArgs {
     #[arg(long, default_value_t = false)]
     spend_all: bool,
 
-    /// Emit machine-readable JSON instead of human-readable text
     #[arg(long, default_value_t = false)]
     output_json: bool,
 }

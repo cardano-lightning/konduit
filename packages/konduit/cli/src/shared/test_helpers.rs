@@ -1,3 +1,4 @@
+//! WARNING: Fully AI generated file.
 //! Test-only helpers for constructing configs without touching a real chain.
 
 use crate::config::{

@@ -6,7 +6,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, Slot, VerificationKey};
+use cardano_sdk::{
+    Credential, Hash, Input, Output, ShelleySlotConfig, SigningKey, Slot, VerificationKey,
+};
 use konduit_data::{Lock, Secret};
 use konduit_tmp::Keytag;
 use konduit_tx::{Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
@@ -173,8 +175,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             .chain(self.wallet_utxos().await?)
             .collect::<BTreeMap<_, _>>();
         let upper_bound = Bounds::around_now(
-            cardano_sdk::PosixMilliseconds::now(),
-            self.network_parameters.protocol_parameters.slot_length_ms(),
+            &ShelleySlotConfig::from(&self.network_parameters.protocol_parameters),
             Slot::new(Bounds::MARGIN_SLOTS),
         )
         .upper

@@ -1,7 +1,7 @@
 use crate::output::{self, OutputJson};
 use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{Credential, PosixMilliseconds, Slot};
+use cardano_sdk::{Credential, ShelleySlotConfig, Slot};
 use konduit_tmp::{Keytag, Receipt};
 use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 use std::collections::BTreeMap;
@@ -18,7 +18,6 @@ pub struct Cmd {
     #[arg(long, value_parser=parse_keytag_receipt)]
     pub receipt: Vec<(Keytag, Receipt)>,
 
-    /// Emit machine-readable JSON instead of human-readable text
     #[arg(long, default_value_t = false)]
     pub output_json: bool,
 }
@@ -35,8 +34,7 @@ impl Cmd {
         };
         let protocol_parameters = connector.protocol_parameters().await?;
         let bounds = Bounds::around_now(
-            PosixMilliseconds::now(),
-            protocol_parameters.slot_length_ms(),
+            &ShelleySlotConfig::from(&protocol_parameters),
             Slot::new(Bounds::MARGIN_SLOTS),
         );
         let upper = bounds

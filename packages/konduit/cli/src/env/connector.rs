@@ -56,13 +56,10 @@ impl TryFrom<ConnectorEnv> for Connector {
                     infer_blockfrost_network(env.blockfrost_project_id.as_deref());
 
                 let public_network = match (env_public_network, inferred_public_network) {
-                    (Ok(configured), Some(inferred)) if configured != inferred => {
-                        // "WARNING: inferred network from blockfrost project id differs from configured network; continuing with network={inferred}"
-                        Err(anyhow!(
-                            "inferred network from blockfrost project id differs from configured network; please ensure {} matches the project id prefix",
-                            ENV_NETWORK
-                        ))
-                    }
+                    (Ok(configured), Some(inferred)) if configured != inferred => Err(anyhow!(
+                        "inferred network from blockfrost project id differs from configured network; please ensure {} matches the project id prefix",
+                        ENV_NETWORK
+                    )),
                     (Ok(configured), _) => Ok(configured),
                     (_, Some(inferred)) => Ok(inferred),
                     (Err(_), None) => Err(anyhow!(
@@ -99,8 +96,6 @@ impl TryFrom<ConnectorEnv> for Connector {
     }
 }
 
-// Fill the env with some defaults if not provided so we can use it to build an example config.
-// BTW, what this helper is able to actually set is only the network.
 impl Fill for ConnectorEnv {
     type Error = anyhow::Error;
 
@@ -164,7 +159,6 @@ fn normalize(value: Option<String>) -> Option<String> {
     })
 }
 
-// FIXME: Originally this was failing when the project id was malformed.
 fn infer_blockfrost_network(project_id: Option<&str>) -> Option<PublicNetwork> {
     let project_id = project_id?;
 
@@ -260,62 +254,3 @@ mod tests {
         }
     }
 }
-
-// FIXME: Original test cases.
-//  #[test]
-//     fn utxorpc_requires_explicit_network() {
-//         let env = ConnectorEnv {
-//             backend: Backend::Utxorpc,
-//             network: None,
-//             blockfrost_project_id: None,
-//             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
-//         };
-//
-//         let error = match Connector::try_from(env) {
-//             Ok(_) => panic!("missing network should fail"),
-//             Err(error) => error,
-//         };
-//
-//         assert!(error.to_string().contains("KONDUIT_NETWORK"));
-//     }
-//
-//     #[test]
-//     fn utxorpc_fill_ignores_stale_blockfrost_project_id() {
-//         let env = ConnectorEnv {
-//             backend: Backend::Utxorpc,
-//             network: Some(Network::Preview),
-//             blockfrost_project_id: Some("preprod12345".to_string()),
-//             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
-//         };
-//
-//         let filled = env.fill().expect("fill should succeed");
-//
-//         assert_eq!(filled.network, Some(Network::Preview));
-//     }
-//
-//     #[test]
-//     fn blockfrost_fill_infers_network_from_project_id() {
-//         let env = ConnectorEnv {
-//             backend: Backend::Blockfrost,
-//             network: None,
-//             blockfrost_project_id: Some("preview12345".to_string()),
-//             utxorpc_uri: None,
-//         };
-//
-//         let filled = env.fill().expect("fill should infer Blockfrost network");
-//
-//         assert_eq!(filled.network, Some(Network::Preview));
-//     }
-//
-//     #[test]
-//     fn blockfrost_network_id_defaults_to_mainnet_when_unset() {
-//         let env = ConnectorEnv {
-//             backend: Backend::Blockfrost,
-//             network: None,
-//             blockfrost_project_id: None,
-//             utxorpc_uri: None,
-//         };
-//
-//         assert_eq!(env.network_id().unwrap(), NetworkId::MAINNET);
-//     }
-// }

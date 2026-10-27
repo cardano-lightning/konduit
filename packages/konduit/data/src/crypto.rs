@@ -179,9 +179,8 @@ impl From<SigningKey> for [u8; 32] {
     }
 }
 
-// =========================================================================
-// Cardano sdk conversions (cardano_sdk-gated)
-// =========================================================================
+// WARNING: AI generated code below.
+// TODO: DO we really need this?
 #[cfg(feature = "cardano_sdk")]
 mod verification_key {
     use super::*;

@@ -5,10 +5,6 @@ use konduit_tmp::to_signing_key;
 use crate::config::consumer::Config;
 use crate::output::{self, OutputJson};
 
-/// A relative cheque timeout, counted from the current time.
-///
-/// The validator compares a cheque's timeout with the transaction's validity
-/// range, and the latter is anchored at the current time as well.
 fn duration_from_relative(duration: Duration) -> Duration {
     let now = PosixMilliseconds::now();
     Duration::from_millis(now.as_millis().saturating_add(duration.as_millis() as u64))
@@ -31,7 +27,6 @@ pub enum Cmd {
         /// (Ordered) list of indexes excluded
         #[arg(long, default_value = "")]
         exclude: Indexes,
-        /// Emit machine-readable JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         output_json: bool,
     },
@@ -58,7 +53,6 @@ pub enum Cmd {
         /// Lock
         #[arg(long, required_unless_present = "lock")]
         secret: Option<Secret>,
-        /// Emit machine-readable JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         output_json: bool,
     },

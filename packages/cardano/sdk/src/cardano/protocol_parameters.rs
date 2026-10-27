@@ -5,7 +5,7 @@
 use minicbor::{Decode, Encode};
 use num::rational::Ratio;
 
-use crate::cardano::time::{Milliseconds, PosixMilliseconds, Slot};
+use crate::cardano::time::{Milliseconds, PosixMilliseconds, ShelleySlotConfig, Slot};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -199,19 +199,14 @@ impl ProtocolParameters {
     /// `first_shelley_slot`, and every slot after it lasts `slot_length_ms`
     /// milliseconds.
     pub fn posix_to_slot(&self, posix: PosixMilliseconds) -> Slot {
-        let delta_ms = posix
-            .as_millis()
-            .saturating_sub(self.start_time.as_millis());
-        let slots = delta_ms / self.slot_length_ms.as_millis().max(1);
-        Slot::new(u64::from(self.first_shelley_slot) + slots)
+        ShelleySlotConfig::from(self).posix_to_slot(posix)
     }
 
     /// Translate a slot number to its posix time.
     ///
     /// The inverse of [`Self::posix_to_slot`].
     pub fn slot_to_posix(&self, slot: Slot) -> PosixMilliseconds {
-        let slots = self.first_shelley_slot.distance_to(slot);
-        self.start_time + self.slot_length_ms * slots
+        ShelleySlotConfig::from(self).slot_to_posix(slot)
     }
 
     /// Specify the multiplier fee coefficient on the size of transactions, in lovelace/bytes
@@ -360,16 +355,27 @@ impl ProtocolParameters {
 
 // -------------------------------------------------------------- Converting (to)
 
+impl From<&ProtocolParameters> for ShelleySlotConfig {
+    fn from(params: &ProtocolParameters) -> Self {
+        Self {
+            start_time: params.start_time,
+            first_era_slot: params.first_shelley_slot,
+            slot_length_ms: params.slot_length_ms,
+        }
+    }
+}
+
 impl From<&ProtocolParameters> for uplc::tx::SlotConfig {
     fn from(params: &ProtocolParameters) -> Self {
+        let config = ShelleySlotConfig::from(params);
         Self {
             // The slot length is a genesis parameter; the ledger uses it to
             // turn the transaction's validity range into POSIX times before
             // handing them to a Plutus script. We must use the very same
             // value, or the local evaluation and the ledger disagree.
-            slot_length: params.slot_length_ms.as_millis() as u32,
-            zero_slot: u64::from(params.first_shelley_slot),
-            zero_time: params.start_time.as_millis(),
+            slot_length: config.slot_length_ms.as_millis() as u32,
+            zero_slot: u64::from(config.first_era_slot),
+            zero_time: config.start_time.as_millis(),
         }
     }
 }
@@ -461,7 +467,7 @@ pub const PLUTUS_V3_02_VAN_ROSSEM: &[i64] = &[
 #[cfg(test)]
 mod tests {
     use super::ProtocolParameters;
-    use crate::cardano::time::{Milliseconds, PosixMilliseconds, Slot};
+    use crate::cardano::time::{Milliseconds, PosixMilliseconds, ShelleySlotConfig, Slot};
 
     /// A fast testnet: 200ms slots, anchored at the chain's start.
     fn fast_testnet() -> ProtocolParameters {
@@ -522,6 +528,16 @@ mod tests {
         let time = PosixMilliseconds::new(1_792_874_004_000 + 18 * 60 * 1000);
 
         assert_eq!(params.slot_to_posix(params.posix_to_slot(time)), time);
+    }
+
+    #[test]
+    fn the_shelley_slot_config_carries_the_chain_grid() {
+        let params = fast_testnet();
+        let config = ShelleySlotConfig::from(&params);
+
+        assert_eq!(config.start_time, params.start_time());
+        assert_eq!(config.first_era_slot, params.first_shelley_slot());
+        assert_eq!(config.slot_length_ms, params.slot_length_ms());
     }
 
     #[test]

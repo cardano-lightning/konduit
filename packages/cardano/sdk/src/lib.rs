@@ -29,7 +29,7 @@ pub use cardano::{
     protocol_parameters::ProtocolParameters,
     redeemer_pointer::RedeemerPointer,
     slot_bound::SlotBound,
-    time::{Milliseconds, PosixMilliseconds, Slot},
+    time::{Milliseconds, PosixMilliseconds, ShelleySlotConfig, Slot},
     transaction::{IsTransactionBodyState, Transaction},
     value::Value,
     with_network_id::WithNetworkId,

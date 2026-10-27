@@ -6,7 +6,7 @@ use crate::core::{
 };
 use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{PosixMilliseconds, Slot};
+use cardano_sdk::{ShelleySlotConfig, Slot};
 use konduit_tmp::to_verifying_key;
 use konduit_tx::ChannelUtxo;
 use std::collections::BTreeMap;
@@ -110,8 +110,7 @@ where
                 .chain(utxos_wallet)
                 .collect(),
             Bounds::around_now(
-                PosixMilliseconds::now(),
-                network_parameters.protocol_parameters.slot_length_ms(),
+                &ShelleySlotConfig::from(&network_parameters.protocol_parameters),
                 Slot::new(Bounds::MARGIN_SLOTS),
             ),
         )?;

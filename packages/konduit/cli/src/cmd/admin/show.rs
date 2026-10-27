@@ -6,13 +6,11 @@ use crate::output::{self, OutputJson};
 pub enum Cmd {
     /// Show config. This is a parsed version of env
     Config {
-        /// Emit machine-readable JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         output_json: bool,
     },
     /// Show address.
     Address {
-        /// Emit machine-readable JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         output_json: bool,
     },
@@ -21,7 +19,6 @@ pub enum Cmd {
         // Verbosity
         #[arg(long, default_value_t = false)]
         verbose: bool,
-        /// Emit machine-readable JSON instead of human-readable text
         #[arg(long, default_value_t = false)]
         output_json: bool,
     },

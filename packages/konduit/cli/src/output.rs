@@ -1,3 +1,4 @@
+//! WARNING: Fully AI generated file
 //! JSON-output DTOs for the CLI commands.
 //!
 //! These types are intentionally defined locally in the CLI package so that the

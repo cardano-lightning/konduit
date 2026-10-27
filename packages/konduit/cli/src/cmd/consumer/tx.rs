@@ -23,7 +23,6 @@ pub struct Cmd {
     #[arg(long, value_names = ["TAG"])]
     close: Vec<Tag>,
 
-    /// Emit machine-readable JSON instead of human-readable text
     #[arg(long, default_value_t = false)]
     output_json: bool,
 }
