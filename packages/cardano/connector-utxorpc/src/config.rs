@@ -1,13 +1,13 @@
-use cardano_sdk::Network;
+use cardano_sdk::PublicNetwork;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
     endpoint: String,
-    network: Network,
+    network: PublicNetwork,
 }
 
 impl Config {
-    pub fn new(endpoint: impl Into<String>, network: Network) -> Self {
+    pub fn new(endpoint: impl Into<String>, network: PublicNetwork) -> Self {
         Self {
             endpoint: endpoint.into(),
             network,
@@ -18,7 +18,7 @@ impl Config {
         &self.endpoint
     }
 
-    pub const fn network(&self) -> Network {
+    pub const fn network(&self) -> PublicNetwork {
         self.network
     }
 }

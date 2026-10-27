@@ -1,0 +1,39 @@
+{
+  "dependencies": {
+    "@konduit/cardano-cli": "workspace:^",
+    "@konduit/cardano-keys": "workspace:^",
+    "@konduit/codec": "workspace:^",
+    "@konduit/konduit-consumer": "workspace:^",
+    "neverthrow": "^8.2.0",
+    "type-fest": "^5.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vtsls/language-server": "^0.2.9",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.17",
+    "vue-tsc": "^3.3.4"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.es.js",
+  "name": "@konduit/integration",
+  "packageManager": "yarn@4.14.1",
+  "private": true,
+  "resolutions": {
+    "@konduit/bln": "github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/bln",
+    "@konduit/cardano-cli": "github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/cardano-cli",
+    "@konduit/cardano-keys": "github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/cardano-keys",
+    "@konduit/codec": "github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/codec",
+    "@konduit/konduit-consumer": "github:cardano-lightning/konduit-js#head=paluh/migrate-the-app&workspace=@konduit/konduit-consumer"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest",
+    "watch:indexer": "node scripts/watch-indexer.mjs"
+  },
+  "type": "module",
+  "version": "0.0.0"
+}

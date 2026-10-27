@@ -1,5 +1,6 @@
 use std::{cmp, collections::BTreeMap};
 
+use cardano_sdk::PosixMilliseconds;
 use cardano_sdk::{Output, Value};
 use konduit_data::{
     Cheque, Constants, Cont, Datum, Duration, Eol, Lock, Pending, Secret, Stage, Tag, Unlocked,
@@ -143,7 +144,7 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::default()))
     }
 
-    pub fn sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+    pub fn sub(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannel {
         let Stage::Opened(subbed, useds) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Sub")));
@@ -174,7 +175,7 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
-    pub fn close(self, upper: &Duration) -> SteppedElseChannel {
+    pub fn close(self, upper: &PosixMilliseconds) -> SteppedElseChannel {
         let variables = match self.variables.close(upper, &self.constants().close_period) {
             Ok(variables) => variables,
             Err(err) => return Err((Box::new(self), err)),
@@ -183,7 +184,7 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
-    pub fn elapse(self, lower: &Duration) -> SteppedElseChannel {
+    pub fn elapse(self, lower: &PosixMilliseconds) -> SteppedElseChannel {
         if let Err(err) = self.variables.elapse(lower) {
             return Err((Box::new(self), err));
         };
@@ -194,7 +195,7 @@ impl Channel {
         ))
     }
 
-    pub fn respond(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+    pub fn respond(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannel {
         let Stage::Closed(subbed, useds, _) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Respond")));
@@ -223,13 +224,17 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
-    pub fn unlock(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+    pub fn unlock(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannel {
         let secrets = receipt.unlockeds().map(|u| *u.secret()).collect::<Vec<_>>();
         self.unlock_with_secrets(secrets, upper)
     }
 
-    pub fn unlock_with_secrets(self, secrets: Vec<Secret>, upper: &Duration) -> SteppedElseChannel {
-        let Stage::Responded(_pendings_amount, pendings) = self.stage() else {
+    pub fn unlock_with_secrets(
+        self,
+        secrets: Vec<Secret>,
+        upper: &PosixMilliseconds,
+    ) -> SteppedElseChannel {
+        let Stage::Responded(_pends_amount, pendings) = self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Unlock")));
         };
@@ -238,7 +243,7 @@ impl Channel {
             .map(|s| (Lock::from(&s), s))
             .collect::<BTreeMap<Lock, Secret>>();
         let map = |p: &Pending| {
-            if p.timeout >= *upper {
+            if p.timeout.as_millis() >= u128::from(upper.as_millis()) {
                 Unpend::Continue
             } else {
                 lookup.get(&p.lock).map_or(Unpend::Continue, Unpend::from)
@@ -266,13 +271,13 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::upper(*upper)))
     }
 
-    pub fn expire(self, lower: &Duration) -> SteppedElseChannel {
-        let Stage::Responded(_pendings_amount, pendings) = &self.stage() else {
+    pub fn expire(self, lower: &PosixMilliseconds) -> SteppedElseChannel {
+        let Stage::Responded(_pends_amount, pendings) = &self.stage() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Expire")));
         };
         let map = |p: &Pending| {
-            if p.timeout < *lower {
+            if p.timeout.as_millis() < u128::from(lower.as_millis()) {
                 Unpend::Expire
             } else {
                 Unpend::Continue
@@ -297,9 +302,9 @@ impl Channel {
         Ok(Stepped::new(self, step_to, Bounds::lower(*lower)))
     }
 
-    pub fn end(self, lower: Option<&Duration>) -> SteppedElseChannel {
+    pub fn end(self, lower: Option<&PosixMilliseconds>) -> SteppedElseChannel {
         // FIXME :: this shouldn't be a clone
-        let Stage::Responded(_pendings_amount, pendings) = self.stage().clone() else {
+        let Stage::Responded(_pends_amount, pendings) = self.stage().clone() else {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "End")));
         };
@@ -308,8 +313,11 @@ impl Channel {
                 return Err((Box::new(self), StepError::NoLower));
             };
             for pending in pendings.iter() {
-                if pending.timeout >= *lower {
-                    return Err((Box::new(self), StepError::Early(*lower, pending.timeout)));
+                if pending.timeout.as_millis() >= u128::from(lower.as_millis()) {
+                    return Err((
+                        Box::new(self),
+                        StepError::Early(Duration::from_millis(lower.as_millis()), pending.timeout),
+                    ));
                 }
             }
             Bounds::lower(*lower)
@@ -320,7 +328,7 @@ impl Channel {
         Ok(Stepped::new(self, step_to, bounds))
     }
 
-    pub fn any_sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannel {
+    pub fn any_sub(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannel {
         match self.stage() {
             Stage::Opened(_, _) => self.sub(receipt, upper),
             Stage::Closed(_, _, _) => self.respond(receipt, upper),

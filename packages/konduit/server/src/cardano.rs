@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 pub enum Cardano {
     Blockfrost(cardano_connector_direct::Blockfrost),
     UtxoRpc(Box<cardano_connector_utxorpc::UtxoRpc>),
+    Node(Box<cardano_connector_node::Node>),
 }
 
 impl CardanoConnector for Cardano {
@@ -17,6 +18,7 @@ impl CardanoConnector for Cardano {
         match self {
             Self::Blockfrost(connector) => connector.network(),
             Self::UtxoRpc(connector) => connector.network(),
+            Self::Node(connector) => connector.network(),
         }
     }
 
@@ -24,6 +26,7 @@ impl CardanoConnector for Cardano {
         match self {
             Self::Blockfrost(connector) => connector.health().await,
             Self::UtxoRpc(connector) => connector.health().await,
+            Self::Node(connector) => connector.health().await,
         }
     }
 
@@ -31,6 +34,7 @@ impl CardanoConnector for Cardano {
         match self {
             Self::Blockfrost(connector) => connector.protocol_parameters().await,
             Self::UtxoRpc(connector) => connector.protocol_parameters().await,
+            Self::Node(connector) => connector.protocol_parameters().await,
         }
     }
 
@@ -42,6 +46,7 @@ impl CardanoConnector for Cardano {
         match self {
             Self::Blockfrost(connector) => connector.utxos_at(payment, delegation).await,
             Self::UtxoRpc(connector) => connector.utxos_at(payment, delegation).await,
+            Self::Node(connector) => connector.utxos_at(payment, delegation).await,
         }
     }
 
@@ -52,6 +57,7 @@ impl CardanoConnector for Cardano {
         match self {
             Self::Blockfrost(connector) => connector.submit(transaction).await,
             Self::UtxoRpc(connector) => connector.submit(transaction).await,
+            Self::Node(connector) => connector.submit(transaction).await,
         }
     }
 }

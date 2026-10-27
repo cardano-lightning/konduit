@@ -167,3 +167,9 @@ impl<'de> Deserialize<'de> for VerificationKey {
         crate::hex_bytes::deserialize(deserializer)
     }
 }
+
+impl From<VerificationKey> for PlutusData<'_> {
+    fn from(key: VerificationKey) -> Self {
+        Self::bytes(key.0)
+    }
+}

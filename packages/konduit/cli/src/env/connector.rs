@@ -1,14 +1,15 @@
 use crate::{
-    config::connector::{Backend, Blockfrost, Connector, UtxoRpc},
+    config::connector::{Backend, Blockfrost, Connector, Node, UtxoRpc},
     shared::Fill,
 };
 use anyhow::anyhow;
-use cardano_sdk::{Network, NetworkId};
+use cardano_sdk::{Network, NetworkId, PublicNetwork};
 use serde::{Deserialize, Serialize};
 
 const ENV_CARDANO_BACKEND: &str = "KONDUIT_CARDANO_BACKEND";
 const ENV_BLOCKFROST_PROJECT_ID: &str = "KONDUIT_BLOCKFROST_PROJECT_ID";
 const ENV_UTXORPC_URI: &str = "KONDUIT_UTXORPC_URI";
+const ENV_NODE_SOCKET: &str = "KONDUIT_NODE_SOCKET";
 const ENV_NETWORK: &str = "KONDUIT_NETWORK";
 
 /// Connector options
@@ -30,29 +31,68 @@ pub struct ConnectorEnv {
     #[arg(long, env = ENV_UTXORPC_URI, alias = "utxorpc")]
     #[serde(rename = "KONDUIT_UTXORPC_URI")]
     pub utxorpc_uri: Option<String>,
+
+    #[arg(long, env = ENV_NODE_SOCKET)]
+    #[serde(rename = "KONDUIT_NODE_SOCKET")]
+    pub node_socket: Option<String>,
 }
 
 impl TryFrom<ConnectorEnv> for Connector {
     type Error = anyhow::Error;
 
     fn try_from(env: ConnectorEnv) -> Result<Self, Self::Error> {
-        Ok(match env.backend {
-            Backend::Blockfrost => Connector::Blockfrost(Blockfrost {
-                network: env
+        let env_public_network = env
+            .network
+            .and_then(|n| PublicNetwork::try_from(n).ok())
+            .ok_or_else(|| {
+                anyhow!(
+                    "invalid network value for {}: must be one of mainnet, preprod, or preview",
+                    ENV_NETWORK
+                )
+            });
+        match env.backend {
+            Backend::Blockfrost => {
+                let inferred_public_network =
+                    infer_blockfrost_network(env.blockfrost_project_id.as_deref());
+
+                let public_network = match (env_public_network, inferred_public_network) {
+                    (Ok(configured), Some(inferred)) if configured != inferred => Err(anyhow!(
+                        "inferred network from blockfrost project id differs from configured network; please ensure {} matches the project id prefix",
+                        ENV_NETWORK
+                    )),
+                    (Ok(configured), _) => Ok(configured),
+                    (_, Some(inferred)) => Ok(inferred),
+                    (Err(_), None) => Err(anyhow!(
+                        "Cardano backend blockfrost requires {} representing a public network or a {} with a known network prefix",
+                        ENV_NETWORK,
+                        ENV_BLOCKFROST_PROJECT_ID
+                    )),
+                }?;
+                Ok(Connector::Blockfrost(Blockfrost {
+                    network: public_network,
+                    project_id: normalize(env.blockfrost_project_id),
+                }))
+            }
+            Backend::Utxorpc => {
+                let public_network = env_public_network?;
+                Ok(Connector::UtxoRpc(UtxoRpc {
+                    network: public_network,
+                    uri: normalize(env.utxorpc_uri),
+                }))
+            }
+            Backend::Node => {
+                let env_network = env
                     .network
-                    .or(infer_blockfrost_network(
-                        env.blockfrost_project_id.as_deref(),
-                    )?)
-                    .unwrap_or(Network::Mainnet),
-                project_id: normalize(env.blockfrost_project_id),
-            }),
-            Backend::Utxorpc => Connector::UtxoRpc(UtxoRpc {
-                network: env
-                    .network
-                    .ok_or(anyhow!("Cardano backend utxorpc requires {}", ENV_NETWORK))?,
-                uri: normalize(env.utxorpc_uri),
-            }),
-        })
+                    .ok_or(anyhow!("Cardano backend node requires {}", ENV_NETWORK))?;
+                let env_node_socket = env
+                    .node_socket
+                    .ok_or(anyhow!("Cardano backend node requires {}", ENV_NODE_SOCKET))?;
+                Ok(Connector::Node(Node {
+                    network: env_network,
+                    socket: env_node_socket,
+                }))
+            }
+        }
     }
 }
 
@@ -60,39 +100,40 @@ impl Fill for ConnectorEnv {
     type Error = anyhow::Error;
 
     fn fill(self) -> anyhow::Result<Self> {
-        let blockfrost_project_id = normalize(self.blockfrost_project_id);
-        let utxorpc_uri = normalize(self.utxorpc_uri);
-
+        let blockfrost_project_id_is_none = self.blockfrost_project_id.is_none();
         match self.backend {
-            Backend::Blockfrost => {
-                let inferred_network = infer_blockfrost_network(blockfrost_project_id.as_deref())?;
-                let network = match (self.network, inferred_network) {
-                    (Some(configured), Some(inferred)) if configured != inferred => {
-                        eprintln!(
-                            "WARNING: inferred network from blockfrost project id differs from configured network; continuing with network={inferred}"
-                        );
-                        Some(inferred)
-                    }
-                    (Some(configured), _) => Some(configured),
-                    (None, Some(inferred)) => Some(inferred),
-                    (None, None) => Some(Network::Mainnet),
-                };
-
-                Ok(Self {
-                    backend: self.backend,
-                    network,
-                    blockfrost_project_id,
-                    utxorpc_uri,
-                })
-            }
+            Backend::Blockfrost => Ok(Self {
+                backend: self.backend,
+                blockfrost_project_id: self.blockfrost_project_id,
+                network: if self.network.is_none() && blockfrost_project_id_is_none {
+                    Some(Network::PREPROD)
+                } else {
+                    None
+                },
+                node_socket: self.node_socket,
+                utxorpc_uri: self.utxorpc_uri,
+            }),
             Backend::Utxorpc => Ok(Self {
                 backend: self.backend,
-                network: Some(
-                    self.network
-                        .ok_or(anyhow!("Cardano backend utxorpc requires {}", ENV_NETWORK))?,
-                ),
-                blockfrost_project_id,
-                utxorpc_uri,
+                blockfrost_project_id: self.blockfrost_project_id,
+                network: self.network.or(Some(Network::PREPROD)),
+                node_socket: self.node_socket,
+                utxorpc_uri: self.utxorpc_uri,
+            }),
+            Backend::Node => Ok(Self {
+                backend: self.backend,
+                blockfrost_project_id: self.blockfrost_project_id,
+                network: self.network.or(Some(Network::PREPROD)),
+                node_socket: self
+                    .node_socket
+                    .or_else(|| {
+                        std::env::var("CARDANO_NODE_SOCKET_PATH")
+                            .ok()
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                    })
+                    .or(Some("/tmp/node.socket".to_string())),
+                utxorpc_uri: self.utxorpc_uri,
             }),
         }
     }
@@ -106,6 +147,7 @@ impl ConnectorEnv {
             (Backend::Utxorpc, None) => {
                 Err(anyhow!("Cardano backend utxorpc requires {}", ENV_NETWORK))
             }
+            (Backend::Node, None) => Ok(NetworkId::TESTNET),
         }
     }
 }
@@ -117,56 +159,39 @@ fn normalize(value: Option<String>) -> Option<String> {
     })
 }
 
-fn infer_blockfrost_network(project_id: Option<&str>) -> anyhow::Result<Option<Network>> {
-    let Some(project_id) = project_id else {
-        return Ok(None);
-    };
+fn infer_blockfrost_network(project_id: Option<&str>) -> Option<PublicNetwork> {
+    let project_id = project_id?;
 
-    [Network::Mainnet, Network::Preprod, Network::Preview]
-        .into_iter()
-        .find(|prefix| project_id.starts_with(&prefix.to_string()))
-        .map(Some)
-        .ok_or(anyhow!(
-            "invalid Blockfrost project id: doesn't start with any known network?"
-        ))
+    [
+        PublicNetwork::Mainnet,
+        PublicNetwork::Preprod,
+        PublicNetwork::Preview,
+    ]
+    .into_iter()
+    .find(|prefix| project_id.starts_with(&prefix.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::ConnectorEnv;
     use crate::config::connector::{Backend, Connector};
-    use crate::shared::Fill;
-    use cardano_sdk::{Network, NetworkId};
-
-    #[test]
-    fn fill_keeps_missing_blockfrost_project_id_unset() {
-        let env = ConnectorEnv {
-            backend: Backend::Blockfrost,
-            network: Some(Network::Preview),
-            blockfrost_project_id: None,
-            utxorpc_uri: None,
-        };
-
-        let filled = env.fill().expect("fill should succeed");
-
-        assert_eq!(filled.blockfrost_project_id, None);
-        assert_eq!(filled.network, Some(Network::Preview));
-    }
+    use cardano_sdk::PublicNetwork;
 
     #[test]
     fn try_from_keeps_utxorpc_network_and_uri() {
         let env = ConnectorEnv {
             backend: Backend::Utxorpc,
-            network: Some(Network::Preprod),
+            network: Some(PublicNetwork::Preprod.into()),
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            node_socket: None,
         };
 
         let connector = Connector::try_from(env).expect("connector config should build");
 
         match connector {
             Connector::UtxoRpc(config) => {
-                assert_eq!(config.network, Network::Preprod);
+                assert_eq!(config.network, PublicNetwork::Preprod);
                 assert_eq!(config.uri.as_deref(), Some("http://127.0.0.1:1337"));
             }
             other => panic!("expected UTxO RPC config, got {other:?}"),
@@ -180,6 +205,7 @@ mod tests {
             network: None,
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            node_socket: None,
         };
 
         let error = match Connector::try_from(env) {
@@ -191,42 +217,40 @@ mod tests {
     }
 
     #[test]
-    fn utxorpc_fill_ignores_stale_blockfrost_project_id() {
-        let env = ConnectorEnv {
-            backend: Backend::Utxorpc,
-            network: Some(Network::Preview),
-            blockfrost_project_id: Some("preprod12345".to_string()),
-            utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
-        };
-
-        let filled = env.fill().expect("fill should succeed");
-
-        assert_eq!(filled.network, Some(Network::Preview));
-    }
-
-    #[test]
-    fn blockfrost_fill_infers_network_from_project_id() {
-        let env = ConnectorEnv {
-            backend: Backend::Blockfrost,
-            network: None,
-            blockfrost_project_id: Some("preview12345".to_string()),
-            utxorpc_uri: None,
-        };
-
-        let filled = env.fill().expect("fill should infer Blockfrost network");
-
-        assert_eq!(filled.network, Some(Network::Preview));
-    }
-
-    #[test]
-    fn blockfrost_network_id_defaults_to_mainnet_when_unset() {
+    fn blockfrost_requires_network_or_project_id() {
         let env = ConnectorEnv {
             backend: Backend::Blockfrost,
             network: None,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            node_socket: None,
         };
 
-        assert_eq!(env.network_id().unwrap(), NetworkId::MAINNET);
+        let error = match Connector::try_from(env) {
+            Ok(_) => panic!("missing network and project id should fail"),
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("KONDUIT_BLOCKFROST_PROJECT_ID"));
+    }
+
+    #[test]
+    fn try_from_builds_node_config() {
+        let env = ConnectorEnv {
+            backend: Backend::Node,
+            network: Some(PublicNetwork::Preprod.into()),
+            blockfrost_project_id: None,
+            utxorpc_uri: None,
+            node_socket: Some("/tmp/node.socket".to_string()),
+        };
+
+        let connector = Connector::try_from(env).expect("node config should build");
+        match connector {
+            Connector::Node(config) => {
+                assert_eq!(config.network, PublicNetwork::Preprod.into());
+                assert_eq!(config.socket, "/tmp/node.socket");
+            }
+            other => panic!("expected Node config, got {other:?}"),
+        }
     }
 }

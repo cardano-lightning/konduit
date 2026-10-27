@@ -1,9 +1,11 @@
 use crate::config::connector::{
-    Blockfrost as BlockfrostConfig, Connector as ConnectorConfig, UtxoRpc as UtxoRpcConfig,
+    Blockfrost as BlockfrostConfig, Connector as ConnectorConfig, Node as NodeConfig,
+    UtxoRpc as UtxoRpcConfig,
 };
 use anyhow::{Context, Result, anyhow};
 use cardano_connector::CardanoConnector;
 use cardano_connector_direct::Blockfrost;
+use cardano_connector_node::{Config as NodeRuntimeConfig, Node as NodeBackend};
 use cardano_connector_utxorpc::{
     Config as UtxoRpcRuntimeConfig, UtxoRpc, ensure_network_matches, live_network,
 };
@@ -12,10 +14,12 @@ use cardano_sdk::{
     transaction::state::ReadyForSigning,
 };
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 pub enum Connector {
     Blockfrost(Blockfrost),
     UtxoRpc(Box<UtxoRpc>),
+    Node(Box<NodeBackend>),
 }
 
 impl Connector {
@@ -23,6 +27,7 @@ impl Connector {
         match config {
             ConnectorConfig::Blockfrost(config) => Self::new_blockfrost(config),
             ConnectorConfig::UtxoRpc(config) => Self::new_utxorpc(config).await,
+            ConnectorConfig::Node(config) => Self::new_node(config).await,
         }
     }
 
@@ -53,6 +58,27 @@ impl Connector {
 
         Ok(Self::UtxoRpc(Box::new(connector)))
     }
+
+    async fn new_node(config: &NodeConfig) -> anyhow::Result<Self> {
+        let socket = &config.socket;
+        let magic = u64::from(config.network);
+
+        let runtime_config = NodeRuntimeConfig::new(PathBuf::from(socket), magic);
+        let connector = NodeBackend::connect(runtime_config)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to connect to local Cardano node at {socket} (network magic {magic})"
+                )
+            })?;
+
+        connector
+            .health()
+            .await
+            .with_context(|| format!("failed to reach local Cardano node at {socket}"))?;
+
+        Ok(Self::Node(Box::new(connector)))
+    }
 }
 
 fn validated_blockfrost_project_id(config: &BlockfrostConfig) -> anyhow::Result<&str> {
@@ -72,6 +98,7 @@ impl CardanoConnector for Connector {
         match self {
             Self::Blockfrost(c) => c.network(),
             Self::UtxoRpc(c) => c.network(),
+            Self::Node(c) => c.network(),
         }
     }
 
@@ -79,6 +106,7 @@ impl CardanoConnector for Connector {
         match self {
             Self::Blockfrost(c) => c.health().await,
             Self::UtxoRpc(c) => c.health().await,
+            Self::Node(c) => c.health().await,
         }
     }
 
@@ -86,6 +114,7 @@ impl CardanoConnector for Connector {
         match self {
             Self::Blockfrost(c) => c.protocol_parameters().await,
             Self::UtxoRpc(c) => c.protocol_parameters().await,
+            Self::Node(c) => c.protocol_parameters().await,
         }
     }
 
@@ -97,6 +126,7 @@ impl CardanoConnector for Connector {
         match self {
             Self::Blockfrost(c) => c.utxos_at(payment, delegation).await,
             Self::UtxoRpc(c) => c.utxos_at(payment, delegation).await,
+            Self::Node(c) => c.utxos_at(payment, delegation).await,
         }
     }
 
@@ -104,6 +134,7 @@ impl CardanoConnector for Connector {
         match self {
             Self::Blockfrost(c) => c.submit(transaction).await,
             Self::UtxoRpc(c) => c.submit(transaction).await,
+            Self::Node(c) => c.submit(transaction).await,
         }
     }
 }
@@ -111,13 +142,13 @@ impl CardanoConnector for Connector {
 #[cfg(test)]
 mod tests {
     use super::{Connector, validated_blockfrost_project_id};
-    use crate::config::connector::{Blockfrost, Connector as ConnectorConfig, UtxoRpc};
-    use cardano_sdk::Network;
+    use crate::config::connector::{Blockfrost, Connector as ConnectorConfig, Node, UtxoRpc};
+    use cardano_sdk::PublicNetwork;
 
     #[test]
     fn blockfrost_config_without_project_id_is_not_runnable() {
         let config = ConnectorConfig::Blockfrost(Blockfrost {
-            network: Network::Mainnet,
+            network: PublicNetwork::Mainnet,
             project_id: None,
         });
 
@@ -133,7 +164,7 @@ mod tests {
     #[test]
     fn utxorpc_config_without_uri_is_not_runnable() {
         let config = ConnectorConfig::UtxoRpc(UtxoRpc {
-            network: Network::Preview,
+            network: PublicNetwork::Preview,
             uri: None,
         });
 
@@ -147,9 +178,33 @@ mod tests {
     }
 
     #[test]
+    fn node_config_attempts_to_connect() {
+        let config = ConnectorConfig::Node(Node {
+            network: PublicNetwork::Preprod.into(),
+            socket: "/tmp/node.socket".to_string(),
+        });
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let error = match runtime.block_on(Connector::from_config(&config)) {
+            Ok(_) => panic!("unreachable socket should fail"),
+            Err(error) => error,
+        };
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("KONDUIT_NODE_SOCKET"),
+            "socket validation moved to env::connector; got: {message}"
+        );
+        assert!(
+            !message.contains("KONDUIT_NODE_NETWORK_MAGIC"),
+            "network_magic is now derived from network; got: {message}"
+        );
+    }
+
+    #[test]
     fn blockfrost_network_mismatch_is_rejected_before_runtime_use() {
         let config = ConnectorConfig::Blockfrost(Blockfrost {
-            network: Network::Preview,
+            network: PublicNetwork::Preview,
             project_id: Some("preprod12345".to_string()),
         });
 
@@ -165,7 +220,7 @@ mod tests {
     #[test]
     fn blockfrost_validation_accepts_matching_project_id() {
         let config = Blockfrost {
-            network: Network::Preview,
+            network: PublicNetwork::Preview,
             project_id: Some("preview12345".to_string()),
         };
 

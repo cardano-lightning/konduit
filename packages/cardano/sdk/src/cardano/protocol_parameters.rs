@@ -5,6 +5,8 @@
 use minicbor::{Decode, Encode};
 use num::rational::Ratio;
 
+use crate::cardano::time::{Milliseconds, PosixMilliseconds, ShelleySlotConfig, Slot};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -47,12 +49,24 @@ pub struct ProtocolParameters {
     /// Cost model for Plutus version 3, ordered according to the [_"spec"_](https://github.com/IntersectMBO/plutus/blob/b12c894833cae725bab11577c845701aeb05dc97/plutus-ledger-api/CostModel/Params/CostModelParams/costModelParamNames.golden.txt)
     #[n(8)]
     plutus_v3_cost_model: PlutusV3CostModel,
-    /// The network POSIX start time, in seconds.
+    /// The POSIX time of [`Self::first_shelley_slot`].
+    ///
+    /// This is the anchor of the chain's slot ⇄ time mapping, *not*
+    /// necessarily the Byron genesis' start.
     #[n(9)]
-    start_time: u64,
+    start_time: PosixMilliseconds,
     /// The first (not-necessarily active) slot of the Shelley era.
     #[n(10)]
-    first_shelley_slot: u64,
+    first_shelley_slot: Slot,
+    /// The length of a slot.
+    ///
+    /// This is a *genesis* parameter (the Shelley genesis' `slotLength`), not a
+    /// protocol parameter: the ledger converts it to POSIX time when it hands
+    /// the transaction's validity range to a Plutus script. The public
+    /// networks use one second; fast testnets use much shorter slots, and
+    /// getting this wrong makes every slot number we compute wrong.
+    #[n(11)]
+    slot_length_ms: Milliseconds,
 }
 type PlutusV3CostModel = Vec<i64>;
 
@@ -119,8 +133,12 @@ impl Default for ProtocolParameters {
             referenced_scripts_fee_multiplier: Ratio::ONE,
             referenced_scripts_fee_step_size: 0,
             plutus_v3_cost_model: vec![],
-            start_time: 0,
-            first_shelley_slot: 0,
+            start_time: PosixMilliseconds::new(0),
+            first_shelley_slot: Slot::new(0),
+            // One second — the slot length of every public network. Chains
+            // with a different slot length (fast testnets) must have it set
+            // explicitly; see `with_slot_length_ms`.
+            slot_length_ms: Milliseconds::new(1_000),
         }
     }
 }
@@ -140,8 +158,10 @@ impl ProtocolParameters {
             .with_referenced_scripts_fee_step_size(25000)
             .with_execution_price_mem(0.0577)
             .with_execution_price_cpu(7.21e-05)
-            .with_start_time(1506203091)
-            .with_first_shelley_slot(4492800)
+            // The Shelley era starts on mainnet at 2020-07-29T21:44:51Z.
+            .with_start_time(PosixMilliseconds::new(1_596_059_091_000))
+            .with_first_shelley_slot(Slot::new(4492800))
+            .with_slot_length_ms(Milliseconds::new(1000))
             .with_plutus_v3_cost_model(PLUTUS_V3_02_VAN_ROSSEM.into())
     }
 
@@ -152,8 +172,10 @@ impl ProtocolParameters {
     pub fn preprod() -> Self {
         Self::mainnet()
             .with_plutus_v3_cost_model(PLUTUS_V3_02_VAN_ROSSEM.into())
-            .with_start_time(1654041600)
-            .with_first_shelley_slot(86400)
+            // The Shelley era starts on preprod at 2020-07-28T21:00:11Z.
+            .with_start_time(PosixMilliseconds::new(1_595_967_611_000))
+            .with_first_shelley_slot(Slot::new(86400))
+            .with_slot_length_ms(Milliseconds::new(1000))
     }
 
     /// _Current_ PreProd protocol parameters.
@@ -165,18 +187,26 @@ impl ProtocolParameters {
     pub fn preview() -> Self {
         Self::mainnet()
             .with_plutus_v3_cost_model(PLUTUS_V3_02_VAN_ROSSEM.into())
-            .with_start_time(1666656000)
-            .with_first_shelley_slot(0)
+            // The Shelley era starts on preview at 2022-10-21T00:00:00Z.
+            .with_start_time(PosixMilliseconds::new(1_666_656_000_000))
+            .with_first_shelley_slot(Slot::new(0))
+            .with_slot_length_ms(Milliseconds::new(1000))
     }
 
     /// Translate a posix time to a slot number for that particular network.
-    pub fn posix_to_slot(&self, posix: std::time::Duration) -> u64 {
-        let delta = posix.as_secs() - self.start_time;
+    ///
+    /// The mapping is the ledger's own: `start_time` is the POSIX time of
+    /// `first_shelley_slot`, and every slot after it lasts `slot_length_ms`
+    /// milliseconds.
+    pub fn posix_to_slot(&self, posix: PosixMilliseconds) -> Slot {
+        ShelleySlotConfig::from(self).posix_to_slot(posix)
+    }
 
-        let byron_duration = 20 * self.first_shelley_slot;
-        let since_shelley_duration = delta - byron_duration;
-
-        self.first_shelley_slot + since_shelley_duration
+    /// Translate a slot number to its posix time.
+    ///
+    /// The inverse of [`Self::posix_to_slot`].
+    pub fn slot_to_posix(&self, slot: Slot) -> PosixMilliseconds {
+        ShelleySlotConfig::from(self).slot_to_posix(slot)
     }
 
     /// Specify the multiplier fee coefficient on the size of transactions, in lovelace/bytes
@@ -236,15 +266,24 @@ impl ProtocolParameters {
         self
     }
 
-    /// Specify the network POSIX start time, in seconds.
-    pub fn with_start_time(mut self, start_time: u64) -> Self {
+    /// Specify the POSIX time of the chain's time anchor.
+    pub fn with_start_time(mut self, start_time: PosixMilliseconds) -> Self {
         self.start_time = start_time;
         self
     }
 
     /// The first (not-necessarily active) slot of the Shelley era.
-    pub fn with_first_shelley_slot(mut self, first_shelley_slot: u64) -> Self {
+    pub fn with_first_shelley_slot(mut self, first_shelley_slot: Slot) -> Self {
         self.first_shelley_slot = first_shelley_slot;
+        self
+    }
+
+    /// The length of a slot.
+    ///
+    /// Must match the chain's genesis (`slotLength`); see
+    /// [`Self::slot_length_ms`].
+    pub fn with_slot_length_ms(mut self, slot_length_ms: Milliseconds) -> Self {
+        self.slot_length_ms = slot_length_ms;
         self
     }
 
@@ -258,6 +297,21 @@ impl ProtocolParameters {
 // ------------------------------------------------------------------ Inspecting
 
 impl ProtocolParameters {
+    /// The POSIX time of the chain's time anchor.
+    pub fn start_time(&self) -> PosixMilliseconds {
+        self.start_time
+    }
+
+    /// The global slot number the chain's time anchor sits at.
+    pub fn first_shelley_slot(&self) -> Slot {
+        self.first_shelley_slot
+    }
+
+    /// The length of a slot.
+    pub fn slot_length_ms(&self) -> Milliseconds {
+        self.slot_length_ms
+    }
+
     /// Base transaction fee, computed from the size of a serialised transaction.
     pub fn base_fee(&self, size: u64) -> u64 {
         size * self.fee_per_byte + self.fee_constant
@@ -301,13 +355,27 @@ impl ProtocolParameters {
 
 // -------------------------------------------------------------- Converting (to)
 
+impl From<&ProtocolParameters> for ShelleySlotConfig {
+    fn from(params: &ProtocolParameters) -> Self {
+        Self {
+            start_time: params.start_time,
+            first_era_slot: params.first_shelley_slot,
+            slot_length_ms: params.slot_length_ms,
+        }
+    }
+}
+
 impl From<&ProtocolParameters> for uplc::tx::SlotConfig {
     fn from(params: &ProtocolParameters) -> Self {
-        let byron_slot_length = 20; // in seconds
+        let config = ShelleySlotConfig::from(params);
         Self {
-            slot_length: 1000, // Shelley slot length, in milliseconds
-            zero_slot: params.first_shelley_slot,
-            zero_time: (params.start_time + byron_slot_length * params.first_shelley_slot) * 1000,
+            // The slot length is a genesis parameter; the ledger uses it to
+            // turn the transaction's validity range into POSIX times before
+            // handing them to a Plutus script. We must use the very same
+            // value, or the local evaluation and the ledger disagree.
+            slot_length: config.slot_length_ms.as_millis() as u32,
+            zero_slot: u64::from(config.first_era_slot),
+            zero_time: config.start_time.as_millis(),
         }
     }
 }
@@ -395,3 +463,149 @@ pub const PLUTUS_V3_02_VAN_ROSSEM: &[i64] = &[
     9444, 1, 1000, 172116, 183150, 6, 24, 21, 213283, 618401, 1998, 28258, 1, 1000, 38159, 2, 22,
     1000, 95933, 1, 1, 11, 1000, 277577, 12, 21,
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::ProtocolParameters;
+    use crate::cardano::time::{Milliseconds, PosixMilliseconds, ShelleySlotConfig, Slot};
+
+    /// A fast testnet: 200ms slots, anchored at the chain's start.
+    fn fast_testnet() -> ProtocolParameters {
+        ProtocolParameters::default()
+            .with_start_time(PosixMilliseconds::new(1_792_874_004_000))
+            .with_first_shelley_slot(Slot::new(0))
+            .with_slot_length_ms(Milliseconds::new(200))
+    }
+
+    #[test]
+    fn posix_to_slot_uses_the_chain_slot_length() {
+        let params = fast_testnet();
+
+        // The anchor itself.
+        assert_eq!(
+            params.posix_to_slot(PosixMilliseconds::new(1_792_874_004_000)),
+            Slot::new(0)
+        );
+        // 18 minutes later: 18 * 60 * 1000 / 200 = 5400 slots.
+        assert_eq!(
+            params.posix_to_slot(PosixMilliseconds::new(1_792_874_004_000 + 18 * 60 * 1000)),
+            Slot::new(5_400)
+        );
+    }
+
+    #[test]
+    fn posix_to_slot_uses_one_second_slots_by_default() {
+        let params = ProtocolParameters::default()
+            .with_start_time(PosixMilliseconds::new(1_792_874_004_000))
+            .with_first_shelley_slot(Slot::new(0));
+
+        assert_eq!(
+            params.posix_to_slot(PosixMilliseconds::new(1_792_874_004_000 + 18 * 60 * 1000)),
+            Slot::new(18 * 60)
+        );
+    }
+
+    #[test]
+    fn posix_to_slot_is_anchored_at_the_first_shelley_slot() {
+        let params = ProtocolParameters::default()
+            .with_start_time(PosixMilliseconds::new(1_792_874_004_000))
+            .with_first_shelley_slot(Slot::new(4_492_800))
+            .with_slot_length_ms(Milliseconds::new(1000));
+
+        assert_eq!(
+            params.posix_to_slot(PosixMilliseconds::new(1_792_874_004_000)),
+            Slot::new(4_492_800)
+        );
+        assert_eq!(
+            params.posix_to_slot(PosixMilliseconds::new(1_792_874_004_000 + 10_000)),
+            Slot::new(4_492_800 + 10)
+        );
+    }
+
+    #[test]
+    fn slot_to_posix_is_the_inverse_of_posix_to_slot() {
+        let params = fast_testnet();
+        let time = PosixMilliseconds::new(1_792_874_004_000 + 18 * 60 * 1000);
+
+        assert_eq!(params.slot_to_posix(params.posix_to_slot(time)), time);
+    }
+
+    #[test]
+    fn the_shelley_slot_config_carries_the_chain_grid() {
+        let params = fast_testnet();
+        let config = ShelleySlotConfig::from(&params);
+
+        assert_eq!(config.start_time, params.start_time());
+        assert_eq!(config.first_era_slot, params.first_shelley_slot());
+        assert_eq!(config.slot_length_ms, params.slot_length_ms());
+    }
+
+    #[test]
+    fn slot_config_carries_the_chain_slot_length() {
+        let params = fast_testnet();
+        let config = uplc::tx::SlotConfig::from(&params);
+
+        assert_eq!(config.slot_length, 200);
+        assert_eq!(config.zero_slot, 0);
+        assert_eq!(config.zero_time, 1_792_874_004_000);
+    }
+
+    /// The size of the konduit validator's flat serialisation, in bytes.
+    const KONDUIT_VALIDATOR_SIZE: u64 = 5_470;
+
+    #[test]
+    fn a_reference_script_costs_fifteen_lovelace_per_byte() {
+        let params = ProtocolParameters::mainnet();
+
+        // The ledger charges the *script's* size at 15 lovelace per byte.
+        assert_eq!(
+            params.referenced_scripts_fee(KONDUIT_VALIDATOR_SIZE),
+            82_050
+        );
+    }
+
+    #[test]
+    fn the_reference_script_fee_is_not_the_utxo_storage_cost() {
+        // `adaPerUTxOByte` (4310) prices the *storage* of a utxo. Feeding it
+        // into the reference-script rate charged 4310 lovelace per byte of
+        // script — 23.6 ada per transaction for the konduit validator alone.
+        // The ledger's rate is 15.
+        let params = ProtocolParameters::mainnet();
+        let utxo_storage_rate = 4310_u64;
+
+        assert_eq!(
+            params.referenced_scripts_fee(KONDUIT_VALIDATOR_SIZE),
+            15 * KONDUIT_VALIDATOR_SIZE
+        );
+        assert!(
+            utxo_storage_rate * KONDUIT_VALIDATOR_SIZE > 23 * ADA,
+            "the utxo storage rate must not be used for scripts"
+        );
+    }
+
+    #[test]
+    fn a_konduit_transaction_costs_about_a_third_of_an_ada() {
+        // The whole fee of a konduit transaction: the base fee (44 per byte of
+        // the transaction plus a flat 155 381), the reference script, and the
+        // script's execution units. This is the number the e2e scenarios
+        // budget for, so it is worth pinning down.
+        let params = ProtocolParameters::mainnet();
+        let transaction_size = 500_u64;
+        let execution_units_mem = 189_335_u64;
+        let execution_units_steps = 65_587_819_u64;
+
+        let fee = params.base_fee(transaction_size)
+            + params.referenced_scripts_fee(KONDUIT_VALIDATOR_SIZE)
+            + params.price_mem(execution_units_mem)
+            + params.price_cpu(execution_units_steps);
+
+        // ~0.28 ada. If this ever jumps by an order of magnitude, something
+        // is charging for the reference script at the wrong rate again.
+        assert!(
+            fee > 200_000 && fee < 400_000,
+            "unexpected konduit transaction fee: {fee}"
+        );
+    }
+
+    const ADA: u64 = 1_000_000;
+}

@@ -18,7 +18,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anyhow = { workspace = true }
 bln-sdk.workspace = true
-chrono.workspace = true
 cardano-sdk = { workspace = true }
 hex.workspace = true
 konduit-data = { workspace = true, features = ["serde"] }
@@ -26,5 +25,3 @@ minicbor.workspace = true
 serde.workspace = true
 serde_with.workspace = true
 thiserror.workspace = true
-web-time.workspace = true
-uplc.workspace = true

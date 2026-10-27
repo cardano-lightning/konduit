@@ -1,3 +1,4 @@
+use cardano_sdk::PosixMilliseconds;
 use konduit_data::{
     Cheque, Duration, Lock, Locked, MAX_UNSQUASHED, Pending, Secret, Squash, SquashBody, Unlocked,
     Used, Verified,
@@ -230,13 +231,16 @@ impl Receipt {
     pub fn prep_sub(
         &self,
         useds: &[Used],
-        upper: &Duration,
+        upper: &PosixMilliseconds,
     ) -> (Vec<Unlocked<Verified>>, Vec<Used>) {
         let unlockeds: Vec<Unlocked<Verified>> = self
             .cheques
             .iter()
             .filter_map(|c| c.as_unlocked())
-            .filter(|u| u.timeout() > *upper && !useds.iter().any(|x| x.index == u.index()))
+            .filter(|u| {
+                u.timeout().as_millis() > u128::from(upper.as_millis())
+                    && !useds.iter().any(|x| x.index == u.index())
+            })
             .collect();
 
         let mut next_useds: Vec<Used> = useds
@@ -256,7 +260,7 @@ impl Receipt {
     pub fn prep_respond(
         &self,
         useds: &[Used],
-        upper: &Duration,
+        upper: &PosixMilliseconds,
     ) -> (Vec<Cheque<Verified>>, Vec<Pending>, u64) {
         let mut cheques = Vec::new();
         let mut pendings = Vec::new();
@@ -268,7 +272,9 @@ impl Receipt {
             .sum();
 
         for c in &self.cheques {
-            if c.timeout() > *upper && !useds.iter().any(|x| x.index == c.index()) {
+            if c.timeout().as_millis() > u128::from(upper.as_millis())
+                && !useds.iter().any(|x| x.index == c.index())
+            {
                 cheques.push(c.clone());
 
                 if let Some(locked) = c.as_locked() {

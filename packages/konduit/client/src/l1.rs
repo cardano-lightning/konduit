@@ -6,6 +6,7 @@ use crate::core::{
 };
 use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
+use cardano_sdk::{ShelleySlotConfig, Slot};
 use konduit_tmp::to_verifying_key;
 use konduit_tx::ChannelUtxo;
 use std::collections::BTreeMap;
@@ -108,7 +109,10 @@ where
                 .chain(utxos_konduit)
                 .chain(utxos_wallet)
                 .collect(),
-            Bounds::twenty_mins(),
+            Bounds::around_now(
+                &ShelleySlotConfig::from(&network_parameters.protocol_parameters),
+                Slot::new(Bounds::MARGIN_SLOTS),
+            ),
         )?;
 
         let consumer_cardano_vk = cardano_sdk::VerificationKey::from(<[u8; 32]>::from(consumer_vk));

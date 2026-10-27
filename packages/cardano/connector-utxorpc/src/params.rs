@@ -1,9 +1,7 @@
 use anyhow::{Context, anyhow};
-use cardano_sdk::ProtocolParameters;
+use cardano_sdk::{Milliseconds, PosixMilliseconds, ProtocolParameters, Slot};
 use num::rational::Ratio;
 use utxorpc::spec::{cardano, query};
-
-const BYRON_SLOT_LENGTH_SECS: u64 = 20;
 
 pub async fn read(client: &mut utxorpc::CardanoQueryClient) -> anyhow::Result<ProtocolParameters> {
     let params = client
@@ -19,6 +17,33 @@ pub async fn read(client: &mut utxorpc::CardanoQueryClient) -> anyhow::Result<Pr
         .context("failed to read era summary from UTxO RPC")?;
 
     build(params, era_summary)
+}
+
+/// The length of a slot, derived from the era summary.
+///
+/// Two consecutive eras give us two (slot, time) pairs; their quotient is the
+/// slot length the chain actually runs with. The era boundaries are expressed
+/// in milliseconds, like the ledger does.
+fn slot_length_ms(
+    summaries: &[cardano::EraSummary],
+    shelley: &cardano::EraSummary,
+) -> Option<Milliseconds> {
+    let shelley_start = shelley.start.as_ref()?;
+    let shelley_index = summaries
+        .iter()
+        .position(|era| std::ptr::eq(era, shelley))?;
+
+    let next = summaries
+        .iter()
+        .skip(shelley_index + 1)
+        .find_map(|era| era.start.as_ref())?;
+
+    let slot_delta = next.slot.checked_sub(shelley_start.slot)?;
+    let time_delta_ms = next.time.checked_sub(shelley_start.time)?;
+    if slot_delta == 0 {
+        return None;
+    }
+    Some(Milliseconds::new(time_delta_ms / slot_delta))
 }
 
 fn build(
@@ -47,11 +72,12 @@ fn build(
         .as_ref()
         .ok_or_else(|| anyhow!("Shelley era summary missing start point"))?;
 
-    let first_shelley_slot = start.slot;
-    let shelley_start_time = start.time / 1000;
-    let start_time = shelley_start_time
-        .checked_sub(first_shelley_slot.saturating_mul(BYRON_SLOT_LENGTH_SECS))
-        .ok_or_else(|| anyhow!("computed negative Cardano start time"))?;
+    // The chain's time anchor: the POSIX time of the Shelley era's first slot.
+    // (The Shelley era's slot number is a *global* one, so the anchor is
+    // `posix(slot) = start.time + (slot - start.slot) * slot_length`.)
+    let first_shelley_slot = Slot::new(start.slot);
+    let start_time = PosixMilliseconds::new(start.time);
+    let slot_length_ms = slot_length_ms(&summaries.summaries, shelley);
     let prices = params
         .prices
         .ok_or_else(|| anyhow!("UTxO RPC protocol parameters missing execution prices"))?;
@@ -85,6 +111,15 @@ fn build(
         )?)
         .with_start_time(start_time)
         .with_first_shelley_slot(first_shelley_slot);
+
+    // The slot length is a genesis parameter; the era summary only tells us
+    // it indirectly (through the distance between two era boundaries). When
+    // the chain has not crossed an era boundary yet we keep the default (one
+    // second, the public networks' slot length).
+    let base = match slot_length_ms {
+        Some(slot_length_ms) => base.with_slot_length_ms(slot_length_ms),
+        None => base,
+    };
 
     let plutus_v3 = cost_models
         .plutus_v3
@@ -137,7 +172,7 @@ fn bytes_to_u64(bytes: &[u8], label: &str) -> anyhow::Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::{build, bytes_to_u64, rational_to_f64};
-    use std::time::Duration;
+    use cardano_sdk::{Milliseconds, PosixMilliseconds, Slot};
     use utxorpc::spec::{cardano, query};
 
     fn bigint(value: i64) -> cardano::BigInt {
@@ -176,22 +211,26 @@ mod tests {
         }
     }
 
+    fn era_summaries(
+        summaries: Vec<cardano::EraSummary>,
+    ) -> query::read_era_summary_response::Summary {
+        query::read_era_summary_response::Summary::Cardano(cardano::EraSummaries { summaries })
+    }
+
     fn era_summary(
         start_time_ms: u64,
         first_shelley_slot: u64,
     ) -> query::read_era_summary_response::Summary {
-        query::read_era_summary_response::Summary::Cardano(cardano::EraSummaries {
-            summaries: vec![cardano::EraSummary {
-                name: "Shelley".to_string(),
-                start: Some(cardano::EraBoundary {
-                    time: start_time_ms,
-                    slot: first_shelley_slot,
-                    epoch: 0,
-                }),
-                end: None,
-                protocol_params: None,
-            }],
-        })
+        era_summaries(vec![cardano::EraSummary {
+            name: "Shelley".to_string(),
+            start: Some(cardano::EraBoundary {
+                time: start_time_ms,
+                slot: first_shelley_slot,
+                epoch: 0,
+            }),
+            end: None,
+            protocol_params: None,
+        }])
     }
 
     #[test]
@@ -223,20 +262,62 @@ mod tests {
         assert_eq!(params.minimum_collateral(100), 150);
         assert_eq!(params.plutus_v3_cost_model(), &vec![1, 2, 3]);
         assert_eq!(
-            params.posix_to_slot(Duration::from_secs(1_700_000_000)),
-            4_492_800
+            params.posix_to_slot(PosixMilliseconds::new(1_700_000_000_000)),
+            Slot::new(4_492_800)
         );
     }
 
     #[test]
-    fn build_rejects_negative_chain_start() {
-        let error = build(params(), era_summary(10_000, 1_000))
-            .expect_err("underflowing chain start should fail");
+    fn build_anchors_on_the_shelley_era_boundary() {
+        let params = build(params(), era_summary(1_700_000_000_000, 4_492_800))
+            .expect("protocol parameters should build");
 
-        assert!(
-            error
-                .to_string()
-                .contains("computed negative Cardano start time")
+        // The anchor is the era boundary itself — the Byron-era offset that
+        // used to be subtracted from it is gone, so a chain whose Shelley era
+        // started long after the epoch is mapped as it really is.
+        assert_eq!(
+            params.posix_to_slot(PosixMilliseconds::new(1_700_000_000_000)),
+            Slot::new(4_492_800)
+        );
+        assert_eq!(
+            params.slot_to_posix(Slot::new(4_492_800)),
+            PosixMilliseconds::new(1_700_000_000_000)
+        );
+    }
+
+    #[test]
+    fn build_derives_the_slot_length_from_consecutive_eras() {
+        // Two eras, 500 slots apart and 100 seconds apart: the chain runs with
+        // slots of 200 milliseconds.
+        let summaries = era_summaries(vec![
+            cardano::EraSummary {
+                name: "Shelley".to_string(),
+                start: Some(cardano::EraBoundary {
+                    time: 1_700_000_000_000,
+                    slot: 4_492_800,
+                    epoch: 0,
+                }),
+                end: None,
+                protocol_params: None,
+            },
+            cardano::EraSummary {
+                name: "Allegra".to_string(),
+                start: Some(cardano::EraBoundary {
+                    time: 1_700_000_100_000,
+                    slot: 4_493_300,
+                    epoch: 1,
+                }),
+                end: None,
+                protocol_params: None,
+            },
+        ]);
+
+        let params = build(params(), summaries).expect("protocol parameters should build");
+
+        assert_eq!(params.slot_length_ms(), Milliseconds::new(200));
+        assert_eq!(
+            params.posix_to_slot(PosixMilliseconds::new(1_700_000_000_000 + 200)),
+            Slot::new(4_492_801)
         );
     }
 

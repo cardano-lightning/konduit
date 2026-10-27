@@ -831,3 +831,18 @@ mod roundtrip {
         }
     }
 }
+
+impl TryFrom<&[u8]> for Redeemer {
+    type Error = minicbor::decode::Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        minicbor::decode(bytes)
+    }
+}
+
+impl From<&Redeemer> for Vec<u8> {
+    fn from(value: &Redeemer) -> Vec<u8> {
+        // Safe: unwrapping `Infallible`.
+        minicbor::to_vec(value).unwrap()
+    }
+}

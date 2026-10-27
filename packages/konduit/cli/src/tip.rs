@@ -51,6 +51,18 @@ impl Consumer {
             channels,
         })
     }
+
+    pub fn wallet(&self) -> &Utxos {
+        &self.wallet
+    }
+
+    pub fn reference_script(&self) -> Option<&Utxo> {
+        self.reference_script.as_ref()
+    }
+
+    pub fn channels(&self) -> &BTreeMap<Input, Channel> {
+        &self.channels
+    }
 }
 
 impl fmt::Display for Consumer {
@@ -109,6 +121,18 @@ impl Adaptor {
             channels,
         })
     }
+
+    pub fn wallet(&self) -> &Utxos {
+        &self.wallet
+    }
+
+    pub fn reference_script(&self) -> Option<&Utxo> {
+        self.reference_script.as_ref()
+    }
+
+    pub fn channels(&self) -> &BTreeMap<Input, Channel> {
+        &self.channels
+    }
 }
 
 impl fmt::Display for Adaptor {
@@ -153,6 +177,14 @@ impl Admin {
             wallet,
             reference_script,
         })
+    }
+
+    pub fn wallet(&self) -> &Utxos {
+        &self.wallet
+    }
+
+    pub fn reference_script(&self) -> Option<&Utxo> {
+        self.reference_script.as_ref()
     }
 }
 
@@ -332,10 +364,10 @@ fn display_stage(f: &mut fmt::Formatter<'_>, stage: &konduit_data::Stage) -> fmt
             useds_to_string(useds),
             elapse_at
         ),
-        konduit_data::Stage::Responded(pendings_amount, pendings) => write!(
+        konduit_data::Stage::Responded(pends_amount, pendings) => write!(
             f,
             "  Responded : {} : {}",
-            pendings_amount,
+            pends_amount,
             pendings_to_string(pendings)
         ),
     }

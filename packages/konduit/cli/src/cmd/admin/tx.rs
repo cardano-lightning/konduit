@@ -1,3 +1,4 @@
+use crate::output::{self, OutputJson};
 use crate::{cardano::ADA, config::admin::Config};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Address, SigningKey, Value, address::kind};
@@ -27,6 +28,9 @@ pub struct SendArgs {
     /// Where the rest of the value goes. Defaults to own address
     #[arg(long)]
     rest: Option<Address<kind::Shelley>>,
+
+    #[arg(long, default_value_t = false)]
+    output_json: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -53,18 +57,35 @@ pub struct DeployArgs {
     /// If true, will spend utxos with scripts. Defaults to false
     #[arg(long, default_value_t = false)]
     spend_all: bool,
+
+    #[arg(long, default_value_t = false)]
+    output_json: bool,
 }
 
 impl Cmd {
     pub async fn run(self, config: &Config) -> anyhow::Result<()> {
         let connector = config.connector.connector().await?;
         match self {
-            Cmd::Send(args) => run_send(&connector, &config.wallet, args).await,
+            Cmd::Send(args) => {
+                run_send(&connector, &config.wallet, args).await?;
+                Ok(())
+            }
             Cmd::Deploy(args) => {
-                run_deploy(&connector, &config.wallet, &config.host_address, args).await
+                run_deploy(&connector, &config.wallet, &config.host_address, args).await?;
+                Ok(())
             }
         }
     }
+}
+
+fn print_tx_result(tx_id: &str, output: OutputJson) -> anyhow::Result<()> {
+    let dto = output::TxOutput::from_id(tx_id.to_string());
+    if output.is_json() {
+        output::render(output, &dto)?;
+    } else {
+        println!("Tx id :: {}", tx_id);
+    }
+    Ok(())
 }
 
 async fn run_send(
@@ -85,9 +106,10 @@ async fn run_send(
         .collect();
     let protocol_parameters = connector.protocol_parameters().await?;
     let mut tx = konduit_tx::admin::send(&protocol_parameters, &utxos, tos, change_address)?;
-    println!("Tx id :: {}", tx.id());
+    let tx_id = tx.id().to_string();
     tx.sign(wallet);
-    connector.submit(&tx).await
+    connector.submit(&tx).await?;
+    print_tx_result(&tx_id, OutputJson(args.output_json))
 }
 
 async fn run_deploy(
@@ -114,9 +136,10 @@ async fn run_deploy(
         Address::<kind::Any>::from(host_address.clone()),
         change_address,
     )?;
-    println!("Tx id :: {}", tx.id());
+    let tx_id = tx.id().to_string();
     tx.sign(wallet);
-    connector.submit(&tx).await
+    connector.submit(&tx).await?;
+    print_tx_result(&tx_id, OutputJson(args.output_json))
 }
 
 #[cfg(test)]
@@ -125,7 +148,8 @@ mod tests {
     use cardano_connector::CardanoConnector;
     use cardano_sdk::{
         Address, Credential, Hash, Input, Network, Output, PlutusVersion, ProtocolParameters,
-        SigningKey, Transaction, Value, address::kind, plutus_script, transaction::state,
+        PublicNetwork, SigningKey, Transaction, Value, address::kind, plutus_script,
+        transaction::state,
     };
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
@@ -137,7 +161,7 @@ mod tests {
     }
 
     struct FakeConnector {
-        network: Network,
+        network: PublicNetwork,
         expected_payment: Credential,
         utxos: BTreeMap<Input, Output>,
         state: Arc<Mutex<ConnectorState>>,
@@ -146,7 +170,7 @@ mod tests {
     impl FakeConnector {
         fn new(expected_payment: Credential, utxos: BTreeMap<Input, Output>) -> Self {
             Self {
-                network: Network::Preview,
+                network: PublicNetwork::Preview,
                 expected_payment,
                 utxos,
                 state: Arc::new(Mutex::new(ConnectorState::default())),
@@ -156,7 +180,7 @@ mod tests {
 
     impl CardanoConnector for FakeConnector {
         fn network(&self) -> Network {
-            self.network
+            self.network.into()
         }
 
         async fn health(&self) -> anyhow::Result<String> {
@@ -193,7 +217,7 @@ mod tests {
     fn payment_address(wallet: &SigningKey) -> Address<kind::Shelley> {
         wallet
             .to_verification_key()
-            .to_address(Network::Preview.into())
+            .to_address(PublicNetwork::Preview.into())
     }
 
     fn wallet_utxos(address: &Address<kind::Shelley>) -> BTreeMap<Input, Output> {
@@ -230,11 +254,12 @@ mod tests {
         let connector = FakeConnector::new(own_address.payment(), wallet_utxos(&own_address));
         let destination = wallet
             .to_verification_key()
-            .to_address(Network::Preview.into());
+            .to_address(PublicNetwork::Preview.into());
         let args = SendArgs {
             spend_all: false,
             to: vec![super::AddressAmount(destination, 2)],
             rest: None,
+            output_json: false,
         };
 
         run_send(&connector, &wallet, args)
@@ -259,7 +284,10 @@ mod tests {
             &connector,
             &wallet,
             &own_address,
-            DeployArgs { spend_all: false },
+            DeployArgs {
+                spend_all: false,
+                output_json: false,
+            },
         )
         .await
         .expect("deploy should skip script utxos by default");
@@ -282,7 +310,10 @@ mod tests {
             &connector,
             &wallet,
             &own_address,
-            DeployArgs { spend_all: true },
+            DeployArgs {
+                spend_all: true,
+                output_json: false,
+            },
         )
         .await
         .expect("deploy should allow script utxos when requested");

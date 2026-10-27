@@ -1,16 +1,19 @@
 use anyhow::{Context, anyhow};
 use cardano_connector::CardanoConnector;
 use cardano_connector_direct::Blockfrost;
+use cardano_connector_node::{Config as NodeConfig, Node as NodeBackend};
 use cardano_connector_utxorpc::{
     Config as UtxoRpcConfig, UtxoRpc, ensure_network_matches, live_network,
 };
-use cardano_sdk::Network;
+use cardano_sdk::PublicNetwork;
 use std::fmt;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum CardanoBackend {
     Blockfrost,
     Utxorpc,
+    Node,
 }
 
 impl fmt::Display for CardanoBackend {
@@ -32,8 +35,14 @@ pub struct CardanoArgs {
     #[arg(long, env = crate::env::UTXORPC_URI)]
     pub utxorpc_uri: Option<String>,
 
+    #[arg(long, env = crate::env::NODE_SOCKET)]
+    pub node_socket: Option<String>,
+
+    #[arg(long, env = crate::env::NODE_NETWORK_MAGIC)]
+    pub node_network_magic: Option<u64>,
+
     #[arg(long, env = crate::env::NETWORK)]
-    pub network: Option<Network>,
+    pub network: Option<PublicNetwork>,
 }
 
 impl CardanoArgs {
@@ -73,6 +82,24 @@ impl CardanoArgs {
                 ensure_network_matches(config.network(), live, config.endpoint())?;
 
                 Ok(super::Cardano::UtxoRpc(Box::new(client)))
+            }
+            CardanoBackend::Node => {
+                let config = self.node_config()?;
+                let client = NodeBackend::connect(config).await.with_context(|| {
+                    format!(
+                        "failed to initialize configured Cardano backend {}",
+                        CardanoBackend::Node.as_str()
+                    )
+                })?;
+
+                client.health().await.with_context(|| {
+                    format!(
+                        "failed to reach configured Cardano backend {}",
+                        CardanoBackend::Node.as_str()
+                    )
+                })?;
+
+                Ok(super::Cardano::Node(Box::new(client)))
             }
         }
     }
@@ -114,6 +141,29 @@ impl CardanoArgs {
         Ok(UtxoRpcConfig::new(endpoint.to_owned(), network))
     }
 
+    fn node_config(&self) -> anyhow::Result<NodeConfig> {
+        let socket = self
+            .node_socket
+            .as_deref()
+            .filter(|socket| !socket.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Cardano backend {} requires {}",
+                    CardanoBackend::Node.as_str(),
+                    crate::env::NODE_SOCKET
+                )
+            })?;
+        let magic = self.node_network_magic.ok_or_else(|| {
+            anyhow!(
+                "Cardano backend {} requires {}",
+                CardanoBackend::Node.as_str(),
+                crate::env::NODE_NETWORK_MAGIC
+            )
+        })?;
+
+        Ok(NodeConfig::new(PathBuf::from(socket), magic))
+    }
+
     #[cfg(test)]
     fn selected_backend_name(&self) -> &'static str {
         self.backend.as_str()
@@ -125,6 +175,7 @@ impl CardanoBackend {
         match self {
             Self::Blockfrost => "blockfrost",
             Self::Utxorpc => "utxorpc",
+            Self::Node => "node",
         }
     }
 }
@@ -133,7 +184,7 @@ impl CardanoBackend {
 mod tests {
     use super::{CardanoArgs, CardanoBackend};
     use cardano_connector_utxorpc::{Config as UtxoRpcConfig, ensure_network_matches};
-    use cardano_sdk::Network;
+    use cardano_sdk::PublicNetwork;
 
     #[test]
     fn blockfrost_backend_requires_project_id() {
@@ -141,6 +192,8 @@ mod tests {
             backend: CardanoBackend::Blockfrost,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            node_socket: None,
+            node_network_magic: None,
             network: None,
         };
 
@@ -157,6 +210,8 @@ mod tests {
             backend: CardanoBackend::Utxorpc,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            node_socket: None,
+            node_network_magic: None,
             network: None,
         };
 
@@ -168,10 +223,47 @@ mod tests {
     }
 
     #[test]
+    fn node_backend_requires_socket_and_magic() {
+        let args = CardanoArgs {
+            backend: CardanoBackend::Node,
+            blockfrost_project_id: None,
+            utxorpc_uri: None,
+            node_socket: None,
+            node_network_magic: None,
+            network: None,
+        };
+
+        let error = args
+            .node_config()
+            .expect_err("missing node socket should fail");
+
+        assert!(error.to_string().contains("KONDUIT_NODE_SOCKET"));
+    }
+
+    #[test]
+    fn node_backend_requires_magic_after_socket_is_set() {
+        let args = CardanoArgs {
+            backend: CardanoBackend::Node,
+            blockfrost_project_id: None,
+            utxorpc_uri: None,
+            node_socket: Some("/tmp/node.socket".to_string()),
+            node_network_magic: None,
+            network: None,
+        };
+
+        let error = args.node_config().expect_err("missing magic should fail");
+
+        assert!(error.to_string().contains("KONDUIT_NODE_NETWORK_MAGIC"));
+    }
+
+    #[test]
     fn utxorpc_network_mismatch_is_rejected() {
-        let error =
-            ensure_network_matches(Network::Preview, Network::Preprod, "http://127.0.0.1:1337")
-                .expect_err("network mismatch should fail");
+        let error = ensure_network_matches(
+            PublicNetwork::Preview,
+            PublicNetwork::Preprod,
+            "http://127.0.0.1:1337",
+        )
+        .expect_err("network mismatch should fail");
 
         assert!(error.to_string().contains("does not match"));
     }
@@ -182,10 +274,26 @@ mod tests {
             backend: CardanoBackend::Blockfrost,
             blockfrost_project_id: Some("preview12345".to_string()),
             utxorpc_uri: None,
+            node_socket: None,
+            node_network_magic: None,
             network: None,
         };
 
         assert_eq!(args.selected_backend_name(), "blockfrost");
+    }
+
+    #[test]
+    fn node_backend_name_matches_selection() {
+        let args = CardanoArgs {
+            backend: CardanoBackend::Node,
+            blockfrost_project_id: None,
+            utxorpc_uri: None,
+            node_socket: Some("/tmp/node.socket".to_string()),
+            node_network_magic: Some(42),
+            network: None,
+        };
+
+        assert_eq!(args.selected_backend_name(), "node");
     }
 
     #[test]
@@ -194,7 +302,9 @@ mod tests {
             backend: CardanoBackend::Utxorpc,
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
-            network: Some(Network::Preview),
+            node_socket: None,
+            node_network_magic: None,
+            network: Some(PublicNetwork::Preview),
         };
 
         let config = args
@@ -204,7 +314,7 @@ mod tests {
         assert_eq!(args.selected_backend_name(), "utxorpc");
         assert_eq!(
             config,
-            UtxoRpcConfig::new("http://127.0.0.1:1337", Network::Preview)
+            UtxoRpcConfig::new("http://127.0.0.1:1337", PublicNetwork::Preview)
         );
     }
 
@@ -214,6 +324,8 @@ mod tests {
             backend: CardanoBackend::Blockfrost,
             blockfrost_project_id: Some("   ".to_string()),
             utxorpc_uri: None,
+            node_socket: None,
+            node_network_magic: None,
             network: None,
         };
 
@@ -230,6 +342,8 @@ mod tests {
             backend: CardanoBackend::Utxorpc,
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            node_socket: None,
+            node_network_magic: None,
             network: None,
         };
 

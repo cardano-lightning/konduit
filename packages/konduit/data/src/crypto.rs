@@ -178,3 +178,35 @@ impl From<SigningKey> for [u8; 32] {
         x.0
     }
 }
+
+// WARNING: AI generated code below.
+// TODO: DO we really need this?
+#[cfg(feature = "cardano_sdk")]
+mod verification_key {
+    use super::*;
+    use cardano_sdk::VerificationKey;
+
+    impl From<VerificationKey> for VerifyingKey {
+        fn from(verification_key: VerificationKey) -> Self {
+            VerifyingKey(verification_key.into())
+        }
+    }
+
+    impl From<&VerificationKey> for VerifyingKey {
+        fn from(verification_key: &VerificationKey) -> Self {
+            VerifyingKey((*verification_key).into())
+        }
+    }
+
+    impl From<VerifyingKey> for VerificationKey {
+        fn from(verifying_key: VerifyingKey) -> Self {
+            VerificationKey::from(verifying_key.0)
+        }
+    }
+
+    impl From<&VerifyingKey> for VerificationKey {
+        fn from(verifying_key: &VerifyingKey) -> Self {
+            VerificationKey::from(verifying_key.0)
+        }
+    }
+}

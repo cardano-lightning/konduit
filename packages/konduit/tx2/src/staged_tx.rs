@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use cardano_sdk::{
-    Address, ChangeStrategy, Hash, Input, NetworkId, Output, SlotBound, Transaction, Value,
-    VerificationKey, address::kind, transaction::state::ReadyForSigning,
+    Address, ChangeStrategy, Hash, Input, NetworkId, Output, PosixMilliseconds, SlotBound,
+    Transaction, Value, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
 use konduit_data::{Duration, Redeemer, Step};
 use konduit_tmp::from_verifying_key;
@@ -234,7 +234,10 @@ impl StagedTx {
             .map(Hash::<28>::new)
             .collect::<Vec<_>>();
 
-        let to_slot = |d: Duration| network_parameters.protocol_parameters.posix_to_slot(*d);
+        let to_slot = |d: Duration| {
+            let posix = PosixMilliseconds::new(u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+            u64::from(network_parameters.protocol_parameters.posix_to_slot(posix))
+        };
         let lower_bound = self
             .interval
             .lower

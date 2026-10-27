@@ -22,10 +22,8 @@ pub use squash_proposal::SquashProposal;
 pub use squash_status::SquashStatus;
 
 mod keytag;
-mod posix_seconds;
 
 pub use keytag::Keytag;
-pub use posix_seconds::PosixSeconds;
 
 // Conversions.
 // FIXME :: put these elsewhere

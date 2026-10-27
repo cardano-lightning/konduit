@@ -23,16 +23,16 @@ pub enum Cmd {
 
 impl Cmd {
     pub(crate) async fn run(self, env: Env) -> anyhow::Result<()> {
-        if let Cmd::Setup = self {
-            return env.setup();
-        }
-
-        let config = Config::try_from(env)?;
-
         match self {
-            Cmd::Show(cmd) => cmd.run(&config).await,
-            Cmd::Tx(cmd) => cmd.run(&config).await,
-            Cmd::Setup => unreachable!(),
+            Cmd::Show(cmd) => {
+                let config = Config::try_from(env)?;
+                cmd.run(&config).await
+            }
+            Cmd::Tx(cmd) => {
+                let config = Config::try_from(env)?;
+                cmd.run(&config).await
+            }
+            Cmd::Setup => env.setup(),
         }
     }
 }

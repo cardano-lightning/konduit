@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use cardano_sdk::{
-    Address, Credential, Hash, Input, Network, Output, PlutusData, PlutusScript, PlutusVersion,
-    Value, cbor,
+    Address, Credential, Hash, Input, Output, PlutusData, PlutusScript, PlutusVersion,
+    PublicNetwork, Value, cbor,
 };
 use pallas_primitives::conway::TransactionOutput;
 use utxorpc::spec::{cardano, query};
@@ -61,7 +61,7 @@ pub fn matches_payment_and_delegation(
 }
 
 pub fn predicate_for_credentials(
-    _network: Network,
+    _network: PublicNetwork,
     payment: &Credential,
     _delegation: Option<&Credential>,
 ) -> utxorpc::spec::query::UtxoPredicate {
@@ -201,7 +201,7 @@ mod tests {
         predicate_for_credentials,
     };
     use cardano_sdk::{
-        Address, Credential, Datum, Network, Output, PlutusData, PlutusVersion, Value,
+        Address, Credential, Datum, Output, PlutusData, PlutusVersion, PublicNetwork, Value,
         address_test, cbor::ToCbor, key_credential, plutus_script,
     };
     use utxorpc::{NativeBytes, spec::cardano::big_int::BigInt as BigIntValue};
@@ -281,7 +281,7 @@ mod tests {
     fn payment_only_predicate_leaves_delegation_unset() {
         let payment = key_credential!("11111111111111111111111111111111111111111111111111111111");
 
-        let predicate = predicate_for_credentials(Network::Preprod, &payment, None);
+        let predicate = predicate_for_credentials(PublicNetwork::Preprod, &payment, None);
         let pattern = predicate.r#match.expect("match pattern").utxo_pattern;
         let utxorpc::spec::query::any_utxo_pattern::UtxoPattern::Cardano(pattern) =
             pattern.expect("cardano pattern");
@@ -297,7 +297,8 @@ mod tests {
         let delegation =
             key_credential!("22222222222222222222222222222222222222222222222222222222");
 
-        let predicate = predicate_for_credentials(Network::Preprod, &payment, Some(&delegation));
+        let predicate =
+            predicate_for_credentials(PublicNetwork::Preprod, &payment, Some(&delegation));
         let pattern = predicate.r#match.expect("match pattern").utxo_pattern;
         let utxorpc::spec::query::any_utxo_pattern::UtxoPattern::Cardano(pattern) =
             pattern.expect("cardano pattern");
@@ -312,8 +313,8 @@ mod tests {
         let payment = key_credential!("11111111111111111111111111111111111111111111111111111111");
         let delegation =
             key_credential!("22222222222222222222222222222222222222222222222222222222");
-        let address =
-            Address::new(Network::Preprod.into(), payment.clone()).with_delegation(delegation);
+        let address = Address::new(PublicNetwork::Preprod.into(), payment.clone())
+            .with_delegation(delegation);
         let output = cardano_sdk::Output::new(address.into(), cardano_sdk::Value::new(1_000_000));
 
         assert!(matches_payment(&output, &payment));
@@ -326,7 +327,7 @@ mod tests {
             key_credential!("22222222222222222222222222222222222222222222222222222222");
         let other_delegation =
             key_credential!("33333333333333333333333333333333333333333333333333333333");
-        let address = Address::new(Network::Preprod.into(), payment.clone())
+        let address = Address::new(PublicNetwork::Preprod.into(), payment.clone())
             .with_delegation(delegation.clone());
         let output = cardano_sdk::Output::new(address.into(), cardano_sdk::Value::new(1_000_000));
 

@@ -19,6 +19,7 @@ pub mod plutus_version;
 pub mod protocol_parameters;
 pub mod redeemer_pointer;
 pub mod slot_bound;
+pub mod time;
 pub mod transaction;
 pub mod value;
 pub mod with_network_id;

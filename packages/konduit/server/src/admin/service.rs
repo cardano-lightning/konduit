@@ -6,7 +6,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use cardano_connector::CardanoConnector;
-use cardano_sdk::{Credential, Hash, Input, Output, SigningKey, VerificationKey};
+use cardano_sdk::{
+    Credential, Hash, Input, Output, ShelleySlotConfig, SigningKey, Slot, VerificationKey,
+};
 use konduit_data::{Lock, Secret};
 use konduit_tmp::Keytag;
 use konduit_tx::{Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
@@ -172,7 +174,12 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             .chain(snapshot)
             .chain(self.wallet_utxos().await?)
             .collect::<BTreeMap<_, _>>();
-        let upper_bound = Bounds::twenty_mins().upper.expect("This returns `Some`!!");
+        let upper_bound = Bounds::around_now(
+            &ShelleySlotConfig::from(&self.network_parameters.protocol_parameters),
+            Slot::new(Bounds::MARGIN_SLOTS),
+        )
+        .upper
+        .expect("a validity window always has an upper bound");
         let mut tx = konduit_tx::adaptor::tx(
             &self.network_parameters,
             &self.tx_preferences,
@@ -208,13 +215,14 @@ mod tests {
     use cardano_connector::CardanoConnector;
     use cardano_sdk::{
         Address, Credential, Hash, Input, Network, Output, PlutusScript, PlutusVersion,
-        ProtocolParameters, SigningKey, Transaction, Value, address::kind, transaction::state,
+        ProtocolParameters, PublicNetwork, SigningKey, Transaction, Value, address::kind,
+        transaction::state,
     };
     use konduit_tx::{KONDUIT_VALIDATOR, adaptor::AdaptorPreferences};
     use std::{collections::BTreeMap, sync::Arc};
 
     struct FakeConnector {
-        network: Network,
+        network: PublicNetwork,
         protocol_parameters: Result<ProtocolParameters, String>,
         host_utxos: Result<BTreeMap<Input, Output>, String>,
     }
@@ -225,7 +233,7 @@ mod tests {
             host_utxos: Result<BTreeMap<Input, Output>, impl Into<String>>,
         ) -> Self {
             Self {
-                network: Network::Preview,
+                network: PublicNetwork::Preview,
                 protocol_parameters: protocol_parameters.map_err(Into::into),
                 host_utxos: host_utxos.map_err(Into::into),
             }
@@ -234,7 +242,7 @@ mod tests {
 
     impl CardanoConnector for FakeConnector {
         fn network(&self) -> Network {
-            self.network
+            self.network.into()
         }
 
         async fn health(&self) -> anyhow::Result<String> {
@@ -284,7 +292,7 @@ mod tests {
     fn test_host_address() -> Address<kind::Shelley> {
         let payment = Credential::from_key(Hash::<28>::from([1; 28]));
         let delegation = Credential::from_key(Hash::<28>::from([2; 28]));
-        Address::new(Network::Preview.into(), payment).with_delegation(delegation)
+        Address::new(PublicNetwork::Preview.into(), payment).with_delegation(delegation)
     }
 
     fn script_output() -> Output {

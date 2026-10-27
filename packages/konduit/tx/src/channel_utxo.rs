@@ -1,5 +1,5 @@
-use cardano_sdk::{Input, Output};
-use konduit_data::{Duration, Secret};
+use cardano_sdk::{Input, Output, PosixMilliseconds};
+use konduit_data::Secret;
 use konduit_tmp::{PossibleStep, Receipt};
 
 use crate::{
@@ -54,29 +54,29 @@ impl ChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().add(amount))
     }
 
-    pub fn sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
+    pub fn sub(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannelUtxo {
         Self::rewrap(
             self.utxo().to_owned(),
             self.data().to_owned().sub(receipt, upper),
         )
     }
 
-    pub fn close(self, upper: &Duration) -> SteppedElseChannelUtxo {
+    pub fn close(self, upper: &PosixMilliseconds) -> SteppedElseChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().close(upper))
     }
 
-    pub fn elapse(self, lower: &Duration) -> SteppedElseChannelUtxo {
+    pub fn elapse(self, lower: &PosixMilliseconds) -> SteppedElseChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().elapse(lower))
     }
 
-    pub fn respond(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
+    pub fn respond(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannelUtxo {
         Self::rewrap(
             self.utxo().to_owned(),
             self.data().to_owned().respond(receipt, upper),
         )
     }
 
-    pub fn unlock(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
+    pub fn unlock(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannelUtxo {
         Self::rewrap(
             self.utxo().to_owned(),
             self.data().to_owned().unlock(receipt, upper),
@@ -86,7 +86,7 @@ impl ChannelUtxo {
     pub fn unlock_with_secrets(
         self,
         secrets: Vec<Secret>,
-        upper: &Duration,
+        upper: &PosixMilliseconds,
     ) -> SteppedElseChannelUtxo {
         Self::rewrap(
             self.utxo().to_owned(),
@@ -94,15 +94,15 @@ impl ChannelUtxo {
         )
     }
 
-    pub fn expire(self, lower: &Duration) -> SteppedElseChannelUtxo {
+    pub fn expire(self, lower: &PosixMilliseconds) -> SteppedElseChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().expire(lower))
     }
 
-    pub fn end(self, lower: Option<&Duration>) -> SteppedElseChannelUtxo {
+    pub fn end(self, lower: Option<&PosixMilliseconds>) -> SteppedElseChannelUtxo {
         Self::rewrap(self.utxo().to_owned(), self.data().to_owned().end(lower))
     }
 
-    pub fn any_sub(self, receipt: &Receipt, upper: &Duration) -> SteppedElseChannelUtxo {
+    pub fn any_sub(self, receipt: &Receipt, upper: &PosixMilliseconds) -> SteppedElseChannelUtxo {
         Self::rewrap(
             self.utxo().to_owned(),
             self.data().to_owned().any_sub(receipt, upper),

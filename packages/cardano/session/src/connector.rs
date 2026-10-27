@@ -26,7 +26,7 @@ impl Default for Config {
     fn default() -> Self {
         Self::Blockfrost {
             key: "mainnetxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx".to_string(),
-            network: Network::Mainnet,
+            network: Network::MAINNET,
         }
     }
 }

@@ -3,6 +3,7 @@ mod cmd;
 mod config;
 mod connector;
 mod env;
+mod output;
 mod shared;
 mod tip;
 

@@ -16,9 +16,21 @@
 debug/
 target/
 
+# Node
+node_modules/
+**/.yarn/*
+!**/.yarn/cache
+*.tsbuildinfo
+
+# Devel process-compose
+.run
+
 # Envs
 .env
 .env.*
 
 # db
 _konduit.redb
+
+# Local devel process-compose
+.pc.log

@@ -1,6 +1,7 @@
+use crate::output::{self, OutputJson};
 use crate::{cmd::parsers::parse_keytag_receipt, config::adaptor::Config};
 use cardano_connector::CardanoConnector;
-use cardano_sdk::Credential;
+use cardano_sdk::{Credential, ShelleySlotConfig, Slot};
 use konduit_tmp::{Keytag, Receipt};
 use konduit_tx::{self, Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 use std::collections::BTreeMap;
@@ -16,6 +17,9 @@ pub struct Cmd {
     /// squash_body,signature;cheque_body,signature,secret;cheque,secret;
     #[arg(long, value_parser=parse_keytag_receipt)]
     pub receipt: Vec<(Keytag, Receipt)>,
+
+    #[arg(long, default_value_t = false)]
+    pub output_json: bool,
 }
 
 impl Cmd {
@@ -28,10 +32,14 @@ impl Cmd {
             min_single: 10_000,
             min_total: 1_000_000,
         };
-        let bounds = Bounds::twenty_mins();
-        let upper = bounds.upper.unwrap();
-
         let protocol_parameters = connector.protocol_parameters().await?;
+        let bounds = Bounds::around_now(
+            &ShelleySlotConfig::from(&protocol_parameters),
+            Slot::new(Bounds::MARGIN_SLOTS),
+        );
+        let upper = bounds
+            .upper
+            .expect("a validity window always has an upper bound");
         let network_id = connector.network().into();
         let network_parameters = NetworkParameters {
             network_id,
@@ -63,8 +71,16 @@ impl Cmd {
             &utxos,
             &upper,
         )?;
-        println!("Tx id :: {}", tx.id());
+        let tx_id = tx.id().to_string();
         tx.sign(&config.wallet);
-        connector.submit(&tx).await
+        connector.submit(&tx).await?;
+        let output = OutputJson(self.output_json);
+        if output.is_json() {
+            let dto = output::TxOutput::from_id(tx_id);
+            output::render(output, &dto)?;
+        } else {
+            println!("Tx id :: {}", tx_id);
+        }
+        Ok(())
     }
 }

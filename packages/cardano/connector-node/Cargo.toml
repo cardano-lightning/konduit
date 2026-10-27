@@ -1,0 +1,33 @@
+[package]
+name = "cardano-connector-node"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cardano-connector.workspace = true
+cardano-sdk.workspace = true
+hex.workspace = true
+minicbor = { workspace = true, features = ["alloc", "derive"] }
+num.workspace = true
+pallas-codec.workspace = true
+pallas-network.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+konduit-data.workspace = true
+konduit-tmp.workspace = true
+konduit-tx.workspace = true
+
+[[example]]
+name = "smoke"
+path = "examples/smoke.rs"

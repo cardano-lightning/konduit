@@ -33,7 +33,7 @@ self: {
     };
   };
 
-  cfg = builtins.trace (builtins.attrNames config) config.konduit-servers;
+  cfg = config.konduit-servers;
 in {
   options = {
     konduit-servers = mkOption {
@@ -46,7 +46,9 @@ in {
     http-services.proxied-services =
       mapAttrs'
       (name: konduit-server: let
-        flakePkgs = konduit-server.flake.packages.x86_64-linux;
+        # pkgs is the guest's package set, so its system is the guest's
+        # architecture.
+        flakePkgs = konduit-server.flake.packages.${pkgs.system};
       in {
         name = "konduit-server-${name}";
         value = {
