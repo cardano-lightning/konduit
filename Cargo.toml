@@ -133,6 +133,9 @@ web-time = "1.1.0"
 
 bln-client = { path = "packages/bln/client", default-features = false }
 bln-sdk = { path = "packages/bln/sdk", default-features = false }
+cln-server = { path = "packages/cln/server", default-features = false, features = [
+  "server",
+] }
 cardano-wallet = { path = "packages/cardano/wallet", default-features = false }
 cardano-session = { path = "packages/cardano/session", default-features = false }
 cardano-keys = { path = "packages/cardano/keys", default-features = false }

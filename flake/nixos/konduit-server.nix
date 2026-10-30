@@ -1,8 +1,8 @@
 # The konduit backend (packages/konduit/server).
 #
 # The server reads everything from its environment: the cardano-sdk arguments
-# expose it through clap, and the BLN and FX clients through their own
-# namespaced flags. Options here only wire the values in; anything the server
+# expose it through clap, and the CLN and FX configuration through environment.
+# Options here only wire the values in; anything the server
 # understands can still be overridden through `environment` (checked in last,
 # so it wins) or through the `environmentFile` the secrets are kept in.
 #
@@ -44,20 +44,9 @@
       KONDUIT_NETWORK = cfg.cardano.network;
     };
 
-  # The BLN client is mandatory and only knows LND and a mock backend.
-  blnEnv =
-    optionalAttrs cfg.bln.mock {
-      BLN_MOCK = "true";
-    }
-    // optionalAttrs (cfg.bln.baseUrl != null) {
-      LND_BASE_URL = cfg.bln.baseUrl;
-    }
-    // optionalAttrs (cfg.bln.macaroon != null) {
-      LND_MACAROON = cfg.bln.macaroon;
-    }
-    // optionalAttrs (cfg.bln.blockTime != null) {
-      BLN_BLOCK_TIME = cfg.bln.blockTime;
-    };
+  clnEnv = optionalAttrs (cfg.cln.configPath != null) {
+    KONDUIT_CLN_CONFIG_PATH = toString cfg.cln.configPath;
+  };
 
   # The FX client refuses to start without a source, and refuses to tick on a
   # zero interval, so `every` is always set.
@@ -95,26 +84,11 @@
     || cfg.fx.kraken;
 in {
   options.services.konduit-server = {
-    bln = {
-      baseUrl = mkOption {
-        type = types.nullOr types.str;
+    cln = {
+      configPath = mkOption {
+        type = types.nullOr types.path;
         default = null;
-        description = "Base URL of the LND REST API.";
-      };
-      blockTime = mkOption {
-        type = types.nullOr types.str;
-        default = "10m";
-        description = "BLN block time, as a humantime duration.";
-      };
-      macaroon = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "LND macaroon in hex format. Keep it in the env file.";
-      };
-      mock = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Use the mock BLN backend instead of LND.";
+        description = "CLN standalone TOML config with signer, inbound peers, fee settings, and outbound channels.";
       };
     };
 
@@ -282,10 +256,6 @@ in {
         message = "services.konduit-server.cardano.{utxorpcUri,network} are required by the utxorpc backend.";
       }
       {
-        assertion = cfg.bln.mock || (cfg.bln.baseUrl != null && cfg.bln.macaroon != null);
-        message = "services.konduit-server.bln.{baseUrl,macaroon} are required unless bln.mock is set.";
-      }
-      {
         assertion = fxConfigured;
         message = ''
           services.konduit-server.fx needs a source: either ada and bitcoin for
@@ -325,7 +295,7 @@ in {
             KONDUIT_SERVER_PORT = toString cfg.port;
           }
           // cardanoEnv
-          // blnEnv
+          // clnEnv
           // fxEnv
           // cfg.environment;
         EnvironmentFile = mkIf (cfg.environmentFile != null) cfg.environmentFile;

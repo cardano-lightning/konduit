@@ -2655,7 +2655,6 @@ name = "konduit-client"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bln-sdk",
  "cardano-connector",
  "cardano-connector-direct",
  "cardano-sdk",
@@ -2754,7 +2753,6 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
- "bln-client",
  "cardano-connector",
  "cardano-connector-direct",
  "cardano-connector-kupo-node",
@@ -2762,6 +2760,7 @@ dependencies = [
  "cardano-connector-utxorpc",
  "cardano-sdk",
  "clap",
+ "cln-server",
  "dotenvy",
  "env_logger",
  "fx-client",
@@ -2781,6 +2780,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -2807,12 +2807,12 @@ name = "konduit-tmp"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bln-sdk",
  "cardano-sdk",
  "hex",
  "konduit-data",
  "minicbor",
  "serde",
+ "serde_json",
  "serde_with",
  "thiserror 2.0.18",
 ]
@@ -2852,7 +2852,6 @@ name = "konduit-wasm"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bln-sdk",
  "cardano-connector-client",
  "cardano-sdk",
  "console_error_panic_hook",
@@ -4160,7 +4159,7 @@ version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
 dependencies = [
- "bitflags",
+ "bitflags 2.11.1",
  "fallible-iterator",
  "fallible-streaming-iterator",
  "hashlink",

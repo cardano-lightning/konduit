@@ -1,5 +1,5 @@
 use crate::server::{
-    self,
+    self, auth,
     auth::AuthKeytag,
     data,
     mediation::{self, Mediate, Mediation, Unmediate},
@@ -46,6 +46,56 @@ pub async fn info(mediation: Mediation, data: Data) -> Result<Mediate<AdaptorInf
 
 pub async fn fx(mediation: Mediation, data: Data) -> Result<Mediate<fx_client::State>, Error> {
     Ok(Mediate(mediation.accept, data.fx().read().await.clone()))
+}
+
+pub async fn payme(
+    mediation: Mediation,
+    data: Data,
+    body: web::Bytes,
+) -> Result<Mediate<konduit_tmp::Payme>, Error> {
+    let request: cln_server::wire::payme::Request = Unmediate::unmediate(mediation.content, &body)?;
+    Ok(Mediate(
+        mediation.accept,
+        data.payme(konduit_tmp::PaymeRequest {
+            amount: request.amount,
+        })?,
+    ))
+}
+
+pub async fn cln_quote(
+    mediation: Mediation,
+    keytag: auth::ClnAuthKeytag,
+    data: Data,
+    body: web::Bytes,
+) -> Result<Mediate<cln_server::wire::quote::Response>, Error> {
+    let request = Unmediate::unmediate(mediation.content, &body)?;
+    Ok(Mediate(
+        mediation.accept,
+        data.cln_quote(keytag.0, request).await?,
+    ))
+}
+
+pub async fn cln_commit(
+    mediation: Mediation,
+    keytag: auth::ClnAuthKeytag,
+    data: Data,
+    body: web::Bytes,
+) -> Result<Mediate<cln_server::wire::commit::Response>, Error> {
+    let request = Unmediate::unmediate(mediation.content, &body)?;
+    Ok(Mediate(
+        mediation.accept,
+        data.cln_commit(keytag.0, request).await?,
+    ))
+}
+
+pub async fn cln_sync(
+    mediation: Mediation,
+    keytag: auth::ClnAuthKeytag,
+    data: Data,
+    body: web::Bytes,
+) -> Result<Mediate<cln_server::wire::sync::Response>, Error> {
+    let request = Unmediate::unmediate(mediation.content, &body)?;
+    Ok(Mediate(mediation.accept, data.cln_sync(keytag.0, request)?))
 }
 
 pub async fn show(_data: Data) -> Result<HttpResponse, Error> {
@@ -129,7 +179,7 @@ pub async fn pay(
     let locked = Locked::new(b.cheque_body, b.signature);
     let body = data::PayBody {
         locked,
-        invoice: b.invoice,
+        payme: b.payme,
     };
     let _ = data.pay(&keytag, body).await?;
     // FIXME : The return type here has diverged!!

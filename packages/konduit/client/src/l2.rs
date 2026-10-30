@@ -1,8 +1,8 @@
 use crate::{
     Adaptor,
     core::{
-        AdaptorInfo, ChequeBody, Duration, Invoice, Lock, Locked, Quote, Receipt, SigningKey,
-        Squash, SquashBody, SquashStatus,
+        AdaptorInfo, ChequeBody, Duration, Lock, Locked, Payme, Quote, Receipt, SigningKey, Squash,
+        SquashBody, SquashStatus,
     },
 };
 use anyhow::anyhow;
@@ -31,34 +31,32 @@ where
         self.adaptor.info()
     }
 
-    pub async fn quote(&self, invoice: &Invoice) -> anyhow::Result<Quote> {
-        self.adaptor.quote(invoice).await
+    pub async fn quote(&self, payme: &Payme) -> anyhow::Result<Quote> {
+        self.adaptor.quote(payme).await
     }
 
     pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
         self.adaptor.receipt().await
     }
 
-    pub async fn pay(&self, invoice: &Invoice, quote: &Quote) -> anyhow::Result<SquashStatus> {
+    pub async fn pay(&self, payme: &Payme, quote: &Quote) -> anyhow::Result<SquashStatus> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("failed calculate duration since UNIX epoch ?!")
             .as_millis() as u64;
 
+        if payme.timeout.as_millis() <= now as u128 {
+            return Err(anyhow!("CLN payme has expired"));
+        }
         let timeout = Duration::from_millis(now + quote.relative_timeout);
 
-        let body = ChequeBody::new(
-            quote.index,
-            quote.amount,
-            timeout,
-            Lock(invoice.payment_hash),
-        );
+        let body = ChequeBody::new(quote.index, quote.amount, timeout, payme.lock);
 
         let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
 
         let locked = Locked::make(&to_signing_key(self.signing_key.clone()), tag, body);
 
-        self.adaptor.pay(invoice, locked.into_unverified()).await
+        self.adaptor.pay(payme, locked.into_unverified()).await
     }
 
     pub async fn squash(&self, squash_body: SquashBody) -> anyhow::Result<SquashStatus> {

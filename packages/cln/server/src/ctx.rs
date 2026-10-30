@@ -5,7 +5,7 @@ use crate::{
     commits::{self, Commit},
     paymes,
     time::now,
-    wire::{self, auth::Keytag, commit::Outbound},
+    wire::{self, auth::Keytag, commit::Outbound as Route},
 };
 use konduit_data::{ChequeBody, Duration, SquashBody, VerifyingKey};
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ impl Default for Params {
     }
 }
 
-pub struct Ctx {
+pub struct Outbound {
     params: Params,
     paymes: Paymes,
     channels: Channels,
@@ -58,7 +58,7 @@ pub enum Error {
     BadReceipt,
 }
 
-impl Ctx {
+impl Outbound {
     pub fn init(config: crate::Config) -> Result<Self, Error> {
         let signer = Signer::new(config.signer);
         let me = signer.verifying_key();
@@ -102,6 +102,19 @@ impl Ctx {
             commits,
             signer,
         }
+    }
+
+    pub fn verifying_key(&self) -> VerifyingKey {
+        self.signer.verifying_key()
+    }
+
+    /// Look up a payment secret already known to this node.
+    pub fn reveal(&self, lock: &konduit_data::Lock) -> Option<konduit_data::Secret> {
+        self.paymes.secret(lock).or_else(|| {
+            self.channels
+                .iter()
+                .find_map(|(_, channel)| channel.reveal(lock))
+        })
     }
 
     /// Currently fee is a fixed flat fee.
@@ -158,7 +171,7 @@ impl Ctx {
             return Err(Error::InsufficientTime);
         }
 
-        let Some(Outbound { key, amount }) = outbound else {
+        let Some(Route { key, amount }) = outbound else {
             // 2... Self is terminal
             let secret = self.paymes.reveal(inbound.lock(), inbound.amount())?;
             return Ok(wire::commit::Response {

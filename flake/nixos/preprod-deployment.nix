@@ -259,8 +259,8 @@ in
               nodeSocketPath = socketPath;
               nodeNetworkMagic = networkMagic;
             };
-            # No LND in this guest.
-            bln.mock = true;
+            # No CLN outbound peer config in this guest; it runs as a local
+            # terminal peer unless a config path is supplied in the env file.
             fx = {
               every = "10m";
               # Fixed rates keep the guest deterministic and offline. Point the

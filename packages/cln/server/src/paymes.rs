@@ -101,6 +101,13 @@ impl Paymes {
         Ok(entry.secret)
     }
 
+    pub(crate) fn secret(&self, lock: &Lock) -> Option<Secret> {
+        self.paymes()
+            .get(lock)
+            .filter(|entry| entry.timeout >= now())
+            .map(|entry| entry.secret)
+    }
+
     /// Drops all entries past their timeout.
     pub fn prune(&self) {
         let now = now();

@@ -2,7 +2,7 @@
 
 # Konduit
 
-> A Cardano to Bitcoin Lightning Network pipe.
+> A payment network built on Cardano channels.
 
 This project is incubating. Expect sharp edges.
 

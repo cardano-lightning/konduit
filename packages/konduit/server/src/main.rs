@@ -1,5 +1,5 @@
 use clap::Parser;
-use konduit_server::{admin, args, index, server};
+use konduit_server::{admin, args, cln, index, server};
 use konduit_tmp::AdaptorInfo;
 use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
@@ -50,10 +50,20 @@ async fn main() -> anyhow::Result<()> {
     // DB
     let db = Arc::new(args.db.build()?);
 
-    // BLN
-    let bln = bln_client::cli::Config::from_args(args.bln)
-        .map_err(|s| anyhow::anyhow!(s))?
-        .build()?;
+    // CLN backend
+    let cln = Arc::new(cln::build(args.cln)?);
+    let cln_sync = Arc::clone(&cln);
+    actix_web::rt::spawn(async move {
+        let mut ticker = interval(std::time::Duration::from_secs(5));
+        loop {
+            ticker.tick().await;
+            for (peer, result) in cln_sync.sync_outbound().await {
+                if let Err(error) = result {
+                    log::warn!("CLN sync failed for {peer:?}: {error}");
+                }
+            }
+        }
+    });
 
     let info = Arc::new(AdaptorInfo::from(args.common.clone()));
 
@@ -81,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
     let admin_every = args.admin.admin_every;
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(
-        admin::Service::new(admin_config, bln.clone(), cardano.clone(), db.clone()).await?,
+        admin::Service::new(admin_config, cln.clone(), cardano.clone(), db.clone()).await?,
     );
     let admin_for_sync = Arc::clone(&admin);
 
@@ -106,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let server_data = server::Data::new(bln, db, fx_state, info, admin);
+    let server_data = server::Data::new(cln, db, fx_state, info, admin);
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;

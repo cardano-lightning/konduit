@@ -1,7 +1,7 @@
 //! Generates three mutually-consistent config files for a local,
 //! three-process demo: merchant <- gateway <- consumer. Run:
 //!
-//!   cargo run --example local_three_party --features "server client"
+//!   cargo run -p cln-server --example consumer_gateway_merchant --features "server client"
 //!
 //! then save each printed block to its own file and run:
 //!   cln-server run --config pay_example/merchant.toml
@@ -23,13 +23,14 @@ const MERCHANT_KEY: [u8; 32] = [3; 32];
 const CONSUMER_GATEWAY_TAG: &[u8] = b"consumer-gateway";
 const GATEWAY_MERCHANT_TAG: &[u8] = b"gateway-merchant";
 
-const GATEWAY_URL: &str = "127.0.0.1:7652";
-const MERCHANT_URL: &str = "127.0.0.1:7653";
-
 // Not yet plumbed in.
 const BACKING: (u64, u64) = (100_000_000, 0);
 
 fn main() -> anyhow::Result<()> {
+    let gateway_url =
+        std::env::var("CLN_GATEWAY_URL").unwrap_or_else(|_| "127.0.0.1:7652".to_string());
+    let merchant_url =
+        std::env::var("CLN_MERCHANT_URL").unwrap_or_else(|_| "127.0.0.1:7653".to_string());
     let consumer_signer = SigningKey::from(CONSUMER_KEY);
     let gateway_signer = SigningKey::from(GATEWAY_KEY);
     let merchant_signer = SigningKey::from(MERCHANT_KEY);
@@ -44,16 +45,16 @@ fn main() -> anyhow::Result<()> {
     // --- consumer -> gateway channel ---
     let consumer_gateway = channel::Config {
         tag: cg_tag.clone(),
-        key: gateway_vkey.clone(),
-        base_url: format!("http://{}", GATEWAY_URL).to_string(),
+        key: gateway_vkey,
+        base_url: format!("http://{gateway_url}"),
         media_type: Default::default(),
     };
 
     // --- gateway -> merchant channel ---
     let gateway_merchant = channel::Config {
         tag: gm_tag.clone(),
-        key: merchant_vkey.clone(),
-        base_url: format!("http://{}", MERCHANT_URL).to_string(),
+        key: merchant_vkey,
+        base_url: format!("http://{merchant_url}"),
         media_type: Default::default(),
     };
 
@@ -62,15 +63,13 @@ fn main() -> anyhow::Result<()> {
     let merchant = Config {
         inbound: inbounds::Config {
             inbounds: vec![inbound::Config {
-                key: gateway_vkey.clone(),
+                key: gateway_vkey,
                 tag: gm_tag,
-                backing: BACKING.clone(),
+                backing: BACKING,
             }],
         },
         outbound: cln_server::Config {
-            signer: cln_server::signer::Config {
-                key: MERCHANT_KEY.clone(),
-            },
+            signer: cln_server::signer::Config { key: MERCHANT_KEY },
             channels: cln_server::channels::Config { channels: vec![] },
             paymes: cln_server::paymes::Config {
                 default_timeout: konduit_data::Duration::from_secs(300),
@@ -78,7 +77,7 @@ fn main() -> anyhow::Result<()> {
             params: cln_server::ctx::Params::default(),
         },
         server: ServerConfig {
-            listen: MERCHANT_URL.to_string(),
+            listen: merchant_url,
             sync_interval_secs: 5,
         },
     };
@@ -88,15 +87,13 @@ fn main() -> anyhow::Result<()> {
     let gateway = Config {
         inbound: inbounds::Config {
             inbounds: vec![inbound::Config {
-                key: consumer_vkey.clone(),
+                key: consumer_vkey,
                 tag: cg_tag.clone(),
                 backing: BACKING,
             }],
         },
         outbound: cln_server::Config {
-            signer: cln_server::signer::Config {
-                key: GATEWAY_KEY.clone(),
-            },
+            signer: cln_server::signer::Config { key: GATEWAY_KEY },
             channels: cln_server::channels::Config {
                 channels: vec![gateway_merchant],
             },
@@ -106,16 +103,14 @@ fn main() -> anyhow::Result<()> {
             params: cln_server::ctx::Params::default(),
         },
         server: ServerConfig {
-            listen: GATEWAY_URL.to_string(),
+            listen: gateway_url,
             sync_interval_secs: 5,
         },
     };
 
     // --- consumer config: one outbound channel (to gateway) ---
     let consumer = client::Config {
-        signer: cln_server::signer::Config {
-            key: CONSUMER_KEY.clone(),
-        },
+        signer: cln_server::signer::Config { key: CONSUMER_KEY },
         gateway: consumer_gateway,
     };
 
@@ -128,8 +123,10 @@ fn write_example_configs(
     gateway: &Config,
     consumer: &client::Config,
 ) -> anyhow::Result<()> {
-    let dir = std::path::Path::new("pay_example");
-    std::fs::create_dir_all(dir)?;
+    let dir = std::env::var_os("CLN_EXAMPLE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("pay_example"));
+    std::fs::create_dir_all(&dir)?;
 
     for (name, toml_str) in [
         ("merchant", toml::to_string_pretty(merchant)?),

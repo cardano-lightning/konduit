@@ -15,7 +15,7 @@ actix-cors.workspace = true
 actix-web.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
-bln-client = { workspace = true, features = ["cli", "namespaced"] }
+cln-server.workspace = true
 cardano-connector-direct.workspace = true
 cardano-connector-node.workspace = true
 cardano-connector-kupo-node.workspace = true
@@ -37,6 +37,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_with = { workspace = true, features = ["base64", "hex", "json"] }
 thiserror.workspace = true
+toml.workspace = true
 tokio.workspace = true
 itertools.workspace = true
 

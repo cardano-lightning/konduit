@@ -39,6 +39,9 @@ log = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["json"] }
 serde_json = { workspace = true, optional = true }
 
+[dev-dependencies]
+tokio.workspace = true
+
 [features]
 default = ["standalone", "client", "server"]
 

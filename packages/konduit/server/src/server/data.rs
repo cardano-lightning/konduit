@@ -4,10 +4,10 @@ use crate::{
     db,
     time::{self, now},
 };
-use bln_client::types::{Invoice, RouteHint};
-use konduit_data::{Duration, Locked, Secret, Squash};
+use konduit_data::{Locked, Secret, Squash};
 use konduit_tmp::{
-    AdaptorInfo, Keytag, Quote, QuoteBody, Receipt, SquashProposal, SquashStatus, TxHelp,
+    AdaptorInfo, Keytag, Payme, PaymeRequest, Quote, QuoteBody, Receipt, SquashProposal,
+    SquashStatus, TxHelp,
 };
 /// Actix web server "Data" ie the context of handlers.
 use std::sync::Arc;
@@ -15,12 +15,7 @@ use tokio::sync::RwLock;
 
 // TODO :: MOVE TO CONFIG
 const FEE_PLACEHOLDER: u64 = 1000;
-/// This is ~ the same as the default on bitcoin: default (apparently) is 40 blocks
-const ADAPTOR_TIME_DELTA: std::time::Duration = std::time::Duration::from_secs(40 * 10 * 60);
-/// Extra time between the "quoted" rel time and the time that might be allowed for in a
-/// "pay". I don't know why this has to be so high.
-/// LND fails for values much smaller than this.
-const QUOTE_PAY_TIME_MARGIN: std::time::Duration = std::time::Duration::from_secs(4 * 10 * 60);
+const QUOTE_PAY_TIME_MARGIN_MS: u64 = 30_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -28,8 +23,8 @@ pub enum Error {
     #[error("no time")]
     Time(#[from] time::Error),
 
-    #[error("Bln: {0}")]
-    Bln(String),
+    #[error("CLN: {0}")]
+    Cln(String),
 
     #[error("Missing middleware data")]
     Auth,
@@ -64,15 +59,8 @@ impl From<db::Error> for Error {
     }
 }
 
-// TODO :: handle the pre/post distinction
-impl From<bln_client::Error> for Error {
-    fn from(value: bln_client::Error) -> Self {
-        Error::Bln(value.to_string())
-    }
-}
-
 pub struct Data {
-    bln: Arc<dyn bln_client::Api + Send + Sync>,
+    cln: Arc<crate::cln::Node>,
     db: Arc<db::Db>,
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<AdaptorInfo<TxHelp>>,
@@ -81,14 +69,14 @@ pub struct Data {
 
 impl Data {
     pub fn new(
-        bln: Arc<dyn bln_client::Api + Send + Sync>,
+        cln: Arc<crate::cln::Node>,
         db: Arc<db::Db>,
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<AdaptorInfo<TxHelp>>,
         admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
     ) -> Self {
         Self {
-            bln,
+            cln,
             db,
             fx,
             info,
@@ -100,20 +88,12 @@ impl Data {
         self.fx.clone()
     }
 
-    async fn msat_to_lovelace(&self, x: u64) -> u64 {
-        self.fx().read().await.msat_to_lovelace(x)
-    }
-
-    async fn lovelace_to_msat(&self, x: u64) -> u64 {
-        self.fx().read().await.lovelace_to_msat(x)
-    }
-
     pub fn db(&self) -> Arc<db::Db> {
         self.db.clone()
     }
 
-    pub fn bln(&self) -> Arc<dyn bln_client::Api + Send + Sync + 'static> {
-        self.bln.clone()
+    pub fn cln(&self) -> Arc<crate::cln::Node> {
+        self.cln.clone()
     }
 
     pub fn admin(&self) -> Arc<dyn admin::SyncApi + Send + Sync + 'static> {
@@ -145,101 +125,117 @@ impl Data {
         }
     }
 
-    async fn bln_quote(
-        &self,
-        amount_msat: u64,
-        payee: [u8; 33],
-        route_hints: Vec<RouteHint>,
-    ) -> Result<bln_client::types::QuoteResponse, Error> {
-        Ok(self
-            .bln()
-            .quote(bln_client::types::QuoteRequest {
-                amount_msat,
-                payee,
-                route_hints,
+    pub fn payme(&self, request: PaymeRequest) -> Result<Payme, Error> {
+        let response = self
+            .cln
+            .payme(cln_server::wire::payme::Request {
+                amount: request.amount,
             })
-            .await?)
+            .map_err(|error| Error::Cln(error.to_string()))?;
+        Ok(Payme {
+            payee: response.payee,
+            amount: response.amount,
+            lock: response.lock,
+            timeout: response.timeout,
+        })
     }
 
     pub async fn quote(&self, keytag: &Keytag, body: QuoteBody) -> Result<Quote, Error> {
         let channel = self.channel(keytag)?;
-        // Pre-check commitment
-        let amount_msat = body.amount_msat();
-        channel.can_commit(self.msat_to_lovelace(amount_msat).await + FEE_PLACEHOLDER + 1)?;
-        let bln_res = self
-            .bln_quote(amount_msat, body.payee(), body.route_hints())
-            .await?;
-        let amount =
-            self.msat_to_lovelace(amount_msat + bln_res.fee_msat).await + FEE_PLACEHOLDER + 1;
+        if body.timeout < time::now()? {
+            return Err(CommitmentError::Time.into());
+        }
+        let response = self
+            .cln
+            .quote_outbound(cln_server::wire::quote::Request {
+                payee: body.payee,
+                amount: body.amount,
+            })
+            .await
+            .map_err(|error| Error::Cln(error.to_string()))?;
+        let amount = body.amount + response.fee + FEE_PLACEHOLDER + 1;
         // Actual commitment
         let index = channel.can_commit(amount)?;
-        let relative_timeout =
-            (ADAPTOR_TIME_DELTA + QUOTE_PAY_TIME_MARGIN + bln_res.relative_timeout).as_millis()
-                as u64;
+        let relative_timeout = response
+            .timeout
+            .as_millis()
+            .saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
         Ok(Quote {
             index,
             amount,
             relative_timeout,
-            routing_fee: bln_res.fee_msat,
+            routing_fee: response.fee,
         })
     }
 
-    async fn bln_pay(
-        &self,
-        invoice: Invoice,
-        fee_limit: u64,
-        rel_timeout: Duration,
-    ) -> Result<bln_client::types::PayResponse, Error> {
-        let pay_request = bln_client::types::PayRequest {
-            fee_limit,
-            relative_timeout: time::from_konduit_duration(rel_timeout),
-            invoice,
-        };
-        // TODO :: handle pre-commitment failure case
-        self.bln()
-            .pay(pay_request)
-            .await
-            .map_err(|err| Error::Bln(err.to_string()))
-    }
-
-    async fn align_commitments(
-        &self,
-        now: Duration,
-        locked: &Locked,
-        invoice: &Invoice,
-    ) -> Result<(u64, Duration), CommitmentError> {
-        if invoice.payment_hash != locked.lock().0 {
+    fn align_commitments(&self, locked: &Locked, payme: &Payme) -> Result<(), CommitmentError> {
+        if payme.lock != *locked.lock() {
             return Err(CommitmentError::Lock);
         }
-        let fee_limit = self
-            .lovelace_to_msat(locked.amount() - FEE_PLACEHOLDER)
-            .await
-            .saturating_sub(invoice.amount_msat);
-        if fee_limit < 1 {
+        if locked.amount() < payme.amount.saturating_add(FEE_PLACEHOLDER) {
             return Err(CommitmentError::Fee);
         }
-        let relative_timeout = locked
-            .timeout()
-            .saturating_sub(now)
-            .saturating_sub(time::to_konduit_duration(ADAPTOR_TIME_DELTA));
-        if relative_timeout.as_secs() < 1 {
+        let current_time = time::now().map_err(|_| CommitmentError::Time)?;
+        if payme.timeout < current_time {
             return Err(CommitmentError::Time);
         }
-        Ok((fee_limit, relative_timeout))
+        Ok(())
     }
 
     pub async fn pay(&self, keytag: &Keytag, body: PayBody) -> Result<PayResponse, Error> {
-        let PayBody { locked, invoice } = body;
-        let (fee_limit, rel_timeout) = self
-            .align_commitments(time::now()?, &locked, &invoice)
-            .await?;
-        self.db().update(keytag, apply_locked(locked))?;
-        let pay_res = self.bln_pay(invoice, fee_limit, rel_timeout).await?;
+        let PayBody { locked, payme } = body;
+        self.align_commitments(&locked, &payme)?;
+        self.db().update(keytag, apply_locked(locked.clone()))?;
+        let outbound = (payme.payee != self.cln.verifying_key()).then_some(
+            cln_server::wire::commit::Outbound {
+                key: payme.payee,
+                amount: payme.amount,
+            },
+        );
+        let pay_res = self
+            .cln
+            .commit_outbound(cln_server::wire::commit::Request {
+                inbound: locked,
+                outbound,
+            })
+            .await
+            .map_err(|error| Error::Cln(error.to_string()))?;
         if let Some(secret) = pay_res.secret {
-            self.db()
-                .update(keytag, apply_secrets(vec![Secret(secret)]))?;
+            self.db().update(keytag, apply_secrets(vec![secret]))?;
         };
-        Ok(PayResponse::from(pay_res.secret))
+        Ok(PayResponse::from(pay_res.secret.map(|secret| secret.0)))
+    }
+
+    pub async fn cln_quote(
+        &self,
+        keytag: cln_server::wire::auth::Keytag,
+        request: cln_server::wire::quote::Request,
+    ) -> Result<cln_server::wire::quote::Response, Error> {
+        self.cln
+            .quote(&keytag, request)
+            .await
+            .map_err(|error| Error::Cln(error.to_string()))
+    }
+
+    pub async fn cln_commit(
+        &self,
+        keytag: cln_server::wire::auth::Keytag,
+        request: cln_server::wire::commit::Request,
+    ) -> Result<cln_server::wire::commit::Response, Error> {
+        self.cln
+            .commit(&keytag, request)
+            .await
+            .map_err(|error| Error::Cln(error.to_string()))
+    }
+
+    pub fn cln_sync(
+        &self,
+        keytag: cln_server::wire::auth::Keytag,
+        request: cln_server::wire::sync::Request,
+    ) -> Result<cln_server::wire::sync::Response, Error> {
+        self.cln
+            .sync(&keytag, request)
+            .map_err(|error| Error::Cln(error.to_string()))
     }
 
     // FIXME :: REMOVE THIS TEMPORARY PATCH!!
@@ -253,7 +249,7 @@ impl Data {
 // NEEDS TO BE DOWNSTREAMED.
 pub struct PayBody {
     pub locked: Locked,
-    pub invoice: Invoice,
+    pub payme: Payme,
 }
 
 #[derive()]

@@ -17,7 +17,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = { workspace = true }
-bln-sdk.workspace = true
 cardano-sdk = { workspace = true }
 hex.workspace = true
 konduit-data = { workspace = true, features = ["serde"] }
@@ -25,3 +24,6 @@ minicbor.workspace = true
 serde.workspace = true
 serde_with.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

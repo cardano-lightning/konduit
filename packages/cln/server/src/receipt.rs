@@ -333,7 +333,7 @@ mod tests {
         let index = receipt.max_index() + 1;
         let secret = Secret(rand_bytes());
         let lock = Lock::from(secret);
-        let body = ChequeBody::new(index, amount, far_future(), lock.clone());
+        let body = ChequeBody::new(index, amount, far_future(), lock);
         let locked = signer.locked(tag.clone(), body);
         receipt.apply_locked(locked).unwrap();
         (index, lock)
@@ -342,7 +342,7 @@ mod tests {
     fn with_unlocked(receipt: &mut Receipt, signer: &Signer, tag: &Tag, amount: u64) -> u64 {
         let index = receipt.max_index() + 1;
         let secret = Secret(rand_bytes());
-        let lock = Lock::from(secret.clone());
+        let lock = Lock::from(secret);
         let body = ChequeBody::new(index, amount, far_future(), lock);
         let locked = signer.locked(tag.clone(), body);
         receipt.apply_locked(locked).unwrap();

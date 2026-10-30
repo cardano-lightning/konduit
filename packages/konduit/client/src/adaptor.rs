@@ -1,5 +1,5 @@
 use crate::core::{
-    AdaptorInfo, Invoice, Keytag, Locked, PayBody, Quote, QuoteBody, Receipt, Squash, SquashStatus,
+    AdaptorInfo, Keytag, Locked, PayBody, Payme, Quote, QuoteBody, Receipt, Squash, SquashStatus,
     Tag, TxHelp,
 };
 use anyhow::anyhow;
@@ -71,25 +71,21 @@ impl<T: Transport> Adaptor<T> {
             .map_err(|e| anyhow!(e))
     }
 
-    pub async fn quote(&self, invoice: &Invoice) -> anyhow::Result<Quote> {
+    pub async fn quote(&self, payme: &Payme) -> anyhow::Result<Quote> {
         self.http_client
-            .post_with_headers::<QuoteBody, Quote>(
-                "/ch/quote",
-                &QuoteBody::Bolt11(invoice.clone()),
-                self.with_keytag_header(),
-            )
+            .post_with_headers::<QuoteBody, Quote>("/ch/quote", payme, self.with_keytag_header())
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    pub async fn pay(&self, invoice: &Invoice, locked: Locked) -> anyhow::Result<SquashStatus> {
+    pub async fn pay(&self, payme: &Payme, locked: Locked) -> anyhow::Result<SquashStatus> {
         self.http_client
             .post_with_headers::<PayBody, SquashStatus>(
                 "/ch/pay",
                 &PayBody {
                     cheque_body: locked.body().to_owned(),
                     signature: locked.signature().to_owned(),
-                    invoice: invoice.clone(),
+                    payme: payme.clone(),
                 },
                 self.with_keytag_header(),
             )

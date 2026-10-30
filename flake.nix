@@ -1,5 +1,5 @@
 {
-  description = "Konduit: A Cardano to Bitcoin Lightning Network pipe";
+  description = "Konduit: Cardano Lightning Network payments";
 
   inputs = {
     aiken.url = "github:aiken-lang/aiken";
@@ -167,6 +167,7 @@
 
         process-compose-dev-env-yaml = pkgs.callPackage ./flake/process-compose/dev-env.nix {
           inherit cardonnay cardano-node cardano-cli kupo;
+          curl = pkgs.curl;
         };
 
         process-compose-dev-env = pkgs.writeShellApplication {
@@ -187,6 +188,7 @@
             kupo
             process-compose-dev-env
             pkgs.coreutils
+            pkgs.curl
             pkgs.gcc
             pkgs.libiconv
             pkgs.process-compose
@@ -261,7 +263,7 @@
               # so we can have more testing flexibility around the local dev env.
 
               export ROOT_DIR="$(git rev-parse --show-toplevel)"
-              export RUN_DIR="$ROOT_DIR/.run"
+              export RUN_DIR="''${KONDUIT_RUN_DIR:-$ROOT_DIR/.run}"
 
               # Vars required by testnet part of the process compose:
 
@@ -296,6 +298,9 @@
               export KONDUIT_SERVER_DB_PATH="$KONDUIT_SERVER_DIR/konduit-server.db"
               export KONDUIT_SERVER_HOST="127.0.0.1"
               export KONDUIT_SERVER_PORT=5663
+              export KONDUIT_SERVER_GATEWAY_PORT=5663
+              export KONDUIT_SERVER_MERCHANT_PORT=5664
+              export CLN_DEMO_CONFIG_DIR="$RUN_DIR/cln-demo"
               # The server refreshes its FX state on a timer, and a zero
               # interval makes it panic on start.
               export KONDUIT_FX_EVERY="10m"

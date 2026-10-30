@@ -21,7 +21,7 @@ impl Default for ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     pub server: ServerConfig,
-    pub inbound: super::inbounds::Config,
+    pub inbound: crate::inbounds::Config,
     pub outbound: crate::Config,
 }
 

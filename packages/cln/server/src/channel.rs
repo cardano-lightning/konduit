@@ -134,6 +134,13 @@ impl Channel {
         Ok(self.receipt().apply_secret(secret)?)
     }
 
+    pub fn reveal(&self, lock: &konduit_data::Lock) -> Option<Secret> {
+        self.receipt()
+            .unlockeds()
+            .find(|unlocked| unlocked.lock() == *lock)
+            .map(|unlocked| *unlocked.secret())
+    }
+
     pub fn apply_timeout(&self, now: konduit_data::Duration) -> Result<(), Error> {
         self.receipt().apply_timeout(now);
         Ok(())

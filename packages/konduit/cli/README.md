@@ -15,7 +15,7 @@ The CLI is _user-centric_ , providing explicit interfaces for:
   sake of playing that role in a local/test setup.
 
 - [adaptor](../../../docs/design/11_roles.md#adaptor): infrastructure operator
-  who run (some of) the "back-end services" of Konduit, along side a BLN node.
+  who run (some of) the "back-end services" of Konduit, alongside CLN peers.
 
 - [admin](../../../docs/design/11_roles.md#adaptor): administrator of a Konduit
   protocol instance; deploying and administering smart contracts.
@@ -175,6 +175,18 @@ Both Adaptor and Consumer can see this:
 ```sh
 consumer show tip
 adaptor show tip
+```
+
+To pay through the CLN network, request a payme from the merchant and pass its
+JSON response to the consumer client. The merchant endpoint is
+`POST /ch/x/cln/payme` with `{"amount": <lovelace>}`. The consumer client then
+uses the payme's payee, lock and timeout when quoting and submitting its cheque.
+
+```sh
+PAYME=$(curl -fsS -H 'content-type: application/json' \
+  -d '{"amount": 1000000}' http://merchant:5663/ch/x/cln/payme)
+konduit-client --server-url http://adaptor:5663 l2 quote --payme "$PAYME"
+konduit-client --server-url http://adaptor:5663 l2 pay --payme "$PAYME"
 ```
 
 Adaptor verify consumer squash:

@@ -1,5 +1,16 @@
 # Konduit Server.
 
+The server uses the Cardano Lightning Network (CLN) for routed payments. It
+creates recipient paymes at `POST /ch/x/cln/payme`; consumers send the returned
+payme object to `/ch/quote` and `/ch/pay`. It also serves the CLN peer protocol
+on `/ch/x/cln/{quote,commit,sync}`. The optional `KONDUIT_CLN_CONFIG_PATH`
+points to a Konduit CLN TOML config containing `[inbound]` peers and the
+`[outbound]` core-node config (`params`, `signer`, `channels`, and `paymes`).
+The Konduit server composes those settings with CLN's core `Ctx`; standalone
+server settings such as listen address and sync interval are not used here.
+Without a config file, the server runs as a local terminal peer with no inbound
+or outbound routes.
+
 ## TODOs
 
 ### Info
@@ -33,7 +44,7 @@ Fee:
 
 ### Admin
 
-#### BLN Sync
+#### CLN Sync
 
 For cheques that do not immediately resolve, we need to handle either:
 
