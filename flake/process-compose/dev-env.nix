@@ -134,9 +134,10 @@
       # The konduit cli reads the .env files of the repo itself, but the cardano
       # connection has to point at the testnet of this run, not at whatever the
       # .env files happen to carry.
-      export KONDUIT_CARDANO_BACKEND="node"
+      export KONDUIT_CARDANO_BACKEND="kupo-node"
       export KONDUIT_NODE_SOCKET="$CARDANO_NODE_SOCKET_PATH"
       export KONDUIT_NETWORK="$CARDANO_NODE_NETWORK_ID"
+      export KONDUIT_KUPO_URI="http://127.0.0.1:$KUPO_UTXO_PORT"
 
       # 200 ada for the admin wallet. The deployment pays the fee and the
       # reference script output has to carry its min ada, so a few tens of
@@ -254,9 +255,10 @@
 
       # Cardano: the local testnet. Variables exported here win over the .env
       # and .env.adaptor files the server loads itself.
-      export KONDUIT_CARDANO_BACKEND="node"
+      export KONDUIT_CARDANO_BACKEND="kupo-node"
       export KONDUIT_NODE_SOCKET="$CARDANO_NODE_SOCKET_PATH"
       export KONDUIT_NODE_NETWORK_MAGIC="$CARDANO_NODE_NETWORK_ID"
+      export KONDUIT_KUPO_URI="http://127.0.0.1:$KUPO_UTXO_PORT"
       # A local testnet is not a public network, but the value is parsed even
       # though the node backend never looks at it.
       export KONDUIT_NETWORK="''${KONDUIT_NETWORK_NAME:-preview}"
@@ -352,6 +354,7 @@ in
           depends_on = {
             "validate-dev-env".condition = "process_completed_successfully";
             "initialize-testnet".condition = "process_healthy";
+            "kupo-utxo".condition = "process_healthy";
             "set-faucet-info".condition = "process_completed_successfully";
           };
           command = "${publish-reference-script}/bin/publish-reference-script";
@@ -364,6 +367,7 @@ in
             "validate-dev-env".condition = "process_completed_successfully";
             "initialize-testnet".condition = "process_healthy";
             "publish-reference-script".condition = "process_completed_successfully";
+            "kupo-utxo".condition = "process_healthy";
           };
           command = "${konduit-server}/bin/konduit-server";
           log_location = "./.run/konduit-server.log";

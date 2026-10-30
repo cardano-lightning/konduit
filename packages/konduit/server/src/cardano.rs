@@ -11,6 +11,7 @@ pub enum Cardano {
     Blockfrost(cardano_connector_direct::Blockfrost),
     UtxoRpc(Box<cardano_connector_utxorpc::UtxoRpc>),
     Node(Box<cardano_connector_node::Node>),
+    KupoNode(Box<cardano_connector_kupo_node::KupoNode>),
 }
 
 impl CardanoConnector for Cardano {
@@ -19,6 +20,7 @@ impl CardanoConnector for Cardano {
             Self::Blockfrost(connector) => connector.network(),
             Self::UtxoRpc(connector) => connector.network(),
             Self::Node(connector) => connector.network(),
+            Self::KupoNode(connector) => connector.network(),
         }
     }
 
@@ -27,6 +29,7 @@ impl CardanoConnector for Cardano {
             Self::Blockfrost(connector) => connector.health().await,
             Self::UtxoRpc(connector) => connector.health().await,
             Self::Node(connector) => connector.health().await,
+            Self::KupoNode(connector) => connector.health().await,
         }
     }
 
@@ -35,6 +38,7 @@ impl CardanoConnector for Cardano {
             Self::Blockfrost(connector) => connector.protocol_parameters().await,
             Self::UtxoRpc(connector) => connector.protocol_parameters().await,
             Self::Node(connector) => connector.protocol_parameters().await,
+            Self::KupoNode(connector) => connector.protocol_parameters().await,
         }
     }
 
@@ -47,6 +51,7 @@ impl CardanoConnector for Cardano {
             Self::Blockfrost(connector) => connector.utxos_at(payment, delegation).await,
             Self::UtxoRpc(connector) => connector.utxos_at(payment, delegation).await,
             Self::Node(connector) => connector.utxos_at(payment, delegation).await,
+            Self::KupoNode(connector) => connector.utxos_at(payment, delegation).await,
         }
     }
 
@@ -58,6 +63,7 @@ impl CardanoConnector for Cardano {
             Self::Blockfrost(connector) => connector.submit(transaction).await,
             Self::UtxoRpc(connector) => connector.submit(transaction).await,
             Self::Node(connector) => connector.submit(transaction).await,
+            Self::KupoNode(connector) => connector.submit(transaction).await,
         }
     }
 }

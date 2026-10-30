@@ -1,6 +1,6 @@
 use crate::config::connector::{
-    Blockfrost as BlockfrostConfig, Connector as ConnectorConfig, Node as NodeConfig,
-    UtxoRpc as UtxoRpcConfig,
+    Blockfrost as BlockfrostConfig, Connector as ConnectorConfig, KupoNode as KupoNodeConfig,
+    Node as NodeConfig, UtxoRpc as UtxoRpcConfig,
 };
 use anyhow::{Context, Result, anyhow};
 use cardano_connector::CardanoConnector;
@@ -20,6 +20,7 @@ pub enum Connector {
     Blockfrost(Blockfrost),
     UtxoRpc(Box<UtxoRpc>),
     Node(Box<NodeBackend>),
+    KupoNode(Box<cardano_connector_kupo_node::KupoNode>),
 }
 
 impl Connector {
@@ -28,6 +29,7 @@ impl Connector {
             ConnectorConfig::Blockfrost(config) => Self::new_blockfrost(config),
             ConnectorConfig::UtxoRpc(config) => Self::new_utxorpc(config).await,
             ConnectorConfig::Node(config) => Self::new_node(config).await,
+            ConnectorConfig::KupoNode(config) => Self::new_kupo_node(config).await,
         }
     }
 
@@ -79,6 +81,21 @@ impl Connector {
 
         Ok(Self::Node(Box::new(connector)))
     }
+
+    async fn new_kupo_node(config: &KupoNodeConfig) -> anyhow::Result<Self> {
+        let magic = u64::from(config.network);
+        let node_config = NodeRuntimeConfig::new(PathBuf::from(&config.socket), magic);
+        let connector =
+            cardano_connector_kupo_node::KupoNode::connect(&config.kupo_uri, node_config)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to connect Kupo + node backend at {}",
+                        config.kupo_uri
+                    )
+                })?;
+        Ok(Self::KupoNode(Box::new(connector)))
+    }
 }
 
 fn validated_blockfrost_project_id(config: &BlockfrostConfig) -> anyhow::Result<&str> {
@@ -99,6 +116,7 @@ impl CardanoConnector for Connector {
             Self::Blockfrost(c) => c.network(),
             Self::UtxoRpc(c) => c.network(),
             Self::Node(c) => c.network(),
+            Self::KupoNode(c) => c.network(),
         }
     }
 
@@ -107,6 +125,7 @@ impl CardanoConnector for Connector {
             Self::Blockfrost(c) => c.health().await,
             Self::UtxoRpc(c) => c.health().await,
             Self::Node(c) => c.health().await,
+            Self::KupoNode(c) => c.health().await,
         }
     }
 
@@ -115,6 +134,7 @@ impl CardanoConnector for Connector {
             Self::Blockfrost(c) => c.protocol_parameters().await,
             Self::UtxoRpc(c) => c.protocol_parameters().await,
             Self::Node(c) => c.protocol_parameters().await,
+            Self::KupoNode(c) => c.protocol_parameters().await,
         }
     }
 
@@ -127,6 +147,7 @@ impl CardanoConnector for Connector {
             Self::Blockfrost(c) => c.utxos_at(payment, delegation).await,
             Self::UtxoRpc(c) => c.utxos_at(payment, delegation).await,
             Self::Node(c) => c.utxos_at(payment, delegation).await,
+            Self::KupoNode(c) => c.utxos_at(payment, delegation).await,
         }
     }
 
@@ -135,6 +156,7 @@ impl CardanoConnector for Connector {
             Self::Blockfrost(c) => c.submit(transaction).await,
             Self::UtxoRpc(c) => c.submit(transaction).await,
             Self::Node(c) => c.submit(transaction).await,
+            Self::KupoNode(c) => c.submit(transaction).await,
         }
     }
 }

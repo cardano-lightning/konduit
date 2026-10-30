@@ -55,6 +55,10 @@ Backend-specific config truth:
 - parsed `utxorpc` CLI config requires `KONDUIT_NETWORK`.
 - live `utxorpc` connector use for commands such as `show tip` and tx flows also
   requires `KONDUIT_UTXORPC_URI`.
+- `KONDUIT_CARDANO_BACKEND=kupo-node` uses `KONDUIT_KUPO_URI` (default
+  `http://127.0.0.1:1443`) for UTxO queries and `KONDUIT_NODE_SOCKET` plus
+  `KONDUIT_NETWORK` for node queries and transaction submission. If Kupo cannot
+  answer or its results cannot be decoded, UTxO queries fall back to the node.
 - `KONDUIT_CARDANO_BACKEND=blockfrost` requires `KONDUIT_BLOCKFROST_PROJECT_ID`;
   the network can still be inferred from the project id or default to `mainnet`
   in some CLI config paths.

@@ -6,6 +6,7 @@ members = [
   "packages/cardano/connector-client",
   "packages/cardano/connector-direct",
   "packages/cardano/connector-node",
+  "packages/cardano/connector-kupo-node",
   "packages/cardano/connector-utxorpc",
   "packages/cardano/sdk",
   "packages/cardano/session",
@@ -137,6 +138,7 @@ cardano-connector = { path = "packages/cardano/connector" }
 cardano-connector-client = { path = "packages/cardano/connector-client" }
 cardano-connector-direct = { path = "packages/cardano/connector-direct" }
 cardano-connector-node = { path = "packages/cardano/connector-node" }
+cardano-connector-kupo-node = { path = "packages/cardano/connector-kupo-node" }
 cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
 cardano-sdk = { path = "packages/cardano/sdk", default-features = false }
 cobbl3 = { path = "packages/util/cobbl3", default-features = false }

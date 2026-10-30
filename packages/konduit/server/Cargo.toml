@@ -18,6 +18,7 @@ async-trait.workspace = true
 bln-client = { workspace = true, features = ["cli", "namespaced"] }
 cardano-connector-direct.workspace = true
 cardano-connector-node.workspace = true
+cardano-connector-kupo-node.workspace = true
 cardano-connector-utxorpc.workspace = true
 cardano-connector.workspace = true
 cardano-sdk = { workspace = true, features = ["clap", "serde"] }

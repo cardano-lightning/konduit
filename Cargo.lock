@@ -830,6 +830,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cardano-connector-kupo-node"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-connector",
+ "cardano-connector-node",
+ "cardano-sdk",
+ "kupo-client",
+ "tokio",
+]
+
+[[package]]
 name = "cardano-connector-node"
 version = "0.0.0"
 dependencies = [
@@ -2566,6 +2578,7 @@ dependencies = [
  "anyhow",
  "cardano-connector",
  "cardano-connector-direct",
+ "cardano-connector-kupo-node",
  "cardano-connector-node",
  "cardano-connector-utxorpc",
  "cardano-sdk",
@@ -2691,6 +2704,7 @@ dependencies = [
  "bln-client",
  "cardano-connector",
  "cardano-connector-direct",
+ "cardano-connector-kupo-node",
  "cardano-connector-node",
  "cardano-connector-utxorpc",
  "cardano-sdk",
