@@ -24,6 +24,7 @@ http-client = { workspace = true, features = [
   "reqwest",
 ], default-features = false }
 rand.workspace = true
+tracing.workspace = true
 
 anyhow = { workspace = true, optional = true }
 actix-web = { workspace = true, optional = true }
@@ -38,6 +39,9 @@ env_logger = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["json"] }
 serde_json = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true, features = [
+  "env-filter",
+] }
 
 [dev-dependencies]
 tokio.workspace = true
@@ -53,10 +57,11 @@ standalone = [
   "dep:env_logger",
   "dep:log",
   "dep:tokio",
+  "dep:tracing-subscriber",
 ]
 
 server = ["standalone", "dep:actix-web", "dep:serde_json"]
-client = ["standalone", "dep:reqwest"]
+client = ["standalone", "dep:reqwest", "dep:serde_json"]
 
 [[bin]]
 name = "cln-server"

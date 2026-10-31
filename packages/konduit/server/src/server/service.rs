@@ -25,7 +25,7 @@ impl Service {
     pub async fn run(self) -> std::io::Result<()> {
         // FIXME :: Handle error
         let data = web::Data::new(self.data);
-        log::info!("Starting server on http://{}...", self.bind_address);
+        tracing::info!("Starting server on http://{}...", self.bind_address);
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())

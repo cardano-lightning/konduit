@@ -32,7 +32,7 @@ impl ResponseError for Error {
         let status = self.status_code();
         if status.is_server_error() {
             // don't leak internal details to the client, but keep them for yourself
-            log::error!("request failed: {self}");
+            tracing::error!("request failed: {self}");
             HttpResponse::build(status).body("internal server error")
         } else {
             HttpResponse::build(status).body(self.to_string())

@@ -3,7 +3,7 @@
 //! invoice directly from them, then committing payment through the
 //! gateway.
 
-use konduit_data::{ChequeBody, Duration, Secret, SquashBody};
+use konduit_data::{ChequeBody, Duration, Locked, Secret, SquashBody, Verified};
 use serde::{Deserialize, Serialize};
 
 use crate::{Channel, Receipt, Signer, channel, signer, time::now, wire, wire::auth::Keytag};
@@ -47,6 +47,7 @@ impl Client {
 
     /// One sync round-trip. Returns `true` if a squash was proposed and
     /// applied locally — meaning a follow-up round-trip is needed to send it.
+    #[tracing::instrument(level = "debug", skip(self), err, ret)]
     async fn sync_once(&self) -> Result<bool, Error> {
         let req = wire::sync::Request {
             receipt: self.gateway.wire_receipt(),
@@ -69,6 +70,7 @@ impl Client {
         Ok(true)
     }
 
+    #[tracing::instrument(level = "debug", skip(self), err)]
     async fn sync_gateway(&self) -> Result<(), Error> {
         if self.sync_once().await? {
             self.sync_once().await?;
@@ -77,32 +79,35 @@ impl Client {
         Ok(())
     }
 
-    /// Requests an payme from `merchant_url`, pays it through the
-    /// gateway, and returns the revealed secret.
-    pub async fn pay(&self, merchant_url: &str, amount: u64) -> Result<Secret, Error> {
-        // 0. Establish/reconcile our view of the gateway channel.
-        self.sync_gateway().await?;
-
-        // 1. payme, direct from merchant — unauthenticated, no channel.
-        let payme: wire::payme::Response = self
+    /// Requests a payme from `merchant_url` — unauthenticated, no channel.
+    #[tracing::instrument(skip_all, err)]
+    async fn request_payme(
+        &self,
+        merchant_url: &str,
+        amount: u64,
+    ) -> Result<wire::payme::Response, Error> {
+        Ok(self
             .http
             .post(format!("{merchant_url}{}", wire::payme::PATH))
             .json(&wire::payme::Request { amount })
             .send()
             .await?
             .json()
-            .await?;
+            .await?)
+    }
 
-        // 2. Quote the gateway's route to the merchant.
-        let quote = self
-            .gateway
-            .quote(&wire::quote::Request {
-                payee: payme.payee,
-                amount: payme.amount,
-            })
-            .await?;
-
-        // 3. Sign our own cheque to the gateway.
+    /// Signs a cheque to the gateway for the merchant's invoice plus the
+    /// gateway's routing fee, and records it locally before dispatching.
+    #[tracing::instrument(
+        skip(self, payme, quote),
+        fields(invoice_amount = payme.amount, fee = quote.fee, total = payme.amount + quote.fee),
+        err
+    )]
+    fn lock_cheque(
+        &self,
+        payme: &wire::payme::Response,
+        quote: &wire::quote::Response,
+    ) -> Result<Locked<Verified>, Error> {
         let pay_amount = payme.amount + quote.fee;
         let buffer = Duration::from_secs(30); // GUESS: arbitrary safety margin
         let timeout = now() + quote.timeout + buffer;
@@ -113,9 +118,33 @@ impl Client {
             payme.lock,
         );
         let locked = self.signer.locked(self.gateway.tag().clone(), body);
-
-        // 4. Record before dispatching.
         self.gateway.apply_locked(locked.clone())?;
+        Ok(locked)
+    }
+
+    /// Requests an payme from `merchant_url`, pays it through the
+    /// gateway, and returns the revealed secret.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn pay(&self, merchant_url: &str, amount: u64) -> Result<Paid, Error> {
+        // 0. Establish/reconcile our view of the gateway channel.
+        self.sync_gateway().await?;
+
+        // 1. payme, direct from merchant — unauthenticated, no channel.
+        let payme = self.request_payme(merchant_url, amount).await?;
+
+        // 2. Quote the gateway's route to the merchant.
+        let quote = self
+            .gateway
+            .quote(&wire::quote::Request {
+                payee: payme.payee,
+                amount: payme.amount,
+            })
+            .await?;
+
+        // 3. Sign our own cheque to the gateway, and record it locally
+        //    before dispatching.
+        let locked = self.lock_cheque(&payme, &quote)?;
+        let committed_amount = locked.amount();
 
         // 5. Commit, routed onward to the merchant.
         let req = wire::commit::Request {
@@ -129,6 +158,21 @@ impl Client {
 
         let secret = res.secret.ok_or(Error::NoSecret)?;
         self.gateway.apply_secret(secret)?;
-        Ok(secret)
+        Ok(Paid {
+            secret,
+            payme_amount: payme.amount,
+            committed_amount,
+        })
     }
+}
+
+/// Result of a successful `pay`: the revealed secret plus the amounts
+/// actually involved, since the merchant's invoice (and so the amount
+/// committed, which also includes the routing fee) may differ from the
+/// amount requested.
+#[derive(Debug, Clone, Copy)]
+pub struct Paid {
+    pub secret: Secret,
+    pub payme_amount: u64,
+    pub committed_amount: u64,
 }

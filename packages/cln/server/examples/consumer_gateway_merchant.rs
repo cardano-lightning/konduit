@@ -31,6 +31,13 @@ fn main() -> anyhow::Result<()> {
         std::env::var("CLN_GATEWAY_URL").unwrap_or_else(|_| "127.0.0.1:7652".to_string());
     let merchant_url =
         std::env::var("CLN_MERCHANT_URL").unwrap_or_else(|_| "127.0.0.1:7653".to_string());
+    // Reuse Konduit's own adaptor fee (KONDUIT_FEE) as the CLN routing fee,
+    // rather than silently falling back to Params::default()'s test
+    // placeholder — keeps the demo's quoted fee consistent with `/info`.
+    let fee: u64 = std::env::var("KONDUIT_FEE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| cln_server::ctx::Params::default().fee);
     let consumer_signer = SigningKey::from(CONSUMER_KEY);
     let gateway_signer = SigningKey::from(GATEWAY_KEY);
     let merchant_signer = SigningKey::from(MERCHANT_KEY);
@@ -74,7 +81,10 @@ fn main() -> anyhow::Result<()> {
             paymes: cln_server::paymes::Config {
                 default_timeout: konduit_data::Duration::from_secs(300),
             },
-            params: cln_server::ctx::Params::default(),
+            params: cln_server::ctx::Params {
+                fee,
+                ..Default::default()
+            },
         },
         server: ServerConfig {
             listen: merchant_url,
@@ -100,7 +110,10 @@ fn main() -> anyhow::Result<()> {
             paymes: cln_server::paymes::Config {
                 default_timeout: konduit_data::Duration::from_secs(3600),
             },
-            params: cln_server::ctx::Params::default(),
+            params: cln_server::ctx::Params {
+                fee,
+                ..Default::default()
+            },
         },
         server: ServerConfig {
             listen: gateway_url,

@@ -112,12 +112,14 @@ impl Data {
         Ok(self.channel(keytag)?.receipt().to_owned())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn squash_proposal(&self, keytag: &Keytag) -> Result<SquashProposal, Error> {
         self.db().update(keytag, apply_timeout(now()?))?;
         Ok(self.channel(keytag)?.propose_squash()?)
     }
 
     // FIXME :: This is permissive against stale and bad squashes
+    #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn squash(&self, keytag: &Keytag, squash: Squash) -> Result<(), Error> {
         match self.db().update(keytag, apply_squash(squash)) {
             Ok(()) | Err(db::Error::Channel(channel::Error::Receipt(_))) => Ok(()),
@@ -125,6 +127,7 @@ impl Data {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(amount = request.amount), err)]
     pub fn payme(&self, request: PaymeRequest) -> Result<Payme, Error> {
         let response = self
             .cln
@@ -132,6 +135,11 @@ impl Data {
                 amount: request.amount,
             })
             .map_err(|error| Error::Cln(error.to_string()))?;
+        // The lock isn't known until the payme is created; logged here
+        // (rather than as an instrument field) so it can be matched
+        // against the same lock in quote/pay/cln_commit spans, including
+        // across the gateway's and merchant's separate terminals.
+        tracing::info!(lock = %response.lock, "payme created");
         Ok(Payme {
             payee: response.payee,
             amount: response.amount,
@@ -140,6 +148,7 @@ impl Data {
         })
     }
 
+    #[tracing::instrument(skip_all, fields(amount = body.amount, lock = %body.lock), err)]
     pub async fn quote(&self, keytag: &Keytag, body: QuoteBody) -> Result<Quote, Error> {
         let channel = self.channel(keytag)?;
         if body.timeout < time::now()? {
@@ -182,6 +191,7 @@ impl Data {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(amount = body.payme.amount, lock = %body.payme.lock), err)]
     pub async fn pay(&self, keytag: &Keytag, body: PayBody) -> Result<PayResponse, Error> {
         let PayBody { locked, payme } = body;
         self.align_commitments(&locked, &payme)?;
@@ -201,11 +211,13 @@ impl Data {
             .await
             .map_err(|error| Error::Cln(error.to_string()))?;
         if let Some(secret) = pay_res.secret {
+            tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
             self.db().update(keytag, apply_secrets(vec![secret]))?;
         };
         Ok(PayResponse::from(pay_res.secret.map(|secret| secret.0)))
     }
 
+    #[tracing::instrument(skip_all, fields(amount = request.amount), err)]
     pub async fn cln_quote(
         &self,
         keytag: cln_server::wire::auth::Keytag,
@@ -217,17 +229,31 @@ impl Data {
             .map_err(|error| Error::Cln(error.to_string()))
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(outbound = request.outbound.is_some(), lock = %request.inbound.lock()),
+        err
+    )]
     pub async fn cln_commit(
         &self,
         keytag: cln_server::wire::auth::Keytag,
         request: cln_server::wire::commit::Request,
     ) -> Result<cln_server::wire::commit::Response, Error> {
-        self.cln
+        let response = self
+            .cln
             .commit(&keytag, request)
             .await
-            .map_err(|error| Error::Cln(error.to_string()))
+            .map_err(|error| Error::Cln(error.to_string()))?;
+        // Logged (not a field, since it's only known on success) so the
+        // same hex secret can be matched across the gateway's and
+        // merchant's separate terminals once it's revealed.
+        if let Some(secret) = response.secret {
+            tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
+        }
+        Ok(response)
     }
 
+    #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn cln_sync(
         &self,
         keytag: cln_server::wire::auth::Keytag,
@@ -239,6 +265,7 @@ impl Data {
     }
 
     // FIXME :: REMOVE THIS TEMPORARY PATCH!!
+    #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn squash_status(&self, keytag: &Keytag) -> Result<SquashStatus, Error> {
         let squash_proposal = self.squash_proposal(keytag)?;
         Ok(SquashStatus::Incomplete(squash_proposal))

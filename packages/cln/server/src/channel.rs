@@ -154,10 +154,12 @@ impl Channel {
         http_client::header_policy::Custom::new(wire::auth::HEADER, &self.auth).boxed()
     }
 
+    #[tracing::instrument(skip(self, req), fields(payee_amount = req.amount), err)]
     pub async fn quote(&self, req: &wire::quote::Request) -> Result<wire::quote::Response, Error> {
         self.client.quote(req, self.auth_header()).await
     }
 
+    #[tracing::instrument(skip_all, err)]
     pub async fn commit(
         &self,
         req: &wire::commit::Request,
@@ -165,6 +167,7 @@ impl Channel {
         self.client.commit(req, self.auth_header()).await
     }
 
+    #[tracing::instrument(level = "debug", skip_all, err)]
     pub async fn sync(&self, req: &wire::sync::Request) -> Result<wire::sync::Response, Error> {
         self.client.sync(req, self.auth_header()).await
     }

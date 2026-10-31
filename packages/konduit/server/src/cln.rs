@@ -24,7 +24,12 @@ fn empty_inbounds() -> cln_server::inbounds::Config {
 }
 
 /// Builds CLN's reusable peer context from Konduit's deployment configuration.
-pub fn build(args: Args) -> anyhow::Result<cln_server::Ctx> {
+///
+/// `fee` is Konduit's own adaptor fee (`CommonArgs.fee` / `KONDUIT_FEE`) and
+/// is only used as the CLN routing fee default when no `config_path` is
+/// given — the only fee knob a deployment actually exposes today, reused
+/// here rather than left silently defaulted to a test placeholder.
+pub fn build(args: Args, fee: u64) -> anyhow::Result<cln_server::Ctx> {
     let config = match args.config_path {
         Some(path) => {
             let raw = std::fs::read_to_string(&path)
@@ -35,7 +40,10 @@ pub fn build(args: Args) -> anyhow::Result<cln_server::Ctx> {
         None => Config {
             inbound: empty_inbounds(),
             outbound: cln_server::Config {
-                params: Default::default(),
+                params: cln_server::ctx::Params {
+                    fee,
+                    ..Default::default()
+                },
                 signer: cln_server::signer::Config {
                     key: cln_server::random::arr32(),
                 },
@@ -55,7 +63,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_payme_can_be_quoted_and_committed() {
-        let cln = build(Args { config_path: None }).expect("local CLN context initializes");
+        let cln = build(Args { config_path: None }, 0).expect("local CLN context initializes");
         let payme = cln
             .payme(payme::Request { amount: 1_000_000 })
             .expect("payme is created");

@@ -125,6 +125,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     }
 
     /// TODO :: split this off
+    #[tracing::instrument(level = "debug", skip_all, err)]
     pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
         // This is a silly implementation.
         let keytags = self.db.keys()?;
@@ -149,6 +150,13 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         Ok(())
     }
 
+    // debug: this is a 2s-interval background ticker (see main.rs), so an
+    // info-level span would announce itself every tick regardless of
+    // whether there was anything to claim. No `err`: `InsufficientTotalGain`
+    // with zero gain is an expected, silently-ignored "nothing to claim
+    // yet" condition (see main.rs's admin-sync ticker) — blanket
+    // error-logging here would spam that.
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn claim(&self) -> Result<(), anyhow::Error> {
         let snapshot = self.snapshot().await?;
         let keys: Vec<Keytag> = self.db.keys()?;
@@ -183,11 +191,14 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             &upper_bound,
         )?;
         tx.sign(&self.wallet);
-        log::warn!("tx_id : {:?}", tx.id());
+        tracing::info!(tx_id = ?tx.id(), "submitting claim transaction");
         self.cardano.submit(&tx).await?;
         Ok(())
     }
 
+    // Same reasoning as `claim`: periodic ticker, caller decides how to
+    // log its Result.
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn sync(&self) -> Result<(), anyhow::Error> {
         self.unlocks().await?;
         self.claim().await?;
@@ -304,7 +315,7 @@ mod tests {
 
     fn cln_context() -> Arc<crate::cln::Node> {
         Arc::new(
-            crate::cln::build(crate::cln::Args { config_path: None })
+            crate::cln::build(crate::cln::Args { config_path: None }, 0)
                 .expect("CLN context initializes"),
         )
     }
