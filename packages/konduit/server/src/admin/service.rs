@@ -17,7 +17,7 @@ use super::{SyncApi, config::Config};
 
 #[derive(Clone)]
 pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
-    bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
+    cln: Arc<crate::cln::Node>,
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
     network_parameters: NetworkParameters,
@@ -29,7 +29,7 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
 impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     pub async fn new(
         config: Config,
-        bln: Arc<dyn bln_client::Api + Send + Sync + 'static>,
+        cln: Arc<crate::cln::Node>,
         cardano: Arc<Connector>,
         db: Arc<db::Db>,
     ) -> anyhow::Result<Self> {
@@ -87,7 +87,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         };
 
         Ok(Self {
-            bln,
+            cln,
             cardano,
             db,
             network_parameters,
@@ -117,20 +117,15 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     async fn get_secrets(&self, locks: Vec<Lock>) -> Result<Vec<Secret>, anyhow::Error> {
         let mut secrets: Vec<Secret> = Vec::new();
         for lock in locks.into_iter() {
-            if let bln_client::types::RevealResponse {
-                secret: Some(secret),
-            } = self
-                .bln
-                .reveal(bln_client::types::RevealRequest { lock: lock.0 })
-                .await?
-            {
-                secrets.push(Secret(secret));
+            if let Some(secret) = self.cln.reveal(&lock) {
+                secrets.push(secret);
             }
         }
         Ok(secrets)
     }
 
     /// TODO :: split this off
+    #[tracing::instrument(level = "debug", skip_all, err)]
     pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
         // This is a silly implementation.
         let keytags = self.db.keys()?;
@@ -155,6 +150,13 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         Ok(())
     }
 
+    // debug: this is a 2s-interval background ticker (see main.rs), so an
+    // info-level span would announce itself every tick regardless of
+    // whether there was anything to claim. No `err`: `InsufficientTotalGain`
+    // with zero gain is an expected, silently-ignored "nothing to claim
+    // yet" condition (see main.rs's admin-sync ticker) — blanket
+    // error-logging here would spam that.
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn claim(&self) -> Result<(), anyhow::Error> {
         let snapshot = self.snapshot().await?;
         let keys: Vec<Keytag> = self.db.keys()?;
@@ -189,11 +191,14 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
             &upper_bound,
         )?;
         tx.sign(&self.wallet);
-        log::warn!("tx_id : {:?}", tx.id());
+        tracing::info!(tx_id = ?tx.id(), "submitting claim transaction");
         self.cardano.submit(&tx).await?;
         Ok(())
     }
 
+    // Same reasoning as `claim`: periodic ticker, caller decides how to
+    // log its Result.
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn sync(&self) -> Result<(), anyhow::Error> {
         self.unlocks().await?;
         self.claim().await?;
@@ -308,6 +313,13 @@ mod tests {
         BTreeMap::from([(Input::new(Hash::<32>::from([9; 32]), 0), script_output())])
     }
 
+    fn cln_context() -> Arc<crate::cln::Node> {
+        Arc::new(
+            crate::cln::build(crate::cln::Args { config_path: None }, 0)
+                .expect("CLN context initializes"),
+        )
+    }
+
     #[tokio::test]
     async fn new_fails_when_protocol_parameters_cannot_be_loaded() {
         let connector = Arc::new(FakeConnector::new(
@@ -315,15 +327,10 @@ mod tests {
             Ok::<_, &str>(host_utxos_with_reference_script()),
         ));
 
-        let error = Service::new(
-            test_config(),
-            Arc::new(bln_client::mock::Client::new()),
-            connector,
-            Arc::new(tmp_db()),
-        )
-        .await
-        .err()
-        .expect("missing protocol parameters should fail startup");
+        let error = Service::new(test_config(), cln_context(), connector, Arc::new(tmp_db()))
+            .await
+            .err()
+            .expect("missing protocol parameters should fail startup");
 
         assert!(
             error
@@ -339,15 +346,10 @@ mod tests {
             Ok::<_, &str>(BTreeMap::new()),
         ));
 
-        let error = Service::new(
-            test_config(),
-            Arc::new(bln_client::mock::Client::new()),
-            connector,
-            Arc::new(tmp_db()),
-        )
-        .await
-        .err()
-        .expect("missing reference script should fail startup");
+        let error = Service::new(test_config(), cln_context(), connector, Arc::new(tmp_db()))
+            .await
+            .err()
+            .expect("missing reference script should fail startup");
 
         let message = error.to_string();
         assert!(message.contains("No reference script found at host address"));
@@ -361,13 +363,8 @@ mod tests {
             Ok::<_, &str>(host_utxos_with_reference_script()),
         ));
 
-        let service = Service::new(
-            test_config(),
-            Arc::new(bln_client::mock::Client::new()),
-            connector,
-            Arc::new(tmp_db()),
-        )
-        .await;
+        let service =
+            Service::new(test_config(), cln_context(), connector, Arc::new(tmp_db())).await;
 
         assert!(service.is_ok(), "startup smoke path should succeed");
     }

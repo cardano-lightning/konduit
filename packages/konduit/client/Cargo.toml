@@ -33,7 +33,6 @@ cli = [
 
 [dependencies]
 anyhow.workspace = true
-bln-sdk.workspace = true
 cardano-connector-direct = { workspace = true, optional = true }
 cardano-connector.workspace = true
 cardano-sdk.workspace = true

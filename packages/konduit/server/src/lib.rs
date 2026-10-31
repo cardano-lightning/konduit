@@ -9,6 +9,7 @@ pub mod admin;
 pub mod common;
 
 pub mod cardano;
+pub mod cln;
 
 pub mod args;
 

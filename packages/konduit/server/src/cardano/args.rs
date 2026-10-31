@@ -14,6 +14,7 @@ pub enum CardanoBackend {
     Blockfrost,
     Utxorpc,
     Node,
+    KupoNode,
 }
 
 impl fmt::Display for CardanoBackend {
@@ -34,6 +35,9 @@ pub struct CardanoArgs {
 
     #[arg(long, env = crate::env::UTXORPC_URI)]
     pub utxorpc_uri: Option<String>,
+
+    #[arg(long, env = crate::env::KUPO_URI, default_value = "http://127.0.0.1:1443")]
+    pub kupo_uri: Option<String>,
 
     #[arg(long, env = crate::env::NODE_SOCKET)]
     pub node_socket: Option<String>,
@@ -100,6 +104,24 @@ impl CardanoArgs {
                 })?;
 
                 Ok(super::Cardano::Node(Box::new(client)))
+            }
+            CardanoBackend::KupoNode => {
+                let node_config = self.node_config()?;
+                let uri = self
+                    .kupo_uri
+                    .as_deref()
+                    .filter(|uri| !uri.trim().is_empty())
+                    .unwrap_or("http://127.0.0.1:1443");
+                let client = cardano_connector_kupo_node::KupoNode::connect(uri, node_config)
+                    .await
+                    .with_context(|| {
+                        format!("failed to initialize Kupo + node backend at {uri}")
+                    })?;
+                client
+                    .health()
+                    .await
+                    .with_context(|| format!("failed to reach Kupo + node backend at {uri}"))?;
+                Ok(super::Cardano::KupoNode(Box::new(client)))
             }
         }
     }
@@ -176,6 +198,7 @@ impl CardanoBackend {
             Self::Blockfrost => "blockfrost",
             Self::Utxorpc => "utxorpc",
             Self::Node => "node",
+            Self::KupoNode => "kupo-node",
         }
     }
 }
@@ -192,6 +215,7 @@ mod tests {
             backend: CardanoBackend::Blockfrost,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: None,
             node_network_magic: None,
             network: None,
@@ -210,6 +234,7 @@ mod tests {
             backend: CardanoBackend::Utxorpc,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: None,
             node_network_magic: None,
             network: None,
@@ -228,6 +253,7 @@ mod tests {
             backend: CardanoBackend::Node,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: None,
             node_network_magic: None,
             network: None,
@@ -246,6 +272,7 @@ mod tests {
             backend: CardanoBackend::Node,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: Some("/tmp/node.socket".to_string()),
             node_network_magic: None,
             network: None,
@@ -274,6 +301,7 @@ mod tests {
             backend: CardanoBackend::Blockfrost,
             blockfrost_project_id: Some("preview12345".to_string()),
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: None,
             node_network_magic: None,
             network: None,
@@ -288,6 +316,7 @@ mod tests {
             backend: CardanoBackend::Node,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: Some("/tmp/node.socket".to_string()),
             node_network_magic: Some(42),
             network: None,
@@ -302,6 +331,7 @@ mod tests {
             backend: CardanoBackend::Utxorpc,
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            kupo_uri: None,
             node_socket: None,
             node_network_magic: None,
             network: Some(PublicNetwork::Preview),
@@ -324,6 +354,7 @@ mod tests {
             backend: CardanoBackend::Blockfrost,
             blockfrost_project_id: Some("   ".to_string()),
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: None,
             node_network_magic: None,
             network: None,
@@ -342,6 +373,7 @@ mod tests {
             backend: CardanoBackend::Utxorpc,
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            kupo_uri: None,
             node_socket: None,
             node_network_magic: None,
             network: None,

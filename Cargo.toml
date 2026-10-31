@@ -6,6 +6,7 @@ members = [
   "packages/cardano/connector-client",
   "packages/cardano/connector-direct",
   "packages/cardano/connector-node",
+  "packages/cardano/connector-kupo-node",
   "packages/cardano/connector-utxorpc",
   "packages/cardano/sdk",
   "packages/cardano/session",
@@ -32,6 +33,7 @@ members = [
   "packages/konduit/tx2",
   "packages/konduit/prompt",
   #"packages/konduit/receipt",
+  "packages/cln/server",
 ]
 resolver = "2"
 
@@ -131,12 +133,17 @@ web-time = "1.1.0"
 
 bln-client = { path = "packages/bln/client", default-features = false }
 bln-sdk = { path = "packages/bln/sdk", default-features = false }
+cln-server = { path = "packages/cln/server", default-features = false, features = [
+  "server",
+] }
 cardano-wallet = { path = "packages/cardano/wallet", default-features = false }
 cardano-session = { path = "packages/cardano/session", default-features = false }
+cardano-keys = { path = "packages/cardano/keys", default-features = false }
 cardano-connector = { path = "packages/cardano/connector" }
 cardano-connector-client = { path = "packages/cardano/connector-client" }
 cardano-connector-direct = { path = "packages/cardano/connector-direct" }
 cardano-connector-node = { path = "packages/cardano/connector-node" }
+cardano-connector-kupo-node = { path = "packages/cardano/connector-kupo-node" }
 cardano-connector-utxorpc = { path = "packages/cardano/connector-utxorpc" }
 cardano-sdk = { path = "packages/cardano/sdk", default-features = false }
 cobbl3 = { path = "packages/util/cobbl3", default-features = false }

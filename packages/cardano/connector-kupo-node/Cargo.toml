@@ -1,0 +1,19 @@
+[package]
+name = "cardano-connector-kupo-node"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cardano-connector.workspace = true
+cardano-connector-node.workspace = true
+cardano-sdk.workspace = true
+kupo-client.workspace = true
+tokio.workspace = true

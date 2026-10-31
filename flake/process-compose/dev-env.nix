@@ -3,6 +3,7 @@
   cardano-node,
   cardonnay,
   coreutils,
+  curl,
   formats,
   jq,
   kupo,
@@ -103,10 +104,105 @@
       export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-./.run/cargo-target-indexer}"
       mkdir -p "$CARGO_TARGET_DIR"
       mkdir -p "$(dirname "$KONDUIT_INDEXER_DB_PATH")"
-      cargo run -p konduit-indexer --features=cli -- \
+      cargo run --release -p konduit-indexer --features=cli -- \
         index \
         --kupo-port "$KUPO_INDEXER_PORT" \
         --db-path "$KONDUIT_INDEXER_DB_PATH"
+    '';
+  };
+
+  cln-demo-configs = writeShellApplication {
+    name = "generate-cln-demo-configs";
+    runtimeInputs = [coreutils];
+    text = ''
+      set -euo pipefail
+      export CARGO_TARGET_DIR="$RUN_DIR/cargo-target-cln-demo"
+      mkdir -p "$CLN_DEMO_CONFIG_DIR"
+      # konduit-server itself loads .env.adaptor (KONDUIT_FEE etc.) via
+      # dotenvy at Rust-runtime, which never reaches sibling processes as
+      # a real shell env var. Source it here too, so the demo's CLN
+      # routing fee (consumer_gateway_merchant.rs) matches what /info
+      # reports instead of silently falling back to a placeholder.
+      if [ -f "$ROOT_DIR/.env.adaptor" ]; then
+        set -a
+        # shellcheck disable=SC1091
+        source "$ROOT_DIR/.env.adaptor"
+        set +a
+      fi
+      CLN_GATEWAY_URL="127.0.0.1:$KONDUIT_SERVER_GATEWAY_PORT" \
+        CLN_MERCHANT_URL="127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT" \
+        CLN_EXAMPLE_CONFIG_DIR="$CLN_DEMO_CONFIG_DIR" \
+        cargo run --release -p cln-server --example consumer_gateway_merchant --features "server client"
+    '';
+  };
+
+  mk-konduit-server = {
+    role,
+    port,
+    signingKey,
+  }:
+    writeShellApplication {
+      name = "konduit-server-${role}";
+      runtimeInputs = [coreutils];
+      text = ''
+        set -euo pipefail
+        export CARGO_TARGET_DIR="$RUN_DIR/cargo-target-server"
+        export KONDUIT_CARDANO_BACKEND="kupo-node"
+        export KONDUIT_NODE_SOCKET="$CARDANO_NODE_SOCKET_PATH"
+        export KONDUIT_NODE_NETWORK_MAGIC="$CARDANO_NODE_NETWORK_ID"
+        export KONDUIT_NETWORK=preview
+        export KONDUIT_KUPO_URI="http://127.0.0.1:$KUPO_UTXO_PORT"
+
+        export KONDUIT_SIGNING_KEY="${signingKey}"
+        export KONDUIT_SERVER_HOST="127.0.0.1"
+        export KONDUIT_SERVER_PORT="${toString port}"
+        export KONDUIT_CLN_CONFIG_PATH="$CLN_DEMO_CONFIG_DIR/${role}.toml"
+        export KONDUIT_CLOSE_PERIOD=30s
+        export ADMIN_EVERY=2s
+        export FX_BITCOIN=60000
+        export FX_ADA=0.5
+        export KONDUIT_SERVER_DB_PATH="$RUN_DIR/konduit-server-${role}/konduit-server.db"
+        export KONDUIT_DB_PATH="$KONDUIT_SERVER_DB_PATH"
+        mkdir -p "$(dirname "$KONDUIT_DB_PATH")"
+
+        cargo run --release -p konduit-server
+      '';
+    };
+
+  konduit-server-gateway = mk-konduit-server {
+    role = "gateway";
+    port = 5663;
+    signingKey = lib.concatStrings (lib.replicate 32 "02");
+  };
+
+  konduit-server-merchant = mk-konduit-server {
+    role = "merchant";
+    port = 5664;
+    signingKey = lib.concatStrings (lib.replicate 32 "03");
+  };
+
+  konduit-server-readiness-probe = writeShellApplication {
+    name = "konduit-server-readiness-probe";
+    runtimeInputs = [curl];
+    text = ''
+      set -euo pipefail
+      : "''${KONDUIT_SERVER_PORT:?}"
+      curl --fail --silent --show-error \
+        "http://127.0.0.1:$KONDUIT_SERVER_PORT/info" > /dev/null
+    '';
+  };
+
+  cln-demo-consumer = writeShellApplication {
+    name = "cln-demo-consumer";
+    runtimeInputs = [];
+    text = ''
+      set -euo pipefail
+      export CARGO_TARGET_DIR="$RUN_DIR/cargo-target-cln-demo"
+      cargo run --release -p cln-server --bin cln-client -- \
+        --config "$CLN_DEMO_CONFIG_DIR/consumer.toml" \
+        pay \
+        --merchant "http://127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT" \
+        --amount 1000
     '';
   };
 
@@ -134,9 +230,10 @@
       # The konduit cli reads the .env files of the repo itself, but the cardano
       # connection has to point at the testnet of this run, not at whatever the
       # .env files happen to carry.
-      export KONDUIT_CARDANO_BACKEND="node"
+      export KONDUIT_CARDANO_BACKEND="kupo-node"
       export KONDUIT_NODE_SOCKET="$CARDANO_NODE_SOCKET_PATH"
       export KONDUIT_NETWORK="$CARDANO_NODE_NETWORK_ID"
+      export KONDUIT_KUPO_URI="http://127.0.0.1:$KUPO_UTXO_PORT"
 
       # 200 ada for the admin wallet. The deployment pays the fee and the
       # reference script output has to carry its min ada, so a few tens of
@@ -146,7 +243,7 @@
       ADMIN_MIN_LOVELACE="50000000"
 
       konduit_cli() {
-        cargo run -q -p konduit-cli -- "$@"
+        cargo run --release -q -p konduit-cli -- "$@"
       }
 
       # The addresses, as the cli resolves them. The cli reads the .env files
@@ -242,44 +339,6 @@
       exit 1
     '';
   };
-
-  konduit-server = writeShellApplication {
-    name = "konduit-server";
-    runtimeInputs = [];
-    text = ''
-      set -x
-      export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-./.run/cargo-target-server}"
-      mkdir -p "$CARGO_TARGET_DIR"
-      mkdir -p "$(dirname "$KONDUIT_SERVER_DB_PATH")"
-
-      # Cardano: the local testnet. Variables exported here win over the .env
-      # and .env.adaptor files the server loads itself.
-      export KONDUIT_CARDANO_BACKEND="node"
-      export KONDUIT_NODE_SOCKET="$CARDANO_NODE_SOCKET_PATH"
-      export KONDUIT_NODE_NETWORK_MAGIC="$CARDANO_NODE_NETWORK_ID"
-      # A local testnet is not a public network, but the value is parsed even
-      # though the node backend never looks at it.
-      export KONDUIT_NETWORK="''${KONDUIT_NETWORK_NAME:-preview}"
-
-      # BLN: mandatory. Falls back to the mock backend unless the dev env
-      # points at an LND.
-      if [ -n "''${LND_BASE_URL:-}" ] && [ -n "''${LND_MACAROON:-}" ]; then
-        unset BLN_MOCK
-      else
-        export BLN_MOCK="true"
-      fi
-
-      # FX: fixed rates unless the dev env brings a live source.
-      export FX_EVERY="''${KONDUIT_FX_EVERY:-10m}"
-      export FX_ADA="''${FX_ADA:-''${KONDUIT_FX_ADA:-0.6}}"
-      export FX_BITCOIN="''${FX_BITCOIN:-''${KONDUIT_FX_BITCOIN:-60000}}"
-
-      export KONDUIT_DB_PATH="$KONDUIT_SERVER_DB_PATH"
-
-      # Started from the repo root, so the server picks up .env and .env.adaptor.
-      cargo run -p konduit-server
-    '';
-  };
 in
   (formats.yaml {}).generate "process-compose.yaml" {
     version = "0.5";
@@ -348,10 +407,20 @@ in
           };
         };
 
+        cln-demo-configs = {
+          depends_on = {
+            "validate-dev-env".condition = "process_completed_successfully";
+          };
+          command = "${cln-demo-configs}/bin/generate-cln-demo-configs";
+          log_location = "./.run/cln-demo-configs.log";
+          namespace = "server";
+        };
+
         publish-reference-script = {
           depends_on = {
             "validate-dev-env".condition = "process_completed_successfully";
             "initialize-testnet".condition = "process_healthy";
+            "kupo-utxo".condition = "process_healthy";
             "set-faucet-info".condition = "process_completed_successfully";
           };
           command = "${publish-reference-script}/bin/publish-reference-script";
@@ -359,14 +428,56 @@ in
           namespace = "server";
         };
 
-        konduit-server = {
+        konduit-server-merchant = {
           depends_on = {
             "validate-dev-env".condition = "process_completed_successfully";
             "initialize-testnet".condition = "process_healthy";
             "publish-reference-script".condition = "process_completed_successfully";
+            "kupo-utxo".condition = "process_healthy";
+            "cln-demo-configs".condition = "process_completed_successfully";
           };
-          command = "${konduit-server}/bin/konduit-server";
-          log_location = "./.run/konduit-server.log";
+          command = "${konduit-server-merchant}/bin/konduit-server-merchant";
+          log_location = "./.run/konduit-server-merchant.log";
+          namespace = "server";
+          readiness_probe = {
+            exec.command = "KONDUIT_SERVER_PORT=$KONDUIT_SERVER_MERCHANT_PORT ${konduit-server-readiness-probe}/bin/konduit-server-readiness-probe";
+            initial_delay_seconds = 1;
+            period_seconds = 2;
+            timeout_seconds = 5;
+            success_threshold = 1;
+            failure_threshold = 60;
+          };
+        };
+
+        konduit-server-gateway = {
+          depends_on = {
+            "validate-dev-env".condition = "process_completed_successfully";
+            "initialize-testnet".condition = "process_healthy";
+            "publish-reference-script".condition = "process_completed_successfully";
+            "kupo-utxo".condition = "process_healthy";
+            "cln-demo-configs".condition = "process_completed_successfully";
+            "konduit-server-merchant".condition = "process_healthy";
+          };
+          command = "${konduit-server-gateway}/bin/konduit-server-gateway";
+          log_location = "./.run/konduit-server-gateway.log";
+          namespace = "server";
+          readiness_probe = {
+            exec.command = "KONDUIT_SERVER_PORT=$KONDUIT_SERVER_GATEWAY_PORT ${konduit-server-readiness-probe}/bin/konduit-server-readiness-probe";
+            initial_delay_seconds = 1;
+            period_seconds = 2;
+            timeout_seconds = 5;
+            success_threshold = 1;
+            failure_threshold = 60;
+          };
+        };
+
+        cln-demo-consumer = {
+          depends_on = {
+            "konduit-server-gateway".condition = "process_healthy";
+            "konduit-server-merchant".condition = "process_healthy";
+          };
+          command = "${cln-demo-consumer}/bin/cln-demo-consumer";
+          log_location = "./.run/cln-demo-consumer.log";
           namespace = "server";
         };
       };

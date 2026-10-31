@@ -1,5 +1,5 @@
 use crate::{
-    config::connector::{Backend, Blockfrost, Connector, Node, UtxoRpc},
+    config::connector::{Backend, Blockfrost, Connector, KupoNode, Node, UtxoRpc},
     shared::Fill,
 };
 use anyhow::anyhow;
@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 const ENV_CARDANO_BACKEND: &str = "KONDUIT_CARDANO_BACKEND";
 const ENV_BLOCKFROST_PROJECT_ID: &str = "KONDUIT_BLOCKFROST_PROJECT_ID";
 const ENV_UTXORPC_URI: &str = "KONDUIT_UTXORPC_URI";
+const ENV_KUPO_URI: &str = "KONDUIT_KUPO_URI";
 const ENV_NODE_SOCKET: &str = "KONDUIT_NODE_SOCKET";
 const ENV_NETWORK: &str = "KONDUIT_NETWORK";
 
@@ -31,6 +32,10 @@ pub struct ConnectorEnv {
     #[arg(long, env = ENV_UTXORPC_URI, alias = "utxorpc")]
     #[serde(rename = "KONDUIT_UTXORPC_URI")]
     pub utxorpc_uri: Option<String>,
+
+    #[arg(long, env = ENV_KUPO_URI, default_value = "http://127.0.0.1:1443")]
+    #[serde(rename = "KONDUIT_KUPO_URI")]
+    pub kupo_uri: Option<String>,
 
     #[arg(long, env = ENV_NODE_SOCKET)]
     #[serde(rename = "KONDUIT_NODE_SOCKET")]
@@ -92,6 +97,21 @@ impl TryFrom<ConnectorEnv> for Connector {
                     socket: env_node_socket,
                 }))
             }
+            Backend::KupoNode => {
+                let network = env
+                    .network
+                    .ok_or(anyhow!("Kupo + node backend requires {}", ENV_NETWORK))?;
+                let socket = env
+                    .node_socket
+                    .ok_or(anyhow!("Kupo + node backend requires {}", ENV_NODE_SOCKET))?;
+                let kupo_uri =
+                    normalize(env.kupo_uri).unwrap_or_else(|| "http://127.0.0.1:1443".to_string());
+                Ok(Connector::KupoNode(KupoNode {
+                    network,
+                    socket,
+                    kupo_uri,
+                }))
+            }
         }
     }
 }
@@ -112,6 +132,7 @@ impl Fill for ConnectorEnv {
                 },
                 node_socket: self.node_socket,
                 utxorpc_uri: self.utxorpc_uri,
+                kupo_uri: self.kupo_uri,
             }),
             Backend::Utxorpc => Ok(Self {
                 backend: self.backend,
@@ -119,6 +140,7 @@ impl Fill for ConnectorEnv {
                 network: self.network.or(Some(Network::PREPROD)),
                 node_socket: self.node_socket,
                 utxorpc_uri: self.utxorpc_uri,
+                kupo_uri: self.kupo_uri,
             }),
             Backend::Node => Ok(Self {
                 backend: self.backend,
@@ -134,6 +156,19 @@ impl Fill for ConnectorEnv {
                     })
                     .or(Some("/tmp/node.socket".to_string())),
                 utxorpc_uri: self.utxorpc_uri,
+                kupo_uri: self.kupo_uri,
+            }),
+            Backend::KupoNode => Ok(Self {
+                backend: self.backend,
+                blockfrost_project_id: self.blockfrost_project_id,
+                network: self.network.or(Some(Network::PREPROD)),
+                node_socket: self
+                    .node_socket
+                    .or_else(|| std::env::var("CARDANO_NODE_SOCKET_PATH").ok()),
+                utxorpc_uri: self.utxorpc_uri,
+                kupo_uri: self
+                    .kupo_uri
+                    .or_else(|| Some("http://127.0.0.1:1443".into())),
             }),
         }
     }
@@ -148,6 +183,7 @@ impl ConnectorEnv {
                 Err(anyhow!("Cardano backend utxorpc requires {}", ENV_NETWORK))
             }
             (Backend::Node, None) => Ok(NetworkId::TESTNET),
+            (Backend::KupoNode, None) => Ok(NetworkId::TESTNET),
         }
     }
 }
@@ -184,6 +220,7 @@ mod tests {
             network: Some(PublicNetwork::Preprod.into()),
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            kupo_uri: None,
             node_socket: None,
         };
 
@@ -205,6 +242,7 @@ mod tests {
             network: None,
             blockfrost_project_id: None,
             utxorpc_uri: Some("http://127.0.0.1:1337".to_string()),
+            kupo_uri: None,
             node_socket: None,
         };
 
@@ -223,6 +261,7 @@ mod tests {
             network: None,
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: None,
         };
 
@@ -241,6 +280,7 @@ mod tests {
             network: Some(PublicNetwork::Preprod.into()),
             blockfrost_project_id: None,
             utxorpc_uri: None,
+            kupo_uri: None,
             node_socket: Some("/tmp/node.socket".to_string()),
         };
 
@@ -251,6 +291,28 @@ mod tests {
                 assert_eq!(config.socket, "/tmp/node.socket");
             }
             other => panic!("expected Node config, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn try_from_builds_kupo_node_config() {
+        let env = ConnectorEnv {
+            backend: Backend::KupoNode,
+            network: Some(cardano_sdk::Network::new(42)),
+            blockfrost_project_id: None,
+            utxorpc_uri: None,
+            kupo_uri: Some("http://127.0.0.1:1443".to_string()),
+            node_socket: Some("/tmp/node.socket".to_string()),
+        };
+
+        let connector = Connector::try_from(env).expect("Kupo + node config should build");
+        match connector {
+            Connector::KupoNode(config) => {
+                assert_eq!(config.network, cardano_sdk::Network::new(42));
+                assert_eq!(config.socket, "/tmp/node.socket");
+                assert_eq!(config.kupo_uri, "http://127.0.0.1:1443");
+            }
+            other => panic!("expected Kupo + node config, got {other:?}"),
         }
     }
 }

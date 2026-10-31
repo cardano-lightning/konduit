@@ -1,5 +1,4 @@
 mod adaptor_info;
-mod cbor;
 mod channel_parameters;
 mod l1_channel;
 mod pay_body;
@@ -14,6 +13,8 @@ pub use adaptor_info::*;
 pub use channel_parameters::ChannelParameters;
 pub use l1_channel::L1Channel;
 pub use pay_body::PayBody;
+mod payme;
+pub use payme::{Payme, PaymeRequest};
 pub use possible_step::PossibleStep;
 pub use quote::Quote;
 pub use quote_body::QuoteBody;

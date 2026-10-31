@@ -25,7 +25,7 @@ impl Service {
     pub async fn run(self) -> std::io::Result<()> {
         // FIXME :: Handle error
         let data = web::Data::new(self.data);
-        log::info!("Starting server on http://{}...", self.bind_address);
+        tracing::info!("Starting server on http://{}...", self.bind_address);
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
@@ -38,6 +38,17 @@ impl Service {
                 .app_data(data.clone())
                 .wrap(middleware::from_fn(mediation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
+                .route(
+                    cln_server::wire::payme::PATH,
+                    web::post().to(handlers::payme),
+                )
+                .service(
+                    web::scope("/ch/x/cln")
+                        .wrap(middleware::from_fn(auth::cln_auth))
+                        .route("/quote", web::post().to(handlers::cln_quote))
+                        .route("/commit", web::post().to(handlers::cln_commit))
+                        .route("/sync", web::post().to(handlers::cln_sync)),
+                )
                 .service(
                     // FIXME : Implement auth
                     web::scope("/ch")

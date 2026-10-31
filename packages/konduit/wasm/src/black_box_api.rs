@@ -1,7 +1,7 @@
 use crate::{
     Adaptor, Connector, core, l1, l2,
     wasm::{
-        self, AdaptorInfo, ChannelOutput, Hash32, Invoice, Lock, Lockeds, NetworkId, Quote,
+        self, AdaptorInfo, ChannelOutput, Hash32, Lock, Lockeds, NetworkId, Payme, Quote,
         ShelleyAddress, SigningKey, Tag, Wallet,
     },
 };
@@ -187,10 +187,10 @@ impl Konduit {
         Ok(())
     }
 
-    /// Get a quote for a given Bolt11 invoice from the adapator.
+    /// Get a quote for a CLN payme returned by the merchant.
     #[wasm_bindgen(js_name = "getQuoteFor")]
-    pub async fn get_quote_for(&self, invoice: &Invoice) -> wasm::Result<Quote> {
-        Ok(self.l2_client()?.quote(invoice).await?.into())
+    pub async fn get_quote_for(&self, payme: &Payme) -> wasm::Result<Quote> {
+        Ok(self.l2_client()?.quote(payme).await?.into())
     }
 }
 
@@ -284,19 +284,19 @@ impl Konduit {
         }
     }
 
-    /// Pay an invoice using a previously established quote.
+    /// Pay a CLN payme using a previously established quote.
     #[wasm_bindgen(js_name = "pay")]
     pub async fn pay(
         &self,
-        invoice: &Invoice,
+        payme: &Payme,
         quote: &Quote,
         lockeds: &mut Lockeds,
     ) -> wasm::Result<SyncStatus> {
         if let Some(tag) = self.adaptor.as_ref()?.tag() {
             log::debug!("pay: for tag={}, quote={:?}", tag, quote);
             let client = self.l2_client()?;
-            lockeds.add(core::Lock(invoice.payment_hash));
-            let squash_status = client.pay(invoice, quote).await?;
+            lockeds.add(payme.lock);
+            let squash_status = client.pay(payme, quote).await?;
             self.squash(client, tag, squash_status, lockeds).await
         } else {
             Err(anyhow!("pay: no tag set; is the channel open?").into())

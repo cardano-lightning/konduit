@@ -1,10 +1,9 @@
-use bln_sdk::types::Invoice;
 use cardano_connector_direct::Blockfrost;
 use cardano_sdk::{Address, VerificationKey, address::kind::Shelley};
 use clap::Parser;
 use http_client::{codec, transport};
 use konduit_data::{Duration, Lock, SquashBody};
-use konduit_tmp::{Keytag, TxHelp};
+use konduit_tmp::{Keytag, Payme, TxHelp};
 use konduit_tx::consumer::{Intent, OpenIntent};
 use serde_json::json;
 use std::{
@@ -126,10 +125,16 @@ pub struct L2Args {
 pub enum L2Cmd {
     /// Show info about the server
     Info,
-    /// Get a quote for a lightning invoice
-    Quote { invoice: String },
-    /// Full workflow: Get quote -> Pay -> Squash
-    Pay { invoice: String },
+    /// Get a quote for a CLN payme JSON object returned by the merchant
+    Quote {
+        #[arg(long)]
+        payme: String,
+    },
+    /// Full workflow: Get quote -> Pay -> Squash using a CLN payme
+    Pay {
+        #[arg(long)]
+        payme: String,
+    },
     /// Manually squash using the latest state
     Squash,
 }
@@ -281,15 +286,15 @@ impl Cli {
                 println!("{}", serde_json::to_string_pretty(adaptor.info())?);
             }
 
-            L2Cmd::Quote { invoice } => {
-                let invoice = invoice.parse::<Invoice>()?;
-                let quote = l2.quote(&invoice).await?;
+            L2Cmd::Quote { payme } => {
+                let payme: Payme = serde_json::from_str(payme)?;
+                let quote = l2.quote(&payme).await?;
                 println!("{}", serde_json::to_string_pretty(&quote)?);
             }
 
-            L2Cmd::Pay { invoice } => {
-                let invoice = invoice.parse::<Invoice>()?;
-                let quote = l2.quote(&invoice).await?;
+            L2Cmd::Pay { payme } => {
+                let payme: Payme = serde_json::from_str(payme)?;
+                let quote = l2.quote(&payme).await?;
 
                 println!("quote = {:?}", quote);
 
@@ -297,7 +302,7 @@ impl Cli {
                     return Ok(());
                 }
 
-                let res = l2.pay(&invoice, &quote).await?;
+                let res = l2.pay(&payme, &quote).await?;
 
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
 

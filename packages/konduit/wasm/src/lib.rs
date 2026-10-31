@@ -32,7 +32,6 @@ mod prelude {
     }
 
     pub mod core {
-        pub use bln_sdk::types::Invoice;
         pub use cardano_connector_client::types::*;
         pub use cardano_sdk::*;
         pub use konduit_data::*;

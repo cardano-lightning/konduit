@@ -1,13 +1,39 @@
 use clap::Parser;
-use konduit_server::{admin, args, index, server};
+use konduit_server::{admin, args, cln, index, server};
 use konduit_tmp::AdaptorInfo;
 use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::interval};
+use tracing::Instrument;
+use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
+
+/// Narration for request handlers and periodic sync (see
+/// `server::data::Data`, `admin::service::Service`) on top of
+/// `tracing`. `tracing_subscriber::fmt`'s default `tracing-log` feature
+/// already bridges any remaining `log::` records (e.g. actix-web's
+/// request-access `Logger` middleware) into this same pipeline, so
+/// nothing that used to show under `env_logger` goes dark.
+fn init_tracing() {
+    // `tracing_subscriber` doesn't auto-detect a non-tty writer, so ANSI
+    // color codes would otherwise land raw in process-compose's captured
+    // output (its log pane, `process logs`, and the `-L` log file) —
+    // readable in a real terminal, noise everywhere else.
+    let ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            EnvFilter::new("konduit_server=info,cln_server=info,actix_web=info")
+        }))
+        .with_span_events(FmtSpan::NEW)
+        .without_time()
+        .with_target(false)
+        .with_ansi(ansi)
+        .compact()
+        .init();
+}
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    init_tracing();
 
     dotenvy::dotenv().ok();
     if std::fs::exists(".env.adaptor")? {
@@ -33,13 +59,17 @@ async fn main() -> anyhow::Result<()> {
             let mut ticker = interval(fx_every);
             loop {
                 ticker.tick().await;
-                match fx_client.get().await {
-                    Ok(new_state) => {
-                        let mut w = fx_state_clone.write().await;
-                        *w = new_state;
+                async {
+                    match fx_client.get().await {
+                        Ok(new_state) => {
+                            let mut w = fx_state_clone.write().await;
+                            *w = new_state;
+                        }
+                        Err(e) => tracing::error!("background FX update failed: {e}"),
                     }
-                    Err(e) => eprintln!("Background FX update failed: {}", e),
                 }
+                .instrument(tracing::debug_span!("fx_sync"))
+                .await;
             }
         });
     }
@@ -50,10 +80,24 @@ async fn main() -> anyhow::Result<()> {
     // DB
     let db = Arc::new(args.db.build()?);
 
-    // BLN
-    let bln = bln_client::cli::Config::from_args(args.bln)
-        .map_err(|s| anyhow::anyhow!(s))?
-        .build()?;
+    // CLN backend
+    let cln = Arc::new(cln::build(args.cln, args.common.fee)?);
+    let cln_sync = Arc::clone(&cln);
+    actix_web::rt::spawn(async move {
+        let mut ticker = interval(std::time::Duration::from_secs(5));
+        loop {
+            ticker.tick().await;
+            async {
+                for (peer, result) in cln_sync.sync_outbound().await {
+                    if let Err(error) = result {
+                        tracing::warn!(peer = ?peer, %error, "CLN sync failed");
+                    }
+                }
+            }
+            .instrument(tracing::debug_span!("cln_sync"))
+            .await;
+        }
+    });
 
     let info = Arc::new(AdaptorInfo::from(args.common.clone()));
 
@@ -70,10 +114,15 @@ async fn main() -> anyhow::Result<()> {
         let mut ticker = interval(index_every);
         loop {
             ticker.tick().await;
-            match sync_index.sync().await {
-                Ok(()) => log::info!("Index sync ok"),
-                Err(e) => log::error!("Index sync failed: {e:#}"),
+            async {
+                match sync_index.sync().await {
+                    // debug: this fires every tick regardless of activity.
+                    Ok(()) => tracing::debug!("index sync ok"),
+                    Err(e) => tracing::error!("index sync failed: {e:#}"),
+                }
             }
+            .instrument(tracing::debug_span!("index_sync"))
+            .await;
         }
     });
 
@@ -81,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
     let admin_every = args.admin.admin_every;
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(
-        admin::Service::new(admin_config, bln.clone(), cardano.clone(), db.clone()).await?,
+        admin::Service::new(admin_config, cln.clone(), cardano.clone(), db.clone()).await?,
     );
     let admin_for_sync = Arc::clone(&admin);
 
@@ -91,14 +140,15 @@ async fn main() -> anyhow::Result<()> {
         loop {
             ticker.tick().await;
             match admin.sync().await {
-                Ok(_) => log::info!("Admin sync ok"),
+                // debug: this fires every tick regardless of activity.
+                Ok(_) => tracing::debug!("admin sync ok"),
                 Err(e) => {
                     if let Some(low_gain) = e.downcast_ref::<InsufficientTotalGain>() {
                         if low_gain.gain > 0 {
-                            log::info!("Admin sync skipped: {}", low_gain);
+                            tracing::info!("admin sync skipped: {low_gain}");
                         }
                     } else {
-                        log::error!("Admin sync failed: {e:#}");
+                        tracing::error!("admin sync failed: {e:#}");
                     }
                 }
             }
@@ -106,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let server_data = server::Data::new(bln, db, fx_state, info, admin);
+    let server_data = server::Data::new(cln, db, fx_state, info, admin);
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;

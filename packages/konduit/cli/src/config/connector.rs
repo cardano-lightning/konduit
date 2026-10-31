@@ -8,6 +8,7 @@ pub enum Backend {
     Blockfrost,
     Utxorpc,
     Node,
+    KupoNode,
 }
 
 impl fmt::Display for Backend {
@@ -16,6 +17,7 @@ impl fmt::Display for Backend {
             Self::Blockfrost => "blockfrost",
             Self::Utxorpc => "utxorpc",
             Self::Node => "node",
+            Self::KupoNode => "kupo-node",
         })
     }
 }
@@ -25,6 +27,7 @@ pub enum Connector {
     Blockfrost(Blockfrost),
     UtxoRpc(UtxoRpc),
     Node(Node),
+    KupoNode(KupoNode),
 }
 
 impl Connector {
@@ -37,6 +40,7 @@ impl Connector {
             Connector::Blockfrost(blockfrost) => blockfrost.network.into(),
             Connector::UtxoRpc(utxorpc) => utxorpc.network.into(),
             Connector::Node(node) => node.network,
+            Connector::KupoNode(node) => node.network,
         }
     }
 }
@@ -48,6 +52,9 @@ impl fmt::Display for Connector {
             Self::Blockfrost(inner) => write!(f, "{}", inner),
             Self::UtxoRpc(inner) => write!(f, "{}", inner),
             Self::Node(inner) => write!(f, "{}", inner),
+            Self::KupoNode(inner) => {
+                write!(f, "Kupo + node || {} || {}", inner.network, inner.kupo_uri)
+            }
         }
     }
 }
@@ -111,6 +118,13 @@ impl fmt::Display for UtxoRpc {
 pub struct Node {
     pub network: Network,
     pub socket: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KupoNode {
+    pub network: Network,
+    pub socket: String,
+    pub kupo_uri: String,
 }
 
 impl fmt::Display for Node {

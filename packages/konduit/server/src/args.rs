@@ -31,9 +31,9 @@ pub struct Args {
     #[command(flatten)]
     pub db: crate::db::Args,
 
-    /// ## BLN
+    /// ## Cardano Lightning Network
     #[command(flatten)]
-    pub bln: bln_client::cli::Args,
+    pub cln: crate::cln::Args,
 
     /// ## FX
     #[command(flatten)]
