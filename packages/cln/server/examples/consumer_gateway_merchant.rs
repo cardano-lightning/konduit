@@ -128,6 +128,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     write_example_configs(&merchant, &gateway, &consumer)?;
+    write_wallet_envs()?;
     Ok(())
 }
 
@@ -149,6 +150,50 @@ fn write_example_configs(
         let path = dir.join(format!("{name}.toml"));
         std::fs::write(&path, toml_str)?;
         println!("wrote {}", path.display());
+    }
+
+    Ok(())
+}
+
+/// Writes one `.env.<name>` file per party (konduit-cli's own dotenv
+/// convention — see `DefaultPath`), carrying the same signing key as its CLN
+/// TOML config above. `konduit-cli` reads `KONDUIT_WALLET`, and the
+/// konduit-server processes read `KONDUIT_SIGNING_KEY` — both set to the
+/// identical hex key here so that whoever opens an on-chain Konduit channel
+/// to a party (consumer -> gateway, gateway -> merchant) signs with exactly
+/// the key that party's CLN context uses to recognize and sign commits for
+/// that channel's keytag.
+///
+/// Never overwrites a file that's already there: these are meant to be
+/// stable across reruns (and editable by hand), unlike the TOML configs
+/// above which are regenerated every time.
+fn write_wallet_envs() -> anyhow::Result<()> {
+    let dir = std::env::var_os("CLN_EXAMPLE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("pay_example"));
+    std::fs::create_dir_all(&dir)?;
+
+    for (name, key) in [
+        ("consumer", CONSUMER_KEY),
+        ("gateway", GATEWAY_KEY),
+        ("merchant", MERCHANT_KEY),
+    ] {
+        let path = dir.join(format!(".env.{name}"));
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        match opts.open(&path) {
+            Ok(mut file) => {
+                let hex_key = hex::encode(key);
+                use std::io::Write;
+                writeln!(file, "KONDUIT_WALLET={hex_key}")?;
+                writeln!(file, "KONDUIT_SIGNING_KEY={hex_key}")?;
+                println!("wrote {}", path.display());
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                println!("kept existing {}", path.display());
+            }
+            Err(err) => return Err(err.into()),
+        }
     }
 
     Ok(())

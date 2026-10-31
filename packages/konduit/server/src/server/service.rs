@@ -28,7 +28,7 @@ impl Service {
         tracing::info!("Starting server on http://{}...", self.bind_address);
         HttpServer::new(move || {
             App::new()
-                .wrap(Logger::default())
+                .wrap(Logger::default().exclude("/info"))
                 .wrap(
                     Cors::default()
                         .allow_any_origin()

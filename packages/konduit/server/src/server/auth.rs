@@ -32,6 +32,10 @@ pub async fn no_auth<B: MessageBody + 'static>(
     next.call(req).await
 }
 
+/// Authenticates the CLN wire-protocol keytag header. Whether that keytag
+/// names a channel actually backed on-chain is NOT checked here — that's
+/// `server::data::Data::assert_cln_peer_backed`'s job, called from each
+/// `cln_*` handler before it reaches CLN's own peer routing.
 pub async fn cln_auth<B: MessageBody + 'static>(
     req: ServiceRequest,
     next: Next<B>,

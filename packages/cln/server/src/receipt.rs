@@ -138,6 +138,11 @@ impl Receipt {
         &self.squash
     }
 
+    /// True while any locked or unlocked cheque awaits reconciliation.
+    pub fn has_pending_cheques(&self) -> bool {
+        !self.cheques.is_empty()
+    }
+
     fn max_index(&self) -> u64 {
         let mc_index = self.cheques.last().map(|mc| mc.index()).unwrap_or(0);
         cmp::max(self.squash.index(), mc_index)

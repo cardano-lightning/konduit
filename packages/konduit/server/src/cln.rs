@@ -9,18 +9,18 @@ pub struct ClnArgs {
     pub config_path: Option<PathBuf>,
 }
 pub use ClnArgs as Args;
-pub type Node = cln_server::Ctx;
+pub type Node = cln_server::standalone::Ctx;
 
 #[derive(Debug, Deserialize)]
 struct Config {
     #[serde(default = "empty_inbounds")]
-    inbound: cln_server::inbounds::Config,
+    inbound: cln_server::standalone::inbounds::Config,
     #[serde(default)]
     outbound: cln_server::Config,
 }
 
-fn empty_inbounds() -> cln_server::inbounds::Config {
-    cln_server::inbounds::Config { inbounds: vec![] }
+fn empty_inbounds() -> cln_server::standalone::inbounds::Config {
+    cln_server::standalone::inbounds::Config { inbounds: vec![] }
 }
 
 /// Builds CLN's reusable peer context from Konduit's deployment configuration.
@@ -29,7 +29,13 @@ fn empty_inbounds() -> cln_server::inbounds::Config {
 /// is only used as the CLN routing fee default when no `config_path` is
 /// given — the only fee knob a deployment actually exposes today, reused
 /// here rather than left silently defaulted to a test placeholder.
-pub fn build(args: Args, fee: u64) -> anyhow::Result<cln_server::Ctx> {
+///
+/// Accepting inbound CLN peer commits here is only safe because
+/// `server::Data::cln_commit` (and `cln_quote`/`cln_sync`) verify the
+/// Konduit channel backing the peer's keytag is actually funded on-chain
+/// before ever reaching this context — `Ctx` itself has no way to check
+/// that.
+pub fn build(args: Args, fee: u64) -> anyhow::Result<cln_server::standalone::Ctx> {
     let config = match args.config_path {
         Some(path) => {
             let raw = std::fs::read_to_string(&path)
@@ -52,7 +58,16 @@ pub fn build(args: Args, fee: u64) -> anyhow::Result<cln_server::Ctx> {
             },
         },
     };
-    cln_server::Ctx::init(config.inbound, config.outbound).map_err(anyhow::Error::from)
+    cln_server::standalone::Ctx::init(cln_server::standalone::Config {
+        // Konduit never runs CLN's own HTTP listener or periodic sync loop
+        // (those are driven by konduit-server's own main loop instead), so
+        // these settings are always defaulted rather than read from the
+        // deployment's config file.
+        server: Default::default(),
+        inbound: config.inbound,
+        outbound: config.outbound,
+    })
+    .map_err(anyhow::Error::from)
 }
 
 #[cfg(test)]

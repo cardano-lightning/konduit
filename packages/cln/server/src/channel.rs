@@ -150,6 +150,10 @@ impl Channel {
         Ok(self.receipt().apply_sync(theirs)?)
     }
 
+    pub fn has_pending_cheques(&self) -> bool {
+        self.receipt().has_pending_cheques()
+    }
+
     fn auth_header(&self) -> Box<dyn http_client::HeaderPolicy> {
         http_client::header_policy::Custom::new(wire::auth::HEADER, &self.auth).boxed()
     }

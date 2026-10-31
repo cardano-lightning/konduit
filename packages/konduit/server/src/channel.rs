@@ -203,6 +203,16 @@ impl Channel {
         }
         Ok(())
     }
+
+    /// Confirms this channel is funded on-chain. Any handoff to routing on
+    /// a peer's behalf (e.g. CLN peer commits) must call this first: unlike
+    /// `uncommitted`, it does not also require a receipt, so it can gate
+    /// first contact with a peer before any receipt exists.
+    pub fn assert_backed(&self) -> Result<(), Error> {
+        self.assert_active()?;
+        self.backing.as_ref().ok_or(Error::NoRetainer)?;
+        Ok(())
+    }
     // --- Queries ------------------------------------------------------------
 
     /// How much funds are currently uncommitted (available to be committed).
@@ -304,6 +314,7 @@ impl Channel {
     /// Verifies the signature and checks uncommitted funds before accepting.
     pub fn apply_locked(&mut self, locked: Locked) -> Result<(), Error> {
         let locked = locked.try_verify(&self.key, &self.tag)?;
+        tracing::info!(" {} {} ", locked.amount(), self.uncommitted().unwrap_or(0));
         if locked.amount() > self.uncommitted()? {
             return Err(Error::Funds);
         }
@@ -424,5 +435,36 @@ impl TryFrom<&konduit_tx::Channel> for Backing {
             subbed,
             useds,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use konduit_data::SigningKey;
+
+    fn test_channel() -> Channel {
+        let key = SigningKey::from([1; 32]).verifying_key();
+        let tag = Tag::from(b"channel-backed-test".to_vec());
+        Channel::new(key, tag)
+    }
+
+    #[test]
+    fn assert_backed_fails_without_an_on_chain_retainer() {
+        let channel = test_channel();
+        assert_eq!(channel.assert_backed(), Err(Error::NoRetainer));
+    }
+
+    #[test]
+    fn assert_backed_succeeds_once_retained() {
+        let mut channel = test_channel();
+        channel
+            .apply_retainer(vec![Backing {
+                amount: 100_000_000,
+                subbed: 0,
+                useds: vec![],
+            }])
+            .expect("retainer applies");
+        assert_eq!(channel.assert_backed(), Ok(()));
     }
 }

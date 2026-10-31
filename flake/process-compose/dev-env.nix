@@ -139,7 +139,6 @@
   mk-konduit-server = {
     role,
     port,
-    signingKey,
   }:
     writeShellApplication {
       name = "konduit-server-${role}";
@@ -153,7 +152,15 @@
         export KONDUIT_NETWORK=preview
         export KONDUIT_KUPO_URI="http://127.0.0.1:$KUPO_UTXO_PORT"
 
-        export KONDUIT_SIGNING_KEY="${signingKey}"
+        # KONDUIT_SIGNING_KEY comes from the .env.${role} that cln-demo-configs
+        # wrote alongside this role's CLN TOML, so this server's L2/CLN
+        # identity always matches whatever on-chain Konduit channel gets
+        # opened against it with that same key.
+        set -a
+        # shellcheck disable=SC1091
+        source "$CLN_DEMO_CONFIG_DIR/.env.${role}"
+        set +a
+
         export KONDUIT_SERVER_HOST="127.0.0.1"
         export KONDUIT_SERVER_PORT="${toString port}"
         export KONDUIT_CLN_CONFIG_PATH="$CLN_DEMO_CONFIG_DIR/${role}.toml"
@@ -172,13 +179,11 @@
   konduit-server-gateway = mk-konduit-server {
     role = "gateway";
     port = 5663;
-    signingKey = lib.concatStrings (lib.replicate 32 "02");
   };
 
   konduit-server-merchant = mk-konduit-server {
     role = "merchant";
     port = 5664;
-    signingKey = lib.concatStrings (lib.replicate 32 "03");
   };
 
   konduit-server-readiness-probe = writeShellApplication {
@@ -189,20 +194,6 @@
       : "''${KONDUIT_SERVER_PORT:?}"
       curl --fail --silent --show-error \
         "http://127.0.0.1:$KONDUIT_SERVER_PORT/info" > /dev/null
-    '';
-  };
-
-  cln-demo-consumer = writeShellApplication {
-    name = "cln-demo-consumer";
-    runtimeInputs = [];
-    text = ''
-      set -euo pipefail
-      export CARGO_TARGET_DIR="$RUN_DIR/cargo-target-cln-demo"
-      cargo run --release -p cln-server --bin cln-client -- \
-        --config "$CLN_DEMO_CONFIG_DIR/consumer.toml" \
-        pay \
-        --merchant "http://127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT" \
-        --amount 1000
     '';
   };
 
@@ -469,16 +460,6 @@ in
             success_threshold = 1;
             failure_threshold = 60;
           };
-        };
-
-        cln-demo-consumer = {
-          depends_on = {
-            "konduit-server-gateway".condition = "process_healthy";
-            "konduit-server-merchant".condition = "process_healthy";
-          };
-          command = "${cln-demo-consumer}/bin/cln-demo-consumer";
-          log_location = "./.run/cln-demo-consumer.log";
-          namespace = "server";
         };
       };
   }

@@ -4,7 +4,7 @@ use crate::{
     db,
     time::{self, now},
 };
-use konduit_data::{Locked, Secret, Squash};
+use konduit_data::{Duration, Locked, Secret, Squash};
 use konduit_tmp::{
     AdaptorInfo, Keytag, Payme, PaymeRequest, Quote, QuoteBody, Receipt, SquashProposal,
     SquashStatus, TxHelp,
@@ -106,6 +106,17 @@ impl Data {
 
     pub fn channel(&self, keytag: &Keytag) -> Result<Channel, Error> {
         self.db.get(keytag)?.ok_or(Error::NoChannel)
+    }
+
+    /// Confirms the Konduit channel backing a CLN peer's keytag is funded
+    /// on-chain before handing a wire-level CLN request off to `self.cln`'s
+    /// peer routing. CLN's own inbound bookkeeping has no way to check
+    /// that itself — it just trusts whatever commits a keytag it already
+    /// recognizes — so every `cln_*` handler must call this first.
+    fn assert_cln_peer_backed(&self, keytag: &cln_server::wire::auth::Keytag) -> Result<(), Error> {
+        let keytag = Keytag::try_from(keytag.as_bytes().to_vec())
+            .map_err(|error| Error::Cln(format!("invalid CLN keytag: {error}")))?;
+        Ok(self.channel(&keytag)?.assert_backed()?)
     }
 
     pub fn receipt(&self, keytag: &Keytag) -> Result<Option<Receipt>, Error> {
@@ -223,10 +234,23 @@ impl Data {
         keytag: cln_server::wire::auth::Keytag,
         request: cln_server::wire::quote::Request,
     ) -> Result<cln_server::wire::quote::Response, Error> {
-        self.cln
-            .quote(&keytag, request)
+        let channel = self.channel(&keytag.as_bytes().to_vec().try_into().unwrap())?;
+        let response = self
+            .cln
+            .quote_outbound(cln_server::wire::quote::Request {
+                payee: request.payee,
+                amount: request.amount,
+            })
             .await
-            .map_err(|error| Error::Cln(error.to_string()))
+            .map_err(|error| Error::Cln(error.to_string()))?;
+        let fee = response.fee + FEE_PLACEHOLDER + 1;
+        // Actual commitment
+        let index = channel.can_commit( request.amount + fee )?;
+        let timeout = response
+            .timeout
+            .as_millis()
+            .saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
+        Ok(cln_server::wire::quote::Response{ index, fee, timeout : Duration::from_millis(timeout) })
     }
 
     #[tracing::instrument(
@@ -239,6 +263,7 @@ impl Data {
         keytag: cln_server::wire::auth::Keytag,
         request: cln_server::wire::commit::Request,
     ) -> Result<cln_server::wire::commit::Response, Error> {
+        self.(&keytag)?;
         let response = self
             .cln
             .commit(&keytag, request)
@@ -259,6 +284,7 @@ impl Data {
         keytag: cln_server::wire::auth::Keytag,
         request: cln_server::wire::sync::Request,
     ) -> Result<cln_server::wire::sync::Response, Error> {
+        self.assert_cln_peer_backed(&keytag)?;
         self.cln
             .sync(&keytag, request)
             .map_err(|error| Error::Cln(error.to_string()))

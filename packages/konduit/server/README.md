@@ -6,10 +6,17 @@ payme object to `/ch/quote` and `/ch/pay`. It also serves the CLN peer protocol
 on `/ch/x/cln/{quote,commit,sync}`. The optional `KONDUIT_CLN_CONFIG_PATH`
 points to a Konduit CLN TOML config containing `[inbound]` peers and the
 `[outbound]` core-node config (`params`, `signer`, `channels`, and `paymes`).
-The Konduit server composes those settings with CLN's core `Ctx`; standalone
-server settings such as listen address and sync interval are not used here.
-Without a config file, the server runs as a local terminal peer with no inbound
-or outbound routes.
+Without a config file, the server runs as a local terminal peer with no
+inbound or outbound routes.
+
+CLN's own peer context (`standalone::Ctx`) has no way to check that an
+inbound keytag is actually backed on-chain — it only knows whether it
+recognizes the keytag at all. So before any `/ch/x/cln/{quote,commit,sync}`
+request reaches it, `server::data::Data::assert_cln_peer_backed` looks the
+keytag up as a Konduit channel and requires it to have a funded on-chain
+retainer, the same way `/ch/pay` requires one before accepting a cheque.
+A keytag with no backed Konduit channel is rejected before it ever reaches
+CLN's routing.
 
 ## TODOs
 

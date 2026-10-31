@@ -5,7 +5,7 @@ use crate::{
     commits::{self, Commit},
     paymes,
     time::now,
-    wire::{self, auth::Keytag, commit::Outbound as Route},
+    wire::{self, auth::Keytag, commit::Outbound},
 };
 use konduit_data::{ChequeBody, Duration, SquashBody, VerifyingKey};
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ impl Default for Params {
     }
 }
 
-pub struct Outbound {
+pub struct Ctx {
     params: Params,
     paymes: Paymes,
     channels: Channels,
@@ -58,7 +58,7 @@ pub enum Error {
     BadReceipt,
 }
 
-impl Outbound {
+impl Ctx {
     pub fn init(config: crate::Config) -> Result<Self, Error> {
         let signer = Signer::new(config.signer);
         let me = signer.verifying_key();
@@ -158,7 +158,7 @@ impl Outbound {
         let wire::commit::Request { inbound, outbound } = req;
 
         // 1. Verify inbound Locked.
-        // OOB:
+        // OOB/ responsibility of caller:
         // - L1: cheque is backed.
         // - L2: cheque is valid wrt to current receipt.
         //
@@ -171,7 +171,7 @@ impl Outbound {
             return Err(Error::InsufficientTime);
         }
 
-        let Some(Route { key, amount }) = outbound else {
+        let Some(Outbound { key, amount }) = outbound else {
             // 2... Self is terminal
             let secret = self.paymes.reveal(inbound.lock(), inbound.amount())?;
             return Ok(wire::commit::Response {
@@ -235,6 +235,9 @@ impl Outbound {
     }
 
     async fn sync_channel(&self, channel: &Arc<Channel>) -> Result<(), Error> {
+        if !channel.has_pending_cheques() {
+            return Ok(());
+        }
         let req = wire::sync::Request {
             receipt: channel.wire_receipt(),
         };
