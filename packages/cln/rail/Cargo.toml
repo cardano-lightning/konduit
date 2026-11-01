@@ -1,5 +1,5 @@
 [package]
-name = "cln-server"
+name = "cln-rail"
 version.workspace = true
 edition.workspace = true
 description.workspace = true
@@ -28,17 +28,14 @@ tracing.workspace = true
 # Only `rt`, for `tokio::spawn`-ing the background squash dispatch: the
 # reqwest transport above already requires an ambient tokio runtime at
 # call time regardless, so this isn't a new runtime dependency, just the
-# first spot cln-server's own code needs to name the crate directly. The
-# fuller feature set (macros/rt-multi-thread/time) the standalone
-# binaries and tests need is layered on below, under "standalone".
+# first spot cln-rail's own code needs to name the crate directly. The
+# fuller feature set (macros/rt-multi-thread/time) the `cln-client`
+# binary and the tests need is layered on below, under "client".
 tokio = { workspace = true, features = ["rt"] }
 
 anyhow = { workspace = true, optional = true }
-actix-web = { workspace = true, optional = true }
 clap = { workspace = true, optional = true, features = ["derive"] }
 toml = { workspace = true, optional = true }
-env_logger = { workspace = true, optional = true }
-log = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["json"] }
 serde_json = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = [
@@ -49,28 +46,22 @@ tracing-subscriber = { workspace = true, optional = true, features = [
 tokio.workspace = true
 
 [features]
-default = ["standalone", "client", "server"]
+default = ["client"]
 
-# Shared by both binaries: CLI parsing, config loading, logging, async runtime.
-standalone = [
+# The `cln-client` binary: CLI parsing, config loading, tracing, async
+# runtime, and the reqwest transport it pays over. The library itself needs
+# none of it.
+client = [
   "dep:clap",
   "dep:toml",
   "dep:anyhow",
-  "dep:env_logger",
-  "dep:log",
+  "dep:reqwest",
+  "dep:serde_json",
+  "dep:tracing-subscriber",
   "tokio/macros",
   "tokio/rt-multi-thread",
   "tokio/time",
-  "dep:tracing-subscriber",
 ]
-
-server = ["standalone", "dep:actix-web", "dep:serde_json"]
-client = ["standalone", "dep:reqwest", "dep:serde_json"]
-
-[[bin]]
-name = "cln-server"
-path = "src/bin/server.rs"
-required-features = ["server"]
 
 [[bin]]
 name = "cln-client"
@@ -79,4 +70,4 @@ required-features = ["client"]
 
 [[example]]
 name = "consumer_gateway_merchant"
-required-features = ["server", "client"]
+required-features = ["client"]

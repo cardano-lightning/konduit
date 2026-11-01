@@ -1,18 +1,17 @@
-//! Generates three mutually-consistent config files for a local,
-//! three-process demo: merchant <- gateway <- consumer. Run:
+//! Generates the mutually-consistent config files for the local demo:
+//! merchant <- gateway <- consumer. The two server roles are
+//! `konduit-server` processes, which read their rail config from
+//! `KONDUIT_CLN_CONFIG_PATH` and their on-chain identity from
+//! `.env.<role>`; the consumer is the `cln-client` binary. The nix
+//! dev-env runs this as `generate-cln-demo-configs`:
 //!
-//!   cargo run -p cln-server --example consumer_gateway_merchant --features "server client"
+//!   cargo run -p cln-rail --example consumer_gateway_merchant --features client
 //!
-//! then save each printed block to its own file and run:
-//!   cln-server run --config pay_example/merchant.toml
-//!   cln-server run --config pay_example/gateway.toml
-//!   cln-consumer pay --config pay_example/consumer.toml --merchant http://127.0.0.1:7653 --amount 1000
+//! then pays with:
+//!   cln-client --config pay_example/consumer.toml pay \
+//!     --merchant http://127.0.0.1:7653 --amount 1000
 
-use cln_server::{
-    channel,
-    config::Config,
-    standalone::{client, config::ServerConfig, inbound, inbounds},
-};
+use cln_rail::{channel, client, config::Config};
 use konduit_data::{SigningKey, Tag};
 
 // Fixed, obviously-fake signing keys — distinct per party so the demo
@@ -23,9 +22,6 @@ const MERCHANT_KEY: [u8; 32] = [3; 32];
 
 const CONSUMER_GATEWAY_TAG: &[u8] = b"consumer-gateway";
 const GATEWAY_MERCHANT_TAG: &[u8] = b"gateway-merchant";
-
-// Not yet plumbed in.
-const BACKING: (u64, u64) = (100_000_000, 0);
 
 fn main() -> anyhow::Result<()> {
     let gateway_url =
@@ -38,12 +34,10 @@ fn main() -> anyhow::Result<()> {
     let fee: u64 = std::env::var("KONDUIT_FEE")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or_else(|| cln_server::ctx::Params::default().fee);
-    let consumer_signer = SigningKey::from(CONSUMER_KEY);
+        .unwrap_or_else(|| cln_rail::ctx::Params::default().fee);
     let gateway_signer = SigningKey::from(GATEWAY_KEY);
     let merchant_signer = SigningKey::from(MERCHANT_KEY);
 
-    let consumer_vkey = consumer_signer.verifying_key();
     let gateway_vkey = gateway_signer.verifying_key();
     let merchant_vkey = merchant_signer.verifying_key();
 
@@ -69,36 +63,36 @@ fn main() -> anyhow::Result<()> {
     // --- merchant config: no outbound channels (terminal node), one
     //     inbound entry admitting the gateway ---
     let merchant = Config {
-            signer: cln_server::signer::Config { key: MERCHANT_KEY },
-            channels: cln_server::channels::Config { channels: vec![] },
-            paymes: cln_server::paymes::Config {
-                default_timeout: konduit_data::Duration::from_secs(300),
-            },
-            params: cln_server::ctx::Params {
-                fee,
-                ..Default::default()
-            },
+        signer: cln_rail::signer::Config { key: MERCHANT_KEY },
+        channels: cln_rail::channels::Config { channels: vec![] },
+        paymes: cln_rail::paymes::Config {
+            default_timeout: konduit_data::Duration::from_secs(300),
+        },
+        params: cln_rail::ctx::Params {
+            fee,
+            ..Default::default()
+        },
     };
 
     // --- gateway config: one outbound channel (to merchant), one
     //     inbound entry admitting the consumer ---
     let gateway = Config {
-            signer: cln_server::signer::Config { key: GATEWAY_KEY },
-            channels: cln_server::channels::Config {
-                channels: vec![gateway_merchant],
-            },
-            paymes: cln_server::paymes::Config {
-                default_timeout: konduit_data::Duration::from_secs(3600),
-            },
-            params: cln_server::ctx::Params {
-                fee,
-                ..Default::default()
-            },
+        signer: cln_rail::signer::Config { key: GATEWAY_KEY },
+        channels: cln_rail::channels::Config {
+            channels: vec![gateway_merchant],
+        },
+        paymes: cln_rail::paymes::Config {
+            default_timeout: konduit_data::Duration::from_secs(3600),
+        },
+        params: cln_rail::ctx::Params {
+            fee,
+            ..Default::default()
+        },
     };
 
     // --- consumer config: one outbound channel (to gateway) ---
     let consumer = client::Config {
-        signer: cln_server::signer::Config { key: CONSUMER_KEY },
+        signer: cln_rail::signer::Config { key: CONSUMER_KEY },
         gateway: consumer_gateway,
     };
 

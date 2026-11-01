@@ -118,7 +118,11 @@ impl Ctx {
     }
 
     /// Look up lock in own paymes
-    pub fn paymes_reveal(&self, lock: &konduit_data::Lock, amount: u64) -> Result<konduit_data::Secret, Error> {
+    pub fn paymes_reveal(
+        &self,
+        lock: &konduit_data::Lock,
+        amount: u64,
+    ) -> Result<konduit_data::Secret, Error> {
         Ok(self.paymes.reveal(lock, amount)?)
     }
 
@@ -145,7 +149,7 @@ impl Ctx {
         let payee = req.payee;
         if payee == self.signer.verifying_key() {
             Ok(wire::quote::Response {
-                index: 0, // FIXME :: Placeholder, 0 is an Impossible index. 
+                index: 0, // FIXME :: Placeholder, 0 is an Impossible index.
                 fee: 0,
                 timeout: Duration::from_millis(0),
             })
@@ -161,7 +165,6 @@ impl Ctx {
         timeout: Duration,
         lock: &Lock,
     ) -> Result<wire::commit::Response, Error> {
-
         // 1. Get existing commit to Lock.
         if let Some(_commit) = self.commits.get(lock) {
             return Err(Error::NoRetries);
@@ -261,7 +264,7 @@ impl Ctx {
         // payee
         // amount
         // lock
-        // timeout 
+        // timeout
         let wire::commit::Request { inbound, outbound } = req;
 
         // 1. Verify inbound Locked.

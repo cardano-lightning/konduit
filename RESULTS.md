@@ -37,7 +37,7 @@ ten consumer-originated payments.
 ### Gateway fees
 
 The gateway's CLN routing fee is a flat 1,414 lovelace per routed payment
-(`cln_server::ctx::Params::default`). Across ten payments, that is 14,140
+(`cln_rail::ctx::Params::default`). Across ten payments, that is 14,140
 lovelace of configured routing fees. The recorded consumer quotes were 102,415
 lovelace for each 100,000-lovelace merchant payment, i.e. 2,415 lovelace above
 the requested amount per quote (24,150 total quote overhead). This quote
@@ -71,7 +71,7 @@ compatible with the pinned nixpkgs:
    nix --extra-experimental-features 'nix-command flakes' develop .#extras --impure
    source .env.process_compose
    for i in $(seq 1 9); do
-     cargo run -p cln-server --bin cln-client -- \
+     cargo run -p cln-rail --bin cln-client -- \
        --config "$RUN_DIR/cln-demo-configs/consumer.toml" pay \
        --merchant http://127.0.0.1:5664 --amount 1000
    done

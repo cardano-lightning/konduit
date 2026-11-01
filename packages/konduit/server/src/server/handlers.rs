@@ -53,7 +53,7 @@ pub async fn payme(
     data: Data,
     body: web::Bytes,
 ) -> Result<Mediate<konduit_tmp::Payme>, Error> {
-    let request: cln_server::wire::payme::Request = Unmediate::unmediate(mediation.content, &body)?;
+    let request: cln_rail::wire::payme::Request = Unmediate::unmediate(mediation.content, &body)?;
     Ok(Mediate(
         mediation.accept,
         data.payme(konduit_tmp::PaymeRequest {
@@ -67,7 +67,7 @@ pub async fn cln_quote(
     keytag: auth::ClnAuthKeytag,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<cln_server::wire::quote::Response>, Error> {
+) -> Result<Mediate<cln_rail::wire::quote::Response>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
     Ok(Mediate(
         mediation.accept,
@@ -80,7 +80,7 @@ pub async fn cln_commit(
     keytag: auth::ClnAuthKeytag,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<cln_server::wire::commit::Response>, Error> {
+) -> Result<Mediate<cln_rail::wire::commit::Response>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
     Ok(Mediate(
         mediation.accept,
@@ -93,7 +93,7 @@ pub async fn cln_sync(
     keytag: auth::ClnAuthKeytag,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<cln_server::wire::sync::Response>, Error> {
+) -> Result<Mediate<cln_rail::wire::sync::Response>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
     Ok(Mediate(mediation.accept, data.cln_sync(keytag.0, request)?))
 }

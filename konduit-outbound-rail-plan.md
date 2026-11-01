@@ -16,14 +16,14 @@ constants and the two `todo!()` handlers all go; nothing is kept as an alias. Bl
 
 `packages/cln/server` → `packages/cln/rail`, crate `cln-server` → `cln-rail`, lib `cln_server` → `cln_rail`.
 Touches `Cargo.toml:36`, `Cargo.toml:136`, `packages/konduit/server/Cargo.toml`, the seven
-`konduit/server` modules that name `cln_server`, `flake/process-compose/dev-env.nix:135` and `RESULTS.md:74`.
+`konduit/server` modules that name `cln_rail`, `flake/process-compose/dev-env.nix:135` and `RESULTS.md:74`.
 
 The standalone server goes: `src/bin/server.rs` and `standalone/{ctx,inbound,inbounds,config}.rs`, with the
 `server` and `standalone` features and the `actix-web` dependency. `konduit-server` is the platform and
 already does this work against a real DB — `server/data.rs`'s `cln_quote`/`cln_commit` do the inbound
 verification (`assert_cln_peer_backed`, `can_commit`) and the fee arithmetic
 (`FEE_PLACEHOLDER`, `QUOTE_PAY_TIME_MARGIN_MS`) that `standalone::Inbounds` only stands in for. Nothing in
-the nix dev-env runs `cln-server` as a server; it runs `konduit-server` for both the gateway and the
+the nix dev-env runs `cln-rail` as a server; it runs `konduit-server` for both the gateway and the
 merchant role (`dev-env.nix:140-178`).
 
 What stays is the client: `standalone/client.rs` → `src/client.rs` behind the existing `client` feature,
@@ -84,7 +84,7 @@ Three decisions worth recording:
 
 Konduit charges; a rail does not. Today this is spread over four places that disagree:
 `konduit/server`'s `FEE_PLACEHOLDER` and `QUOTE_PAY_TIME_MARGIN_MS` (`data.rs:18-19`,
-"TODO :: MOVE TO CONFIG"), `cln_server::ctx::Params::{fee, hop_timeout}`, `cln.rs::build(args, fee)`
+"TODO :: MOVE TO CONFIG"), `cln_rail::ctx::Params::{fee, hop_timeout}`, `cln.rs::build(args, fee)`
 passing konduit's fee _into_ those params, and the example setting them from `KONDUIT_FEE`.
 
 After: one owner, one struct, `konduit_server::Margins { fee: u64, time: Relative }`. `ctx::Params` is
@@ -261,7 +261,7 @@ come from that same client.
 
 Hold a `konduit_rail::Registry` in `server::Data` beside `db`/`fx`, built from config at startup; the cln
 rail registers under `"cln"`, and `konduit` is already rejected there rather than at request time.
-`cln.rs::build` becomes rail construction plus registration. `Data`'s `cln: Arc<cln_server::Ctx>` field and
+`cln.rs::build` becomes rail construction plus registration. `Data`'s `cln: Arc<cln_rail::Ctx>` field and
 its `cln()` accessor go — the platform holds rails, not one named rail.
 
 ### `POST /pay/{rail}/pay`
@@ -306,7 +306,7 @@ negotiated like `Mediate` already is. One match, one place, swappable for `probl
 - `cln-client` keeps paying: `payme` from the merchant, `/pay/cln/pay` through the gateway, squash. Both
   ends are `konduit-server`, so its changes are the new paths, the `Payee` target, and `konduit-client`
   underneath.
-- Update `dev-env.nix:135` (`-p cln-server --example … --features "server client"` → `-p cln-rail … client`)
+- Update `dev-env.nix:135` (`-p cln-rail --example … --features "server client"` → `-p cln-rail … client`)
   and `RESULTS.md:74`.
 - `standalone::ctx`'s `local_payme_commits_through_the_standalone_client_path` dies with standalone. Replace
   with: `Outcome` mapping unit tests, one per row of the Phase B table; an idempotency test (one lock

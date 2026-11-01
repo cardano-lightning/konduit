@@ -38,10 +38,7 @@ impl Service {
                 .app_data(data.clone())
                 .wrap(middleware::from_fn(mediation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
-                .route(
-                    cln_server::wire::payme::PATH,
-                    web::post().to(handlers::payme),
-                )
+                .route(cln_rail::wire::payme::PATH, web::post().to(handlers::payme))
                 .service(
                     web::scope("/ch/x/cln")
                         .wrap(middleware::from_fn(auth::cln_auth))

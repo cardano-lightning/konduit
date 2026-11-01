@@ -136,12 +136,9 @@ impl Client {
         let Some(their_wire) = self.gateway.fetch_receipt().await? else {
             return Ok(());
         };
-        let their = Receipt::try_verify(
-            their_wire,
-            &self.signer.verifying_key(),
-            self.gateway.tag(),
-        )
-        .map_err(|_| Error::BadReceipt)?;
+        let their =
+            Receipt::try_verify(their_wire, &self.signer.verifying_key(), self.gateway.tag())
+                .map_err(|_| Error::BadReceipt)?;
         self.gateway.apply_sync(their)?;
         Ok(())
     }

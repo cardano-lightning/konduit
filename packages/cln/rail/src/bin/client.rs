@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use cln_server::standalone::{Client, client::Config};
+use cln_rail::{Client, client::Config};
 use std::path::PathBuf;
 use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
 
@@ -85,7 +85,7 @@ fn init_tracing() {
     let ansi = std::io::IsTerminal::is_terminal(&std::io::stderr());
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("cln_server=info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("cln_rail=info")),
         )
         .with_span_events(FmtSpan::NEW)
         .without_time()

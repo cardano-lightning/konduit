@@ -12,7 +12,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 const KEYTAG_HEADER: &str = "KONDUIT";
-const CLN_KEYTAG_HEADER: &str = cln_server::wire::auth::HEADER;
+const CLN_KEYTAG_HEADER: &str = cln_rail::wire::auth::HEADER;
 
 pub async fn no_auth<B: MessageBody + 'static>(
     req: ServiceRequest,
@@ -46,14 +46,14 @@ pub async fn cln_auth<B: MessageBody + 'static>(
         .ok_or_else(|| ErrorBadRequest("missing konduit header"))?
         .to_str()
         .map_err(|_| ErrorBadRequest("konduit header not ascii"))?;
-    let keytag = cln_server::wire::auth::Keytag::from_str(raw)
+    let keytag = cln_rail::wire::auth::Keytag::from_str(raw)
         .map_err(|_| ErrorBadRequest("invalid konduit header"))?;
     req.extensions_mut().insert(keytag);
     next.call(req).await
 }
 
 #[derive(Debug, Clone)]
-pub struct ClnAuthKeytag(pub cln_server::wire::auth::Keytag);
+pub struct ClnAuthKeytag(pub cln_rail::wire::auth::Keytag);
 
 impl FromRequest for ClnAuthKeytag {
     type Error = Error;
@@ -62,7 +62,7 @@ impl FromRequest for ClnAuthKeytag {
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
         ready(
             req.extensions()
-                .get::<cln_server::wire::auth::Keytag>()
+                .get::<cln_rail::wire::auth::Keytag>()
                 .cloned()
                 .map(ClnAuthKeytag)
                 .ok_or_else(|| ErrorForbidden("missing CLN keytag middleware context")),

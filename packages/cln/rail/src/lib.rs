@@ -28,5 +28,7 @@ pub mod random;
 
 pub mod time;
 
-#[cfg(feature = "standalone")]
-pub mod standalone;
+#[cfg(feature = "client")]
+pub mod client;
+#[cfg(feature = "client")]
+pub use client::Client;

@@ -132,7 +132,7 @@
       CLN_GATEWAY_URL="127.0.0.1:$KONDUIT_SERVER_GATEWAY_PORT" \
         CLN_MERCHANT_URL="127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT" \
         CLN_EXAMPLE_CONFIG_DIR="$CLN_DEMO_CONFIG_DIR" \
-        cargo run --release -p cln-server --example consumer_gateway_merchant --features "server client"
+        cargo run --release -p cln-rail --example consumer_gateway_merchant --features client
     '';
   };
 

@@ -20,9 +20,11 @@ fn init_tracing() {
     // readable in a real terminal, noise everywhere else.
     let ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("konduit_server=info,cln_server=info,actix_web=info")
-        }))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                EnvFilter::new("konduit_server=info,cln_rail=info,actix_web=info")
+            }),
+        )
         .with_span_events(FmtSpan::NEW)
         .without_time()
         .with_target(false)

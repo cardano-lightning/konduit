@@ -1080,17 +1080,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
-name = "cln-server"
+name = "cln-rail"
 version = "0.0.0"
 dependencies = [
- "actix-web",
  "anyhow",
  "clap",
- "env_logger",
  "hex",
  "http-client",
  "konduit-data",
- "log",
  "minicbor",
  "rand 0.6.5",
  "reqwest",
@@ -2773,7 +2770,7 @@ dependencies = [
  "cardano-connector-utxorpc",
  "cardano-sdk",
  "clap",
- "cln-server",
+ "cln-rail",
  "dotenvy",
  "fx-client",
  "hex",
