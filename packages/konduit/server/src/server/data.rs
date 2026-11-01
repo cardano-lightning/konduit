@@ -4,6 +4,7 @@ use crate::{
     db,
     time::{self, now},
 };
+use cln_server::{receipt, wire::commit::Request};
 use konduit_data::{Duration, Locked, Secret, Squash};
 use konduit_tmp::{
     AdaptorInfo, Keytag, Payme, PaymeRequest, Quote, QuoteBody, Receipt, SquashProposal,
@@ -60,7 +61,7 @@ impl From<db::Error> for Error {
 }
 
 pub struct Data {
-    cln: Arc<crate::cln::Node>,
+    cln: Arc<cln_server::Ctx>,
     db: Arc<db::Db>,
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<AdaptorInfo<TxHelp>>,
@@ -69,7 +70,7 @@ pub struct Data {
 
 impl Data {
     pub fn new(
-        cln: Arc<crate::cln::Node>,
+        cln: Arc<cln_server::Ctx>,
         db: Arc<db::Db>,
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<AdaptorInfo<TxHelp>>,
@@ -92,7 +93,7 @@ impl Data {
         self.db.clone()
     }
 
-    pub fn cln(&self) -> Arc<crate::cln::Node> {
+    pub fn cln(&self) -> Arc<cln_server::Ctx> {
         self.cln.clone()
     }
 
@@ -161,31 +162,32 @@ impl Data {
 
     #[tracing::instrument(skip_all, fields(amount = body.amount, lock = %body.lock), err)]
     pub async fn quote(&self, keytag: &Keytag, body: QuoteBody) -> Result<Quote, Error> {
-        let channel = self.channel(keytag)?;
-        if body.timeout < time::now()? {
-            return Err(CommitmentError::Time.into());
-        }
-        let response = self
-            .cln
-            .quote_outbound(cln_server::wire::quote::Request {
-                payee: body.payee,
-                amount: body.amount,
-            })
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        let amount = body.amount + response.fee + FEE_PLACEHOLDER + 1;
-        // Actual commitment
-        let index = channel.can_commit(amount)?;
-        let relative_timeout = response
-            .timeout
-            .as_millis()
-            .saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
-        Ok(Quote {
-            index,
-            amount,
-            relative_timeout,
-            routing_fee: response.fee,
-        })
+        todo!("Superceded:: remove")
+        // let channel = self.channel(keytag)?;
+        // if body.timeout < time::now()? {
+        //     return Err(CommitmentError::Time.into());
+        // }
+        // let response = self
+        //     .cln
+        //     .quote_outbound(cln_server::wire::quote::Request {
+        //         payee: body.payee,
+        //         amount: body.amount,
+        //     })
+        //     .await
+        //     .map_err(|error| Error::Cln(error.to_string()))?;
+        // let amount = body.amount + response.fee + FEE_PLACEHOLDER + 1;
+        // // Actual commitment
+        // let index = channel.can_commit(amount)?;
+        // let relative_timeout = response
+        //     .timeout
+        //     .as_millis()
+        //     .saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
+        // Ok(Quote {
+        //     index,
+        //     amount,
+        //     relative_timeout,
+        //     routing_fee: response.fee,
+        // })
     }
 
     fn align_commitments(&self, locked: &Locked, payme: &Payme) -> Result<(), CommitmentError> {
@@ -204,28 +206,29 @@ impl Data {
 
     #[tracing::instrument(skip_all, fields(amount = body.payme.amount, lock = %body.payme.lock), err)]
     pub async fn pay(&self, keytag: &Keytag, body: PayBody) -> Result<PayResponse, Error> {
-        let PayBody { locked, payme } = body;
-        self.align_commitments(&locked, &payme)?;
-        self.db().update(keytag, apply_locked(locked.clone()))?;
-        let outbound = (payme.payee != self.cln.verifying_key()).then_some(
-            cln_server::wire::commit::Outbound {
-                key: payme.payee,
-                amount: payme.amount,
-            },
-        );
-        let pay_res = self
-            .cln
-            .commit_outbound(cln_server::wire::commit::Request {
-                inbound: locked,
-                outbound,
-            })
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        if let Some(secret) = pay_res.secret {
-            tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
-            self.db().update(keytag, apply_secrets(vec![secret]))?;
-        };
-        Ok(PayResponse::from(pay_res.secret.map(|secret| secret.0)))
+        todo!("Superceded! to be removed");
+        // let PayBody { locked, payme } = body;
+        // self.align_commitments(&locked, &payme)?;
+        // self.db().update(keytag, apply_locked(locked.clone()))?;
+        // let outbound = (payme.payee != self.cln.verifying_key()).then_some(
+        //     cln_server::wire::commit::Outbound {
+        //         key: payme.payee,
+        //         amount: payme.amount,
+        //     },
+        // );
+        // let pay_res = self
+        //     .cln
+        //     .commit_outbound(cln_server::wire::commit::Request {
+        //         inbound: locked,
+        //         outbound,
+        //     })
+        //     .await
+        //     .map_err(|error| Error::Cln(error.to_string()))?;
+        // if let Some(secret) = pay_res.secret {
+        //     tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
+        //     self.db().update(keytag, apply_secrets(vec![secret]))?;
+        // };
+        // Ok(PayResponse::from(pay_res.secret.map(|secret| secret.0)))
     }
 
     #[tracing::instrument(skip_all, fields(amount = request.amount), err)]
@@ -235,21 +238,17 @@ impl Data {
         request: cln_server::wire::quote::Request,
     ) -> Result<cln_server::wire::quote::Response, Error> {
         let channel = self.channel(&keytag.as_bytes().to_vec().try_into().unwrap())?;
-        let response = self
-            .cln
-            .quote_outbound(cln_server::wire::quote::Request {
-                payee: request.payee,
-                amount: request.amount,
-            })
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        let fee = response.fee + FEE_PLACEHOLDER + 1;
-        // Actual commitment
+        let (fee, timeout) = if request.payee == self.cln.verifying_key() {
+            // I am the payee. No fee
+            (0_u64, Duration::from_millis(0))
+        } else {
+            let response = self .cln .quote(request.clone()) .await.map_err(|e| Error::Cln(e.to_string()))?;
+            (response.fee + FEE_PLACEHOLDER, response.timeout)
+        };
+        // Inbound index
         let index = channel.can_commit( request.amount + fee )?;
-        let timeout = response
-            .timeout
-            .as_millis()
-            .saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
+        // ALWAYS NEED TIME TO SUB!
+        let timeout = timeout.as_millis().saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
         Ok(cln_server::wire::quote::Response{ index, fee, timeout : Duration::from_millis(timeout) })
     }
 
@@ -263,19 +262,25 @@ impl Data {
         keytag: cln_server::wire::auth::Keytag,
         request: cln_server::wire::commit::Request,
     ) -> Result<cln_server::wire::commit::Response, Error> {
-        self.(&keytag)?;
-        let response = self
-            .cln
-            .commit(&keytag, request)
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        // Logged (not a field, since it's only known on success) so the
-        // same hex secret can be matched across the gateway's and
-        // merchant's separate terminals once it's revealed.
-        if let Some(secret) = response.secret {
+        let keytag = keytag.as_bytes().to_vec().try_into().unwrap();
+        self.db().update(&keytag, apply_locked(request.inbound.clone()))?;
+        let timeout = Duration::from_millis(request.inbound.timeout().as_millis().saturating_sub(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64);
+        let secret = if request.outbound.is_none() || request.outbound.as_ref().is_some_and(|payme| payme.key == self.cln.verifying_key() ) { 
+            // ASSUME PAYEE. You own the secret.
+            let secret = self.cln().paymes_reveal(request.inbound.lock(),request.inbound.amount()).map_err(|e| Error::Cln(e.to_string()))?;
+            Some(secret)
+        } else { 
+            // Youre routing. 
+            let payee = request.outbound.ok_or(Error::Other)?.key;
+            let amount = request.inbound.amount().checked_sub(FEE_PLACEHOLDER).ok_or(Error::Other)?;
+            let response = self.cln().commit2(&payee, amount, timeout, &request.inbound.lock()).await.map_err(|e| Error::Cln(e.to_string()))?;
+            response.secret
+        };
+        if let Some(secret) = secret {
             tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
+            self.db().update(&keytag, apply_secrets(vec![secret]))?;
         }
-        Ok(response)
+        Ok(cln_server::wire::commit::Response { secret }) 
     }
 
     #[tracing::instrument(level = "debug", skip_all, err)]
@@ -284,10 +289,15 @@ impl Data {
         keytag: cln_server::wire::auth::Keytag,
         request: cln_server::wire::sync::Request,
     ) -> Result<cln_server::wire::sync::Response, Error> {
-        self.assert_cln_peer_backed(&keytag)?;
-        self.cln
-            .sync(&keytag, request)
-            .map_err(|error| Error::Cln(error.to_string()))
+        let keytag = keytag.as_bytes().to_vec().try_into().unwrap();
+        self.db().update(&keytag, apply_squash(request.receipt.squash))?;
+        let channel = self.channel(&keytag)?;
+        let receipt = channel.receipt().clone().ok_or(Error::Other)?;
+        let squash = receipt.squash().clone().into_unverified();
+        let cheques = receipt.cheques().cloned().map(|c| c.into_unverified()).collect();
+        let receipt = cln_server::wire::sync::Receipt { squash , cheques };
+        Ok(cln_server::wire::sync::Response { receipt } ) 
+
     }
 
     // FIXME :: REMOVE THIS TEMPORARY PATCH!!

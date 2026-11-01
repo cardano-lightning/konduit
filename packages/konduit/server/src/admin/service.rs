@@ -17,7 +17,7 @@ use super::{SyncApi, config::Config};
 
 #[derive(Clone)]
 pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
-    cln: Arc<crate::cln::Node>,
+    cln: Arc<cln_server::Ctx>,
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
     network_parameters: NetworkParameters,
@@ -29,7 +29,7 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
 impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     pub async fn new(
         config: Config,
-        cln: Arc<crate::cln::Node>,
+        cln: Arc<cln_server::Ctx>,
         cardano: Arc<Connector>,
         db: Arc<db::Db>,
     ) -> anyhow::Result<Self> {
@@ -341,7 +341,7 @@ mod tests {
         BTreeMap::from([(Input::new(Hash::<32>::from([9; 32]), 0), script_output())])
     }
 
-    fn cln_context() -> Arc<crate::cln::Node> {
+    fn cln_context() -> Arc<cln_server::Ctx> {
         Arc::new(
             crate::cln::build(crate::cln::Args { config_path: None }, 0)
                 .expect("CLN context initializes"),

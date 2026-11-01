@@ -25,14 +25,16 @@ http-client = { workspace = true, features = [
 ], default-features = false }
 rand.workspace = true
 tracing.workspace = true
+# Only `rt`, for `tokio::spawn`-ing the background squash dispatch: the
+# reqwest transport above already requires an ambient tokio runtime at
+# call time regardless, so this isn't a new runtime dependency, just the
+# first spot cln-server's own code needs to name the crate directly. The
+# fuller feature set (macros/rt-multi-thread/time) the standalone
+# binaries and tests need is layered on below, under "standalone".
+tokio = { workspace = true, features = ["rt"] }
 
 anyhow = { workspace = true, optional = true }
 actix-web = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = [
-  "macros",
-  "rt-multi-thread",
-  "time",
-] }
 clap = { workspace = true, optional = true, features = ["derive"] }
 toml = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
@@ -56,7 +58,9 @@ standalone = [
   "dep:anyhow",
   "dep:env_logger",
   "dep:log",
-  "dep:tokio",
+  "tokio/macros",
+  "tokio/rt-multi-thread",
+  "tokio/time",
   "dep:tracing-subscriber",
 ]
 

@@ -10,7 +10,8 @@
 
 use cln_server::{
     channel,
-    standalone::{Config, client, config::ServerConfig, inbound, inbounds},
+    config::Config,
+    standalone::{client, config::ServerConfig, inbound, inbounds},
 };
 use konduit_data::{SigningKey, Tag};
 
@@ -68,14 +69,6 @@ fn main() -> anyhow::Result<()> {
     // --- merchant config: no outbound channels (terminal node), one
     //     inbound entry admitting the gateway ---
     let merchant = Config {
-        inbound: inbounds::Config {
-            inbounds: vec![inbound::Config {
-                key: gateway_vkey,
-                tag: gm_tag,
-                backing: BACKING,
-            }],
-        },
-        outbound: cln_server::Config {
             signer: cln_server::signer::Config { key: MERCHANT_KEY },
             channels: cln_server::channels::Config { channels: vec![] },
             paymes: cln_server::paymes::Config {
@@ -85,24 +78,11 @@ fn main() -> anyhow::Result<()> {
                 fee,
                 ..Default::default()
             },
-        },
-        server: ServerConfig {
-            listen: merchant_url,
-            sync_interval_secs: 5,
-        },
     };
 
     // --- gateway config: one outbound channel (to merchant), one
     //     inbound entry admitting the consumer ---
     let gateway = Config {
-        inbound: inbounds::Config {
-            inbounds: vec![inbound::Config {
-                key: consumer_vkey,
-                tag: cg_tag.clone(),
-                backing: BACKING,
-            }],
-        },
-        outbound: cln_server::Config {
             signer: cln_server::signer::Config { key: GATEWAY_KEY },
             channels: cln_server::channels::Config {
                 channels: vec![gateway_merchant],
@@ -114,11 +94,6 @@ fn main() -> anyhow::Result<()> {
                 fee,
                 ..Default::default()
             },
-        },
-        server: ServerConfig {
-            listen: gateway_url,
-            sync_interval_secs: 5,
-        },
     };
 
     // --- consumer config: one outbound channel (to gateway) ---

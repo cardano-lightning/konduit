@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
         loop {
             ticker.tick().await;
             async {
-                for (peer, result) in cln_sync.sync_outbound().await {
+                for (peer, result) in cln_sync.sync().await {
                     if let Err(error) = result {
                         tracing::warn!(peer = ?peer, %error, "CLN sync failed");
                     }

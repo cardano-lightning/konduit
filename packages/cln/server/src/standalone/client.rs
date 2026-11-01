@@ -122,11 +122,37 @@ impl Client {
         Ok(locked)
     }
 
+    /// Fetches whatever receipt the gateway already has on file for us and
+    /// reconciles it into our local state. A `None` (gateway's never seen
+    /// a squash from us) is a no-op, not an error. This client has no
+    /// persistence between invocations — local state always starts at
+    /// `SquashBody::zero()` (see `init`) — so this always has to run
+    /// before anything else: without it, `sync_gateway` would instead push
+    /// that fresh zero state outward, which only ever works the very
+    /// first time (any later call regresses whatever the gateway already
+    /// has recorded, and gets rejected as a stale squash).
+    #[tracing::instrument(level = "debug", skip(self), err)]
+    async fn recover_receipt(&self) -> Result<(), Error> {
+        let Some(their_wire) = self.gateway.fetch_receipt().await? else {
+            return Ok(());
+        };
+        let their = Receipt::try_verify(
+            their_wire,
+            &self.signer.verifying_key(),
+            self.gateway.tag(),
+        )
+        .map_err(|_| Error::BadReceipt)?;
+        self.gateway.apply_sync(their)?;
+        Ok(())
+    }
+
     /// Requests an payme from `merchant_url`, pays it through the
     /// gateway, and returns the revealed secret.
     #[tracing::instrument(skip(self), err)]
     pub async fn pay(&self, merchant_url: &str, amount: u64) -> Result<Paid, Error> {
-        // 0. Establish/reconcile our view of the gateway channel.
+        // 0. Recover whatever receipt the gateway already has on file,
+        // then establish/reconcile our view of the gateway channel.
+        self.recover_receipt().await?;
         self.sync_gateway().await?;
 
         // 1. payme, direct from merchant — unauthenticated, no channel.

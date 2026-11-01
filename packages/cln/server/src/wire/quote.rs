@@ -13,12 +13,15 @@ pub struct Request {
     pub amount: u64,
 }
 
+/// FIXME :: There is no seperation between inbound and outbound types.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Response {
-    // Estimated routing fee
     #[n(0)]
-    pub fee: u64,
-    // Relative timeout
+    pub index: u64,
+    // Estimated routing fee (**Relative** amount).
     #[n(1)]
+    pub fee: u64,
+    // **Relative** timeout
+    #[n(2)]
     pub timeout: Duration,
 }

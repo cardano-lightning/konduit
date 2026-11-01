@@ -175,6 +175,15 @@ impl Channel {
     pub async fn sync(&self, req: &wire::sync::Request) -> Result<wire::sync::Response, Error> {
         self.client.sync(req, self.auth_header()).await
     }
+
+    /// Fetches whatever receipt the partner currently has on file for this
+    /// channel (`None` if it's never seen a squash from us at all). Unlike
+    /// `sync`, this touches no local state — callers decide what to do
+    /// with it.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub async fn fetch_receipt(&self) -> Result<Option<WireReceipt>, Error> {
+        self.client.receipt(self.auth_header()).await
+    }
 }
 
 enum Client {
@@ -213,6 +222,22 @@ impl Client {
         Ok(res)
     }
 
+    async fn get<Res>(
+        &self,
+        path: &str,
+        auth: Box<dyn http_client::HeaderPolicy>,
+    ) -> Result<Res, Error>
+    where
+        Res: for<'de> Deserialize<'de> + for<'b> minicbor::Decode<'b, ()>,
+    {
+        let headers = vec![auth];
+        let res = match self {
+            Client::Json(c) => c.get_with_headers::<Res>(path, headers).await?,
+            Client::Cbor(c) => c.get_with_headers::<Res>(path, headers).await?,
+        };
+        Ok(res)
+    }
+
     pub async fn quote(
         &self,
         req: &wire::quote::Request,
@@ -235,5 +260,16 @@ impl Client {
         auth: Box<dyn http_client::HeaderPolicy>,
     ) -> Result<wire::sync::Response, Error> {
         self.post(wire::sync::PATH, req, auth).await
+    }
+
+    /// The plain (non-wire-protocol) `/ch/receipt` endpoint, reusing the
+    /// same keytag-derived auth value since it only needs the `KEYTAG`
+    /// header (konduit-server's `no_auth` middleware), not the CLN-wire
+    /// one — both read the same header name case-insensitively.
+    pub async fn receipt(
+        &self,
+        auth: Box<dyn http_client::HeaderPolicy>,
+    ) -> Result<Option<WireReceipt>, Error> {
+        self.get("/ch/receipt", auth).await
     }
 }

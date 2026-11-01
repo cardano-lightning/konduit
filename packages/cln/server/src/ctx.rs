@@ -7,7 +7,7 @@ use crate::{
     time::now,
     wire::{self, auth::Keytag, commit::Outbound},
 };
-use konduit_data::{ChequeBody, Duration, SquashBody, VerifyingKey};
+use konduit_data::{ChequeBody, Duration, Lock, SquashBody, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +117,11 @@ impl Ctx {
         })
     }
 
+    /// Look up lock in own paymes
+    pub fn paymes_reveal(&self, lock: &konduit_data::Lock, amount: u64) -> Result<konduit_data::Secret, Error> {
+        Ok(self.paymes.reveal(lock, amount)?)
+    }
+
     /// Currently fee is a fixed flat fee.
     fn fee(&self) -> u64 {
         self.params.fee
@@ -140,26 +145,128 @@ impl Ctx {
         let payee = req.payee;
         if payee == self.signer.verifying_key() {
             Ok(wire::quote::Response {
+                index: 0, // FIXME :: Placeholder, 0 is an Impossible index. 
                 fee: 0,
-                timeout: *self.timeout(),
+                timeout: Duration::from_millis(0),
             })
         } else {
-            let res = self.channels.get(&payee)?.quote(&req).await?;
-            let fee = res.fee + self.fee();
-            let timeout = res.timeout.saturating_add(*self.timeout());
-            Ok(wire::quote::Response { fee, timeout })
+            Ok(self.channels.get(&payee)?.quote(&req).await?)
         }
     }
 
+    pub async fn commit2(
+        &self,
+        payee: &VerifyingKey,
+        amount: u64,
+        timeout: Duration,
+        lock: &Lock,
+    ) -> Result<wire::commit::Response, Error> {
+
+        // 1. Get existing commit to Lock.
+        if let Some(_commit) = self.commits.get(lock) {
+            return Err(Error::NoRetries);
+        };
+
+        // 2. Get outbound route
+        let channel = self.channels.get(payee)?;
+
+        // 2a. Our own receipt tracking is in-memory only (see Ctx::init),
+        // so it can lag behind whatever the partner already has on file
+        // (e.g. after a restart). Recover it before proposing the next
+        // index, so we don't propose one that collides with state the
+        // partner has already seen.
+        self.recover_receipt(channel).await?;
+
+        // 3. Make outbound Locked.
+        let body = ChequeBody::new(channel.propose_index(), amount, timeout, lock.clone());
+        let locked = self.signer.locked(channel.tag().clone(), body);
+
+        // 4. Record commit to Lock.
+        self.commits.insert(*lock, Commit::new())?;
+        channel.apply_locked(locked.clone())?;
+
+        // 5. Dispatch and await.
+        let req = wire::commit::Request {
+            inbound: locked.into_unverified(),
+            outbound: None,
+        };
+        // TODO :: handle errors. For now just propogate them
+        let res = channel.commit(&req).await?;
+        // 6. If secret then record secret, and get the resulting squash to
+        // the partner as soon as possible — but as a background task:
+        // the caller is waiting on this response and doesn't need to wait
+        // on that extra network round-trip too.
+        if let Some(secret) = res.secret {
+            channel.apply_secret(secret)?;
+            self.spawn_dispatch_squash(channel);
+        }
+        Ok(res)
+    }
+
+    /// Fetches whatever receipt the partner has on file for `channel` and
+    /// reconciles it into our local state. A `None` (partner has never
+    /// seen a squash from us) is a no-op, not an error.
+    async fn recover_receipt(&self, channel: &Channel) -> Result<(), Error> {
+        let Some(their_wire) = channel.fetch_receipt().await? else {
+            return Ok(());
+        };
+        let their = Receipt::try_verify(their_wire, &self.signer.verifying_key(), channel.tag())
+            .map_err(|_| Error::BadReceipt)?;
+        channel.apply_sync(their)?;
+        Ok(())
+    }
+
+    /// Proposes (and locally applies) a new squash from whatever's pending
+    /// right now, then pushes it to the partner in the background. Signing
+    /// is cheap/local so it happens synchronously; only the network push
+    /// is backgrounded.
+    fn spawn_dispatch_squash(&self, channel: &Arc<Channel>) {
+        let body = match channel.maybe_propose_squash_body() {
+            Ok(Some(body)) => body,
+            Ok(None) => return,
+            Err(err) => {
+                tracing::warn!("proposing squash failed: {err}");
+                return;
+            }
+        };
+        let squash = self.signer.squash(channel.tag().clone(), body);
+        if let Err(err) = channel.apply_squash(squash) {
+            tracing::warn!("applying our own squash locally failed: {err}");
+            return;
+        }
+
+        let channel = Arc::clone(channel);
+        let own_vkey = self.signer.verifying_key();
+        tokio::spawn(async move {
+            if let Err(err) = Self::push_squash(&channel, own_vkey).await {
+                tracing::warn!("dispatching squash to partner failed: {err}");
+            }
+        });
+    }
+
+    async fn push_squash(channel: &Channel, own_vkey: VerifyingKey) -> Result<(), Error> {
+        let req = wire::sync::Request {
+            receipt: channel.wire_receipt(),
+        };
+        let their_wire = channel.sync(&req).await?.receipt;
+        let their = Receipt::try_verify(their_wire, &own_vkey, channel.tag())
+            .map_err(|_| Error::BadReceipt)?;
+        channel.apply_sync(their)?;
+        Ok(())
+    }
     pub async fn commit(
         &self,
         req: wire::commit::Request,
     ) -> Result<wire::commit::Response, Error> {
+        // payee
+        // amount
+        // lock
+        // timeout 
         let wire::commit::Request { inbound, outbound } = req;
 
         // 1. Verify inbound Locked.
         // OOB/ responsibility of caller:
-        // - L1: cheque is backed.
+        // - L1: channel / cheque is backed.
         // - L2: cheque is valid wrt to current receipt.
         //
         // In bounds:

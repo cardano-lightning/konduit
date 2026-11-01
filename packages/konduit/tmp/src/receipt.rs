@@ -102,7 +102,7 @@ impl Receipt {
     // -- Accessors
     // ------------------------------------------------------------------------
 
-    fn cheques(&self) -> impl Iterator<Item = &Cheque<Verified>> {
+    pub fn cheques(&self) -> impl Iterator<Item = &Cheque<Verified>> {
         self.cheques.iter()
     }
 
