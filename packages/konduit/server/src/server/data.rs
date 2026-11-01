@@ -262,11 +262,14 @@ impl Data {
         // Konduit's alone: that the channel is backed, and that the
         // cheque is one it can claim.
         self.channel(keytag)?.assert_backed()?;
+        // Konduit's fee and margin come off here and nowhere else. A
+        // cheque that cannot cover them calls no rail — and is not
+        // banked either: refusing before the receipt is what keeps a
+        // cheque konduit will not honour out of it, which is cheaper
+        // than taking it in and trying to drop it afterwards.
+        let constraints = self.margins.strip(&request.inbound, now()?)?;
         self.db()
             .update(keytag, apply_locked(request.inbound.clone()))?;
-        // Konduit's fee and margin come off here and nowhere else. A
-        // cheque that cannot cover them calls no rail.
-        let constraints = self.margins.strip(&request.inbound, now()?)?;
 
         let outcome = if rail == RESERVED_NAME {
             // Konduit is the payee, and pays itself out of what is left
@@ -295,10 +298,17 @@ impl Data {
             // Committed and unresolved: the consumer polls squash
             // status, where the secret arrives as an unlocked cheque.
             Outcome::Pending => Ok(PayOutcome::Pending),
-            // The inbound cheque is left live to elapse either way.
-            // FIXME :: we could drop the cheque here
+            // The inbound cheque is left live to elapse either way, and
+            // dropping it on a pre-commitment failure is not konduit's
+            // to do: `Receipt::apply_locked` takes cheques strictly in
+            // index order, so a hole would refuse the consumer's next
+            // one until the two resynced. The protocol already answers
+            // this — the consumer retries under the same lock and
+            // `apply_replace` takes the better cheque at the same index
+            // — and anything never retried elapses on its own timeout.
             Outcome::FailedPre(problem) => Err(problem.into()),
-            // cannot drop the cheque here
+            // Committed outbound, so the cheque is owed whatever the
+            // peer says: it stays.
             Outcome::FailedPost(problem) => Err(problem.into()),
         }
     }
