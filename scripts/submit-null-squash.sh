@@ -49,7 +49,7 @@ submit_null_squash() {
   KONDUIT_SIGNING_KEY="$(wallet_of "$wallet_role")" \
     KONDUIT_TAG="$(tag_hex "$tag_ascii")" \
     KONDUIT_SERVER_URL="$adaptor_url" \
-    cargo run --release -q -p konduit-client -- -y l2 squash
+    cargo run -q -p konduit-client -- -y l2 squash
 }
 
 submit_null_squash consumer consumer-gateway "http://127.0.0.1:$KONDUIT_SERVER_GATEWAY_PORT"

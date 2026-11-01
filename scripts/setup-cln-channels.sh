@@ -37,7 +37,7 @@ export KONDUIT_NETWORK="$CARDANO_NODE_NETWORK_ID"
 export KONDUIT_KUPO_URI="http://127.0.0.1:$KUPO_UTXO_PORT"
 
 konduit_cli() {
-  cargo run --release -q -p konduit-cli -- "$@"
+  cargo run -q -p konduit-cli -- "$@"
 }
 
 # Resolved the same way publish-reference-script resolves it, so both always
@@ -174,7 +174,7 @@ open_channel consumer consumer-gateway "http://127.0.0.1:$KONDUIT_SERVER_GATEWAY
 open_channel gateway gateway-merchant "http://127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT"
 
 echo "both channels opened; konduit-indexer polls every 10s, so give it a" \
-     "cycle before paying through them (Data::assert_cln_peer_backed checks" \
+     "cycle before paying through them (Data::assert_backed checks" \
      "each server's own locally-indexed view, not the chain directly)."
 echo
 "$(dirname "${BASH_SOURCE[0]}")/show-balances.sh"

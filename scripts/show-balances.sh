@@ -22,7 +22,7 @@ export KONDUIT_NETWORK="$CARDANO_NODE_NETWORK_ID"
 export KONDUIT_KUPO_URI="http://127.0.0.1:$KUPO_UTXO_PORT"
 
 konduit_cli() {
-  cargo run --release -q -p konduit-cli -- "$@"
+  cargo run -q -p konduit-cli -- "$@"
 }
 
 # Resolved the same way setup/teardown resolve it, so all three always
