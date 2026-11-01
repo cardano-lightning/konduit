@@ -94,7 +94,7 @@ async fn the_rail_registers_as_cln() {
 
     // And is reachable with its instruction erased to bytes, as the platform
     // will hand it over.
-    let instruction = konduit_rail::RawInstruction::Json(serde_json::to_vec(&outbound()).unwrap());
+    let instruction = konduit_rail::Encoded::Json(serde_json::to_vec(&outbound()).unwrap());
     let outcome = registry
         .get("cln")
         .unwrap()

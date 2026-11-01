@@ -119,15 +119,16 @@ impl<T> Instruction for T where
 {
 }
 
-/// An instruction still in the codec it arrived in. Konduit does not parse
-/// instructions; it carries them.
+/// An instruction still in the codec it arrived in: konduit does not
+/// parse instructions, it carries them, and the variant says which codec
+/// to read it back with.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RawInstruction {
+pub enum Encoded {
     Json(Vec<u8>),
     Cbor(Vec<u8>),
 }
 
-impl RawInstruction {
+impl Encoded {
     /// Deserializes into a rail's own instruction type. The erasing layer
     /// calls this, so no rail hand rolls `bad-instruction`.
     pub fn decode<T: Instruction>(&self) -> Result<T, QuoteProblem> {
@@ -183,14 +184,10 @@ pub trait DynRail: Send + Sync {
     fn quote<'a>(
         &'a self,
         amount: u64,
-        instruction: &'a RawInstruction,
+        encoded: &'a Encoded,
     ) -> BoxFuture<'a, Result<Quoted, QuoteProblem>>;
 
-    fn commit<'a>(
-        &'a self,
-        inbound: Constraints,
-        instruction: &'a RawInstruction,
-    ) -> BoxFuture<'a, Outcome>;
+    fn commit<'a>(&'a self, inbound: Constraints, encoded: &'a Encoded) -> BoxFuture<'a, Outcome>;
 
     fn reveal<'a>(&'a self, lock: &'a Lock) -> BoxFuture<'a, Resolution>;
 }
@@ -203,21 +200,17 @@ impl<R: Rail> DynRail for R {
     fn quote<'a>(
         &'a self,
         amount: u64,
-        instruction: &'a RawInstruction,
+        encoded: &'a Encoded,
     ) -> BoxFuture<'a, Result<Quoted, QuoteProblem>> {
         Box::pin(async move {
-            let instruction = instruction.decode::<R::QuoteInstruction>()?;
+            let instruction = encoded.decode::<R::QuoteInstruction>()?;
             Rail::quote(self, amount, instruction).await
         })
     }
 
-    fn commit<'a>(
-        &'a self,
-        inbound: Constraints,
-        instruction: &'a RawInstruction,
-    ) -> BoxFuture<'a, Outcome> {
+    fn commit<'a>(&'a self, inbound: Constraints, encoded: &'a Encoded) -> BoxFuture<'a, Outcome> {
         Box::pin(async move {
-            match instruction.decode::<R::CommitInstruction>() {
+            match encoded.decode::<R::CommitInstruction>() {
                 Ok(instruction) => Rail::commit(self, inbound, instruction).await,
                 // Nothing is sent, so this is a pre-commitment failure.
                 Err(problem) => Outcome::FailedPre(problem.into()),
@@ -311,10 +304,10 @@ mod tests {
         registry.insert(Stub).unwrap();
         let rail = registry.get("stub").unwrap().clone();
 
-        let json = RawInstruction::Json(serde_json::to_vec(&Payee(7)).unwrap());
+        let json = Encoded::Json(serde_json::to_vec(&Payee(7)).unwrap());
         let mut buf = Vec::new();
         minicbor::encode(Payee(7), &mut buf).unwrap();
-        let cbor = RawInstruction::Cbor(buf);
+        let cbor = Encoded::Cbor(buf);
 
         for instruction in [json, cbor] {
             let quoted = futures_lite_block_on(rail.quote(42, &instruction));
@@ -327,7 +320,7 @@ mod tests {
         let mut registry = Registry::new();
         registry.insert(Stub).unwrap();
         let rail = registry.get("stub").unwrap().clone();
-        let instruction = RawInstruction::Json(b"not a payee".to_vec());
+        let instruction = Encoded::Json(b"not a payee".to_vec());
 
         match futures_lite_block_on(rail.commit(constraints(), &instruction)) {
             Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "bad-instruction"),

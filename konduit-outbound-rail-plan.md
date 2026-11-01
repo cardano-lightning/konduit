@@ -58,7 +58,7 @@ inbound. Converging them is worth doing and is not in this plan.
 ## Phase A — `konduit-rail` _(done)_
 
 `packages/konduit/rail` exists, compiles, and has four tests. It holds `Constraints`, `Quoted`, `Outcome`,
-`Resolution`, the `Rail` trait, the erasing `DynRail` over `RawInstruction` + boxed futures, and a `Registry`
+`Resolution`, the `Rail` trait, the erasing `DynRail` over `Encoded` + boxed futures, and a `Registry`
 that rejects `konduit` and duplicate names at construction. Dependencies: `konduit-data`, `minicbor`,
 `serde`, `serde_json`, `thiserror`. No actix, no transport.
 
@@ -74,8 +74,8 @@ Three decisions worth recording:
   margin from an absolute timeout and keeps it absolute, while `ctx::commit` subtracts it and then compares
   to `now()`. `Relative::{absolute, until}` are the only two conversions.
 - **Instructions carry both codecs.** `Instruction: Deserialize + for<'b> minicbor::Decode<'b, ()>` and
-  `RawInstruction::{Json, Cbor}`, because the boundary is content-negotiated and
-  `for<'de> Deserialize<'de>` alone covers only half of it. `RawInstruction::decode` raises `bad-instruction`, so no
+  `Encoded::{Json, Cbor}`, because the boundary is content-negotiated and
+  `for<'de> Deserialize<'de>` alone covers only half of it. `Encoded::decode` raises `bad-instruction`, so no
   rail hand rolls it, and `DynRail::commit` reports it as `FailedPre` — nothing was sent.
 - **`fx-unavailable` is a placeholder.** The variant exists and nothing produces it; no rail fetches a
   rate, and `fx-client` stays unwired until `bln` needs it.
