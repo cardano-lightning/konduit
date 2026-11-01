@@ -1,3 +1,4 @@
+// FIXME :: do away with this module. rehome content.
 //! `cln` as an outbound rail: its two instruction types.
 //!
 //! CLN is the Cardano Lightning Network, so this rail's hop is a konduit
@@ -24,17 +25,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 #[serde(transparent)]
 #[cbor(transparent)]
+// FIXME :: Should serialize as hex/ bytestring.
 pub struct Payee(#[n(0)] pub VerifyingKey);
 
-/// What a commit instructs: who to pay, and how much to pay them.
+/// What a commit instructs: who to pay, and how much they receive.
 ///
-/// The amount is the consumer's instruction, not konduit's ceiling. The
-/// rail checks it against `Constraints.amount` — the inbound cheque net
-/// of konduit's fee — and commits exactly this much, so the difference
-/// between the two is the consumer's own headroom and not something the
-/// rail spends.
+/// The amount is what reaches the payee, not what leaves this node: the
+/// peer downstream is a konduit too and charges to be paid, so the rail
+/// adds the peer's own fee on top and checks the sum against
+/// `Constraints.amount` — the inbound cheque net of konduit's fee.
+/// Whatever is left over is the consumer's own headroom and not
+/// something the rail spends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Outbound {
+    // FIXME :: should be payee
     #[n(0)]
     pub key: VerifyingKey,
     #[n(1)]

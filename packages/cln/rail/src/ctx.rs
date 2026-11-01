@@ -128,6 +128,7 @@ impl Ctx {
     /// is cheap/local so it happens synchronously; only the network push
     /// is backgrounded.
     fn spawn_dispatch_squash(&self, channel: &Arc<Channel>) {
+        // TODO :: review this logic
         let body = match channel.maybe_propose_squash_body() {
             Ok(Some(body)) => body,
             Ok(None) => return,
@@ -207,7 +208,8 @@ impl Rail for Ctx {
         })
     }
 
-    /// Commit `instruction.amount` outbound to `instruction.key`, within `inbound`.
+    /// Commit `instruction.amount`, plus whatever the peer charges to
+    /// receive it, outbound to `instruction.key`, within `inbound`.
     ///
     /// There is no error arm: once the outbound cheque is dispatched,
     /// anything short of an answer is `Pending`, because an error read as
@@ -242,6 +244,25 @@ impl Rail for Ctx {
             }
         };
 
+        // The peer is a konduit, so being paid costs its own fee: the
+        // outbound cheque carries the payee's amount plus that. What it
+        // comes to is the peer's own quote, the same one this rail's
+        // `quote` passed upstream, so the inbound cheque is already sized
+        // for it.
+        let peer = match channel.quote(instruction.amount).await {
+            Ok(quote) => quote,
+            Err(err) => {
+                return Outcome::FailedPre(QuoteProblem::RailUnavailable(err.to_string()).into());
+            }
+        };
+        let outbound = instruction.amount.saturating_add(peer.fee);
+        if outbound > inbound.amount {
+            return Outcome::FailedPre(PreProblem::InsufficientMargin(format!(
+                "paying {} costs {outbound} with the peer's fee, with {} claimable net of ours",
+                instruction.amount, inbound.amount
+            )));
+        }
+
         // Our receipt tracking is in-memory only, so it can lag behind
         // whatever the partner already has on file (e.g. after a
         // restart). Recover it before proposing an index, so we don't
@@ -252,17 +273,17 @@ impl Rail for Ctx {
 
         let timeout = inbound.timeout.absolute(now());
         let index = channel.propose_index();
-        match self.commits.claim(
-            inbound.lock,
-            Commit::new(index, instruction.amount, timeout),
-        ) {
+        match self
+            .commits
+            .claim(inbound.lock, Commit::new(index, outbound, timeout))
+        {
             // The lock is the idempotency key: this is what the commit
             // already made under it came to, not a second payment.
             Claim::Existing(outcome) => return outcome,
             Claim::Fresh => {}
         }
 
-        let body = ChequeBody::new(index, instruction.amount, timeout, inbound.lock);
+        let body = ChequeBody::new(index, outbound, timeout, inbound.lock);
         let locked = self.signer.locked(channel.tag().clone(), body);
         if let Err(err) = channel.apply_locked(locked.clone()) {
             // Nothing is sent, so the claim is given up and a retry
