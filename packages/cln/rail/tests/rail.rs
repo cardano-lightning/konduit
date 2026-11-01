@@ -92,13 +92,13 @@ async fn the_rail_registers_as_cln() {
     registry.insert(rail()).expect("cln is not reserved");
     assert_eq!(registry.names(), vec!["cln"]);
 
-    // And is reachable with its target erased to bytes, as the platform
+    // And is reachable with its instruction erased to bytes, as the platform
     // will hand it over.
-    let target = konduit_rail::RawTarget::Json(serde_json::to_vec(&outbound()).unwrap());
+    let instruction = konduit_rail::RawInstruction::Json(serde_json::to_vec(&outbound()).unwrap());
     let outcome = registry
         .get("cln")
         .unwrap()
-        .commit(constraints(Relative::from_secs(60)), &target)
+        .commit(constraints(Relative::from_secs(60)), &instruction)
         .await;
     match outcome {
         Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "unroutable"),

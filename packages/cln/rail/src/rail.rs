@@ -1,9 +1,9 @@
-//! `cln` as an outbound rail: its two target types.
+//! `cln` as an outbound rail: its two instruction types.
 //!
 //! CLN is the Cardano Lightning Network, so this rail's hop is a konduit
 //! channel and its backend is a konduit node: the rail is a konduit
-//! client pointed downstream. Its targets are therefore konduit's own
-//! addressing, and everything else — the channel, the cheque, the squash
+//! client pointed downstream. Its instructions are written in konduit's
+//! own addressing, and everything else — the channel, the cheque, the squash
 //! — is the rail's own.
 //!
 //! The `impl Rail for Ctx` itself lives in `ctx.rs`, beside the state it
@@ -19,8 +19,8 @@ use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 /// What a quote asks about: who to pay. A quote needs no amount of its
-/// own — konduit passes that separately — so this is less than a commit
-/// target, as a rail's two targets are allowed to be.
+/// own, since konduit passes that separately, so a quote is instructed
+/// with less than a commit — as a rail's two instructions may be.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 #[serde(transparent)]
 #[cbor(transparent)]

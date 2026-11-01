@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use konduit_data::{Locked, Secret};
 
-/// The rail's own commit target, which is what an onward instruction is.
-/// One type, so the consumer's instruction and what the rail checks
-/// against its ceiling cannot drift apart.
+/// An onward instruction is the rail's own commit instruction. One type,
+/// so what the consumer asks for and what the rail checks against its
+/// ceiling cannot drift apart.
 pub use crate::rail::Outbound;
 
 pub const PATH: &str = "/ch/x/cln/commit";

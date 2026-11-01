@@ -58,7 +58,7 @@ inbound. Converging them is worth doing and is not in this plan.
 ## Phase A — `konduit-rail` _(done)_
 
 `packages/konduit/rail` exists, compiles, and has four tests. It holds `Constraints`, `Quoted`, `Outcome`,
-`Resolution`, the `Rail` trait, the erasing `DynRail` over `RawTarget` + boxed futures, and a `Registry`
+`Resolution`, the `Rail` trait, the erasing `DynRail` over `RawInstruction` + boxed futures, and a `Registry`
 that rejects `konduit` and duplicate names at construction. Dependencies: `konduit-data`, `minicbor`,
 `serde`, `serde_json`, `thiserror`. No actix, no transport.
 
@@ -73,9 +73,9 @@ Three decisions worth recording:
   across these crates and the boundary is exactly where they get mixed: `data.cln_commit:267` subtracts the
   margin from an absolute timeout and keeps it absolute, while `ctx::commit` subtracts it and then compares
   to `now()`. `Relative::{absolute, until}` are the only two conversions.
-- **Targets carry both codecs.** `Target: Deserialize + for<'b> minicbor::Decode<'b, ()>` and
-  `RawTarget::{Json, Cbor}`, because the boundary is content-negotiated and
-  `for<'de> Deserialize<'de>` alone covers only half of it. `RawTarget::decode` raises `bad-target`, so no
+- **Instructions carry both codecs.** `Instruction: Deserialize + for<'b> minicbor::Decode<'b, ()>` and
+  `RawInstruction::{Json, Cbor}`, because the boundary is content-negotiated and
+  `for<'de> Deserialize<'de>` alone covers only half of it. `RawInstruction::decode` raises `bad-instruction`, so no
   rail hand rolls it, and `DynRail::commit` reports it as `FailedPre` — nothing was sent.
 - **`fx-unavailable` is a placeholder.** The variant exists and nothing produces it; no rail fetches a
   rate, and `fx-client` stays unwired until `bln` needs it.
@@ -93,7 +93,7 @@ rail, and the example stops plumbing it there. A rail is not configured with a f
 has neither: `Quoted` reports what its _network_ costs, which the rail learns from its backend and passes
 through unchanged.
 
-**Quote, outward.** `rail.quote(amount, target) -> Quoted { fee_net, timeout_net }`, then konduit answers
+**Quote, outward.** `rail.quote(amount, instruction) -> Quoted { fee_net, timeout_net }`, then konduit answers
 `fee = fee_net + margins.fee` and `relative_timeout = timeout_net + margins.time`.
 
 **Commit, inward.** From a cheque of amount `A` and absolute timeout `T`:
@@ -104,7 +104,7 @@ timeout_net = Relative::until(T, now) - margins.time
 ```
 
 **The invariant**: strip is exactly the inverse of add, so a cheque that satisfies a quote satisfies the
-rail. A consumer quoted `(a, target) -> (fee, timeout)` sends `A ≥ a + fee` and `T - now ≥ timeout`; then
+rail. A consumer quoted `(a, instruction) -> (fee, timeout)` sends `A ≥ a + fee` and `T - now ≥ timeout`; then
 `amount_net ≥ a + fee_net` and `timeout_net ≥ timeout_net(quoted)` — precisely what the rail quoted. One
 `add_margins`/`strip_margins` pair in one module, with a round-trip test, is what keeps that true; two
 inlined additions are what let it drift, and a quote promising less margin than commit demands is an
@@ -113,7 +113,7 @@ inlined additions are what let it drift, and a quote promising less margin than 
 Consequences worth being explicit about:
 
 - **`Constraints.amount` is a ceiling, not a payment.** The rail keeps nothing of it, commits what its
-  commit target instructs, and answers `FailedPre(insufficient-margin)` when the instruction is over the
+  commit instruction names, and answers `FailedPre(insufficient-margin)` when the instruction is over the
   ceiling or the ceiling cannot cover what its backend quotes.
 - **A volatility buffer is not a fee and not a margin.** A rail whose network prices in another asset, or
   reads another clock, may hold back a buffer against divergence between quote and commit. That is the
@@ -135,17 +135,17 @@ node: the rail is a konduit client pointed downstream, concretely and not behind
 keeps the channel state (receipt, index proposal, secret cache) and drops its private `http-client` stack
 for `konduit-client`, which is already a client of this API.
 
-### Target and the shapes it replaces
+### Instructions, and the shapes they replace
 
-- `QuoteTarget = Payee(VerifyingKey)` and `CommitTarget = Outbound { key, amount }`: a quote needs no
+- `QuoteInstruction = Payee(VerifyingKey)` and `CommitInstruction = Outbound { key, amount }`: a quote needs no
   amount of its own, since konduit passes that separately, so a rail quotes on less than it commits on
-  exactly as the spec allows. Neither target is ever an `Option` — terminal payment is `/pay/konduit/pay`,
+  exactly as the spec allows. Neither instruction is ever an `Option` — terminal payment is `/pay/konduit/pay`,
   which calls no rail at all.
 - **The instruction names the amount; konduit names the ceiling.** `Constraints.amount` is the inbound
   cheque net of konduit's fee, and `Outbound.amount` is what the consumer asked to be paid. The rail checks
   the second against the first and commits the second, so the difference is the consumer's own headroom and
   not something the rail spends. Over the ceiling is `FailedPre(insufficient-margin)`, before anything is
-  sent. Konduit still does not parse the target: the check is the rail's, where the target is already
+  sent. Konduit still does not parse the instruction: the check is the rail's, where it is already
   deserialized.
 - `wire::commit::Outbound` is not a second type: `wire::commit` re-exports the rail's own, so the
   consumer's instruction and what the rail checks cannot drift apart. The `Option` around it goes with the
@@ -162,7 +162,7 @@ a restart. Replace it with a lookup the rail can be told about while running:
 - `Lookup`, a `BTreeMap<VerifyingKey, Outbound>` behind the same `Mutex`/`RwLock` discipline as `Channels`,
   where `Outbound` is the peer's `url` plus the `tag` of the channel to it. Keyed by key, as asked:
   `{ key: url }` is the config surface, with the tag alongside it because the channel needs one.
-- Resolving a `Payee` target goes through `Lookup`; a miss is `FailedPre(unroutable)`.
+- Resolving a `Payee` goes through `Lookup`; a miss is `FailedPre(unroutable)`.
 - Seeded from the TOML as today, and settable at runtime: `Lookup::upsert`/`remove`, exposed on a
   `konduit-server` admin route (the `/admin` scope already exists, trusted-sources-only per its comment).
   Persisting the lookup can wait; re-reading config at startup is the fallback.
@@ -179,7 +179,7 @@ generic port — the one concrete client, injected at construction.
 ### `commit`
 
 `ctx::commit2` is already the rail entry point — `(payee, amount, timeout, lock)` is `Constraints` plus
-target, and `data.cln_commit` already calls it that way. So `ctx::commit` and `ctx::commit2` collapse into
+instruction, and `data.cln_commit` already calls it that way. So `ctx::commit` and `ctx::commit2` collapse into
 `Rail::commit(&self, inbound: Constraints, Payee) -> Outcome`, and the inbound-specific parts of
 `ctx::commit` (the `timeout < now()` check, the fee check, the `outbound: None` paymes branch) do not come
 with it.
@@ -276,17 +276,17 @@ One ordered function, replacing `data.cln_commit` and the `todo!()` `data.pay`, 
 1. Verify inbound: keytag → channel, `assert_backed`, `can_commit`, `apply_locked`. Konduit's alone.
 2. `amount_net = A - margins.fee`, `checked_sub` → konduit's own `insufficient-fee` problem.
 3. `timeout_net = Relative::until(T, now) - margins.time`.
-4. `registry.get(rail)?.commit(Constraints { .. }, raw_target)`.
+4. `registry.get(rail)?.commit(Constraints { .. }, raw_instruction)`.
 5. Map `Outcome`: `Success` → `apply_secrets` then return the secret; `Pending` → record and answer pending;
    `FailedPre`/`FailedPost` → the problem's slug, its status, and its string, with the inbound cheque left
    live to elapse — say so in the body, since the consumer carries that liquidity cost.
 
 Steps 2 and 3 are `strip_margins`, nowhere else. The lock comes from the cheque and konduit never parses
-the target; that holds today and only needs to keep holding once the target is opaque bytes.
+the instruction; that holds today and only needs to keep holding once the instruction is opaque bytes.
 
 ### `POST /pay/{rail}/quote`
 
-`rail.quote(amount, target)` then `add_margins`, answering `konduit_tmp::Quote { index, amount, fee,
+`rail.quote(amount, instruction)` then `add_margins`, answering `konduit_tmp::Quote { index, amount, fee,
 relative_timeout }`. Replaces `data.cln_quote`'s inline `response.fee + FEE_PLACEHOLDER` and
 `saturating_add(QUOTE_PAY_TIME_MARGIN_MS)`.
 
@@ -301,7 +301,7 @@ failed; before it, as a rail fault to log, not a failed payment.
 ### Problems at the boundary
 
 `handlers::Error` maps everything that isn't a mediation failure to `400` with the `Display` string
-(`handlers.rs:22-40`). Replace with one match from slug to status — `bad-target` 400, `unroutable`,
+(`handlers.rs:22-40`). Replace with one match from slug to status — `bad-instruction` 400, `unroutable`,
 `amount-out-of-range`, `insufficient-margin` 422, `rail-unavailable`, `fx-unavailable` 503,
 `outbound-rejected` 502, `outbound-timeout` 504 — carrying the problem's string as the body, content
 negotiated like `Mediate` already is. One match, one place, swappable for `problem-details` later.
@@ -309,7 +309,7 @@ negotiated like `Mediate` already is. One match, one place, swappable for `probl
 ## Phase D — demo and tests
 
 - `cln-client` keeps paying: `payme` from the merchant, `/pay/cln/pay` through the gateway, squash. Both
-  ends are `konduit-server`, so its changes are the new paths, the `Payee` target, and `konduit-client`
+  ends are `konduit-server`, so its changes are the new paths, the `Payee` instruction, and `konduit-client`
   underneath.
 - Update `dev-env.nix:135` (`-p cln-rail --example … --features "server client"` → `-p cln-rail … client`)
   and `RESULTS.md:74`.

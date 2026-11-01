@@ -223,19 +223,19 @@ impl Ctx {
 /// because this is where the state is.
 impl Rail for Ctx {
     const NAME: &'static str = "cln";
-    type QuoteTarget = Payee;
-    type CommitTarget = Outbound;
+    type QuoteInstruction = Payee;
+    type CommitInstruction = Outbound;
 
     /// What the network downstream costs to reach the payee. The rail
     /// adds nothing of its own.
-    async fn quote(&self, amount: u64, target: Payee) -> Result<Quoted, QuoteProblem> {
+    async fn quote(&self, amount: u64, instruction: Payee) -> Result<Quoted, QuoteProblem> {
         let channel = self
             .channels
-            .get(&target.0)
+            .get(&instruction.0)
             .map_err(|err| QuoteProblem::Unroutable(err.to_string()))?;
         let response = channel
             .quote(&wire::quote::Request {
-                payee: target.0,
+                payee: instruction.0,
                 amount,
             })
             .await
@@ -246,7 +246,7 @@ impl Rail for Ctx {
         })
     }
 
-    /// Commit `target.amount` outbound to `target.key`, within `inbound`.
+    /// Commit `instruction.amount` outbound to `instruction.key`, within `inbound`.
     ///
     /// There is no error arm: once the outbound cheque is dispatched,
     /// anything short of an answer is `Pending`, because an error read as
@@ -255,18 +255,18 @@ impl Rail for Ctx {
         skip(self),
         fields(
             ceiling = inbound.amount,
-            amount = target.amount,
+            amount = instruction.amount,
             timeout = %inbound.timeout,
             lock = %inbound.lock,
         )
     )]
-    async fn commit(&self, inbound: Constraints, target: Outbound) -> Outcome {
+    async fn commit(&self, inbound: Constraints, instruction: Outbound) -> Outcome {
         // Constraints first, since refusing them costs nothing and
         // touches no network.
-        if target.amount > inbound.amount {
+        if instruction.amount > inbound.amount {
             return Outcome::FailedPre(PreProblem::InsufficientMargin(format!(
                 "instructed to pay {} with {} claimable net of fee",
-                target.amount, inbound.amount
+                instruction.amount, inbound.amount
             )));
         }
         if inbound.timeout.is_zero() {
@@ -274,7 +274,7 @@ impl Rail for Ctx {
                 "no time left to make an outbound commitment".to_string(),
             ));
         }
-        let channel = match self.channels.get(&target.key) {
+        let channel = match self.channels.get(&instruction.key) {
             Ok(channel) => channel,
             Err(err) => {
                 return Outcome::FailedPre(QuoteProblem::Unroutable(err.to_string()).into());
@@ -291,17 +291,17 @@ impl Rail for Ctx {
 
         let timeout = inbound.timeout.absolute(now());
         let index = channel.propose_index();
-        match self
-            .commits
-            .claim(inbound.lock, Commit::new(index, target.amount, timeout))
-        {
+        match self.commits.claim(
+            inbound.lock,
+            Commit::new(index, instruction.amount, timeout),
+        ) {
             // The lock is the idempotency key: this is what the commit
             // already made under it came to, not a second payment.
             Claim::Existing(outcome) => return outcome,
             Claim::Fresh => {}
         }
 
-        let body = ChequeBody::new(index, target.amount, timeout, inbound.lock);
+        let body = ChequeBody::new(index, instruction.amount, timeout, inbound.lock);
         let locked = self.signer.locked(channel.tag().clone(), body);
         if let Err(err) = channel.apply_locked(locked.clone()) {
             // Nothing is sent, so the claim is given up and a retry

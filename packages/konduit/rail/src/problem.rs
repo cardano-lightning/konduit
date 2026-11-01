@@ -10,11 +10,11 @@
 /// anything is sent.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum QuoteProblem {
-    /// The target failed to deserialize. Raised by the erasing layer, so
+    /// The instruction failed to deserialize. Raised by the erasing layer, so
     /// no rail hand rolls it.
-    #[error("bad target: {0}")]
-    BadTarget(String),
-    /// The target parsed, and there is no route to it.
+    #[error("bad instruction: {0}")]
+    BadInstruction(String),
+    /// The instruction parsed, and there is no route to it.
     #[error("unroutable: {0}")]
     Unroutable(String),
     /// The amount is outside what the network carries.
@@ -32,7 +32,7 @@ pub enum QuoteProblem {
 impl QuoteProblem {
     pub fn slug(&self) -> &'static str {
         match self {
-            Self::BadTarget(_) => "bad-target",
+            Self::BadInstruction(_) => "bad-instruction",
             Self::Unroutable(_) => "unroutable",
             Self::AmountOutOfRange(_) => "amount-out-of-range",
             Self::RailUnavailable(_) => "rail-unavailable",

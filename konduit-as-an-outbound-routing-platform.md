@@ -78,19 +78,19 @@ The rail trait below is internal and in process. Konduit maps between the two, a
 Authenticated per channel by keytag. The rail is in the path, so Consumer picks it per payment.
 Channel operations are the same shape under a reserved `konduit` name, since they hold irrespective of outbound rail.
 
-| route                      | Consumer sends        | konduit returns                                              |
-| -------------------------- | --------------------- | ------------------------------------------------------------ |
-| `GET /info`                | -                     | asset class, configured rails, konduit's fee and time margin |
-| `POST /pay/{rail}/quote`   | amount, target        | fee and timeout: the rail's, plus konduit's                  |
-| `POST /pay/{rail}/pay`     | locked cheque, target | the secret, pending, or problem details                      |
-| `GET /pay/konduit/receipt` | -                     | latest receipt                                               |
-| `POST /pay/konduit/squash` | signed squash         | `SquashStatus`                                               |
+| route                      | Consumer sends             | konduit returns                                              |
+| -------------------------- | -------------------------- | ------------------------------------------------------------ |
+| `GET /info`                | -                          | asset class, configured rails, konduit's fee and time margin |
+| `POST /pay/{rail}/quote`   | amount, instruction        | fee and timeout: the rail's, plus konduit's                  |
+| `POST /pay/{rail}/pay`     | locked cheque, instruction | the secret, pending, or problem details                      |
+| `GET /pay/konduit/receipt` | -                          | latest receipt                                               |
+| `POST /pay/konduit/squash` | signed squash              | `SquashStatus`                                               |
 
 Quote and pay are the rail's operations seen from the other side, with konduit's fee and time margin added on the way out and stripped on the way in.
 Reveal is absent: konduit needs it to build its own receipt, Consumer does not. Consumer resolves the inbound leg alone, which is squash.
 
 1. **Cover.** The cheque's amount covers the quoted amount and konduit's fee; its timeout exceeds the quoted timeout and konduit's margin. Short of that the commitment is not made, and no rail component is called.
-2. **Lock.** The cheque bears the payee's lock. Konduit takes the lock from the cheque, never from the target, which it does not parse. A lock the target disagrees with is the rail's `FailedPre`.
+2. **Lock.** The cheque bears the payee's lock. Konduit takes the lock from the cheque, never from the instruction, which it does not parse. A lock the instruction disagrees with is the rail's `FailedPre`.
 3. **Resolution.** A secret is returned and Consumer squashes. Pending is polled on squash status, where the secret arrives as an unlocked cheque in the proposal. A failure leaves the cheque to elapse.
 
 An inbound routing peer uses the same shape. It differs in authentication and in holding its own channel, not in the operations.
@@ -99,15 +99,15 @@ An inbound routing peer uses the same shape. It differs in authentication and in
 
 A rail owns its network: the route, the hop count, its own fees, its retries, its settlement.
 Do whatever here.
-The target is part of that: it reaches konduit as bytes, and a rail parses and validates it, since whether some string is a payable BLN invoice is a BLN question.
+The instruction is part of that: it reaches konduit as bytes, and a rail parses and validates it, since whether some string is a payable BLN invoice is a BLN question.
 Konduit asks only that the outcome be reported in the terms below.
 
 ### Konduit role
 
 Konduit verifies inbound; a failure here calls no rail component.
 
-1. **Quote**: forward the request with its target; add fee and time margin to the reply.
-2. **Commit**: verify the inbound commitment is claimable upto amount, lock, timeout; forward these net of fee and time margin, with the target.
+1. **Quote**: forward the request with its instruction; add fee and time margin to the reply.
+2. **Commit**: verify the inbound commitment is claimable upto amount, lock, timeout; forward these net of fee and time margin, with the instruction.
 3. **Reveal**: fetch downstream secrets for resolution (squash) and redemption. Only pending and post-commitment failures need a reveal.
 
 A commit the rail declines leaves the inbound cheque live until its timeout. Consumer carries that liquidity cost on a failed payment.
@@ -145,8 +145,8 @@ A rail is an in process trait impl, compiled in and selected by configuration at
 Whether it then speaks to a remote node over its own transport is inside the hole above.
 
 Konduit supplies the inbound constraints, the rail owns everything after them, so constraints come first in argument order.
-Each operation takes its own rail defined target type: a rail quotes on less than it commits on, and konduit names neither.
-A target that fails to deserialize is a `FailedPre` raised by the erasing layer, so no rail hand rolls it.
+Each operation takes its own rail defined instruction type: a rail quotes on less than it commits on, and konduit names neither.
+An instruction that fails to deserialize is a `FailedPre` raised by the erasing layer, so no rail hand rolls it.
 
 ```rust
 pub struct Constraints {
@@ -177,11 +177,11 @@ pub enum Resolution {
 pub trait Rail {
     /// Identifier, and the config key. Konduit serves it at `/pay/{NAME}/`.
     const NAME: &'static str;
-    type QuoteTarget: for<'de> Deserialize<'de>;
-    type CommitTarget: for<'de> Deserialize<'de>;
+    type QuoteInstruction: for<'de> Deserialize<'de>;
+    type CommitInstruction: for<'de> Deserialize<'de>;
 
-    async fn quote(&self, amount: u64, target: Self::QuoteTarget) -> Result<Quoted, QuoteProblem>;
-    async fn commit(&self, inbound: Constraints, target: Self::CommitTarget) -> Outcome;
+    async fn quote(&self, amount: u64, instruction: Self::QuoteInstruction) -> Result<Quoted, QuoteProblem>;
+    async fn commit(&self, inbound: Constraints, instruction: Self::CommitInstruction) -> Outcome;
     async fn reveal(&self, lock: &Lock) -> Resolution;
 }
 ```
@@ -196,7 +196,7 @@ Quote keeps an error because a failed quote commits nothing.
 Konduit reads `Unknown` past the commitment timeout as failed, and before it as a rail fault.
 
 Two associated types and `async fn` are not dyn compatible, so the registry holds an erasing layer:
-an object safe trait over bytes and boxed futures, which deserializes each target and raises `bad-target` itself.
+an object safe trait over bytes and boxed futures, which deserializes each instruction and raises `bad-instruction` itself.
 
 ### Problem
 
@@ -206,13 +206,13 @@ The sets are distinct, so they are separate types: what blocks a quote also bloc
 
 `QuoteProblem`, also every way a commit fails before sending:
 
-| slug                  | status | meaning                                                   |
-| --------------------- | ------ | --------------------------------------------------------- |
-| `bad-target`          | 400    | target failed to deserialize; raised by the erasing layer |
-| `unroutable`          | 422    | target parsed, no route to it                             |
-| `amount-out-of-range` | 422    | amount outside what the network carries                   |
-| `rail-unavailable`    | 503    | the rail's own backend is unreachable                     |
-| `fx-unavailable`      | 503    | no rate for the instance asset                            |
+| slug                  | status | meaning                                                        |
+| --------------------- | ------ | -------------------------------------------------------------- |
+| `bad-instruction`     | 400    | instruction failed to deserialize; raised by the erasing layer |
+| `unroutable`          | 422    | instruction parsed, no route to it                             |
+| `amount-out-of-range` | 422    | amount outside what the network carries                        |
+| `rail-unavailable`    | 503    | the rail's own backend is unreachable                          |
+| `fx-unavailable`      | 503    | no rate for the instance asset                                 |
 
 `PreProblem` is a `QuoteProblem` or `insufficient-margin` (422): the constraints cannot cover the rail's own margin.
 Commit alone raises it, since quote is what proposes the margin.
@@ -232,7 +232,7 @@ Commit alone raises it, since quote is what proposes the margin.
   Fees are always added even without onward routing.
   A direct terminal pay has a home in `/pay/konduit/pay`: same verification, no onward rail, fees still konduit's to add.
   This holds only while Consumer knows it is paying konduit, since the path is chosen upstream.
-  Where the target is encrypted, or otherwise unparsable until the rail has it, terminality is not visible at request time and the path cannot carry the decision.
+  Where the instruction is encrypted, or otherwise unparsable until the rail has it, terminality is not visible at request time and the path cannot carry the decision.
 
 ## Task
 

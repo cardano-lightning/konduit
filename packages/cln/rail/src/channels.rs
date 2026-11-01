@@ -1,7 +1,7 @@
 //! The outbound lookup: which peer this rail can reach, and how.
 //!
 //! Keyed by the peer's verifying key, which for a one-hop rail is also
-//! the payee a target names. Entries are seeded from config and settable
+//! the payee an instruction names. Entries are seeded from config and settable
 //! while running, so a new outbound peer does not mean a restart.
 //!
 //! Onward routing — a payee that is not the peer — would need a route

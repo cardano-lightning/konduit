@@ -110,29 +110,32 @@ pub enum Resolution {
     Failed(PostProblem),
 }
 
-/// A rail's own target type, as it arrives over a content-negotiated
+/// A rail's own instruction type, as it arrives over a content-negotiated
 /// boundary. Both codecs, because the boundary serves both.
-pub trait Target: for<'de> Deserialize<'de> + for<'b> minicbor::Decode<'b, ()> + Send {}
+pub trait Instruction: for<'de> Deserialize<'de> + for<'b> minicbor::Decode<'b, ()> + Send {}
 
-impl<T> Target for T where T: for<'de> Deserialize<'de> + for<'b> minicbor::Decode<'b, ()> + Send {}
+impl<T> Instruction for T where
+    T: for<'de> Deserialize<'de> + for<'b> minicbor::Decode<'b, ()> + Send
+{
+}
 
-/// A target still in the codec it arrived in. Konduit does not parse
-/// targets; it carries them.
+/// An instruction still in the codec it arrived in. Konduit does not parse
+/// instructions; it carries them.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RawTarget {
+pub enum RawInstruction {
     Json(Vec<u8>),
     Cbor(Vec<u8>),
 }
 
-impl RawTarget {
-    /// Deserializes into a rail's own target type. The erasing layer
-    /// calls this, so no rail hand rolls `bad-target`.
-    pub fn decode<T: Target>(&self) -> Result<T, QuoteProblem> {
+impl RawInstruction {
+    /// Deserializes into a rail's own instruction type. The erasing layer
+    /// calls this, so no rail hand rolls `bad-instruction`.
+    pub fn decode<T: Instruction>(&self) -> Result<T, QuoteProblem> {
         match self {
             Self::Json(bytes) => serde_json::from_slice(bytes)
-                .map_err(|err| QuoteProblem::BadTarget(err.to_string())),
+                .map_err(|err| QuoteProblem::BadInstruction(err.to_string())),
             Self::Cbor(bytes) => {
-                minicbor::decode(bytes).map_err(|err| QuoteProblem::BadTarget(err.to_string()))
+                minicbor::decode(bytes).map_err(|err| QuoteProblem::BadInstruction(err.to_string()))
             }
         }
     }
@@ -140,20 +143,20 @@ impl RawTarget {
 
 /// Konduit supplies the inbound constraints and the rail owns everything
 /// after them, so constraints come first. Each operation takes the rail's
-/// own target type: a rail quotes on less than it commits on, and konduit
+/// own instruction type: a rail quotes on less than it commits on, and konduit
 /// names neither.
 pub trait Rail: Send + Sync {
     /// Identifier, and the config key. Konduit serves it at `/pay/{NAME}/`.
     const NAME: &'static str;
-    type QuoteTarget: Target;
-    type CommitTarget: Target;
+    type QuoteInstruction: Instruction;
+    type CommitInstruction: Instruction;
 
     /// Establish what the rail's network costs. Keeps an error, because a
     /// failed quote commits nothing.
     fn quote(
         &self,
         amount: u64,
-        target: Self::QuoteTarget,
+        instruction: Self::QuoteInstruction,
     ) -> impl Future<Output = Result<Quoted, QuoteProblem>> + Send;
 
     /// Commit outbound within `inbound`. The lock is the idempotency key:
@@ -161,7 +164,7 @@ pub trait Rail: Send + Sync {
     fn commit(
         &self,
         inbound: Constraints,
-        target: Self::CommitTarget,
+        instruction: Self::CommitInstruction,
     ) -> impl Future<Output = Outcome> + Send;
 
     /// Delayed resolution. A rail caches a revealed secret at least as
@@ -172,18 +175,22 @@ pub trait Rail: Send + Sync {
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// [`Rail`] with its associated types erased, so the registry can hold
-/// one of each. Deserializing the target happens here, which is why
-/// `bad-target` is nobody's hand rolled error.
+/// one of each. Deserializing the instruction happens here, which is why
+/// `bad-instruction` is nobody's hand rolled error.
 pub trait DynRail: Send + Sync {
     fn name(&self) -> &'static str;
 
     fn quote<'a>(
         &'a self,
         amount: u64,
-        target: &'a RawTarget,
+        instruction: &'a RawInstruction,
     ) -> BoxFuture<'a, Result<Quoted, QuoteProblem>>;
 
-    fn commit<'a>(&'a self, inbound: Constraints, target: &'a RawTarget) -> BoxFuture<'a, Outcome>;
+    fn commit<'a>(
+        &'a self,
+        inbound: Constraints,
+        instruction: &'a RawInstruction,
+    ) -> BoxFuture<'a, Outcome>;
 
     fn reveal<'a>(&'a self, lock: &'a Lock) -> BoxFuture<'a, Resolution>;
 }
@@ -196,18 +203,22 @@ impl<R: Rail> DynRail for R {
     fn quote<'a>(
         &'a self,
         amount: u64,
-        target: &'a RawTarget,
+        instruction: &'a RawInstruction,
     ) -> BoxFuture<'a, Result<Quoted, QuoteProblem>> {
         Box::pin(async move {
-            let target = target.decode::<R::QuoteTarget>()?;
-            Rail::quote(self, amount, target).await
+            let instruction = instruction.decode::<R::QuoteInstruction>()?;
+            Rail::quote(self, amount, instruction).await
         })
     }
 
-    fn commit<'a>(&'a self, inbound: Constraints, target: &'a RawTarget) -> BoxFuture<'a, Outcome> {
+    fn commit<'a>(
+        &'a self,
+        inbound: Constraints,
+        instruction: &'a RawInstruction,
+    ) -> BoxFuture<'a, Outcome> {
         Box::pin(async move {
-            match target.decode::<R::CommitTarget>() {
-                Ok(target) => Rail::commit(self, inbound, target).await,
+            match instruction.decode::<R::CommitInstruction>() {
+                Ok(instruction) => Rail::commit(self, inbound, instruction).await,
                 // Nothing is sent, so this is a pre-commitment failure.
                 Err(problem) => Outcome::FailedPre(problem.into()),
             }
@@ -231,8 +242,8 @@ mod tests {
 
     impl Rail for Stub {
         const NAME: &'static str = "stub";
-        type QuoteTarget = Payee;
-        type CommitTarget = Payee;
+        type QuoteInstruction = Payee;
+        type CommitInstruction = Payee;
 
         async fn quote(&self, amount: u64, _: Payee) -> Result<Quoted, QuoteProblem> {
             Ok(Quoted {
@@ -254,8 +265,8 @@ mod tests {
 
     impl Rail for Reserved {
         const NAME: &'static str = RESERVED_NAME;
-        type QuoteTarget = Payee;
-        type CommitTarget = Payee;
+        type QuoteInstruction = Payee;
+        type CommitInstruction = Payee;
 
         async fn quote(&self, _: u64, _: Payee) -> Result<Quoted, QuoteProblem> {
             unreachable!()
@@ -300,13 +311,13 @@ mod tests {
         registry.insert(Stub).unwrap();
         let rail = registry.get("stub").unwrap().clone();
 
-        let json = RawTarget::Json(serde_json::to_vec(&Payee(7)).unwrap());
+        let json = RawInstruction::Json(serde_json::to_vec(&Payee(7)).unwrap());
         let mut buf = Vec::new();
         minicbor::encode(Payee(7), &mut buf).unwrap();
-        let cbor = RawTarget::Cbor(buf);
+        let cbor = RawInstruction::Cbor(buf);
 
-        for target in [json, cbor] {
-            let quoted = futures_lite_block_on(rail.quote(42, &target));
+        for instruction in [json, cbor] {
+            let quoted = futures_lite_block_on(rail.quote(42, &instruction));
             assert_eq!(quoted.unwrap().fee, 42);
         }
     }
@@ -316,10 +327,10 @@ mod tests {
         let mut registry = Registry::new();
         registry.insert(Stub).unwrap();
         let rail = registry.get("stub").unwrap().clone();
-        let target = RawTarget::Json(b"not a payee".to_vec());
+        let instruction = RawInstruction::Json(b"not a payee".to_vec());
 
-        match futures_lite_block_on(rail.commit(constraints(), &target)) {
-            Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "bad-target"),
+        match futures_lite_block_on(rail.commit(constraints(), &instruction)) {
+            Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "bad-instruction"),
             other => panic!("expected FailedPre, got {other:?}"),
         }
     }
