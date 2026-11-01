@@ -224,15 +224,19 @@ Commit alone raises it, since quote is what proposes the margin.
 | `outbound-rejected` | 502    | the outbound network refused or failed the payment        |
 | `outbound-timeout`  | 504    | the outbound commitment timed out unresolved; reveal only |
 
-## Issues
+## Decided
 
-- We do not have special treatment for being the terminal of a route, ie the ultimate recipient.
-  However fees, are a konduit responsibility where as assessing payee is rail responsibility.
-  They are handled in two separate places. Accommodating this edge case looks a bit painful right now.
-  Fees are always added even without onward routing.
-  A direct terminal pay has a home in `/pay/konduit/pay`: same verification, no onward rail, fees still konduit's to add.
-  This holds only while Consumer knows it is paying konduit, since the path is chosen upstream.
-  Where the instruction is encrypted, or otherwise unparsable until the rail has it, terminality is not visible at request time and the path cannot carry the decision.
+- **Being the ultimate payee gets no special treatment.** Fee and time margin are added just the same,
+  since they pay for the inbound verification konduit does either way, and that work does not shrink
+  because the route ends here. So there is no terminal discount to implement, and no edge case to
+  accommodate: a direct pay is the ordinary path with no onward rail, and `/pay/konduit/pay` is its home.
+  What remains true is that the path can only carry the decision while Consumer knows it is paying
+  konduit — where the instruction is encrypted, or otherwise unparsable until a rail has it, terminality
+  is not visible at request time.
+- **Lock alignment is a rail's question, not konduit's.** Konduit takes the lock from the cheque and
+  compares it to nothing. Whether an instruction names something that disagrees with that lock is a fact
+  about the rail's own network — only the rail can read the instruction at all — so it is the rail's
+  `FailedPre`.
 
 ## Task
 

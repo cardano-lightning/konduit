@@ -1,12 +1,15 @@
 //! Konduit's fee and time margin, and the only arithmetic that applies
 //! them.
 //!
-//! Konduit charges; a rail does not. A quote leaves with konduit's fee
-//! and margin added to the rail's; a commit arrives and has them
-//! stripped back off before the rail is called. `strip` is the exact
-//! inverse of `add`, which is what makes a cheque that satisfies a quote
-//! necessarily satisfy the rail — so the two live here together, and a
-//! caller does neither by hand.
+//! Konduit charges; a rail does not. A quote leaves padded with
+//! konduit's fee and margin on top of the rail's; a commit arrives and
+//! has them stripped back off before the rail is called. `strip` is the
+//! exact inverse of `pad`, which is what makes a cheque that satisfies a
+//! quote necessarily satisfy the rail — so the two live here together,
+//! and a caller does neither by hand.
+//!
+//! This applies to every payment, including one where konduit is itself
+//! the payee: being the end of the route is not a discount.
 
 use konduit_data::{Duration, Locked};
 use konduit_rail::{Constraints, Quoted, Relative};
@@ -44,8 +47,9 @@ impl Margins {
         Self { fee, time }
     }
 
-    /// What a consumer is quoted: the rail's terms, plus konduit's.
-    pub fn add(&self, quoted: Quoted) -> Quoted {
+    /// What a consumer is quoted: the rail's terms, padded with
+    /// konduit's.
+    pub fn pad(&self, quoted: Quoted) -> Quoted {
         Quoted {
             fee: quoted.fee.saturating_add(self.fee),
             timeout: Relative(quoted.timeout.0.saturating_add(self.time.0)),
@@ -105,7 +109,7 @@ mod tests {
     #[test]
     fn a_cheque_that_satisfies_the_quote_satisfies_the_rail() {
         let (margins, quoted, now) = (margins(), quoted(), Duration::from_secs(1_000));
-        let offered = margins.add(quoted);
+        let offered = margins.pad(quoted);
         // The consumer pays the quoted amount plus the quoted fee, and
         // allows the quoted timeout, to the millisecond.
         let amount = 5_000 + offered.fee;

@@ -106,7 +106,7 @@ timeout_net = Relative::until(T, now) - margins.time
 **The invariant**: strip is exactly the inverse of add, so a cheque that satisfies a quote satisfies the
 rail. A consumer quoted `(a, instruction) -> (fee, timeout)` sends `A ≥ a + fee` and `T - now ≥ timeout`; then
 `amount_net ≥ a + fee_net` and `timeout_net ≥ timeout_net(quoted)` — precisely what the rail quoted. One
-`add_margins`/`strip_margins` pair in one module, with a round-trip test, is what keeps that true; two
+`pad`/`strip` pair in one module, with a round-trip test, is what keeps that true; two
 inlined additions are what let it drift, and a quote promising less margin than commit demands is an
 `insufficient-margin` the consumer could not have anticipated.
 
@@ -281,12 +281,12 @@ One ordered function, replacing `data.cln_commit` and the `todo!()` `data.pay`, 
    `FailedPre`/`FailedPost` → the problem's slug, its status, and its string, with the inbound cheque left
    live to elapse — say so in the body, since the consumer carries that liquidity cost.
 
-Steps 2 and 3 are `strip_margins`, nowhere else. The lock comes from the cheque and konduit never parses
+Steps 2 and 3 are `Margins::strip`, nowhere else. The lock comes from the cheque and konduit never parses
 the instruction; that holds today and only needs to keep holding once the instruction is opaque bytes.
 
 ### `POST /pay/{rail}/quote`
 
-`rail.quote(amount, instruction)` then `add_margins`, answering `konduit_tmp::Quote { index, amount, fee,
+`rail.quote(amount, instruction)` then `Margins::pad`, answering `konduit_tmp::Quote { index, amount, fee,
 relative_timeout }`. Replaces `data.cln_quote`'s inline `response.fee + FEE_PLACEHOLDER` and
 `saturating_add(QUOTE_PAY_TIME_MARGIN_MS)`.
 
@@ -315,7 +315,7 @@ negotiated like `Mediate` already is. One match, one place, swappable for `probl
   and `RESULTS.md:74`.
 - `standalone::ctx`'s `local_payme_commits_through_the_standalone_client_path` dies with standalone. Replace
   with: `Outcome` mapping unit tests, one per row of the Phase B table; an idempotency test (one lock
-  committed twice → one outbound payment, same secret); an `add_margins`/`strip_margins` round-trip test
+  committed twice → one outbound payment, same secret); a `pad`/`strip` round-trip test
   asserting the cover invariant; and a platform test in `konduit-server` driving a stub `Rail` through
   commit-pending-reveal — the `konduit-rail` tests already do this much against a stub, so the harness
   exists.
@@ -335,5 +335,10 @@ negotiated like `Mediate` already is. One match, one place, swappable for `probl
 4. **`problem-details`** is skipped for now by choice; the `slug()` methods are the seam for picking it up.
 5. **Fx** — placeholder only: the `fx-unavailable` variant exists, unproduced, and `fx-client` stays
    unwired until a rail denominates in something other than the instance asset.
-6. **Terminality** — the spec's own open issue. The plan takes the stated resolution (`/pay/konduit/pay`,
-   fees still konduit's) and does nothing cleverer.
+6. **Terminality** — decided, and nothing to build: being the ultimate payee gets no special treatment,
+   so fee and margin are padded on exactly as they are for a routed payment. `/pay/konduit/pay` is the
+   home for a direct pay, and `paymes_reveal` is handed `constraints.amount` like any rail would be, so
+   konduit's fee is genuinely charged on a payment to itself.
+7. **Lock alignment is the rail's.** Konduit compares the lock to nothing; `data::align_commitments`,
+   which did, is deleted. Whether an instruction disagrees with the cheque's lock is a fact about a
+   rail's own network, and its `FailedPre` to raise.

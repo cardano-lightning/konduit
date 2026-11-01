@@ -192,20 +192,6 @@ impl Data {
         // })
     }
 
-    fn align_commitments(&self, locked: &Locked, payme: &Payme) -> Result<(), CommitmentError> {
-        if payme.lock != *locked.lock() {
-            return Err(CommitmentError::Lock);
-        }
-        if locked.amount() < payme.amount.saturating_add(self.margins.fee) {
-            return Err(CommitmentError::Fee);
-        }
-        let current_time = time::now().map_err(|_| CommitmentError::Time)?;
-        if payme.timeout < current_time {
-            return Err(CommitmentError::Time);
-        }
-        Ok(())
-    }
-
     #[tracing::instrument(skip_all, fields(amount = body.payme.amount, lock = %body.payme.lock), err)]
     pub async fn pay(&self, keytag: &Keytag, body: PayBody) -> Result<PayResponse, Error> {
         todo!("Superceded! to be removed");
@@ -253,7 +239,7 @@ impl Data {
                 .await
                 .map_err(|problem| Error::Cln(problem.to_string()))?
         };
-        let offered = self.margins.add(downstream);
+        let offered = self.margins.pad(downstream);
         // Inbound index, against the whole of what the cheque must bear.
         let index = channel.can_commit(request.amount + offered.fee)?;
         Ok(cln_rail::wire::quote::Response {
@@ -285,10 +271,12 @@ impl Data {
                 .as_ref()
                 .is_some_and(|payme| payme.key == self.cln.verifying_key())
         {
-            // ASSUME PAYEE. You own the secret.
+            // Konduit is the payee, and pays itself out of what is left
+            // after its own fee — being the end of the route is not a
+            // discount.
             let secret = self
                 .cln()
-                .paymes_reveal(request.inbound.lock(), request.inbound.amount())
+                .paymes_reveal(request.inbound.lock(), constraints.amount)
                 .map_err(|e| Error::Cln(e.to_string()))?;
             Some(secret)
         } else {
@@ -373,10 +361,12 @@ impl From<crate::margins::Error> for Error {
     }
 }
 
+/// Konduit's own grounds for not committing. Note what is absent: the
+/// lock. Konduit takes it from the cheque and compares it to nothing —
+/// whether an instruction disagrees with it is the rail's question, and
+/// its `FailedPre` to raise.
 #[derive(Debug, thiserror::Error)]
 pub enum CommitmentError {
-    #[error("lock mismatch")]
-    Lock,
     #[error("no or insufficient fee")]
     Fee,
     #[error("no or insufficient time")]
