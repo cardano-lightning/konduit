@@ -299,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn a_target_reaches_a_rail_in_either_codec() {
+    fn an_instruction_reaches_a_rail_in_either_codec() {
         let mut registry = Registry::new();
         registry.insert(Stub).unwrap();
         let rail = registry.get("stub").unwrap().clone();
@@ -316,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn an_undecodable_target_is_a_pre_commitment_failure() {
+    fn an_undecodable_instruction_is_a_pre_commitment_failure() {
         let mut registry = Registry::new();
         registry.insert(Stub).unwrap();
         let rail = registry.get("stub").unwrap().clone();

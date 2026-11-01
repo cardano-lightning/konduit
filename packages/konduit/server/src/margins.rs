@@ -40,6 +40,16 @@ impl Error {
             Self::InsufficientTime => "insufficient-time",
         }
     }
+
+    /// Konduit's own problems carry their own status, for the same
+    /// reason a rail's do: the enum that defines the problem is what
+    /// knows its meaning. The cheque is well formed and cannot be acted
+    /// on, so both are 422.
+    pub fn status(&self) -> u16 {
+        match self {
+            Self::InsufficientFee | Self::InsufficientTime => 422,
+        }
+    }
 }
 
 impl Margins {

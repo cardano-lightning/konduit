@@ -65,9 +65,9 @@ that rejects `konduit` and duplicate names at construction. Dependencies: `kondu
 Three decisions worth recording:
 
 - **No `problem-details` yet.** `QuoteProblem`, `PreProblem`, `PostProblem` are plain `thiserror` enums,
-  each variant carrying a `String` of runtime context that is what the user sees. Each keeps a
-  `slug() -> &'static str` with the spec's stable slugs, so the HTTP status mapping is a one-line match in
-  `konduit-server` and the later `problem-details` migration is mechanical. No HTTP in this crate.
+  each variant carrying a `String` of runtime context that is what the user sees, plus `slug()` and
+  `status() -> u16` — the same two the `ProblemDetail` trait will supply, so that migration is mechanical.
+  A `u16` is not HTTP in this crate's sense: it is the status vocabulary, which ADR 10 keeps on the error.
 - **`Relative(Duration)`** is the type of `Constraints.timeout` and `Quoted.timeout`, a deliberate
   deviation from the spec's code block. `konduit_data::Duration` is used both absolutely and relatively
   across these crates and the boundary is exactly where they get mixed: `data.cln_commit:267` subtracts the
@@ -300,11 +300,16 @@ failed; before it, as a rail fault to log, not a failed payment.
 
 ### Problems at the boundary
 
-`handlers::Error` maps everything that isn't a mediation failure to `400` with the `Display` string
-(`handlers.rs:22-40`). Replace with one match from slug to status — `bad-instruction` 400, `unroutable`,
-`amount-out-of-range`, `insufficient-margin` 422, `rail-unavailable`, `fx-unavailable` 503,
-`outbound-rejected` 502, `outbound-timeout` 504 — carrying the problem's string as the body, content
-negotiated like `Mediate` already is. One match, one place, swappable for `problem-details` later.
+Slug _and_ status belong to the enum that defines the problem, not to the boundary: they are stable across
+rails and across transports, and the variant's author is who knows what it means. So `QuoteProblem`,
+`PreProblem`, `PostProblem` each carry `slug()` and `status() -> u16` in `konduit-rail`, and
+`margins::Error` carries its own in `konduit-server` for the same reason — that is ADR 10's design, where
+`http_status` is a `u16` on the trait and integration crates convert to their native type.
+
+What `konduit-server` owns is the response: turning a `u16` into an actix status, writing the body,
+negotiating its codec as `Mediate` already does. It chooses nothing. `handlers::Error` currently maps
+everything that isn't a mediation failure to `400` with the `Display` string (`handlers.rs:22-40`), which is
+what this replaces.
 
 ## Phase D — demo and tests
 
