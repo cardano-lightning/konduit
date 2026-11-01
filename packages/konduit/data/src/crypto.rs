@@ -4,7 +4,7 @@ use cryptoxide::ed25519;
 use serde::{Deserialize, Serialize};
 
 /// Ed25519 verification key (public key), 32 bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VerifyingKey(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] [u8; 32]);
 
@@ -56,6 +56,21 @@ impl From<VerifyingKey> for [u8; 32] {
     }
 }
 
+/// Hex, like everything else that is bytes on the wire: a 32-byte
+/// array printed element by element is unreadable in a log line and
+/// cannot be pasted back into a request.
+impl std::fmt::Debug for VerifyingKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "VerifyingKey({})", hex::encode(self.0))
+    }
+}
+
+impl std::fmt::Debug for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Signature({})", hex::encode(self.0))
+    }
+}
+
 impl<C> minicbor::Encode<C> for VerifyingKey {
     fn encode<W: minicbor::encode::Write>(
         &self,
@@ -85,7 +100,7 @@ impl<'b, C> minicbor::Decode<'b, C> for VerifyingKey {
 
 // =========================================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Signature(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] [u8; 64]);
 

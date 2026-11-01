@@ -4,10 +4,17 @@ use crate::{ParseError, utils::try_into_array};
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 #[repr(transparent)]
 pub struct Secret(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] pub [u8; 32]);
+
+/// Hex, as the wire carries it.
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Secret({})", hex::encode(self.0))
+    }
+}
 
 impl std::str::FromStr for Secret {
     type Err = ParseError;

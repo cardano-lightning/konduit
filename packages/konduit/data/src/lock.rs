@@ -6,10 +6,18 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 pub struct Lock(#[cfg_attr(feature = "serde", serde(with = "crate::hex_bytes"))] pub [u8; 32]);
+
+/// Hex: a lock is quoted back in requests and logs, so it prints the
+/// way it travels.
+impl fmt::Debug for Lock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "Lock({})", hex::encode(self.0))
+    }
+}
 
 impl fmt::Display for Lock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
