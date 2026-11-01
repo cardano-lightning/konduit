@@ -20,6 +20,7 @@ impl AdaptorInfo {
         close_period: u64,
         max_tag_length: u8,
         fee: u64,
+        time_margin: u64,
     ) -> Self {
         Self(core::AdaptorInfo {
             channel_parameters: ChannelParameters {
@@ -27,7 +28,11 @@ impl AdaptorInfo {
                 close_period: Duration::from_secs(close_period),
                 tag_length: max_tag_length as usize,
             },
-            tos: TosInfo { flat_fee: fee },
+            tos: TosInfo {
+                flat_fee: fee,
+                time_margin: Duration::from_secs(time_margin),
+                rails: Vec::new(),
+            },
             tx_help: (),
         })
     }
@@ -50,5 +55,19 @@ impl AdaptorInfo {
     #[wasm_bindgen(getter, js_name = "fee")]
     pub fn _wasm_fee(&self) -> u64 {
         self.tos.flat_fee
+    }
+
+    /// Konduit's own time margin: how much sooner than the cheque the
+    /// outbound commitment must resolve.
+    #[wasm_bindgen(getter, js_name = "timeMargin")]
+    pub fn _wasm_time_margin(&self) -> u64 {
+        self.tos.time_margin.as_secs()
+    }
+
+    /// The rails this adaptor is configured with, for the consumer to
+    /// pick one per payment.
+    #[wasm_bindgen(getter, js_name = "rails")]
+    pub fn _wasm_rails(&self) -> Vec<String> {
+        self.tos.rails.clone()
     }
 }

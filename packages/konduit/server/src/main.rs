@@ -101,7 +101,13 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let info = Arc::new(AdaptorInfo::from(args.common.clone()));
+    let mut info = AdaptorInfo::from(args.common.clone());
+    // The rails this adaptor is configured with, so `/info` names the set
+    // a consumer picks from. One entry while `cln` is the only one
+    // compiled in.
+    info.tos.rails = vec![<cln_rail::Ctx as konduit_rail::Rail>::NAME.to_string()];
+    let info = Arc::new(info);
+    let margins = konduit_server::Margins::from(&info.tos);
 
     // ADMIN :: Index
     let index_every = args.admin.admin_every;
@@ -158,7 +164,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let server_data = server::Data::new(cln, db, fx_state, info, admin);
+    let server_data = server::Data::new(cln, db, fx_state, info, margins, admin);
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;

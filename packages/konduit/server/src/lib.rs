@@ -11,6 +11,9 @@ pub mod common;
 pub mod cardano;
 pub mod cln;
 
+pub mod margins;
+pub use margins::Margins;
+
 pub mod args;
 
 pub mod db;

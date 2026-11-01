@@ -22,6 +22,7 @@ pub const SERVER_PORT: &str = "KONDUIT_SERVER_PORT";
 /// # Channel params
 pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";
 pub const FEE: &str = "KONDUIT_FEE";
+pub const TIME_MARGIN: &str = "KONDUIT_TIME_MARGIN";
 pub const TAG_LENGTH: &str = "KONDUIT_TAG_LENGTH";
 
 /// # Tx building & preferences

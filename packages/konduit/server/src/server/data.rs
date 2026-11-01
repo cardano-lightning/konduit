@@ -1,12 +1,12 @@
 use crate::{
-    Channel, admin,
+    Channel, Margins, admin,
     channel::{self, apply_locked, apply_secrets, apply_squash, apply_timeout},
     db,
     time::{self, now},
 };
 use cln_rail::Payee;
 use konduit_data::{Duration, Locked, Secret, Squash};
-use konduit_rail::{Constraints, Outcome, Rail, Relative};
+use konduit_rail::{Outcome, Quoted, Rail, Relative};
 use konduit_tmp::{
     AdaptorInfo, Keytag, Payme, PaymeRequest, Quote, QuoteBody, Receipt, SquashProposal,
     SquashStatus, TxHelp,
@@ -14,10 +14,6 @@ use konduit_tmp::{
 /// Actix web server "Data" ie the context of handlers.
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-// TODO :: MOVE TO CONFIG
-const FEE_PLACEHOLDER: u64 = 1000;
-const QUOTE_PAY_TIME_MARGIN_MS: u64 = 30_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -66,6 +62,9 @@ pub struct Data {
     db: Arc<db::Db>,
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<AdaptorInfo<TxHelp>>,
+    /// Konduit's own fee and time margin, and the only place either is
+    /// added or stripped.
+    margins: Margins,
     admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
 }
 
@@ -75,6 +74,7 @@ impl Data {
         db: Arc<db::Db>,
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<AdaptorInfo<TxHelp>>,
+        margins: Margins,
         admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
     ) -> Self {
         Self {
@@ -82,6 +82,7 @@ impl Data {
             db,
             fx,
             info,
+            margins,
             admin,
         }
     }
@@ -195,7 +196,7 @@ impl Data {
         if payme.lock != *locked.lock() {
             return Err(CommitmentError::Lock);
         }
-        if locked.amount() < payme.amount.saturating_add(FEE_PLACEHOLDER) {
+        if locked.amount() < payme.amount.saturating_add(self.margins.fee) {
             return Err(CommitmentError::Fee);
         }
         let current_time = time::now().map_err(|_| CommitmentError::Time)?;
@@ -239,27 +240,26 @@ impl Data {
         request: cln_rail::wire::quote::Request,
     ) -> Result<cln_rail::wire::quote::Response, Error> {
         let channel = self.channel(&keytag.as_bytes().to_vec().try_into().unwrap())?;
-        let (fee, timeout) = if request.payee == self.cln.verifying_key() {
-            // I am the payee. No fee
-            (0_u64, Duration::from_millis(0))
+        // Terminal: nothing is routed onward, so there is nothing
+        // downstream to quote. Konduit's own terms still apply.
+        let downstream = if request.payee == self.cln.verifying_key() {
+            Quoted {
+                fee: 0,
+                timeout: Relative(Duration::from_millis(0)),
+            }
         } else {
-            let quoted = self
-                .cln
+            self.cln
                 .quote(request.amount, Payee(request.payee))
                 .await
-                .map_err(|problem| Error::Cln(problem.to_string()))?;
-            (quoted.fee + FEE_PLACEHOLDER, quoted.timeout.0)
+                .map_err(|problem| Error::Cln(problem.to_string()))?
         };
-        // Inbound index
-        let index = channel.can_commit(request.amount + fee)?;
-        // ALWAYS NEED TIME TO SUB!
-        let timeout = timeout
-            .as_millis()
-            .saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
+        let offered = self.margins.add(downstream);
+        // Inbound index, against the whole of what the cheque must bear.
+        let index = channel.can_commit(request.amount + offered.fee)?;
         Ok(cln_rail::wire::quote::Response {
             index,
-            fee,
-            timeout: Duration::from_millis(timeout),
+            fee: offered.fee,
+            timeout: offered.timeout.0,
         })
     }
 
@@ -276,13 +276,9 @@ impl Data {
         let keytag = keytag.as_bytes().to_vec().try_into().unwrap();
         self.db()
             .update(&keytag, apply_locked(request.inbound.clone()))?;
-        let timeout = Duration::from_millis(
-            request
-                .inbound
-                .timeout()
-                .as_millis()
-                .saturating_sub(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64,
-        );
+        // Konduit's fee and margin come off here and nowhere else. A
+        // cheque that cannot cover them calls no rail.
+        let constraints = self.margins.strip(&request.inbound, now()?)?;
         let secret = if request.outbound.is_none()
             || request
                 .outbound
@@ -296,21 +292,10 @@ impl Data {
                 .map_err(|e| Error::Cln(e.to_string()))?;
             Some(secret)
         } else {
-            // Youre routing.
+            // Youre routing. `constraints.amount` is the ceiling the
+            // rail may spend; the instruction says what to pay, and the
+            // rail checks the one against the other.
             let instruction = request.outbound.ok_or(Error::Other)?;
-            // The ceiling the rail may spend: the inbound cheque net of
-            // konduit's fee. The rail checks the consumer's instruction
-            // against it and commits that, not the ceiling.
-            let ceiling = request
-                .inbound
-                .amount()
-                .checked_sub(FEE_PLACEHOLDER)
-                .ok_or(Error::Other)?;
-            let constraints = Constraints {
-                amount: ceiling,
-                timeout: Relative::until(timeout, now()?),
-                lock: *request.inbound.lock(),
-            };
             // FIXME :: interim mapping. The pending and failed arms are
             // the consumer's to see as problem details, which is Phase C
             // of the rail plan; until then pending is indistinguishable
@@ -376,6 +361,15 @@ impl From<Option<[u8; 32]>> for PayResponse {
         value
             .map(Secret)
             .map_or(PayResponse::Pending, PayResponse::Ok)
+    }
+}
+
+impl From<crate::margins::Error> for Error {
+    fn from(err: crate::margins::Error) -> Self {
+        match err {
+            crate::margins::Error::InsufficientFee => CommitmentError::Fee.into(),
+            crate::margins::Error::InsufficientTime => CommitmentError::Time.into(),
+        }
     }
 }
 

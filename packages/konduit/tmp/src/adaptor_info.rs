@@ -31,6 +31,14 @@ impl From<AdaptorInfo<TxHelp>> for AdaptorInfo<()> {
 pub struct TosInfo {
     #[n(0)]
     pub flat_fee: u64,
+    /// How much sooner than the inbound cheque konduit requires the
+    /// outbound commitment to resolve. Relative.
+    #[n(1)]
+    pub time_margin: konduit_data::Duration,
+    /// The rails this adaptor is configured with, so a consumer sees the
+    /// set it picks from. `konduit` is reserved and not among them.
+    #[n(2)]
+    pub rails: Vec<String>,
 }
 
 #[serde_as]

@@ -23,6 +23,10 @@ pub struct CommonArgs {
     // Amount in channel currency (eg lovelace)
     #[arg(long, env = env::FEE, default_value = "1000")]
     pub fee: u64,
+    /// How much sooner than the inbound cheque konduit requires the
+    /// outbound commitment to resolve, leaving it time to act.
+    #[arg(long, env = env::TIME_MARGIN, value_name=metavar::DURATION, default_value="30s")]
+    pub time_margin: Duration,
 }
 
 impl From<CommonArgs> for ChannelParameters {
@@ -38,7 +42,13 @@ impl From<CommonArgs> for ChannelParameters {
 
 impl From<CommonArgs> for AdaptorInfo<TxHelp> {
     fn from(args: CommonArgs) -> Self {
-        let tos = TosInfo { flat_fee: args.fee };
+        let tos = TosInfo {
+            flat_fee: args.fee,
+            time_margin: args.time_margin,
+            // Filled in once the registry is built; the args don't know
+            // which rails are compiled in.
+            rails: Vec::new(),
+        };
 
         let tx_help = TxHelp {
             host_address: args.host_address.clone(),

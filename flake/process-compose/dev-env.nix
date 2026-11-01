@@ -118,17 +118,9 @@
       set -euo pipefail
       export CARGO_TARGET_DIR="$RUN_DIR/cargo-target-cln-demo"
       mkdir -p "$CLN_DEMO_CONFIG_DIR"
-      # konduit-server itself loads .env.adaptor (KONDUIT_FEE etc.) via
-      # dotenvy at Rust-runtime, which never reaches sibling processes as
-      # a real shell env var. Source it here too, so the demo's CLN
-      # routing fee (consumer_gateway_merchant.rs) matches what /info
-      # reports instead of silently falling back to a placeholder.
-      if [ -f "$ROOT_DIR/.env.adaptor" ]; then
-        set -a
-        # shellcheck disable=SC1091
-        source "$ROOT_DIR/.env.adaptor"
-        set +a
-      fi
+      # No .env.adaptor here any more: the fee is konduit's own, read by
+      # konduit-server itself, and the generated rail config carries no
+      # fee to keep consistent with it.
       CLN_GATEWAY_URL="127.0.0.1:$KONDUIT_SERVER_GATEWAY_PORT" \
         CLN_MERCHANT_URL="127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT" \
         CLN_EXAMPLE_CONFIG_DIR="$CLN_DEMO_CONFIG_DIR" \
