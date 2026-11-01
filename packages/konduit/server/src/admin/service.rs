@@ -117,7 +117,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     async fn get_secrets(&self, locks: Vec<Lock>) -> Result<Vec<Secret>, anyhow::Error> {
         let mut secrets: Vec<Secret> = Vec::new();
         for lock in locks.into_iter() {
-            if let Some(secret) = self.cln.reveal(&lock) {
+            if let Some(secret) = self.cln.known_secret(&lock) {
                 secrets.push(secret);
             }
         }
@@ -343,7 +343,7 @@ mod tests {
 
     fn cln_context() -> Arc<cln_rail::Ctx> {
         Arc::new(
-            crate::cln::build(crate::cln::Args { config_path: None }, 0)
+            crate::cln::build(crate::cln::Args { config_path: None })
                 .expect("CLN context initializes"),
         )
     }

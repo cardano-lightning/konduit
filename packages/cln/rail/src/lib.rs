@@ -24,6 +24,9 @@ pub use commits::Commits;
 pub mod ctx;
 pub use ctx::Ctx;
 
+pub mod rail;
+pub use rail::Payee;
+
 pub mod random;
 
 pub mod time;

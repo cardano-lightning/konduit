@@ -4,8 +4,8 @@ use crate::{
     db,
     time::{self, now},
 };
-use cln_rail::{receipt, wire::commit::Request};
 use konduit_data::{Duration, Locked, Secret, Squash};
+use konduit_rail::{Constraints, Outcome, Relative};
 use konduit_tmp::{
     AdaptorInfo, Keytag, Payme, PaymeRequest, Quote, QuoteBody, Receipt, SquashProposal,
     SquashStatus, TxHelp,
@@ -242,12 +242,12 @@ impl Data {
             // I am the payee. No fee
             (0_u64, Duration::from_millis(0))
         } else {
-            let response = self
+            let quoted = self
                 .cln
-                .quote(request.clone())
+                .quote_payee(&request.payee, request.amount)
                 .await
-                .map_err(|e| Error::Cln(e.to_string()))?;
-            (response.fee + FEE_PLACEHOLDER, response.timeout)
+                .map_err(|problem| Error::Cln(problem.to_string()))?;
+            (quoted.fee + FEE_PLACEHOLDER, quoted.timeout.0)
         };
         // Inbound index
         let index = channel.can_commit(request.amount + fee)?;
@@ -302,12 +302,21 @@ impl Data {
                 .amount()
                 .checked_sub(FEE_PLACEHOLDER)
                 .ok_or(Error::Other)?;
-            let response = self
-                .cln()
-                .commit2(&payee, amount, timeout, &request.inbound.lock())
-                .await
-                .map_err(|e| Error::Cln(e.to_string()))?;
-            response.secret
+            let constraints = Constraints {
+                amount,
+                timeout: Relative::until(timeout, now()?),
+                lock: *request.inbound.lock(),
+            };
+            // FIXME :: interim mapping. The pending and failed arms are
+            // the consumer's to see as problem details, which is Phase C
+            // of the rail plan; until then pending is indistinguishable
+            // from "no secret yet" and a failure is a 400.
+            match self.cln().commit_payee(constraints, &payee).await {
+                Outcome::Success(secret) => Some(secret),
+                Outcome::Pending => None,
+                Outcome::FailedPre(problem) => return Err(Error::Cln(problem.to_string())),
+                Outcome::FailedPost(problem) => return Err(Error::Cln(problem.to_string())),
+            }
         };
         if let Some(secret) = secret {
             tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");

@@ -28,6 +28,7 @@ fx-client = { workspace = true, features = ["cli", "namespaced"] }
 hex.workspace = true
 humantime.workspace = true
 konduit-data = { workspace = true, features = ["serde"] }
+konduit-rail.workspace = true
 konduit-tmp.workspace = true
 konduit-tx.workspace = true
 minicbor.workspace = true

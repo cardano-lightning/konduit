@@ -28,13 +28,8 @@ fn main() -> anyhow::Result<()> {
         std::env::var("CLN_GATEWAY_URL").unwrap_or_else(|_| "127.0.0.1:7652".to_string());
     let merchant_url =
         std::env::var("CLN_MERCHANT_URL").unwrap_or_else(|_| "127.0.0.1:7653".to_string());
-    // Reuse Konduit's own adaptor fee (KONDUIT_FEE) as the CLN routing fee,
-    // rather than silently falling back to Params::default()'s test
-    // placeholder — keeps the demo's quoted fee consistent with `/info`.
-    let fee: u64 = std::env::var("KONDUIT_FEE")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or_else(|| cln_rail::ctx::Params::default().fee);
+    // No fee here: konduit's own fee is konduit's (KONDUIT_FEE, read by
+    // konduit-server), and the rail charges nothing of its own.
     let gateway_signer = SigningKey::from(GATEWAY_KEY);
     let merchant_signer = SigningKey::from(MERCHANT_KEY);
 
@@ -60,22 +55,17 @@ fn main() -> anyhow::Result<()> {
         media_type: Default::default(),
     };
 
-    // --- merchant config: no outbound channels (terminal node), one
-    //     inbound entry admitting the gateway ---
+    // --- merchant config: no outbound peers, since it is the terminal
+    //     payee and pays no one onward ---
     let merchant = Config {
         signer: cln_rail::signer::Config { key: MERCHANT_KEY },
         channels: cln_rail::channels::Config { channels: vec![] },
         paymes: cln_rail::paymes::Config {
             default_timeout: konduit_data::Duration::from_secs(300),
         },
-        params: cln_rail::ctx::Params {
-            fee,
-            ..Default::default()
-        },
     };
 
-    // --- gateway config: one outbound channel (to merchant), one
-    //     inbound entry admitting the consumer ---
+    // --- gateway config: one outbound peer, the merchant ---
     let gateway = Config {
         signer: cln_rail::signer::Config { key: GATEWAY_KEY },
         channels: cln_rail::channels::Config {
@@ -83,10 +73,6 @@ fn main() -> anyhow::Result<()> {
         },
         paymes: cln_rail::paymes::Config {
             default_timeout: konduit_data::Duration::from_secs(3600),
-        },
-        params: cln_rail::ctx::Params {
-            fee,
-            ..Default::default()
         },
     };
 

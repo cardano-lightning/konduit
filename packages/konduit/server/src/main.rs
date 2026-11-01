@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
     let db = Arc::new(args.db.build()?);
 
     // CLN backend
-    let cln = Arc::new(cln::build(args.cln, args.common.fee)?);
+    let cln = Arc::new(cln::build(args.cln)?);
     let cln_sync = Arc::clone(&cln);
     actix_web::rt::spawn(async move {
         let mut ticker = interval(std::time::Duration::from_secs(5));

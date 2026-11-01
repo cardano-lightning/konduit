@@ -1,35 +1,24 @@
+//! The rail's own state: its outbound lookup, what it has committed, and
+//! the paymes it holds as a terminal payee.
+//!
+//! Everything here is downstream of konduit's inbound verification. The
+//! rail is handed `Constraints` — an amount, a relative timeout and a
+//! lock — and owns what it does with them. It charges no fee and keeps
+//! no margin of its own; see `rail.rs`.
+
 use std::sync::Arc;
 
 use crate::{
     Channel, Channels, Commits, Paymes, Receipt, Signer, channel, channels,
-    commits::{self, Commit},
+    commits::{Claim, Commit},
     paymes,
     time::now,
-    wire::{self, auth::Keytag, commit::Outbound},
+    wire::{self, auth::Keytag},
 };
-use konduit_data::{ChequeBody, Duration, Lock, SquashBody, VerifyingKey};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Params {
-    // Fee is a simple flat fee
-    pub fee: u64,
-    // This the _relative timeout of single_ hop for handling a cheque.
-    // This is distinct from paymes timeout which is the absolute timeout.
-    pub hop_timeout: Duration,
-}
-
-impl Default for Params {
-    fn default() -> Self {
-        Self {
-            fee: 1414,
-            hop_timeout: Duration::from_secs(300),
-        }
-    }
-}
+use konduit_data::{ChequeBody, Duration, Lock, Secret, SquashBody, VerifyingKey};
+use konduit_rail::{Constraints, Outcome, PreProblem, QuoteProblem, Quoted, Relative, Resolution};
 
 pub struct Ctx {
-    params: Params,
     paymes: Paymes,
     channels: Channels,
     commits: Commits,
@@ -44,16 +33,6 @@ pub enum Error {
     Channel(#[from] channel::Error),
     #[error("paymes: {0}")]
     Paymes(#[from] paymes::Error),
-    #[error("commits: {0}")]
-    Commits(#[from] commits::Error),
-    #[error("retries not supported, lock already used")]
-    NoRetries,
-    #[error("inbound does not cover outbound")]
-    NegativeFee,
-    #[error("inbound does not cover outbound + fee")]
-    InsufficientFee,
-    #[error("inbound has insufficient timebound")]
-    InsufficientTime,
     #[error("peer sent an unverifiable receipt")]
     BadReceipt,
 }
@@ -62,25 +41,16 @@ impl Ctx {
     pub fn init(config: crate::Config) -> Result<Self, Error> {
         let signer = Signer::new(config.signer);
         let me = signer.verifying_key();
-        let mut channels = Channels::new();
-        for channel_config in config.channels.channels.iter() {
-            let receipt =
-                Receipt::new(signer.squash(channel_config.tag.clone(), SquashBody::zero()));
-            channels.insert(
-                channel_config.key,
-                Channel::new(
-                    channel_config,
-                    receipt,
-                    Keytag::from((&me, &channel_config.tag)).to_hex(),
-                ),
-            );
-        }
-
+        let channels = Channels::from_config(
+            &config.channels,
+            |entry| Receipt::new(signer.squash(entry.tag.clone(), SquashBody::zero())),
+            |entry| Keytag::from((&me, &entry.tag)).to_hex(),
+        );
         let paymes = Paymes::new(config.paymes);
-        // TODO:: Commits should persist.
+        // TODO:: Commits should persist. A restart between commit and
+        // reveal currently loses the secret.
         let commits = Commits::new();
         Ok(Self {
-            params: config.params,
             paymes,
             channels,
             commits,
@@ -88,17 +58,10 @@ impl Ctx {
         })
     }
 
-    pub fn new(
-        params: Params,
-        paymes: Paymes,
-        channels: Channels,
-        commits: Commits,
-        signer: Signer,
-    ) -> Self {
+    pub fn new(paymes: Paymes, channels: Channels, commits: Commits, signer: Signer) -> Self {
         Self {
-            params,
-            channels,
             paymes,
+            channels,
             commits,
             signer,
         }
@@ -108,31 +71,36 @@ impl Ctx {
         self.signer.verifying_key()
     }
 
-    /// Look up a payment secret already known to this node.
-    pub fn reveal(&self, lock: &konduit_data::Lock) -> Option<konduit_data::Secret> {
-        self.paymes.secret(lock).or_else(|| {
-            self.channels
-                .iter()
-                .find_map(|(_, channel)| channel.reveal(lock))
-        })
+    /// The outbound lookup, for seeding and for admin changes while
+    /// running.
+    pub fn channels(&self) -> &Channels {
+        &self.channels
+    }
+
+    /// Look up a payment secret already known to this node, wherever it
+    /// came from: our own payme, a commit we made, or an unlocked cheque
+    /// still sitting in an outbound receipt.
+    ///
+    /// Distinct from the rail's `reveal`, which answers only for locks
+    /// this rail committed under and says what it does not know.
+    pub fn known_secret(&self, lock: &Lock) -> Option<Secret> {
+        self.paymes
+            .secret(lock)
+            .or_else(|| match self.commits.get(lock)?.state {
+                crate::commits::State::Resolved(secret) => Some(secret),
+                _ => None,
+            })
+            .or_else(|| {
+                self.channels
+                    .all()
+                    .iter()
+                    .find_map(|(_, channel)| channel.reveal(lock))
+            })
     }
 
     /// Look up lock in own paymes
-    pub fn paymes_reveal(
-        &self,
-        lock: &konduit_data::Lock,
-        amount: u64,
-    ) -> Result<konduit_data::Secret, Error> {
+    pub fn paymes_reveal(&self, lock: &Lock, amount: u64) -> Result<Secret, Error> {
         Ok(self.paymes.reveal(lock, amount)?)
-    }
-
-    /// Currently fee is a fixed flat fee.
-    fn fee(&self) -> u64 {
-        self.params.fee
-    }
-
-    fn timeout(&self) -> &Duration {
-        &self.params.hop_timeout
     }
 
     pub fn payme(&self, req: wire::payme::Request) -> Result<wire::payme::Response, Error> {
@@ -145,66 +113,157 @@ impl Ctx {
         })
     }
 
-    pub async fn quote(&self, req: wire::quote::Request) -> Result<wire::quote::Response, Error> {
-        let payee = req.payee;
-        if payee == self.signer.verifying_key() {
-            Ok(wire::quote::Response {
-                index: 0, // FIXME :: Placeholder, 0 is an Impossible index.
-                fee: 0,
-                timeout: Duration::from_millis(0),
-            })
-        } else {
-            Ok(self.channels.get(&payee)?.quote(&req).await?)
-        }
+    /// Drops whatever has elapsed. A resolved secret is kept as long as
+    /// the commitment it unlocked, and no longer.
+    pub fn prune(&self) {
+        let now = now();
+        self.paymes.prune();
+        self.commits.prune(now);
     }
 
-    pub async fn commit2(
+    // ------------------------------------------------------------------------
+    // -- The rail's three operations. `rail.rs` wraps these in the trait.
+    // ------------------------------------------------------------------------
+
+    /// What the network downstream costs to reach `payee`. The rail adds
+    /// nothing of its own.
+    pub async fn quote_payee(
         &self,
         payee: &VerifyingKey,
         amount: u64,
-        timeout: Duration,
-        lock: &Lock,
-    ) -> Result<wire::commit::Response, Error> {
-        // 1. Get existing commit to Lock.
-        if let Some(_commit) = self.commits.get(lock) {
-            return Err(Error::NoRetries);
+    ) -> Result<Quoted, QuoteProblem> {
+        let channel = self
+            .channels
+            .get(payee)
+            .map_err(|err| QuoteProblem::Unroutable(err.to_string()))?;
+        let response = channel
+            .quote(&wire::quote::Request {
+                payee: *payee,
+                amount,
+            })
+            .await
+            .map_err(|err| QuoteProblem::RailUnavailable(err.to_string()))?;
+        Ok(Quoted {
+            fee: response.fee,
+            timeout: Relative(response.timeout),
+        })
+    }
+
+    /// Commit outbound within `inbound`, to `payee`.
+    ///
+    /// There is no error arm: once the outbound cheque is dispatched,
+    /// anything short of an answer is `Pending`, because an error read as
+    /// a non-payment would chase a payment that may well have been made.
+    #[tracing::instrument(
+        skip(self),
+        fields(amount = inbound.amount, timeout = %inbound.timeout, lock = %inbound.lock)
+    )]
+    pub async fn commit_payee(&self, inbound: Constraints, payee: &VerifyingKey) -> Outcome {
+        // Constraints first, since refusing them costs nothing and
+        // touches no network.
+        if inbound.timeout.is_zero() {
+            return Outcome::FailedPre(PreProblem::InsufficientMargin(
+                "no time left to make an outbound commitment".to_string(),
+            ));
+        }
+        let channel = match self.channels.get(payee) {
+            Ok(channel) => channel,
+            Err(err) => {
+                return Outcome::FailedPre(QuoteProblem::Unroutable(err.to_string()).into());
+            }
         };
 
-        // 2. Get outbound route
-        let channel = self.channels.get(payee)?;
+        // Our receipt tracking is in-memory only, so it can lag behind
+        // whatever the partner already has on file (e.g. after a
+        // restart). Recover it before proposing an index, so we don't
+        // propose one that collides with state the partner has seen.
+        if let Err(err) = self.recover_receipt(&channel).await {
+            return Outcome::FailedPre(QuoteProblem::RailUnavailable(err.to_string()).into());
+        }
 
-        // 2a. Our own receipt tracking is in-memory only (see Ctx::init),
-        // so it can lag behind whatever the partner already has on file
-        // (e.g. after a restart). Recover it before proposing the next
-        // index, so we don't propose one that collides with state the
-        // partner has already seen.
-        self.recover_receipt(channel).await?;
+        let timeout = inbound.timeout.absolute(now());
+        let index = channel.propose_index();
+        match self
+            .commits
+            .claim(inbound.lock, Commit::new(index, inbound.amount, timeout))
+        {
+            // The lock is the idempotency key: this is what the commit
+            // already made under it came to, not a second payment.
+            Claim::Existing(outcome) => return outcome,
+            Claim::Fresh => {}
+        }
 
-        // 3. Make outbound Locked.
-        let body = ChequeBody::new(channel.propose_index(), amount, timeout, lock.clone());
+        let body = ChequeBody::new(index, inbound.amount, timeout, inbound.lock);
         let locked = self.signer.locked(channel.tag().clone(), body);
+        if let Err(err) = channel.apply_locked(locked.clone()) {
+            // Nothing is sent, so the claim is given up and a retry
+            // under this lock is free to proceed.
+            self.commits.release(&inbound.lock);
+            return Outcome::FailedPre(
+                QuoteProblem::RailUnavailable(format!("outbound channel: {err}")).into(),
+            );
+        }
 
-        // 4. Record commit to Lock.
-        self.commits.insert(*lock, Commit::new())?;
-        channel.apply_locked(locked.clone())?;
-
-        // 5. Dispatch and await.
+        // Onward routing is the peer's own business: a lookup keyed by
+        // payee is a peer table, not a route table.
         let req = wire::commit::Request {
             inbound: locked.into_unverified(),
             outbound: None,
         };
-        // TODO :: handle errors. For now just propogate them
-        let res = channel.commit(&req).await?;
-        // 6. If secret then record secret, and get the resulting squash to
-        // the partner as soon as possible — but as a background task:
-        // the caller is waiting on this response and doesn't need to wait
-        // on that extra network round-trip too.
-        if let Some(secret) = res.secret {
-            channel.apply_secret(secret)?;
-            self.spawn_dispatch_squash(channel);
+        let res = match channel.commit(&req).await {
+            Ok(res) => res,
+            Err(err) => {
+                // Dispatched. Whether it paid is not ours to say.
+                tracing::warn!("outbound commit unanswered, reporting pending: {err}");
+                return Outcome::Pending;
+            }
+        };
+        let Some(secret) = res.secret else {
+            return Outcome::Pending;
+        };
+
+        // Cache the secret before anything can squash the unlocked
+        // cheque that carries it out of the receipt.
+        if let Err(err) = self.commits.resolve(&inbound.lock, secret) {
+            tracing::warn!("recording the revealed secret failed: {err}");
         }
-        Ok(res)
+        if let Err(err) = channel.apply_secret(secret) {
+            tracing::warn!("applying the revealed secret locally failed: {err}");
+        }
+        // Get the resulting squash to the partner as soon as possible,
+        // but in the background: the caller is waiting on this answer and
+        // doesn't need to wait on that round-trip too.
+        self.spawn_dispatch_squash(&channel);
+        Outcome::Success(secret)
     }
+
+    /// Delayed resolution for a lock this rail committed under.
+    pub fn reveal_lock(&self, lock: &Lock) -> Resolution {
+        if let Some(commit) = self.commits.get(lock) {
+            return commit.resolution(now());
+        }
+        // Not ours, or pruned — though an outbound receipt may still
+        // carry the unlocked cheque.
+        match self
+            .channels
+            .all()
+            .iter()
+            .find_map(|(_, channel)| channel.reveal(lock))
+        {
+            Some(secret) => Resolution::Success(secret),
+            None => Resolution::Unknown,
+        }
+    }
+
+    /// The locks this rail is still waiting on, for the platform's
+    /// resolver to poll.
+    pub fn in_flight(&self) -> Vec<Lock> {
+        self.commits.in_flight()
+    }
+
+    // ------------------------------------------------------------------------
+    // -- Channel housekeeping
+    // ------------------------------------------------------------------------
 
     /// Fetches whatever receipt the partner has on file for `channel` and
     /// reconciles it into our local state. A `None` (partner has never
@@ -257,89 +316,15 @@ impl Ctx {
         channel.apply_sync(their)?;
         Ok(())
     }
-    pub async fn commit(
-        &self,
-        req: wire::commit::Request,
-    ) -> Result<wire::commit::Response, Error> {
-        // payee
-        // amount
-        // lock
-        // timeout
-        let wire::commit::Request { inbound, outbound } = req;
-
-        // 1. Verify inbound Locked.
-        // OOB/ responsibility of caller:
-        // - L1: channel / cheque is backed.
-        // - L2: cheque is valid wrt to current receipt.
-        //
-        // In bounds:
-        //
-        // - Timeout.
-        // - If routed, then fee.
-        let timeout = inbound.timeout().saturating_sub(*self.timeout());
-        if timeout < now() {
-            return Err(Error::InsufficientTime);
-        }
-
-        let Some(Outbound { key, amount }) = outbound else {
-            // 2... Self is terminal
-            let secret = self.paymes.reveal(inbound.lock(), inbound.amount())?;
-            return Ok(wire::commit::Response {
-                secret: Some(secret),
-            });
-        };
-
-        // If routed then routing fee.
-        let fee = inbound
-            .amount()
-            .checked_sub(amount)
-            .ok_or(Error::NegativeFee)?;
-        if fee < self.fee() {
-            return Err(Error::InsufficientFee);
-        }
-
-        // 3. Get existing commit to Lock.
-        if let Some(_commit) = self.commits.get(inbound.lock()) {
-            return Err(Error::NoRetries);
-        };
-
-        // 2. Get outbound route
-        // 2... Only single path, one-hop allowed.
-        let channel = self.channels.get(&key)?;
-
-        // 3. Make outbound Locked.
-        let body = ChequeBody::new(channel.propose_index(), amount, timeout, *inbound.lock());
-        let locked = self.signer.locked(channel.tag().clone(), body);
-
-        // 4. Record commit to Lock.
-        self.commits.insert(*inbound.lock(), Commit::new())?;
-        channel.apply_locked(locked.clone())?;
-
-        // 5. Dispatch and await.
-        let req = wire::commit::Request {
-            inbound: locked.into_unverified(),
-            outbound: None,
-        };
-        // TODO :: handle errors. For now just propogate them
-        let res = channel.commit(&req).await?;
-        // 6. If secret then record secret.
-        if let Some(secret) = res.secret {
-            channel.apply_secret(secret)?;
-        }
-
-        // TODOD :: call sync on channel but do not await!
-        //
-        // 7. Relay response.
-        Ok(res)
-    }
 
     /// May need to be called more than once to be in sync. Each channel is
     /// synced independently.
     pub async fn sync(&self) -> Vec<(VerifyingKey, Result<(), Error>)> {
+        self.prune();
         let mut results = Vec::new();
-        for (key, channel) in self.channels.iter() {
-            let result = self.sync_channel(channel).await;
-            results.push((*key, result));
+        for (key, channel) in self.channels.all() {
+            let result = self.sync_channel(&channel).await;
+            results.push((key, result));
         }
         results
     }

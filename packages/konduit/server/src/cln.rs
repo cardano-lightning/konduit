@@ -1,5 +1,4 @@
 use anyhow::Context;
-use serde::Deserialize;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, clap::Args)]
@@ -11,7 +10,7 @@ pub struct ClnArgs {
 pub use ClnArgs as Args;
 type Config = cln_rail::Config;
 
-pub fn build(args: Args, fee: u64) -> anyhow::Result<cln_rail::Ctx> {
+pub fn build(args: Args) -> anyhow::Result<cln_rail::Ctx> {
     let config = match args.config_path {
         Some(path) => {
             let raw = std::fs::read_to_string(&path)
@@ -20,10 +19,6 @@ pub fn build(args: Args, fee: u64) -> anyhow::Result<cln_rail::Ctx> {
                 .with_context(|| format!("parsing Konduit CLN config at {}", path.display()))?
         }
         None => Config {
-            params: cln_rail::ctx::Params {
-                fee,
-                ..Default::default()
-            },
             signer: cln_rail::signer::Config {
                 key: cln_rail::random::arr32(),
             },

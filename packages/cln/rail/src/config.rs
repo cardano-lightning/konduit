@@ -1,11 +1,10 @@
 use konduit_data::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
-use crate::{channels, ctx, paymes, signer};
+use crate::{channels, paymes, signer};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
-    pub params: ctx::Params,
     pub signer: signer::Config,
     pub channels: channels::Config,
     pub paymes: paymes::Config,
