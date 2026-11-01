@@ -9,20 +9,20 @@
 use std::sync::Arc;
 
 use crate::{
-    Channel, Channels, Commits, Paymes, Receipt, Signer, channel, channels,
+    Channel, Channels, Commits, Receipt, Signer, channel, channels,
     commits::{Claim, Commit},
-    paymes,
     rail::{Outbound, Payee},
     time::now,
-    wire::{self, auth::Keytag},
 };
-use konduit_data::{ChequeBody, Duration, Lock, Secret, SquashBody, VerifyingKey};
+use konduit_data::{
+    ChequeBody, Duration, Lock, Secret, Squash, SquashBody, Verified, VerifyingKey,
+};
 use konduit_rail::{
     Constraints, Outcome, PreProblem, QuoteProblem, Quoted, Rail, Relative, Resolution,
 };
+use konduit_tmp::{Keytag, PayOutcome};
 
 pub struct Ctx {
-    paymes: Paymes,
     channels: Channels,
     commits: Commits,
     signer: Signer,
@@ -34,8 +34,6 @@ pub enum Error {
     Channels(#[from] channels::Error),
     #[error("channel: {0}")]
     Channel(#[from] channel::Error),
-    #[error("paymes: {0}")]
-    Paymes(#[from] paymes::Error),
     #[error("peer sent an unverifiable receipt")]
     BadReceipt,
 }
@@ -47,23 +45,20 @@ impl Ctx {
         let channels = Channels::from_config(
             &config.channels,
             |entry| Receipt::new(signer.squash(entry.tag.clone(), SquashBody::zero())),
-            |entry| Keytag::from((&me, &entry.tag)).to_hex(),
+            |entry| Keytag::from_parts(&me, &entry.tag).to_hex(),
         );
-        let paymes = Paymes::new(config.paymes);
         // TODO:: Commits should persist. A restart between commit and
         // reveal currently loses the secret.
         let commits = Commits::new();
         Ok(Self {
-            paymes,
             channels,
             commits,
             signer,
         })
     }
 
-    pub fn new(paymes: Paymes, channels: Channels, commits: Commits, signer: Signer) -> Self {
+    pub fn new(channels: Channels, commits: Commits, signer: Signer) -> Self {
         Self {
-            paymes,
             channels,
             commits,
             signer,
@@ -87,41 +82,22 @@ impl Ctx {
     /// Distinct from the rail's `reveal`, which answers only for locks
     /// this rail committed under and says what it does not know.
     pub fn known_secret(&self, lock: &Lock) -> Option<Secret> {
-        self.paymes
-            .secret(lock)
-            .or_else(|| match self.commits.get(lock)?.state {
-                crate::commits::State::Resolved(secret) => Some(secret),
-                _ => None,
-            })
-            .or_else(|| {
-                self.channels
-                    .all()
-                    .iter()
-                    .find_map(|(_, channel)| channel.reveal(lock))
-            })
-    }
-
-    /// Look up lock in own paymes
-    pub fn paymes_reveal(&self, lock: &Lock, amount: u64) -> Result<Secret, Error> {
-        Ok(self.paymes.reveal(lock, amount)?)
-    }
-
-    pub fn payme(&self, req: wire::payme::Request) -> Result<wire::payme::Response, Error> {
-        let payme = self.paymes.insert(req.amount);
-        Ok(wire::payme::Response {
-            payee: self.signer.verifying_key(),
-            amount: payme.amount,
-            lock: payme.lock,
-            timeout: payme.timeout,
+        match self.commits.get(lock).map(|commit| commit.state) {
+            Some(crate::commits::State::Resolved(secret)) => Some(secret),
+            _ => None,
+        }
+        .or_else(|| {
+            self.channels
+                .all()
+                .iter()
+                .find_map(|(_, channel)| channel.reveal(lock))
         })
     }
 
     /// Drops whatever has elapsed. A resolved secret is kept as long as
     /// the commitment it unlocked, and no longer.
     pub fn prune(&self) {
-        let now = now();
-        self.paymes.prune();
-        self.commits.prune(now);
+        self.commits.prune(now());
     }
 
     /// The locks this rail is still waiting on, for the platform's
@@ -161,28 +137,21 @@ impl Ctx {
             }
         };
         let squash = self.signer.squash(channel.tag().clone(), body);
-        if let Err(err) = channel.apply_squash(squash) {
+        if let Err(err) = channel.apply_squash(squash.clone()) {
             tracing::warn!("applying our own squash locally failed: {err}");
             return;
         }
 
         let channel = Arc::clone(channel);
-        let own_vkey = self.signer.verifying_key();
         tokio::spawn(async move {
-            if let Err(err) = Self::push_squash(&channel, own_vkey).await {
+            if let Err(err) = Self::push_squash(&channel, squash).await {
                 tracing::warn!("dispatching squash to partner failed: {err}");
             }
         });
     }
 
-    async fn push_squash(channel: &Channel, own_vkey: VerifyingKey) -> Result<(), Error> {
-        let req = wire::sync::Request {
-            receipt: channel.wire_receipt(),
-        };
-        let their_wire = channel.sync(&req).await?.receipt;
-        let their = Receipt::try_verify(their_wire, &own_vkey, channel.tag())
-            .map_err(|_| Error::BadReceipt)?;
-        channel.apply_sync(their)?;
+    async fn push_squash(channel: &Channel, squash: Squash<Verified>) -> Result<(), Error> {
+        channel.squash(squash.into_unverified()).await?;
         Ok(())
     }
 
@@ -202,17 +171,12 @@ impl Ctx {
         if !channel.has_pending_cheques() {
             return Ok(());
         }
-        let req = wire::sync::Request {
-            receipt: channel.wire_receipt(),
-        };
-        let their_wire = channel.sync(&req).await?.receipt;
-        let their = Receipt::try_verify(their_wire, &self.signer.verifying_key(), channel.tag())
-            .map_err(|_| Error::BadReceipt)?;
-        channel.apply_sync(their)?;
+        self.recover_receipt(channel).await?;
         channel.apply_timeout(now().saturating_sub(Duration::from_secs(120)))?;
         if let Some(body) = channel.maybe_propose_squash_body()? {
             let squash = self.signer.squash(channel.tag().clone(), body);
-            channel.apply_squash(squash)?;
+            channel.apply_squash(squash.clone())?;
+            Self::push_squash(channel, squash).await?;
         }
         Ok(())
     }
@@ -233,16 +197,13 @@ impl Rail for Ctx {
             .channels
             .get(&instruction.0)
             .map_err(|err| QuoteProblem::Unroutable(err.to_string()))?;
-        let response = channel
-            .quote(&wire::quote::Request {
-                payee: instruction.0,
-                amount,
-            })
+        let quote = channel
+            .quote(amount)
             .await
             .map_err(|err| QuoteProblem::RailUnavailable(err.to_string()))?;
         Ok(Quoted {
-            fee: response.fee,
-            timeout: Relative(response.timeout),
+            fee: quote.fee,
+            timeout: Relative(Duration::from_millis(quote.relative_timeout)),
         })
     }
 
@@ -312,21 +273,17 @@ impl Rail for Ctx {
             );
         }
 
-        // Onward routing is the peer's own business: a lookup keyed by
-        // payee is a peer table, not a route table.
-        let req = wire::commit::Request {
-            inbound: locked.into_unverified(),
-            outbound: None,
-        };
-        let res = match channel.commit(&req).await {
-            Ok(res) => res,
+        // The peer is the payee — a lookup keyed by payee is a peer
+        // table, not a route table — so this is its terminal pay.
+        let outcome = match channel.pay(locked.into_unverified()).await {
+            Ok(outcome) => outcome,
             Err(err) => {
                 // Dispatched. Whether it paid is not ours to say.
                 tracing::warn!("outbound commit unanswered, reporting pending: {err}");
                 return Outcome::Pending;
             }
         };
-        let Some(secret) = res.secret else {
+        let PayOutcome::Success(secret) = outcome else {
             return Outcome::Pending;
         };
 

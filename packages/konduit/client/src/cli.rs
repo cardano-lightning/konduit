@@ -302,8 +302,13 @@ impl Cli {
                     return Ok(());
                 }
 
-                let res = l2.pay(&payme, &quote).await?;
+                let outcome = l2.pay(&payme, &quote).await?;
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
 
+                // The inbound leg is resolved by squash either way: a
+                // pending payment's secret arrives as an unlocked cheque
+                // in the proposal.
+                let res = l2.squash_status().await?;
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
 
                 l2.sync(res, and_confirm, |x| known_lock(&x)).await?;

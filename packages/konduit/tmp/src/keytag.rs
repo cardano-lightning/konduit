@@ -11,6 +11,10 @@ use std::fmt;
 #[serde(transparent)]
 pub struct Keytag(#[serde_as(as = "serde_with::hex::Hex")] Vec<u8>);
 
+/// The header a channel's keytag travels in, on every authenticated
+/// request.
+pub const HEADER: &str = "KONDUIT";
+
 impl AsRef<[u8]> for Keytag {
     fn as_ref(&self) -> &[u8] {
         &self.0
@@ -46,6 +50,21 @@ impl Keytag {
                 .chain(tag.as_ref().to_vec())
                 .collect::<Vec<u8>>(),
         )
+    }
+
+    /// From konduit's own key type, as the L2 side holds it.
+    pub fn from_parts(key: &konduit_data::VerifyingKey, tag: &Tag) -> Self {
+        Self(
+            <[u8; 32]>::from(*key)
+                .to_vec()
+                .into_iter()
+                .chain(tag.as_ref().to_vec())
+                .collect(),
+        )
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(&self.0)
     }
 
     pub fn split(&self) -> (VerificationKey, Tag) {

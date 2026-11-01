@@ -6,7 +6,9 @@
 use konduit_data::{ChequeBody, Duration, Locked, Secret, SquashBody, Verified};
 use serde::{Deserialize, Serialize};
 
-use crate::{Channel, Receipt, Signer, channel, signer, time::now, wire, wire::auth::Keytag};
+use crate::{Channel, Outbound, Payee, Receipt, Signer, channel, signer, time::now};
+use konduit_rail::Rail;
+use konduit_tmp::{Keytag, PayOutcome, Payme, PaymeRequest, Quote};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -36,7 +38,7 @@ impl Client {
     pub fn init(config: Config) -> Self {
         let signer = Signer::new(config.signer);
         let receipt = Receipt::new(signer.squash(config.gateway.tag.clone(), SquashBody::zero()));
-        let auth = Keytag::from((&signer.verifying_key(), &config.gateway.tag)).to_hex();
+        let auth = Keytag::from_parts(&signer.verifying_key(), &config.gateway.tag).to_hex();
         let gateway = Channel::new(&config.gateway, receipt, auth);
         Self {
             signer,
@@ -45,28 +47,20 @@ impl Client {
         }
     }
 
-    /// One sync round-trip. Returns `true` if a squash was proposed and
-    /// applied locally — meaning a follow-up round-trip is needed to send it.
+    /// One reconciliation round. Returns `true` if a squash was proposed
+    /// and sent, meaning another round may find more to do.
     #[tracing::instrument(level = "debug", skip(self), err, ret)]
     async fn sync_once(&self) -> Result<bool, Error> {
-        let req = wire::sync::Request {
-            receipt: self.gateway.wire_receipt(),
-        };
-        let their = Receipt::try_verify(
-            self.gateway.sync(&req).await?.receipt,
-            &self.signer.verifying_key(),
-            self.gateway.tag(),
-        )
-        .map_err(|_| Error::BadReceipt)?;
-        self.gateway.apply_sync(their)?;
+        self.recover_receipt().await?;
         self.gateway
             .apply_timeout(now().saturating_sub(Duration::from_secs(120)))?;
 
         let Some(body) = self.gateway.maybe_propose_squash_body()? else {
             return Ok(false);
         };
-        self.gateway
-            .apply_squash(self.signer.squash(self.gateway.tag().clone(), body))?;
+        let squash = self.signer.squash(self.gateway.tag().clone(), body);
+        self.gateway.apply_squash(squash.clone())?;
+        self.gateway.squash(squash.into_unverified()).await?;
         Ok(true)
     }
 
@@ -74,22 +68,17 @@ impl Client {
     async fn sync_gateway(&self) -> Result<(), Error> {
         if self.sync_once().await? {
             self.sync_once().await?;
-            self.sync_once().await?;
         }
         Ok(())
     }
 
     /// Requests a payme from `merchant_url` — unauthenticated, no channel.
     #[tracing::instrument(skip_all, err)]
-    async fn request_payme(
-        &self,
-        merchant_url: &str,
-        amount: u64,
-    ) -> Result<wire::payme::Response, Error> {
+    async fn request_payme(&self, merchant_url: &str, amount: u64) -> Result<Payme, Error> {
         Ok(self
             .http
-            .post(format!("{merchant_url}{}", wire::payme::PATH))
-            .json(&wire::payme::Request { amount })
+            .post(format!("{merchant_url}/pay/konduit/payme"))
+            .json(&PaymeRequest { amount })
             .send()
             .await?
             .json()
@@ -103,14 +92,10 @@ impl Client {
         fields(invoice_amount = payme.amount, fee = quote.fee, total = payme.amount + quote.fee),
         err
     )]
-    fn lock_cheque(
-        &self,
-        payme: &wire::payme::Response,
-        quote: &wire::quote::Response,
-    ) -> Result<Locked<Verified>, Error> {
+    fn lock_cheque(&self, payme: &Payme, quote: &Quote) -> Result<Locked<Verified>, Error> {
         let pay_amount = payme.amount + quote.fee;
         let buffer = Duration::from_secs(30); // GUESS: arbitrary safety margin
-        let timeout = now() + quote.timeout + buffer;
+        let timeout = now() + Duration::from_millis(quote.relative_timeout) + buffer;
         let body = ChequeBody::new(
             self.gateway.propose_index(),
             pay_amount,
@@ -155,13 +140,16 @@ impl Client {
         // 1. payme, direct from merchant — unauthenticated, no channel.
         let payme = self.request_payme(merchant_url, amount).await?;
 
-        // 2. Quote the gateway's route to the merchant.
+        // 2. Quote the gateway's cln route to the merchant. The rail is
+        //    the consumer's pick, and it goes in the path.
+        let rail = <crate::Ctx as Rail>::NAME;
         let quote = self
             .gateway
-            .quote(&wire::quote::Request {
-                payee: payme.payee,
-                amount: payme.amount,
-            })
+            .quote_via(
+                rail,
+                payme.amount,
+                self.gateway.encode_instruction(&Payee(payme.payee))?,
+            )
             .await?;
 
         // 3. Sign our own cheque to the gateway, and record it locally
@@ -169,17 +157,18 @@ impl Client {
         let locked = self.lock_cheque(&payme, &quote)?;
         let committed_amount = locked.amount();
 
-        // 5. Commit, routed onward to the merchant.
-        let req = wire::commit::Request {
-            inbound: locked.into_unverified(),
-            outbound: Some(wire::commit::Outbound {
-                key: payme.payee,
-                amount: payme.amount,
-            }),
-        };
-        let res = self.gateway.commit(&req).await?;
+        // 4. Pay, instructing the gateway's rail to carry it onward.
+        let instruction = self
+            .gateway
+            .encode_instruction(&Outbound::new(payme.payee, payme.amount))?;
+        let outcome = self
+            .gateway
+            .pay_via(rail, locked.into_unverified(), instruction)
+            .await?;
 
-        let secret = res.secret.ok_or(Error::NoSecret)?;
+        let PayOutcome::Success(secret) = outcome else {
+            return Err(Error::NoSecret);
+        };
         self.gateway.apply_secret(secret)?;
         Ok(Paid {
             secret,

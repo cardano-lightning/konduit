@@ -1,12 +1,13 @@
 use crate::{
     Adaptor,
     core::{
-        AdaptorInfo, ChequeBody, Duration, Lock, Locked, Payme, Quote, Receipt, SigningKey, Squash,
-        SquashBody, SquashStatus,
+        AdaptorInfo, ChequeBody, Duration, Lock, Locked, PayOutcome, Payme, Quote, Receipt,
+        SigningKey, Squash, SquashBody, SquashStatus,
     },
 };
 use anyhow::anyhow;
 use http_client::Transport;
+use konduit_rail::RESERVED_NAME;
 use konduit_tmp::{TxHelp, to_signing_key, to_verifying_key};
 use web_time::{SystemTime, UNIX_EPOCH};
 
@@ -31,15 +32,38 @@ where
         self.adaptor.info()
     }
 
+    /// Quotes a payment to `payme`'s payee. Terminal only: when the
+    /// payee is the adaptor itself, the reserved `konduit` name carries
+    /// it and there is no instruction to write. Paying onward through a
+    /// rail means naming the rail and encoding its instruction, which
+    /// only the caller can do.
     pub async fn quote(&self, payme: &Payme) -> anyhow::Result<Quote> {
-        self.adaptor.quote(payme).await
+        self.assert_terminal(payme)?;
+        self.adaptor
+            .quote(RESERVED_NAME, payme.amount, Vec::new())
+            .await
+    }
+
+    fn assert_terminal(&self, payme: &Payme) -> anyhow::Result<()> {
+        let adaptor = to_verifying_key(self.info().channel_parameters.adaptor_key);
+        if payme.payee != adaptor {
+            return Err(anyhow!(
+                "payee is not this adaptor: pay through a rail with its own instruction"
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn squash_status(&self) -> anyhow::Result<SquashStatus> {
+        self.adaptor.squash_status().await
     }
 
     pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
         self.adaptor.receipt().await
     }
 
-    pub async fn pay(&self, payme: &Payme, quote: &Quote) -> anyhow::Result<SquashStatus> {
+    pub async fn pay(&self, payme: &Payme, quote: &Quote) -> anyhow::Result<PayOutcome> {
+        self.assert_terminal(payme)?;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("failed calculate duration since UNIX epoch ?!")
@@ -56,7 +80,9 @@ where
 
         let locked = Locked::make(&to_signing_key(self.signing_key.clone()), tag, body);
 
-        self.adaptor.pay(payme, locked.into_unverified()).await
+        self.adaptor
+            .pay(RESERVED_NAME, locked.into_unverified(), Vec::new())
+            .await
     }
 
     pub async fn squash(&self, squash_body: SquashBody) -> anyhow::Result<SquashStatus> {

@@ -1,5 +1,3 @@
-pub mod wire;
-
 pub mod config;
 pub use config::Config;
 
@@ -11,9 +9,6 @@ pub use channel::Channel;
 
 pub mod channels;
 pub use channels::Channels;
-
-pub mod paymes;
-pub use paymes::Paymes;
 
 pub mod signer;
 pub use signer::Signer;

@@ -18,7 +18,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anyhow = { workspace = true }
 cardano-sdk = { workspace = true }
-hex.workspace = true
+hex = { workspace = true, features = ["serde"] }
 konduit-data = { workspace = true, features = ["serde"] }
 minicbor.workspace = true
 serde.workspace = true

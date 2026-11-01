@@ -1,6 +1,6 @@
 use crate::core::{
-    AdaptorInfo, Keytag, Locked, PayBody, Payme, Quote, QuoteBody, Receipt, Squash, SquashStatus,
-    Tag, TxHelp,
+    AdaptorInfo, Keytag, Locked, PayOutcome, PayRequest, Quote, QuoteRequest, Receipt, Squash,
+    SquashStatus, Tag, TxHelp,
 };
 use anyhow::anyhow;
 use http_client::{HeaderPolicy, Transport, codec, header_policy};
@@ -66,29 +66,59 @@ impl<T: Transport> Adaptor<T> {
 
     pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
         self.http_client
-            .get_with_headers::<Option<Receipt>>("/ch/receipt", self.with_keytag_header())
+            .get_with_headers::<Option<Receipt>>("/pay/konduit/receipt", self.with_keytag_header())
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    pub async fn quote(&self, payme: &Payme) -> anyhow::Result<Quote> {
+    /// What `rail` charges to carry `amount`, konduit's own terms
+    /// included. `instruction` is the rail's, and empty for the reserved
+    /// `konduit` name.
+    pub async fn quote(
+        &self,
+        rail: &str,
+        amount: u64,
+        instruction: Vec<u8>,
+    ) -> anyhow::Result<Quote> {
+        let request = QuoteRequest {
+            amount,
+            instruction,
+        };
         self.http_client
-            .post_with_headers::<QuoteBody, Quote>("/ch/quote", payme, self.with_keytag_header())
-            .await
-            .map_err(|e| anyhow!(e))
-    }
-
-    pub async fn pay(&self, payme: &Payme, locked: Locked) -> anyhow::Result<SquashStatus> {
-        self.http_client
-            .post_with_headers::<PayBody, SquashStatus>(
-                "/ch/pay",
-                &PayBody {
-                    cheque_body: locked.body().to_owned(),
-                    signature: locked.signature().to_owned(),
-                    payme: payme.clone(),
-                },
+            .post_with_headers::<QuoteRequest, Quote>(
+                &format!("/pay/{rail}/quote"),
+                &request,
                 self.with_keytag_header(),
             )
+            .await
+            .map_err(|e| anyhow!(e))
+    }
+
+    pub async fn pay(
+        &self,
+        rail: &str,
+        inbound: Locked,
+        instruction: Vec<u8>,
+    ) -> anyhow::Result<PayOutcome> {
+        let request = PayRequest {
+            inbound,
+            instruction,
+        };
+        self.http_client
+            .post_with_headers::<PayRequest, PayOutcome>(
+                &format!("/pay/{rail}/pay"),
+                &request,
+                self.with_keytag_header(),
+            )
+            .await
+            .map_err(|e| anyhow!(e))
+    }
+
+    /// Where the inbound leg stands: what konduit expects signed next,
+    /// and the unlocked cheques a pending payment has resolved into.
+    pub async fn squash_status(&self) -> anyhow::Result<SquashStatus> {
+        self.http_client
+            .get_with_headers::<SquashStatus>("/pay/konduit/squash", self.with_keytag_header())
             .await
             .map_err(|e| anyhow!(e))
     }
@@ -104,7 +134,7 @@ impl<T: Transport> Adaptor<T> {
 
         let res = self
             .http_client
-            .post_with_headers::<Squash, SquashStatus>("/ch/squash", &squash, headers)
+            .post_with_headers::<Squash, SquashStatus>("/pay/konduit/squash", &squash, headers)
             .await;
         res.map_err(|e| anyhow!(e))
     }

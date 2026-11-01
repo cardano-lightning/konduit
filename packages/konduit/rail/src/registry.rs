@@ -27,14 +27,24 @@ impl Registry {
     }
 
     pub fn insert<R: Rail + 'static>(&mut self, rail: R) -> Result<(), Error> {
+        self.insert_shared(Arc::new(rail))
+    }
+
+    /// For a rail something else also holds — a background task of its
+    /// own, say.
+    pub fn insert_shared<R: Rail + 'static>(&mut self, rail: Arc<R>) -> Result<(), Error> {
         if R::NAME == RESERVED_NAME {
             return Err(Error::Reserved);
         }
         if self.rails.contains_key(R::NAME) {
             return Err(Error::Duplicate(R::NAME));
         }
-        self.rails.insert(R::NAME, Arc::new(rail));
+        self.rails.insert(R::NAME, rail);
         Ok(())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &Arc<dyn DynRail>)> {
+        self.rails.iter().map(|(name, rail)| (*name, rail))
     }
 
     pub fn get(&self, name: &str) -> Option<&Arc<dyn DynRail>> {

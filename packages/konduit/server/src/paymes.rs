@@ -1,6 +1,5 @@
 //! paymes is a lookup table of `payme`s
 
-use crate::{random, time::now};
 use konduit_data::{Duration, Lock, Secret};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
@@ -22,15 +21,15 @@ impl Default for Config {
 
 /// Caller needs to insert verifying key to create a payme response.
 #[derive(Debug)]
-pub(crate) struct Payme {
-    pub(crate) amount: u64,
-    pub(crate) lock: Lock,
-    pub(crate) timeout: Duration,
+pub struct Payme {
+    pub amount: u64,
+    pub lock: Lock,
+    pub timeout: Duration,
 }
 
 /// Storage-only: never leaves this module.
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-pub(crate) struct Entry {
+pub struct Entry {
     #[n(0)]
     amount: u64,
     #[n(1)]
@@ -77,10 +76,10 @@ impl Paymes {
         self.paymes.lock().expect("paymes state poisoned")
     }
 
-    pub(crate) fn insert(&self, amount: u64) -> Payme {
-        let secret = Secret(random::arr32());
+    pub fn insert(&self, amount: u64, now: Duration) -> Payme {
+        let secret = Secret(rand::random::<[u8; 32]>());
         let lock = Lock::from(secret);
-        let timeout = now() + self.config.default_timeout;
+        let timeout = now + self.config.default_timeout;
         self.paymes()
             .insert(lock, Entry::new(amount, timeout, secret));
         Payme {
@@ -90,9 +89,9 @@ impl Paymes {
         }
     }
 
-    pub(crate) fn reveal(&self, lock: &Lock, amount: u64) -> Result<Secret, Error> {
+    pub fn reveal(&self, lock: &Lock, amount: u64, now: Duration) -> Result<Secret, Error> {
         let entry = self.paymes().remove(lock).ok_or(Error::NotExist)?;
-        if entry.timeout < now() {
+        if entry.timeout < now {
             return Err(Error::Expired);
         }
         if amount < entry.amount {
@@ -101,16 +100,15 @@ impl Paymes {
         Ok(entry.secret)
     }
 
-    pub(crate) fn secret(&self, lock: &Lock) -> Option<Secret> {
+    pub fn secret(&self, lock: &Lock, now: Duration) -> Option<Secret> {
         self.paymes()
             .get(lock)
-            .filter(|entry| entry.timeout >= now())
+            .filter(|entry| entry.timeout >= now)
             .map(|entry| entry.secret)
     }
 
     /// Drops all entries past their timeout.
-    pub fn prune(&self) {
-        let now = now();
+    pub fn prune(&self, now: Duration) {
         self.paymes().retain(|_, entry| entry.timeout >= now);
     }
 }

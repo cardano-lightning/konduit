@@ -60,9 +60,6 @@ fn main() -> anyhow::Result<()> {
     let merchant = Config {
         signer: cln_rail::signer::Config { key: MERCHANT_KEY },
         channels: cln_rail::channels::Config { channels: vec![] },
-        paymes: cln_rail::paymes::Config {
-            default_timeout: konduit_data::Duration::from_secs(300),
-        },
     };
 
     // --- gateway config: one outbound peer, the merchant ---
@@ -70,9 +67,6 @@ fn main() -> anyhow::Result<()> {
         signer: cln_rail::signer::Config { key: GATEWAY_KEY },
         channels: cln_rail::channels::Config {
             channels: vec![gateway_merchant],
-        },
-        paymes: cln_rail::paymes::Config {
-            default_timeout: konduit_data::Duration::from_secs(3600),
         },
     };
 

@@ -11,7 +11,15 @@ use minicbor::{Decode, Decoder, Encode};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp;
 
-pub use crate::wire::sync::Receipt as WireReceipt;
+/// The receipt as it travels: unverified, since the peer's signature is
+/// what makes it verifiable and that is the reader's job.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Encode, Decode)]
+pub struct WireReceipt {
+    #[n(0)]
+    pub squash: Squash,
+    #[n(1)]
+    pub cheques: Vec<Cheque>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

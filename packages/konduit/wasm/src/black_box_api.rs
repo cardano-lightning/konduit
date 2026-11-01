@@ -296,7 +296,10 @@ impl Konduit {
             log::debug!("pay: for tag={}, quote={:?}", tag, quote);
             let client = self.l2_client()?;
             lockeds.add(payme.lock);
-            let squash_status = client.pay(payme, quote).await?;
+            let outcome = client.pay(payme, quote).await?;
+            log::debug!("pay: outcome={:?}", outcome);
+            // Resolved or pending, the inbound leg is settled by squash.
+            let squash_status = client.squash_status().await?;
             self.squash(client, tag, squash_status, lockeds).await
         } else {
             Err(anyhow!("pay: no tag set; is the channel open?").into())

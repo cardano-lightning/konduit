@@ -10,5 +10,6 @@ pub struct Quote {
     #[n(2)]
     pub relative_timeout: u64,
     #[n(3)]
-    pub routing_fee: u64,
+    /// Everything on top of `amount`: the rail's and konduit's.
+    pub fee: u64,
 }

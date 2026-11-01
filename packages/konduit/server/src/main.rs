@@ -82,8 +82,16 @@ async fn main() -> anyhow::Result<()> {
     // DB
     let db = Arc::new(args.db.build()?);
 
-    // CLN backend
+    // Rails. `cln` is the only one compiled in; the rest of the server
+    // only ever sees the registry.
     let cln = Arc::new(cln::build(args.cln)?);
+    let mut rails = konduit_rail::Registry::new();
+    rails
+        .insert_shared(Arc::clone(&cln))
+        .map_err(anyhow::Error::from)?;
+    let rails = Arc::new(rails);
+    // Konduit's own paymes, for payments that end here.
+    let paymes = Arc::new(konduit_server::Paymes::new(Default::default()));
     let cln_sync = Arc::clone(&cln);
     actix_web::rt::spawn(async move {
         let mut ticker = interval(std::time::Duration::from_secs(5));
@@ -105,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
     // The rails this adaptor is configured with, so `/info` names the set
     // a consumer picks from. One entry while `cln` is the only one
     // compiled in.
-    info.tos.rails = vec![<cln_rail::Ctx as konduit_rail::Rail>::NAME.to_string()];
+    info.tos.rails = rails.names().iter().map(|n| n.to_string()).collect();
     let info = Arc::new(info);
     let margins = konduit_server::Margins::from(&info.tos);
 
@@ -138,7 +146,14 @@ async fn main() -> anyhow::Result<()> {
     let admin_every = args.admin.admin_every;
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(
-        admin::Service::new(admin_config, cln.clone(), cardano.clone(), db.clone()).await?,
+        admin::Service::new(
+            admin_config,
+            Arc::clone(&rails),
+            Arc::clone(&paymes),
+            cardano.clone(),
+            db.clone(),
+        )
+        .await?,
     );
     let admin_for_sync = Arc::clone(&admin);
 
@@ -164,7 +179,16 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let server_data = server::Data::new(cln, db, fx_state, info, margins, admin);
+
+    let server_data = server::Data::new(
+        rails,
+        Arc::clone(&paymes),
+        db,
+        fx_state,
+        info,
+        margins,
+        admin,
+    );
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;

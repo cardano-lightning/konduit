@@ -2,14 +2,13 @@
 //! payee it cannot reach, constraints it cannot work within, and a lock
 //! it knows nothing about.
 
-use cln_rail::{Channels, Commits, Ctx, Outbound, Payee, Paymes, Signer, paymes, signer};
+use cln_rail::{Channels, Commits, Ctx, Outbound, Payee, Signer, signer};
 use konduit_data::{Duration, Lock, SigningKey};
 use konduit_rail::{Constraints, Outcome, Rail, Registry, Relative, Resolution};
 
 /// A rail with no outbound peers at all.
 fn rail() -> Ctx {
     Ctx::new(
-        Paymes::new(paymes::Config::default()),
         Channels::new(),
         Commits::new(),
         Signer::new(signer::Config { key: [7; 32] }),

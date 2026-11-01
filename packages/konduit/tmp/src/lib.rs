@@ -1,6 +1,7 @@
 mod adaptor_info;
 mod channel_parameters;
 mod l1_channel;
+mod pay;
 mod pay_body;
 mod possible_step;
 mod quote;
@@ -12,6 +13,7 @@ mod squash_status;
 pub use adaptor_info::*;
 pub use channel_parameters::ChannelParameters;
 pub use l1_channel::L1Channel;
+pub use pay::{PayOutcome, PayRequest, QuoteRequest};
 pub use pay_body::PayBody;
 mod payme;
 pub use payme::{Payme, PaymeRequest};
@@ -22,7 +24,7 @@ pub use receipt::Receipt;
 pub use squash_proposal::SquashProposal;
 pub use squash_status::SquashStatus;
 
-mod keytag;
+pub mod keytag;
 
 pub use keytag::Keytag;
 

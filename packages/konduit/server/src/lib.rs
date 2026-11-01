@@ -11,6 +11,9 @@ pub mod common;
 pub mod cardano;
 pub mod cln;
 
+pub mod paymes;
+pub use paymes::Paymes;
+
 pub mod margins;
 pub use margins::Margins;
 

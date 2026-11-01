@@ -25,7 +25,7 @@ impl Quote {
     }
 
     #[wasm_bindgen(getter, js_name = "routingFee")]
-    pub fn _wasm_routing_fee(&self) -> u64 {
-        self.routing_fee
+    pub fn _wasm_fee(&self) -> u64 {
+        self.fee
     }
 }

@@ -29,6 +29,7 @@ hex.workspace = true
 humantime.workspace = true
 konduit-data = { workspace = true, features = ["serde"] }
 konduit-rail.workspace = true
+rand.workspace = true
 konduit-tmp.workspace = true
 konduit-tx.workspace = true
 minicbor.workspace = true

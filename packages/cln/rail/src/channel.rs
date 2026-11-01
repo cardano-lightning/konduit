@@ -16,8 +16,9 @@ use konduit_data::{Locked, Secret, SigningKey, Squash, SquashBody, Tag, Verified
 use crate::{
     Receipt,
     receipt::{self, WireReceipt},
-    wire,
 };
+use konduit_rail::RESERVED_NAME as RESERVED;
+use konduit_tmp::{PayOutcome, PayRequest, Quote, QuoteRequest, SquashStatus, keytag};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum MediaType {
@@ -155,31 +156,64 @@ impl Channel {
     }
 
     fn auth_header(&self) -> Box<dyn http_client::HeaderPolicy> {
-        http_client::header_policy::Custom::new(wire::auth::HEADER, &self.auth).boxed()
+        http_client::header_policy::Custom::new(keytag::HEADER, &self.auth).boxed()
     }
 
-    #[tracing::instrument(skip(self, req), fields(payee_amount = req.amount), err)]
-    pub async fn quote(&self, req: &wire::quote::Request) -> Result<wire::quote::Response, Error> {
-        self.client.quote(req, self.auth_header()).await
+    /// Encodes an instruction in this channel's codec, for the rail at
+    /// the other end to decode with the same one.
+    pub fn encode_instruction<T>(&self, instruction: &T) -> Result<Vec<u8>, Error>
+    where
+        T: Serialize + minicbor::Encode<()>,
+    {
+        self.client.encode(instruction)
     }
 
-    #[tracing::instrument(skip_all, err)]
-    pub async fn commit(
+    /// What `rail` charges to carry `amount`, on top of konduit's own.
+    #[tracing::instrument(skip(self, instruction), err)]
+    pub async fn quote_via(
         &self,
-        req: &wire::commit::Request,
-    ) -> Result<wire::commit::Response, Error> {
-        self.client.commit(req, self.auth_header()).await
+        rail: &str,
+        amount: u64,
+        instruction: Vec<u8>,
+    ) -> Result<Quote, Error> {
+        self.client
+            .quote(rail, amount, instruction, self.auth_header())
+            .await
     }
 
+    /// Hands over a cheque, for `rail` to carry onward.
+    #[tracing::instrument(skip(self, instruction), err)]
+    pub async fn pay_via(
+        &self,
+        rail: &str,
+        inbound: Locked,
+        instruction: Vec<u8>,
+    ) -> Result<PayOutcome, Error> {
+        self.client
+            .pay(rail, inbound, instruction, self.auth_header())
+            .await
+    }
+
+    /// What the peer charges to be paid `amount`. The peer is the payee,
+    /// so this is its own `/pay/konduit/quote`.
+    pub async fn quote(&self, amount: u64) -> Result<Quote, Error> {
+        self.quote_via(RESERVED, amount, Vec::new()).await
+    }
+
+    /// Hands the peer a cheque. Nothing for it to route onward.
+    pub async fn pay(&self, inbound: Locked) -> Result<PayOutcome, Error> {
+        self.pay_via(RESERVED, inbound, Vec::new()).await
+    }
+
+    /// Sends a signed squash, resolving whatever it covers.
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub async fn sync(&self, req: &wire::sync::Request) -> Result<wire::sync::Response, Error> {
-        self.client.sync(req, self.auth_header()).await
+    pub async fn squash(&self, squash: Squash) -> Result<SquashStatus, Error> {
+        self.client.squash(squash, self.auth_header()).await
     }
 
-    /// Fetches whatever receipt the partner currently has on file for this
-    /// channel (`None` if it's never seen a squash from us at all). Unlike
-    /// `sync`, this touches no local state — callers decide what to do
-    /// with it.
+    /// Fetches whatever receipt the peer currently has on file for this
+    /// channel (`None` if it has never seen a squash from us). Touches no
+    /// local state — callers decide what to do with it.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub async fn fetch_receipt(&self) -> Result<Option<WireReceipt>, Error> {
         self.client.receipt(self.auth_header()).await
@@ -238,38 +272,60 @@ impl Client {
         Ok(res)
     }
 
+    /// This client's codec, for an instruction that konduit carries but
+    /// does not read.
+    fn encode<T>(&self, instruction: &T) -> Result<Vec<u8>, Error>
+    where
+        T: Serialize + minicbor::Encode<()>,
+    {
+        match self {
+            Client::Json(_) => serde_json::to_vec(instruction)
+                .map_err(|err| Error::Transport(format!("encode instruction: {err}"))),
+            Client::Cbor(_) => minicbor::to_vec(instruction)
+                .map_err(|err| Error::Transport(format!("encode instruction: {err}"))),
+        }
+    }
+
     pub async fn quote(
         &self,
-        req: &wire::quote::Request,
+        rail: &str,
+        amount: u64,
+        instruction: Vec<u8>,
         auth: Box<dyn http_client::HeaderPolicy>,
-    ) -> Result<wire::quote::Response, Error> {
-        self.post(wire::quote::PATH, req, auth).await
+    ) -> Result<Quote, Error> {
+        let req = QuoteRequest {
+            amount,
+            instruction,
+        };
+        self.post(&format!("/pay/{rail}/quote"), &req, auth).await
     }
 
-    pub async fn commit(
+    pub async fn pay(
         &self,
-        req: &wire::commit::Request,
+        rail: &str,
+        inbound: Locked,
+        instruction: Vec<u8>,
         auth: Box<dyn http_client::HeaderPolicy>,
-    ) -> Result<wire::commit::Response, Error> {
-        self.post(wire::commit::PATH, req, auth).await
+    ) -> Result<PayOutcome, Error> {
+        let req = PayRequest {
+            inbound,
+            instruction,
+        };
+        self.post(&format!("/pay/{rail}/pay"), &req, auth).await
     }
 
-    pub async fn sync(
+    pub async fn squash(
         &self,
-        req: &wire::sync::Request,
+        squash: Squash,
         auth: Box<dyn http_client::HeaderPolicy>,
-    ) -> Result<wire::sync::Response, Error> {
-        self.post(wire::sync::PATH, req, auth).await
+    ) -> Result<SquashStatus, Error> {
+        self.post("/pay/konduit/squash", &squash, auth).await
     }
 
-    /// The plain (non-wire-protocol) `/ch/receipt` endpoint, reusing the
-    /// same keytag-derived auth value since it only needs the `KEYTAG`
-    /// header (konduit-server's `no_auth` middleware), not the CLN-wire
-    /// one — both read the same header name case-insensitively.
     pub async fn receipt(
         &self,
         auth: Box<dyn http_client::HeaderPolicy>,
     ) -> Result<Option<WireReceipt>, Error> {
-        self.get("/ch/receipt", auth).await
+        self.get("/pay/konduit/receipt", auth).await
     }
 }

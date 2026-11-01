@@ -1,12 +1,11 @@
 use crate::server::{
-    self, auth,
+    self,
     auth::AuthKeytag,
     data,
     mediation::{self, Mediate, Mediation, Unmediate},
 };
 use actix_web::{HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_data::Locked;
-use konduit_tmp::{AdaptorInfo, Quote, Receipt, SquashProposal, SquashStatus, TxHelp};
+use konduit_tmp::{AdaptorInfo, PayOutcome, Quote, Receipt, SquashProposal, SquashStatus, TxHelp};
 use std::ops::Deref;
 
 type Data = web::Data<server::Data>;
@@ -24,12 +23,25 @@ impl ResponseError for Error {
         match self {
             Error::Mediation(mediation::Error::Unmediate(_)) => StatusCode::BAD_REQUEST,
             Error::Mediation(mediation::Error::Backend(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+            // A problem states its own status; this only turns the
+            // number into actix's type.
+            Error::Data(data::Error::Problem { status, .. }) => {
+                StatusCode::from_u16(*status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            Error::Data(data::Error::NoRail(_)) => StatusCode::NOT_FOUND,
             Error::Data(_) => StatusCode::BAD_REQUEST,
         }
     }
 
     fn error_response(&self) -> HttpResponse {
         let status = self.status_code();
+        if let Error::Data(data::Error::Problem { slug, detail, .. }) = self {
+            return HttpResponse::build(status).json(serde_json::json!({
+                "type": slug,
+                "status": status.as_u16(),
+                "detail": detail,
+            }));
+        }
         if status.is_server_error() {
             // don't leak internal details to the client, but keep them for yourself
             tracing::error!("request failed: {self}");
@@ -53,49 +65,36 @@ pub async fn payme(
     data: Data,
     body: web::Bytes,
 ) -> Result<Mediate<konduit_tmp::Payme>, Error> {
-    let request: cln_rail::wire::payme::Request = Unmediate::unmediate(mediation.content, &body)?;
-    Ok(Mediate(
-        mediation.accept,
-        data.payme(konduit_tmp::PaymeRequest {
-            amount: request.amount,
-        })?,
-    ))
+    let request = Unmediate::unmediate(mediation.content, &body)?;
+    Ok(Mediate(mediation.accept, data.payme(request)?))
 }
 
-pub async fn cln_quote(
+/// `POST /pay/{rail}/quote`
+pub async fn quote(
     mediation: Mediation,
-    keytag: auth::ClnAuthKeytag,
+    keytag: AuthKeytag,
+    rail: web::Path<String>,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<cln_rail::wire::quote::Response>, Error> {
+) -> Result<Mediate<Quote>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
-    Ok(Mediate(
-        mediation.accept,
-        data.cln_quote(keytag.0, request).await?,
-    ))
+    let quote = data
+        .quote(&keytag, &rail, request, mediation.content)
+        .await?;
+    Ok(Mediate(mediation.accept, quote))
 }
 
-pub async fn cln_commit(
+/// `POST /pay/{rail}/pay`
+pub async fn pay(
     mediation: Mediation,
-    keytag: auth::ClnAuthKeytag,
+    keytag: AuthKeytag,
+    rail: web::Path<String>,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<cln_rail::wire::commit::Response>, Error> {
+) -> Result<Mediate<PayOutcome>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
-    Ok(Mediate(
-        mediation.accept,
-        data.cln_commit(keytag.0, request).await?,
-    ))
-}
-
-pub async fn cln_sync(
-    mediation: Mediation,
-    keytag: auth::ClnAuthKeytag,
-    data: Data,
-    body: web::Bytes,
-) -> Result<Mediate<cln_rail::wire::sync::Response>, Error> {
-    let request = Unmediate::unmediate(mediation.content, &body)?;
-    Ok(Mediate(mediation.accept, data.cln_sync(keytag.0, request)?))
+    let outcome = data.pay(&keytag, &rail, request, mediation.content).await?;
+    Ok(Mediate(mediation.accept, outcome))
 }
 
 pub async fn show(_data: Data) -> Result<HttpResponse, Error> {
@@ -148,40 +147,6 @@ pub async fn squash(
     body: web::Bytes,
     // ) -> Result<Mediate<()>, Error> {
 ) -> Result<Mediate<SquashStatus>, Error> {
-    let _: Result<_, Error> = Ok(Mediate(
-        mediation.accept,
-        data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?,
-    ));
-    squash_status(mediation, keytag, data).await
-}
-
-pub async fn quote(
-    mediation: Mediation,
-    keytag: AuthKeytag,
-    data: Data,
-    body: web::Bytes,
-) -> Result<Mediate<Quote>, Error> {
-    Ok(Mediate(
-        mediation.accept,
-        data.quote(&keytag, Unmediate::unmediate(mediation.content, &body)?)
-            .await?,
-    ))
-}
-
-// FIXME :: Remove the glue required here for historical reasons
-pub async fn pay(
-    mediation: Mediation,
-    keytag: AuthKeytag,
-    data: Data,
-    body: web::Bytes,
-) -> Result<Mediate<SquashStatus>, Error> {
-    let b = konduit_tmp::PayBody::unmediate(mediation.content, &body)?;
-    let locked = Locked::new(b.cheque_body, b.signature);
-    let body = data::PayBody {
-        locked,
-        payme: b.payme,
-    };
-    let _ = data.pay(&keytag, body).await?;
-    // FIXME : The return type here has diverged!!
+    data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?;
     squash_status(mediation, keytag, data).await
 }

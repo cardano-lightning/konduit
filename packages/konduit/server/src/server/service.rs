@@ -38,22 +38,21 @@ impl Service {
                 .app_data(data.clone())
                 .wrap(middleware::from_fn(mediation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
-                .route(cln_rail::wire::payme::PATH, web::post().to(handlers::payme))
+                // A payme is asked for by whoever wants to pay, who may
+                // hold no channel here yet, so it carries no keytag.
+                .route("/pay/konduit/payme", web::post().to(handlers::payme))
                 .service(
-                    web::scope("/ch/x/cln")
-                        .wrap(middleware::from_fn(auth::cln_auth))
-                        .route("/quote", web::post().to(handlers::cln_quote))
-                        .route("/commit", web::post().to(handlers::cln_commit))
-                        .route("/sync", web::post().to(handlers::cln_sync)),
-                )
-                .service(
-                    // FIXME : Implement auth
-                    web::scope("/ch")
-                        .wrap(middleware::from_fn(auth::no_auth))
-                        .route("/receipt", web::get().to(handlers::receipt))
-                        .route("/squash", web::post().to(handlers::squash))
-                        .route("/quote", web::post().to(handlers::quote))
-                        .route("/pay", web::post().to(handlers::pay)),
+                    // Everything a consumer or a routing peer does,
+                    // authenticated per channel by keytag. The rail is
+                    // in the path, and `konduit` is reserved for what no
+                    // rail owns.
+                    web::scope("/pay")
+                        .wrap(middleware::from_fn(auth::keytag_auth))
+                        .route("/konduit/receipt", web::get().to(handlers::receipt))
+                        .route("/konduit/squash", web::get().to(handlers::squash_status))
+                        .route("/konduit/squash", web::post().to(handlers::squash))
+                        .route("/{rail}/quote", web::post().to(handlers::quote))
+                        .route("/{rail}/pay", web::post().to(handlers::pay)),
                 )
                 .service(web::scope("/opt").route("/fx", web::get().to(handlers::fx)))
                 .service(

@@ -23,7 +23,6 @@ pub fn build(args: Args) -> anyhow::Result<cln_rail::Ctx> {
                 key: cln_rail::random::arr32(),
             },
             channels: cln_rail::channels::Config { channels: vec![] },
-            paymes: Default::default(),
         },
     };
     cln_rail::Ctx::init(config).map_err(anyhow::Error::from)
