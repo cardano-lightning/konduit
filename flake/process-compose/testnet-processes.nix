@@ -22,14 +22,35 @@
     '';
   };
 
+  # Wipes everything that only describes the testnet being replaced.
+  #
+  # The testnet dir is the obvious half. The other half is everything
+  # indexed from it: kupo's two workdirs, the konduit indexer's db and
+  # each konduit-server's db. Those survive outside $TESTNET_DIR, and a
+  # new testnet reuses the same channel tags and keys, so a kept db has a
+  # server starting up believing in channels and cheques that the fresh
+  # chain has never heard of.
   clear-testnet-state = writeShellApplication {
     name = "clear-testnet-state";
     runtimeInputs = [coreutils];
     text = ''
       set -x
-      if [ -d "$TESTNET_DIR" ]; then
-        rm -rf "$TESTNET_DIR"
-      fi
+      # Unset is fine and means "not this process-compose's concern":
+      # testnet.nix shares this script and defines none of the indexer
+      # or server dirs.
+      for dir in \
+        "$TESTNET_DIR" \
+        "''${KUPO_INDEXER_DIR:-}" \
+        "''${KUPO_UTXO_DIR:-}" \
+        "''${KONDUIT_INDEXER_DIR:-}" \
+        "''${KONDUIT_SERVER_DIR:-}" \
+        "''${KONDUIT_SERVER_DIR:-}-gateway" \
+        "''${KONDUIT_SERVER_DIR:-}-merchant"; do
+        if [ "$dir" != "-gateway" ] && [ "$dir" != "-merchant" ] \
+          && [ -n "$dir" ] && [ -d "$dir" ]; then
+          rm -rf "$dir"
+        fi
+      done
       mkdir -p "$TESTNET_DIR"
     '';
   };
