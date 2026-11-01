@@ -2,6 +2,13 @@
 //! But there subtle divergences between: Inbound and outbound behaviour.
 //! The previous implementation is an Inbound receipt.
 //! We need here an outbound receipt.
+//!
+//! This is the payer's own view, and it stays the payer's own: a squash
+//! says what is settled, and deriving one from the counterparty's
+//! receipt would have this node signing a settlement figure computed
+//! from the other side's accounting. `apply_sync` merges the two rather
+//! than adopting theirs for that reason. A one-shot client can afford to
+//! trust and sign; a rail that squashes continuously cannot.
 
 use konduit_data::{
     Cheque, Duration, Indexes, IndexesError, Lock, Locked, Secret, Squash, SquashBody,

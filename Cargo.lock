@@ -1084,7 +1084,6 @@ name = "cln-rail"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "clap",
  "hex",
  "http-client",
  "konduit-data",
@@ -1092,14 +1091,12 @@ dependencies = [
  "konduit-tmp",
  "minicbor",
  "rand 0.6.5",
- "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
- "tracing-subscriber",
  "web-time",
 ]
 
@@ -2658,8 +2655,11 @@ dependencies = [
  "anyhow",
  "cardano-connector",
  "cardano-connector-direct",
+ "cardano-connector-kupo-node",
+ "cardano-connector-node",
  "cardano-sdk",
  "clap",
+ "cln-rail",
  "dotenvy",
  "env_logger",
  "http-client",
@@ -2877,6 +2877,7 @@ dependencies = [
  "js-sys",
  "konduit-client",
  "konduit-data",
+ "konduit-rail",
  "konduit-tmp",
  "konduit-tx",
  "log",

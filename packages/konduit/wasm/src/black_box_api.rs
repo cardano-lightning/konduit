@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use konduit_rail::RESERVED_NAME;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_time::{Duration, SystemTime, UNIX_EPOCH};
@@ -187,10 +188,18 @@ impl Konduit {
         Ok(())
     }
 
-    /// Get a quote for a CLN payme returned by the merchant.
+    /// Get a quote for a payme returned by the merchant.
+    ///
+    /// Terminal only: this pays the adaptor itself, under konduit's own
+    /// reserved name and with no instruction. Paying onward through a
+    /// rail means naming one, which this api does not yet do.
     #[wasm_bindgen(js_name = "getQuoteFor")]
     pub async fn get_quote_for(&self, payme: &Payme) -> wasm::Result<Quote> {
-        Ok(self.l2_client()?.quote(payme).await?.into())
+        Ok(self
+            .l2_client()?
+            .quote(RESERVED_NAME, payme.amount, Vec::new())
+            .await?
+            .into())
     }
 }
 
@@ -296,7 +305,7 @@ impl Konduit {
             log::debug!("pay: for tag={}, quote={:?}", tag, quote);
             let client = self.l2_client()?;
             lockeds.add(payme.lock);
-            let outcome = client.pay(payme, quote).await?;
+            let outcome = client.pay(RESERVED_NAME, payme, quote, Vec::new()).await?;
             log::debug!("pay: outcome={:?}", outcome);
             // Resolved or pending, the inbound leg is settled by squash.
             let squash_status = client.squash_status().await?;

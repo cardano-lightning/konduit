@@ -1,3 +1,4 @@
+use cardano_connector::CardanoConnector;
 use cardano_connector_direct::Blockfrost;
 use cardano_sdk::{Address, VerificationKey, address::kind::Shelley};
 use clap::Parser;
@@ -11,11 +12,15 @@ use std::{
     io::{self, Write},
 };
 
+#[cfg(feature = "cln")]
+use crate::cln;
 use crate::{
     Adaptor,
+    connector::{Backend, ConnectorArgs},
     core::{AdaptorInfo, SigningKey, SquashStatus, Tag},
     l1, l2,
 };
+use konduit_rail::RESERVED_NAME;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Konduit Consumer CLI")]
@@ -84,9 +89,8 @@ pub struct L1Args {
     #[command(subcommand)]
     pub cmd: L1Cmd,
 
-    /// For L1, only the blockfrost connector is supported.
-    #[arg(long, env = "KONDUIT_BLOCKFROST_PROJECT_ID")]
-    pub blockfrost_project_id: String,
+    #[command(flatten)]
+    pub connector: ConnectorArgs,
 
     /// Reference script host address. If omitted, it's fetched from the L2 server.
     #[arg(long, env = "KONDUIT_HOST_ADDRESS")]
@@ -109,9 +113,11 @@ pub enum L1Cmd {
         #[arg(long = "close-period")]
         close_period: Option<Duration>,
     },
+    /// Add funds to the channel, on top of whatever it already locks.
+    Add { amount: u64 },
     /// Close
     Close,
-    /// Close
+    /// Step the channel on, settling whatever the chain already allows.
     Step,
 }
 
@@ -137,6 +143,16 @@ pub enum L2Cmd {
     },
     /// Manually squash using the latest state
     Squash,
+    /// Pay a payee through this konduit's cln rail: ask the payee for a
+    /// payme, then quote and pay with the rail's own instruction.
+    #[cfg(feature = "cln")]
+    Cln {
+        /// The payee's url, where the payme is asked for.
+        #[arg(long)]
+        payee: String,
+        #[arg(long)]
+        amount: u64,
+    },
 }
 
 pub fn transport() -> transport::Reqwest {
@@ -186,9 +202,33 @@ impl Cli {
         }
     }
 
+    /// Picks the backend, then hands the connector to the backend-agnostic
+    /// body below. Each arm connects its own way, so they can't share a type.
     async fn run_l1(&self, args: &L1Args) -> anyhow::Result<()> {
-        let cardano = Blockfrost::new(args.blockfrost_project_id.clone());
-        let l1 = l1::Client::new(&cardano, &self.signing_key);
+        match args.connector.backend {
+            Backend::Blockfrost => {
+                let cardano = Blockfrost::new(args.connector.blockfrost_project_id()?.to_string());
+                self.run_l1_with(&cardano, args).await
+            }
+            #[cfg(feature = "node")]
+            Backend::Node => {
+                let cardano = args.connector.node().await?;
+                self.run_l1_with(&cardano, args).await
+            }
+            #[cfg(feature = "node")]
+            Backend::KupoNode => {
+                let cardano = args.connector.kupo_node().await?;
+                self.run_l1_with(&cardano, args).await
+            }
+        }
+    }
+
+    async fn run_l1_with<C: CardanoConnector>(
+        &self,
+        cardano: &C,
+        args: &L1Args,
+    ) -> anyhow::Result<()> {
+        let l1 = l1::Client::new(cardano, &self.signing_key);
         let ref_script_host = &args.ref_script_host;
 
         // Channels is a plain query, not an execute() call - handle it and return early.
@@ -241,6 +281,12 @@ impl Cli {
                 (vec![open], BTreeMap::new(), ref_script_host)
             }
 
+            L1Cmd::Add { amount } => (
+                Vec::new(),
+                BTreeMap::from([(self.tag.clone(), Intent::Add(*amount))]),
+                self.resolve_ref_script_host(ref_script_host).await?,
+            ),
+
             L1Cmd::Close => (
                 Vec::new(),
                 BTreeMap::from([(self.tag.clone(), Intent::Close)]),
@@ -286,15 +332,17 @@ impl Cli {
                 println!("{}", serde_json::to_string_pretty(adaptor.info())?);
             }
 
+            // Paying the adaptor itself: konduit's own reserved name,
+            // and no instruction to write.
             L2Cmd::Quote { payme } => {
                 let payme: Payme = serde_json::from_str(payme)?;
-                let quote = l2.quote(&payme).await?;
+                let quote = l2.quote(RESERVED_NAME, payme.amount, Vec::new()).await?;
                 println!("{}", serde_json::to_string_pretty(&quote)?);
             }
 
             L2Cmd::Pay { payme } => {
                 let payme: Payme = serde_json::from_str(payme)?;
-                let quote = l2.quote(&payme).await?;
+                let quote = l2.quote(RESERVED_NAME, payme.amount, Vec::new()).await?;
 
                 println!("quote = {:?}", quote);
 
@@ -302,7 +350,7 @@ impl Cli {
                     return Ok(());
                 }
 
-                let outcome = l2.pay(&payme, &quote).await?;
+                let outcome = l2.pay(RESERVED_NAME, &payme, &quote, Vec::new()).await?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
 
                 // The inbound leg is resolved by squash either way: a
@@ -319,6 +367,30 @@ impl Cli {
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
                 l2.sync(res, and_confirm, |_x: konduit_data::Lock| known_lock(&_x))
                     .await?;
+            }
+
+            #[cfg(feature = "cln")]
+            L2Cmd::Cln { payee, amount } => {
+                // The payme comes from the payee, not from the konduit
+                // this client has a channel with.
+                let payme = cln::request_payme(&client_json(payee.clone()), *amount).await?;
+                let instruction = cln::instruction(payme.payee, payme.amount)?;
+                let quote = l2
+                    .quote(cln::RAIL, payme.amount, instruction.clone())
+                    .await?;
+
+                println!("quote = {:?}", quote);
+
+                if !self.yes && !confirm("Proceed with payment?")? {
+                    return Ok(());
+                }
+
+                let outcome = l2.pay(cln::RAIL, &payme, &quote, instruction).await?;
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
+
+                let res = l2.squash_status().await?;
+                let and_confirm = prompt_if_incomplete(&res, self.yes)?;
+                l2.sync(res, and_confirm, |x| known_lock(&x)).await?;
             }
         }
 

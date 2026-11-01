@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prints a human-readable status report for the CLN demo: each actor's
 # wallet address + ADA balance, followed by any Konduit channel it owns
-# on-chain (tag, stage, locked amount). Shared by setup-cln-channels.sh and
+# on-chain (tag, stage, locked amount). Shared by fund-cln-wallets.sh and
 # teardown-cln-channels.sh so both report the same way; after teardown
 # there are no channels left to list, so it's just the three balances.
 #

@@ -2,16 +2,21 @@
 //! merchant <- gateway <- consumer. The two server roles are
 //! `konduit-server` processes, which read their rail config from
 //! `KONDUIT_CLN_CONFIG_PATH` and their on-chain identity from
-//! `.env.<role>`; the consumer is the `cln-client` binary. The nix
-//! dev-env runs this as `generate-cln-demo-configs`:
+//! `.env.<role>`. The nix dev-env runs this as
+//! `generate-cln-demo-configs`:
 //!
-//!   cargo run -p cln-rail --example consumer_gateway_merchant --features client
+//!   cargo run -p cln-rail --example consumer_gateway_merchant
 //!
-//! then pays with:
-//!   cln-client --config pay_example/consumer.toml pay \
-//!     --merchant http://127.0.0.1:7653 --amount 1000
+//! The consumer has no config of its own: it is `konduit-client`, which
+//! takes its key, tag and server from the environment, and names the
+//! rail on the command line:
+//!
+//!   KONDUIT_SIGNING_KEY=<consumer key> \
+//!     KONDUIT_TAG=<consumer-gateway tag, hex> \
+//!     KONDUIT_SERVER_URL=http://127.0.0.1:5663 \
+//!     konduit-client -y l2 cln --payee http://127.0.0.1:5664 --amount 1000
 
-use cln_rail::{channel, client, commits, config::Config};
+use cln_rail::{channel, commits, config::Config};
 use konduit_data::{SigningKey, Tag};
 
 // Fixed, obviously-fake signing keys — distinct per party so the demo
@@ -76,15 +81,32 @@ fn main() -> anyhow::Result<()> {
         known_commits: commits_config("gateway"),
     };
 
-    // --- consumer config: one outbound channel (to gateway) ---
-    let consumer = client::Config {
-        signer: cln_rail::signer::Config { key: CONSUMER_KEY },
-        peer: gateway_known,
-        tag: cg_tag.clone(),
-    };
-
-    write_example_configs(&merchant, &gateway, &consumer)?;
+    write_example_configs(&merchant, &gateway)?;
+    // The consumer has no TOML; what it needs is an environment, and it
+    // is generated here for the same reason the TOMLs are: so the key,
+    // the tag and the url it pays through cannot drift from the
+    // channels configured above.
+    write_consumer_env(&gateway_known.base_url, &cg_tag)?;
     write_wallet_envs()?;
+    Ok(())
+}
+
+/// The consumer's environment, regenerated every run — unlike
+/// `.env.<role>`, which is kept once written.
+fn write_consumer_env(server_url: &str, tag: &Tag) -> anyhow::Result<()> {
+    let dir = config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join("consumer.env");
+    std::fs::write(
+        &path,
+        format!(
+            "KONDUIT_SIGNING_KEY={}\nKONDUIT_TAG={}\nKONDUIT_SERVER_URL={}\n",
+            hex::encode(CONSUMER_KEY),
+            hex::encode(tag.as_ref()),
+            server_url,
+        ),
+    )?;
+    println!("wrote {}", path.display());
     Ok(())
 }
 
@@ -103,18 +125,13 @@ fn config_dir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("pay_example"))
 }
 
-fn write_example_configs(
-    merchant: &Config,
-    gateway: &Config,
-    consumer: &client::Config,
-) -> anyhow::Result<()> {
+fn write_example_configs(merchant: &Config, gateway: &Config) -> anyhow::Result<()> {
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
 
     for (name, toml_str) in [
         ("merchant", toml::to_string_pretty(merchant)?),
         ("gateway", toml::to_string_pretty(gateway)?),
-        ("consumer", toml::to_string_pretty(consumer)?),
     ] {
         let path = dir.join(format!("{name}.toml"));
         std::fs::write(&path, toml_str)?;

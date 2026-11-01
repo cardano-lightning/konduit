@@ -7,9 +7,14 @@ use crate::{
 };
 use anyhow::anyhow;
 use http_client::Transport;
-use konduit_rail::RESERVED_NAME;
 use konduit_tmp::{TxHelp, to_signing_key, to_verifying_key};
 use web_time::{SystemTime, UNIX_EPOCH};
+
+/// How much longer than the quoted minimum a cheque is written for, to
+/// cover the time it spends in flight — across every hop, since each one
+/// quoted its own margin on the assumption the cheque would still be
+/// good on arrival.
+const TRANSIT_ALLOWANCE_MS: u64 = 30_000;
 
 pub struct Client<'a, T: Transport> {
     adaptor: &'a Adaptor<T>,
@@ -32,26 +37,19 @@ where
         self.adaptor.info()
     }
 
-    /// Quotes a payment to `payme`'s payee. Terminal only: when the
-    /// payee is the adaptor itself, the reserved `konduit` name carries
-    /// it and there is no instruction to write. Paying onward through a
-    /// rail means naming the rail and encoding its instruction, which
-    /// only the caller can do.
-    pub async fn quote(&self, payme: &Payme) -> anyhow::Result<Quote> {
-        self.assert_terminal(payme)?;
-        self.adaptor
-            .quote(RESERVED_NAME, payme.amount, Vec::new())
-            .await
-    }
-
-    fn assert_terminal(&self, payme: &Payme) -> anyhow::Result<()> {
-        let adaptor = to_verifying_key(self.info().channel_parameters.adaptor_key);
-        if payme.payee != adaptor {
-            return Err(anyhow!(
-                "payee is not this adaptor: pay through a rail with its own instruction"
-            ));
-        }
-        Ok(())
+    /// Quotes carrying `instruction` onward over `rail`.
+    ///
+    /// This knows no rail: the name goes in the path and the instruction
+    /// travels as bytes, both of them the caller's to choose. Paying the
+    /// adaptor itself is not a special case — it is konduit's own
+    /// reserved name with an empty instruction, picked like any other.
+    pub async fn quote(
+        &self,
+        rail: &str,
+        amount: u64,
+        instruction: Vec<u8>,
+    ) -> anyhow::Result<Quote> {
+        self.adaptor.quote(rail, amount, instruction).await
     }
 
     pub async fn squash_status(&self) -> anyhow::Result<SquashStatus> {
@@ -62,8 +60,15 @@ where
         self.adaptor.receipt().await
     }
 
-    pub async fn pay(&self, payme: &Payme, quote: &Quote) -> anyhow::Result<PayOutcome> {
-        self.assert_terminal(payme)?;
+    /// Hands over a cheque for `quote`, with the same `rail` and
+    /// `instruction` that quote was taken against.
+    pub async fn pay(
+        &self,
+        rail: &str,
+        payme: &Payme,
+        quote: &Quote,
+        instruction: Vec<u8>,
+    ) -> anyhow::Result<PayOutcome> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("failed calculate duration since UNIX epoch ?!")
@@ -72,7 +77,12 @@ where
         if payme.timeout.as_millis() <= now as u128 {
             return Err(anyhow!("CLN payme has expired"));
         }
-        let timeout = Duration::from_millis(now + quote.relative_timeout);
+        // The quoted timeout is a minimum the cheque must still satisfy
+        // when it arrives, not when it is signed, so the payer adds its
+        // own allowance for the trip. Without one the window is exactly
+        // consumed by the first konduit's margin and nothing is left for
+        // the hop after it.
+        let timeout = Duration::from_millis(now + quote.relative_timeout + TRANSIT_ALLOWANCE_MS);
 
         let body = ChequeBody::new(quote.index, quote.amount, timeout, payme.lock);
 
@@ -81,7 +91,7 @@ where
         let locked = Locked::make(&to_signing_key(self.signing_key.clone()), tag, body);
 
         self.adaptor
-            .pay(RESERVED_NAME, locked.into_unverified(), Vec::new())
+            .pay(rail, locked.into_unverified(), instruction)
             .await
     }
 

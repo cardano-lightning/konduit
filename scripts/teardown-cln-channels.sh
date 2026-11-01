@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Closes and ends the two on-chain Konduit channels opened by
-# setup-cln-channels.sh (consumer -> gateway, gateway -> merchant),
+# fund-cln-wallets.sh printed (consumer -> gateway, gateway -> merchant),
 # against an already-running `process-compose-dev-env`.
 #
 # Not wired into process-compose: run this yourself, from inside the nix
@@ -8,7 +8,7 @@
 # to reclaim their locked ADA rather than just abandoning it.
 #
 # Each party's wallet key is read from the `.env.<role>` that
-# cln-demo-configs wrote alongside its CLN TOML, same as setup-cln-channels.sh.
+# cln-demo-configs wrote alongside its CLN TOML, same as fund-cln-wallets.sh.
 #
 # Usage: scripts/teardown-cln-channels.sh
 set -euo pipefail
@@ -30,7 +30,7 @@ konduit_cli() {
   cargo run -q -p konduit-cli -- "$@"
 }
 
-# Resolved the same way setup-cln-channels.sh resolves it, so both always
+# Resolved the same way fund-cln-wallets.sh resolves it, so both always
 # agree on which reference-script deployment is live.
 admin_config="$(konduit_cli admin show config)"
 export KONDUIT_HOST_ADDRESS

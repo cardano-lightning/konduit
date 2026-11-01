@@ -29,11 +29,23 @@ cli = [
   "serde_json",
   "cardano-connector-direct",
   "konduit-data/serde",
+  # The executable is where a rail gets named, so it carries the rails.
+  "cln",
+  # ... and where a chain backend gets named.
+  "node",
 ]
+# The node-backed L1 backends (node, kupo-node). Not in the wasm builds:
+# their transports are native-only.
+node = ["dep:cardano-connector-node", "dep:cardano-connector-kupo-node"]
+# The cln rail, consumer side: its instruction and its name.
+cln = ["dep:cln-rail", "serde_json", "konduit-data/serde"]
 
 [dependencies]
 anyhow.workspace = true
 cardano-connector-direct = { workspace = true, optional = true }
+# -F node
+cardano-connector-node = { workspace = true, optional = true }
+cardano-connector-kupo-node = { workspace = true, optional = true }
 cardano-connector.workspace = true
 cardano-sdk.workspace = true
 http-client = { workspace = true, features = ["json", "cbor"] }
@@ -48,8 +60,13 @@ tokio = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 konduit-tmp.workspace = true
 konduit-rail.workspace = true
+# -F cln
+cln-rail = { workspace = true, optional = true, default-features = false }
 env_logger.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
+# The workspace pins proptest with default-features off, so std has to be
+# asked for by name, as konduit-data does — without it proptest's own lib
+# doesn't compile.
+proptest = { workspace = true, features = ["std", "bit-set"] }
 proptest-derive.workspace = true

@@ -33,6 +33,7 @@ hex.workspace = true
 http-client = { workspace = true, features = ["gloo", "json", "cbor"] }
 js-sys.workspace = true
 konduit-client.workspace = true
+konduit-rail.workspace = true
 konduit-data.workspace = true
 konduit-tx.workspace = true
 log.workspace = true

@@ -13,13 +13,15 @@
 # server error "no receipt: submit a null squash first" (channel.rs)
 # refers to, so there's at least a baseline receipt to build on.
 #
-# Unlike setup/teardown-cln-channels.sh, this never touches L1 at all: it's
+# Unlike fund-cln-wallets.sh/teardown-cln-channels.sh, this never touches L1
+# at all: it's
 # a pure L2/HTTP action against the running konduit-server processes, via
 # konduit-client's own `l2 squash` (packages/konduit/client/src/cli.rs),
 # not konduit-cli.
 #
 # Not wired into process-compose: run this yourself, from inside the nix
-# dev shell, once setup-cln-channels.sh has opened the channels.
+# dev shell, once the channels are open (see fund-cln-wallets.sh for the
+# opens it prints).
 #
 # Usage: scripts/submit-null-squash.sh
 set -euo pipefail

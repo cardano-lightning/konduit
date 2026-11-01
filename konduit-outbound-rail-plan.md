@@ -8,11 +8,11 @@ constants and the two `todo!()` handlers all go; nothing is kept as an alias. Bl
 
 ## Crate layout
 
-| crate            | path                      | holds                                                                                                        |
-| ---------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `konduit-rail`   | `packages/konduit/rail`   | `Constraints`, `Quoted`, `Outcome`, `Resolution`, the problem enums, `Rail`, the erasing layer, the registry |
-| `cln-rail`       | `packages/cln/rail`       | `impl Rail for Cln` — outbound over a Cardano Lightning channel — plus the `cln-client` binary               |
-| `konduit-server` | `packages/konduit/server` | the platform: inbound verification, fee and time margin, `/pay/{rail}/…`, `/pay/konduit/…`                   |
+| crate            | path                      | holds                                                                                                         |
+| ---------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `konduit-rail`   | `packages/konduit/rail`   | `Constraints`, `Quoted`, `Outcome`, `Resolution`, the problem enums, `Rail`, the erasing layer, the registry  |
+| `cln-rail`       | `packages/cln/rail`       | `impl Rail for Cln` — outbound over a Cardano Lightning channel. The consumer side is `konduit-client -F cln` |
+| `konduit-server` | `packages/konduit/server` | the platform: inbound verification, fee and time margin, `/pay/{rail}/…`, `/pay/konduit/…`                    |
 
 `packages/cln/server` → `packages/cln/rail`, crate `cln-server` → `cln-rail`, lib `cln_server` → `cln_rail`.
 Touches `Cargo.toml:36`, `Cargo.toml:136`, `packages/konduit/server/Cargo.toml`, the seven

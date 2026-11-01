@@ -75,10 +75,19 @@ impl Margins {
             .amount()
             .checked_sub(self.fee)
             .ok_or(Error::InsufficientFee)?;
-        let timeout = Relative::until(inbound.timeout(), now).saturating_sub(self.time);
-        if timeout.is_zero() {
+        // Covering the margin exactly is covering it: konduit judges its
+        // own margin and nothing else. What is left over may well be too
+        // little for a rail to work in, but that is the rail's call —
+        // `commit` refuses a zero window itself — and for konduit as the
+        // payee there is no onward leg to need any.
+        //
+        // Checked before subtracting, because `saturating_sub` cannot
+        // tell "exactly the margin" from "less than it".
+        let remaining = Relative::until(inbound.timeout(), now);
+        if remaining < self.time {
             return Err(Error::InsufficientTime);
         }
+        let timeout = remaining.saturating_sub(self.time);
         Ok(Constraints {
             amount,
             timeout,
@@ -149,7 +158,22 @@ mod tests {
     fn a_cheque_short_of_the_margin_is_konduits_refusal() {
         let margins = margins();
         let now = Duration::from_secs(1_000);
-        let inbound = cheque(10_000, margins.time, now);
+        let short = Relative(margins.time.0.saturating_sub(Duration::from_millis(1)));
+        let inbound = cheque(10_000, short, now);
         assert_eq!(margins.strip(&inbound, now), Err(Error::InsufficientTime));
+    }
+
+    /// The boundary belongs to konduit's own margin and no further: a
+    /// cheque worth exactly the margin covers it, and leaves a rail
+    /// nothing — which is konduit's answer, not its refusal. A terminal
+    /// payee needs no onward window, and a rail refuses a zero one on
+    /// its own.
+    #[test]
+    fn a_cheque_worth_exactly_the_margin_covers_it() {
+        let margins = margins();
+        let now = Duration::from_secs(1_000);
+        let inbound = cheque(10_000, margins.time, now);
+        let constraints = margins.strip(&inbound, now).expect("covers the margin");
+        assert!(constraints.timeout.is_zero());
     }
 }

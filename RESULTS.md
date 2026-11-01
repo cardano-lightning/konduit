@@ -68,12 +68,12 @@ compatible with the pinned nixpkgs:
    total (the demo converts each to a 100,000-lovelace payment):
 
    ```sh
-   nix --extra-experimental-features 'nix-command flakes' develop .#extras --impure
+   nix --extra-experimental-features 'nix-command flakes fetch-closure' develop .#extras --impure
    source .env.process_compose
+   set -a; source "$CLN_DEMO_CONFIG_DIR/consumer.env"; set +a
    for i in $(seq 1 9); do
-     cargo run -p cln-rail --bin cln-client -- \
-       --config "$RUN_DIR/cln-demo-configs/consumer.toml" pay \
-       --merchant http://127.0.0.1:5664 --amount 1000
+     cargo run -q -p konduit-client -- -y l2 cln \
+       --payee http://127.0.0.1:5664 --amount 1000
    done
    ```
 

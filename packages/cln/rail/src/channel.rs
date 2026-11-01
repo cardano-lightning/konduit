@@ -243,6 +243,21 @@ impl Channel {
     }
 }
 
+// FIXME :: This duplicates `konduit_client::Adaptor`, which speaks the
+// same endpoints with the same keytag header. It should be rationalized
+// onto that one — a rail is a konduit client pointed downstream, so the
+// dependency runs this way round. Three things block it today:
+//
+//   - `Adaptor` is JSON only (`http_client::Client<T, codec::Json>`),
+//     where a peer here may be configured for either codec;
+//   - it answers in `anyhow`, flattening the status, where this rail has
+//     to tell `Pending` from `OutboundRejected` from `RailUnavailable`
+//     and must not do that by matching strings;
+//   - `Adaptor::new` is eager and fallible (it fetches `/info`), so a
+//     rail with several peers could not start while one was down, which
+//     is worse than answering `rail-unavailable` per request.
+//
+// The receipt is not part of this: see `receipt.rs`.
 enum Client {
     Json(http_client::Client<http_client::transport::Reqwest, codec::Json>),
     Cbor(http_client::Client<http_client::transport::Reqwest, codec::Cbor>),

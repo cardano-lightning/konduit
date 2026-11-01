@@ -32,44 +32,16 @@ tracing.workspace = true
 # reqwest transport above already requires an ambient tokio runtime at
 # call time regardless, so this isn't a new runtime dependency, just the
 # first spot cln-rail's own code needs to name the crate directly. The
-# fuller feature set (macros/rt-multi-thread/time) the `cln-client`
-# binary and the tests need is layered on below, under "client".
+# fuller feature set (macros/rt-multi-thread/time) the tests need is
+# layered on below, as a dev-dependency.
 tokio = { workspace = true, features = ["rt"] }
 
-anyhow = { workspace = true, optional = true }
-clap = { workspace = true, optional = true, features = ["derive"] }
-toml = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true, features = ["json"] }
-
-tracing-subscriber = { workspace = true, optional = true, features = [
-  "env-filter",
-] }
-
 [dev-dependencies]
-tokio.workspace = true
-
-[features]
-default = ["client"]
-
-# The `cln-client` binary: CLI parsing, config loading, tracing, async
-# runtime, and the reqwest transport it pays over. The library itself needs
-# none of it.
-client = [
-  "dep:clap",
-  "dep:toml",
-  "dep:anyhow",
-  "dep:reqwest",
-  "dep:tracing-subscriber",
-  "tokio/macros",
-  "tokio/rt-multi-thread",
-  "tokio/time",
-]
-
-[[bin]]
-name = "cln-client"
-path = "src/bin/client.rs"
-required-features = ["client"]
+# For the config generator example and the tests; the library needs
+# neither.
+anyhow.workspace = true
+toml.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [[example]]
 name = "consumer_gateway_merchant"
-required-features = ["client"]
