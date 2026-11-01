@@ -25,7 +25,7 @@ pub mod ctx;
 pub use ctx::Ctx;
 
 pub mod rail;
-pub use rail::Payee;
+pub use rail::{Outbound, Payee};
 
 pub mod random;
 

@@ -12,11 +12,14 @@ use crate::{
     Channel, Channels, Commits, Paymes, Receipt, Signer, channel, channels,
     commits::{Claim, Commit},
     paymes,
+    rail::{Outbound, Payee},
     time::now,
     wire::{self, auth::Keytag},
 };
 use konduit_data::{ChequeBody, Duration, Lock, Secret, SquashBody, VerifyingKey};
-use konduit_rail::{Constraints, Outcome, PreProblem, QuoteProblem, Quoted, Relative, Resolution};
+use konduit_rail::{
+    Constraints, Outcome, PreProblem, QuoteProblem, Quoted, Rail, Relative, Resolution,
+};
 
 pub struct Ctx {
     paymes: Paymes,
@@ -121,140 +124,6 @@ impl Ctx {
         self.commits.prune(now);
     }
 
-    // ------------------------------------------------------------------------
-    // -- The rail's three operations. `rail.rs` wraps these in the trait.
-    // ------------------------------------------------------------------------
-
-    /// What the network downstream costs to reach `payee`. The rail adds
-    /// nothing of its own.
-    pub async fn quote_payee(
-        &self,
-        payee: &VerifyingKey,
-        amount: u64,
-    ) -> Result<Quoted, QuoteProblem> {
-        let channel = self
-            .channels
-            .get(payee)
-            .map_err(|err| QuoteProblem::Unroutable(err.to_string()))?;
-        let response = channel
-            .quote(&wire::quote::Request {
-                payee: *payee,
-                amount,
-            })
-            .await
-            .map_err(|err| QuoteProblem::RailUnavailable(err.to_string()))?;
-        Ok(Quoted {
-            fee: response.fee,
-            timeout: Relative(response.timeout),
-        })
-    }
-
-    /// Commit outbound within `inbound`, to `payee`.
-    ///
-    /// There is no error arm: once the outbound cheque is dispatched,
-    /// anything short of an answer is `Pending`, because an error read as
-    /// a non-payment would chase a payment that may well have been made.
-    #[tracing::instrument(
-        skip(self),
-        fields(amount = inbound.amount, timeout = %inbound.timeout, lock = %inbound.lock)
-    )]
-    pub async fn commit_payee(&self, inbound: Constraints, payee: &VerifyingKey) -> Outcome {
-        // Constraints first, since refusing them costs nothing and
-        // touches no network.
-        if inbound.timeout.is_zero() {
-            return Outcome::FailedPre(PreProblem::InsufficientMargin(
-                "no time left to make an outbound commitment".to_string(),
-            ));
-        }
-        let channel = match self.channels.get(payee) {
-            Ok(channel) => channel,
-            Err(err) => {
-                return Outcome::FailedPre(QuoteProblem::Unroutable(err.to_string()).into());
-            }
-        };
-
-        // Our receipt tracking is in-memory only, so it can lag behind
-        // whatever the partner already has on file (e.g. after a
-        // restart). Recover it before proposing an index, so we don't
-        // propose one that collides with state the partner has seen.
-        if let Err(err) = self.recover_receipt(&channel).await {
-            return Outcome::FailedPre(QuoteProblem::RailUnavailable(err.to_string()).into());
-        }
-
-        let timeout = inbound.timeout.absolute(now());
-        let index = channel.propose_index();
-        match self
-            .commits
-            .claim(inbound.lock, Commit::new(index, inbound.amount, timeout))
-        {
-            // The lock is the idempotency key: this is what the commit
-            // already made under it came to, not a second payment.
-            Claim::Existing(outcome) => return outcome,
-            Claim::Fresh => {}
-        }
-
-        let body = ChequeBody::new(index, inbound.amount, timeout, inbound.lock);
-        let locked = self.signer.locked(channel.tag().clone(), body);
-        if let Err(err) = channel.apply_locked(locked.clone()) {
-            // Nothing is sent, so the claim is given up and a retry
-            // under this lock is free to proceed.
-            self.commits.release(&inbound.lock);
-            return Outcome::FailedPre(
-                QuoteProblem::RailUnavailable(format!("outbound channel: {err}")).into(),
-            );
-        }
-
-        // Onward routing is the peer's own business: a lookup keyed by
-        // payee is a peer table, not a route table.
-        let req = wire::commit::Request {
-            inbound: locked.into_unverified(),
-            outbound: None,
-        };
-        let res = match channel.commit(&req).await {
-            Ok(res) => res,
-            Err(err) => {
-                // Dispatched. Whether it paid is not ours to say.
-                tracing::warn!("outbound commit unanswered, reporting pending: {err}");
-                return Outcome::Pending;
-            }
-        };
-        let Some(secret) = res.secret else {
-            return Outcome::Pending;
-        };
-
-        // Cache the secret before anything can squash the unlocked
-        // cheque that carries it out of the receipt.
-        if let Err(err) = self.commits.resolve(&inbound.lock, secret) {
-            tracing::warn!("recording the revealed secret failed: {err}");
-        }
-        if let Err(err) = channel.apply_secret(secret) {
-            tracing::warn!("applying the revealed secret locally failed: {err}");
-        }
-        // Get the resulting squash to the partner as soon as possible,
-        // but in the background: the caller is waiting on this answer and
-        // doesn't need to wait on that round-trip too.
-        self.spawn_dispatch_squash(&channel);
-        Outcome::Success(secret)
-    }
-
-    /// Delayed resolution for a lock this rail committed under.
-    pub fn reveal_lock(&self, lock: &Lock) -> Resolution {
-        if let Some(commit) = self.commits.get(lock) {
-            return commit.resolution(now());
-        }
-        // Not ours, or pruned — though an outbound receipt may still
-        // carry the unlocked cheque.
-        match self
-            .channels
-            .all()
-            .iter()
-            .find_map(|(_, channel)| channel.reveal(lock))
-        {
-            Some(secret) => Resolution::Success(secret),
-            None => Resolution::Unknown,
-        }
-    }
-
     /// The locks this rail is still waiting on, for the platform's
     /// resolver to poll.
     pub fn in_flight(&self) -> Vec<Lock> {
@@ -346,5 +215,151 @@ impl Ctx {
             channel.apply_squash(squash)?;
         }
         Ok(())
+    }
+}
+
+/// Konduit supplies the inbound constraints and this rail owns
+/// everything after them. One `commit`, no wrapper: the bodies live here
+/// because this is where the state is.
+impl Rail for Ctx {
+    const NAME: &'static str = "cln";
+    type QuoteTarget = Payee;
+    type CommitTarget = Outbound;
+
+    /// What the network downstream costs to reach the payee. The rail
+    /// adds nothing of its own.
+    async fn quote(&self, amount: u64, target: Payee) -> Result<Quoted, QuoteProblem> {
+        let channel = self
+            .channels
+            .get(&target.0)
+            .map_err(|err| QuoteProblem::Unroutable(err.to_string()))?;
+        let response = channel
+            .quote(&wire::quote::Request {
+                payee: target.0,
+                amount,
+            })
+            .await
+            .map_err(|err| QuoteProblem::RailUnavailable(err.to_string()))?;
+        Ok(Quoted {
+            fee: response.fee,
+            timeout: Relative(response.timeout),
+        })
+    }
+
+    /// Commit `target.amount` outbound to `target.key`, within `inbound`.
+    ///
+    /// There is no error arm: once the outbound cheque is dispatched,
+    /// anything short of an answer is `Pending`, because an error read as
+    /// a non-payment would chase a payment that may well have been made.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            ceiling = inbound.amount,
+            amount = target.amount,
+            timeout = %inbound.timeout,
+            lock = %inbound.lock,
+        )
+    )]
+    async fn commit(&self, inbound: Constraints, target: Outbound) -> Outcome {
+        // Constraints first, since refusing them costs nothing and
+        // touches no network.
+        if target.amount > inbound.amount {
+            return Outcome::FailedPre(PreProblem::InsufficientMargin(format!(
+                "instructed to pay {} with {} claimable net of fee",
+                target.amount, inbound.amount
+            )));
+        }
+        if inbound.timeout.is_zero() {
+            return Outcome::FailedPre(PreProblem::InsufficientMargin(
+                "no time left to make an outbound commitment".to_string(),
+            ));
+        }
+        let channel = match self.channels.get(&target.key) {
+            Ok(channel) => channel,
+            Err(err) => {
+                return Outcome::FailedPre(QuoteProblem::Unroutable(err.to_string()).into());
+            }
+        };
+
+        // Our receipt tracking is in-memory only, so it can lag behind
+        // whatever the partner already has on file (e.g. after a
+        // restart). Recover it before proposing an index, so we don't
+        // propose one that collides with state the partner has seen.
+        if let Err(err) = self.recover_receipt(&channel).await {
+            return Outcome::FailedPre(QuoteProblem::RailUnavailable(err.to_string()).into());
+        }
+
+        let timeout = inbound.timeout.absolute(now());
+        let index = channel.propose_index();
+        match self
+            .commits
+            .claim(inbound.lock, Commit::new(index, target.amount, timeout))
+        {
+            // The lock is the idempotency key: this is what the commit
+            // already made under it came to, not a second payment.
+            Claim::Existing(outcome) => return outcome,
+            Claim::Fresh => {}
+        }
+
+        let body = ChequeBody::new(index, target.amount, timeout, inbound.lock);
+        let locked = self.signer.locked(channel.tag().clone(), body);
+        if let Err(err) = channel.apply_locked(locked.clone()) {
+            // Nothing is sent, so the claim is given up and a retry
+            // under this lock is free to proceed.
+            self.commits.release(&inbound.lock);
+            return Outcome::FailedPre(
+                QuoteProblem::RailUnavailable(format!("outbound channel: {err}")).into(),
+            );
+        }
+
+        // Onward routing is the peer's own business: a lookup keyed by
+        // payee is a peer table, not a route table.
+        let req = wire::commit::Request {
+            inbound: locked.into_unverified(),
+            outbound: None,
+        };
+        let res = match channel.commit(&req).await {
+            Ok(res) => res,
+            Err(err) => {
+                // Dispatched. Whether it paid is not ours to say.
+                tracing::warn!("outbound commit unanswered, reporting pending: {err}");
+                return Outcome::Pending;
+            }
+        };
+        let Some(secret) = res.secret else {
+            return Outcome::Pending;
+        };
+
+        // Cache the secret before anything can squash the unlocked
+        // cheque that carries it out of the receipt.
+        if let Err(err) = self.commits.resolve(&inbound.lock, secret) {
+            tracing::warn!("recording the revealed secret failed: {err}");
+        }
+        if let Err(err) = channel.apply_secret(secret) {
+            tracing::warn!("applying the revealed secret locally failed: {err}");
+        }
+        // Get the resulting squash to the partner as soon as possible,
+        // but in the background: the caller is waiting on this answer and
+        // doesn't need to wait on that round-trip too.
+        self.spawn_dispatch_squash(&channel);
+        Outcome::Success(secret)
+    }
+
+    /// Delayed resolution for a lock this rail committed under.
+    async fn reveal(&self, lock: &Lock) -> Resolution {
+        if let Some(commit) = self.commits.get(lock) {
+            return commit.resolution(now());
+        }
+        // Not ours, or pruned — though an outbound receipt may still
+        // carry the unlocked cheque.
+        match self
+            .channels
+            .all()
+            .iter()
+            .find_map(|(_, channel)| channel.reveal(lock))
+        {
+            Some(secret) => Resolution::Success(secret),
+            None => Resolution::Unknown,
+        }
     }
 }

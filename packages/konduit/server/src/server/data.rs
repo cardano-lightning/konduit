@@ -4,8 +4,9 @@ use crate::{
     db,
     time::{self, now},
 };
+use cln_rail::Payee;
 use konduit_data::{Duration, Locked, Secret, Squash};
-use konduit_rail::{Constraints, Outcome, Relative};
+use konduit_rail::{Constraints, Outcome, Rail, Relative};
 use konduit_tmp::{
     AdaptorInfo, Keytag, Payme, PaymeRequest, Quote, QuoteBody, Receipt, SquashProposal,
     SquashStatus, TxHelp,
@@ -244,7 +245,7 @@ impl Data {
         } else {
             let quoted = self
                 .cln
-                .quote_payee(&request.payee, request.amount)
+                .quote(request.amount, Payee(request.payee))
                 .await
                 .map_err(|problem| Error::Cln(problem.to_string()))?;
             (quoted.fee + FEE_PLACEHOLDER, quoted.timeout.0)
@@ -296,14 +297,17 @@ impl Data {
             Some(secret)
         } else {
             // Youre routing.
-            let payee = request.outbound.ok_or(Error::Other)?.key;
-            let amount = request
+            let instruction = request.outbound.ok_or(Error::Other)?;
+            // The ceiling the rail may spend: the inbound cheque net of
+            // konduit's fee. The rail checks the consumer's instruction
+            // against it and commits that, not the ceiling.
+            let ceiling = request
                 .inbound
                 .amount()
                 .checked_sub(FEE_PLACEHOLDER)
                 .ok_or(Error::Other)?;
             let constraints = Constraints {
-                amount,
+                amount: ceiling,
                 timeout: Relative::until(timeout, now()?),
                 lock: *request.inbound.lock(),
             };
@@ -311,7 +315,7 @@ impl Data {
             // the consumer's to see as problem details, which is Phase C
             // of the rail plan; until then pending is indistinguishable
             // from "no secret yet" and a failure is a 400.
-            match self.cln().commit_payee(constraints, &payee).await {
+            match self.cln().commit(constraints, instruction).await {
                 Outcome::Success(secret) => Some(secret),
                 Outcome::Pending => None,
                 Outcome::FailedPre(problem) => return Err(Error::Cln(problem.to_string())),

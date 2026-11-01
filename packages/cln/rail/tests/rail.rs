@@ -2,7 +2,7 @@
 //! payee it cannot reach, constraints it cannot work within, and a lock
 //! it knows nothing about.
 
-use cln_rail::{Channels, Commits, Ctx, Payee, Paymes, Signer, paymes, signer};
+use cln_rail::{Channels, Commits, Ctx, Outbound, Payee, Paymes, Signer, paymes, signer};
 use konduit_data::{Duration, Lock, SigningKey};
 use konduit_rail::{Constraints, Outcome, Rail, Registry, Relative, Resolution};
 
@@ -20,6 +20,11 @@ fn payee() -> Payee {
     Payee(SigningKey::from([9; 32]).verifying_key())
 }
 
+/// Pay the whole ceiling the constraints allow.
+fn outbound() -> Outbound {
+    Outbound::new(payee().0, 1_000)
+}
+
 fn constraints(timeout: Relative) -> Constraints {
     Constraints {
         amount: 1_000,
@@ -31,7 +36,7 @@ fn constraints(timeout: Relative) -> Constraints {
 #[tokio::test]
 async fn a_payee_with_no_channel_is_unroutable() {
     let outcome = rail()
-        .commit(constraints(Relative::from_secs(60)), payee())
+        .commit(constraints(Relative::from_secs(60)), outbound())
         .await;
     match outcome {
         Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "unroutable"),
@@ -45,9 +50,23 @@ async fn no_time_left_is_insufficient_margin() {
     // to commit within. The rail keeps no margin of its own, but it
     // still cannot write a cheque that has already elapsed.
     let outcome = rail()
-        .commit(constraints(Relative::from_secs(0)), payee())
+        .commit(constraints(Relative::from_secs(0)), outbound())
         .await;
     match outcome {
+        Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "insufficient-margin"),
+        other => panic!("expected FailedPre, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn paying_more_than_the_constraints_allow_is_refused() {
+    // The ceiling is the inbound cheque net of konduit's fee; the
+    // instruction is the consumer's. Over it, nothing is committed.
+    let over = Outbound::new(payee().0, 1_001);
+    match rail()
+        .commit(constraints(Relative::from_secs(60)), over)
+        .await
+    {
         Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "insufficient-margin"),
         other => panic!("expected FailedPre, got {other:?}"),
     }
@@ -75,7 +94,7 @@ async fn the_rail_registers_as_cln() {
 
     // And is reachable with its target erased to bytes, as the platform
     // will hand it over.
-    let target = konduit_rail::RawTarget::Json(serde_json::to_vec(&payee()).unwrap());
+    let target = konduit_rail::RawTarget::Json(serde_json::to_vec(&outbound()).unwrap());
     let outcome = registry
         .get("cln")
         .unwrap()

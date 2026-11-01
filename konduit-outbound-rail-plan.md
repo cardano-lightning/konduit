@@ -112,8 +112,9 @@ inlined additions are what let it drift, and a quote promising less margin than 
 
 Consequences worth being explicit about:
 
-- **`Constraints.amount` is a ceiling, not a payment.** The rail spends at most that and keeps nothing;
-  `FailedPre(insufficient-margin)` is what it says when the ceiling cannot cover what its backend quotes.
+- **`Constraints.amount` is a ceiling, not a payment.** The rail keeps nothing of it, commits what its
+  commit target instructs, and answers `FailedPre(insufficient-margin)` when the instruction is over the
+  ceiling or the ceiling cannot cover what its backend quotes.
 - **A volatility buffer is not a fee and not a margin.** A rail whose network prices in another asset, or
   reads another clock, may hold back a buffer against divergence between quote and commit. That is the
   rail's own and belongs to such a rail's config. CLN is ADA on Cardano's Posix clock, both sides, so there
@@ -136,15 +137,19 @@ for `konduit-client`, which is already a client of this API.
 
 ### Target and the shapes it replaces
 
-- `QuoteTarget = CommitTarget = Payee(VerifyingKey)`, replacing `wire::quote::Request.payee` and
-  `wire::commit::Outbound`. Always present — no `Option` anywhere in a target. Terminal payment is
-  `/pay/konduit/pay`, which calls no rail at all.
-- `Outbound.amount` goes: the amount is `Constraints.amount`, already net of konduit's fee. Two sources of
-  truth for one number is what `data.rs:276`'s `inbound.amount().checked_sub(FEE_PLACEHOLDER)` and
-  `ctx.rs`'s `inbound.amount().checked_sub(amount)` each separately work around.
-- `Option<Outbound>` goes. Terminal-or-onward was an `Option` in the body; it is now which path the rail
-  `POST`s to downstream, which is the spec's structural selection: the peer is the payee →
-  `/pay/konduit/pay` on it; otherwise `/pay/cln/pay` with the payee as target, for the peer to route on.
+- `QuoteTarget = Payee(VerifyingKey)` and `CommitTarget = Outbound { key, amount }`: a quote needs no
+  amount of its own, since konduit passes that separately, so a rail quotes on less than it commits on
+  exactly as the spec allows. Neither target is ever an `Option` — terminal payment is `/pay/konduit/pay`,
+  which calls no rail at all.
+- **The instruction names the amount; konduit names the ceiling.** `Constraints.amount` is the inbound
+  cheque net of konduit's fee, and `Outbound.amount` is what the consumer asked to be paid. The rail checks
+  the second against the first and commits the second, so the difference is the consumer's own headroom and
+  not something the rail spends. Over the ceiling is `FailedPre(insufficient-margin)`, before anything is
+  sent. Konduit still does not parse the target: the check is the rail's, where the target is already
+  deserialized.
+- `wire::commit::Outbound` is not a second type: `wire::commit` re-exports the rail's own, so the
+  consumer's instruction and what the rail checks cannot drift apart. The `Option` around it goes with the
+  path split below.
 - `wire::sync` goes. Resolution downstream is `GET /pay/konduit/receipt` + `POST /pay/konduit/squash`, the
   same two calls a consumer makes — the spec's "an inbound routing peer uses the same shape". The
   bidirectional one-round-trip receipt exchange has no counterpart in the new API.
