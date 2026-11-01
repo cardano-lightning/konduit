@@ -25,6 +25,7 @@ members = [
   "packages/konduit/client",
   "packages/konduit/data",
   "packages/konduit/indexer",
+  "packages/konduit/rail",
   "packages/konduit/server",
   "packages/konduit/tx",
   "packages/konduit/wasm",
@@ -150,6 +151,7 @@ http-client = { path = "packages/util/http-client", default-features = false }
 konduit-client = { path = "packages/konduit/client", default-features = false }
 konduit-data = { path = "packages/konduit/data", default-features = false }
 konduit-indexer = { path = "packages/konduit/indexer" }
+konduit-rail = { path = "packages/konduit/rail", default-features = false }
 konduit-tmp = { path = "packages/konduit/tmp", default-features = false }
 kupo-client = { path = "packages/util/kupo-client" }
 konduit-server = { path = "packages/konduit/server" }
