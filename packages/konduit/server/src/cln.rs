@@ -18,11 +18,17 @@ pub fn build(args: Args) -> anyhow::Result<cln_rail::Ctx> {
             toml::from_str(&raw)
                 .with_context(|| format!("parsing Konduit CLN config at {}", path.display()))?
         }
+        // No config file: a rail that can reach no one and has
+        // committed nothing. Nothing to keep, so nothing to persist.
         None => Config {
             signer: cln_rail::signer::Config {
                 key: cln_rail::random::arr32(),
             },
-            channels: cln_rail::channels::Config { channels: vec![] },
+            outbound: cln_rail::channels::Config {
+                known_keys: vec![],
+                channels: vec![],
+            },
+            known_commits: Default::default(),
         },
     };
     cln_rail::Ctx::init(config).map_err(anyhow::Error::from)

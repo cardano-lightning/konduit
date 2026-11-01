@@ -9,6 +9,8 @@
 //! as a `String` for now; these become `problem-details` derives, whose
 //! trait carries the same two, when that crate is wired in.
 
+use serde::{Deserialize, Serialize};
+
 /// Everything that blocks a quote, and every way a commit fails before
 /// anything is sent.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -83,7 +85,10 @@ impl PreProblem {
 }
 
 /// Nothing fails before sending once sent, so these are the only two.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+///
+/// Serializable because a rail that persists what it has committed
+/// persists how those commitments ended.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
 pub enum PostProblem {
     /// The outbound network refused or failed the payment.
     #[error("outbound rejected: {0}")]

@@ -27,25 +27,47 @@ pub enum MediaType {
     Cbor,
 }
 
+/// Where a peer is reached, and nothing about any channel with them: a
+/// key the rail knows, the url it answers on, and the codec to speak.
+///
+/// This is the lookup half. A key being known says the rail could pay
+/// that peer if it had a channel; whether it has one is [`Entry`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
-    pub tag: Tag,
-    /// Receiver's key (ie sub_vkey).
+pub struct KnownKey {
+    /// Peer's key (ie sub_vkey).
     pub key: VerifyingKey,
-    /// Receiver's
     pub base_url: String,
     pub media_type: MediaType,
 }
 
-impl Default for Config {
+impl Default for KnownKey {
     fn default() -> Self {
-        let key = SigningKey::from([255; 32]).verifying_key();
-        let tag = Tag::from(hex::decode("deadbeef").unwrap());
         Self {
-            tag,
-            key,
+            key: SigningKey::from([255; 32]).verifying_key(),
             base_url: "http://localhost:7652".to_string(),
             media_type: Default::default(),
+        }
+    }
+}
+
+/// A channel the rail has: the tag names it, the key says whose known
+/// url to reach it at. An entry whose key is not known is refused at
+/// startup — see `config::Config::verify`.
+///
+/// Seeded from config today. Once this node can see the channels it is
+/// the payer of on chain, an entry is what that view would hand over,
+/// which is why it carries no url of its own.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Entry {
+    pub key: VerifyingKey,
+    pub tag: Tag,
+}
+
+impl Default for Entry {
+    fn default() -> Self {
+        Self {
+            key: KnownKey::default().key,
+            tag: Tag::from(hex::decode("deadbeef").unwrap()),
         }
     }
 }
@@ -88,11 +110,12 @@ pub struct Channel {
 }
 
 impl Channel {
-    pub fn new(config: &Config, receipt: Receipt, auth: String) -> Self {
+    /// A channel with `tag`, reached wherever `known` says.
+    pub fn new(known: &KnownKey, tag: Tag, receipt: Receipt, auth: String) -> Self {
         let timeout = Some(Duration::from_secs(5));
-        let client = Client::new(config.base_url.clone(), config.media_type.clone(), timeout);
+        let client = Client::new(known.base_url.clone(), known.media_type.clone(), timeout);
         Self {
-            tag: config.tag.clone(),
+            tag,
             receipt: Mutex::new(receipt),
             client,
             auth,

@@ -17,10 +17,7 @@ pub mod commits;
 pub use commits::Commits;
 
 pub mod ctx;
-pub use ctx::Ctx;
-
-pub mod rail;
-pub use rail::{Outbound, Payee};
+pub use ctx::{Ctx, Outbound};
 
 pub mod random;
 

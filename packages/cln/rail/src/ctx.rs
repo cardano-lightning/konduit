@@ -1,17 +1,23 @@
-//! The rail's own state: its outbound lookup, what it has committed, and
-//! the paymes it holds as a terminal payee.
+//! The rail's own state, its instruction, and its `impl Rail`.
+//!
+//! CLN is the Cardano Lightning Network, so this rail's hop is a konduit
+//! channel and its peer is a konduit node: the rail is a konduit client
+//! pointed downstream. Its instruction is written in konduit's own
+//! addressing, and everything else — the channel, the cheque, the squash
+//! — is the rail's own.
 //!
 //! Everything here is downstream of konduit's inbound verification. The
 //! rail is handed `Constraints` — an amount, a relative timeout and a
-//! lock — and owns what it does with them. It charges no fee and keeps
-//! no margin of its own; see `rail.rs`.
+//! lock — and owns what it does with them. It keeps no margin of its
+//! own: what it charges is what the peer charges, passed through. Nor
+//! does it hold a volatility buffer, since both sides of this hop are
+//! ADA on Cardano's clock and there is nothing to diverge.
 
 use std::sync::Arc;
 
 use crate::{
     Channel, Channels, Commits, Receipt, Signer, channel, channels,
     commits::{Claim, Commit},
-    rail::{Outbound, Payee},
     time::now,
 };
 use konduit_data::{
@@ -21,6 +27,35 @@ use konduit_rail::{
     Constraints, Outcome, PreProblem, QuoteProblem, Quoted, Rail, Relative, Resolution,
 };
 use konduit_tmp::{Keytag, PayOutcome};
+use minicbor::{Decode, Encode};
+use serde::{Deserialize, Serialize};
+
+/// What this rail is instructed with: who to pay, and how much they
+/// receive.
+///
+/// One type for both operations, because a quote and a commit ask about
+/// the same thing — konduit names neither the payee nor the amount, so
+/// both travel here.
+///
+/// The amount is what reaches the payee, not what leaves this node: the
+/// peer downstream is a konduit too and charges to be paid, so the rail
+/// adds the peer's own fee on top and checks the sum against
+/// `Constraints.amount` — the inbound cheque net of konduit's fee.
+/// Whatever is left over is the consumer's own headroom and not
+/// something the rail spends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct Outbound {
+    #[n(0)]
+    pub payee: VerifyingKey,
+    #[n(1)]
+    pub amount: u64,
+}
+
+impl Outbound {
+    pub fn new(payee: VerifyingKey, amount: u64) -> Self {
+        Self { payee, amount }
+    }
+}
 
 pub struct Ctx {
     channels: Channels,
@@ -30,6 +65,10 @@ pub struct Ctx {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("config: {0}")]
+    Config(#[from] crate::config::Error),
+    #[error("commits: {0}")]
+    Commits(#[from] crate::commits::Error),
     #[error("channels: {0}")]
     Channels(#[from] channels::Error),
     #[error("channel: {0}")]
@@ -40,16 +79,15 @@ pub enum Error {
 
 impl Ctx {
     pub fn init(config: crate::Config) -> Result<Self, Error> {
+        config.verify()?;
         let signer = Signer::new(config.signer);
         let me = signer.verifying_key();
         let channels = Channels::from_config(
-            &config.channels,
+            &config.outbound,
             |entry| Receipt::new(signer.squash(entry.tag.clone(), SquashBody::zero())),
             |entry| Keytag::from_parts(&me, &entry.tag).to_hex(),
         );
-        // TODO:: Commits should persist. A restart between commit and
-        // reveal currently loses the secret.
-        let commits = Commits::new();
+        let commits = Commits::from_config(&config.known_commits)?;
         Ok(Self {
             channels,
             commits,
@@ -188,18 +226,18 @@ impl Ctx {
 /// because this is where the state is.
 impl Rail for Ctx {
     const NAME: &'static str = "cln";
-    type QuoteInstruction = Payee;
+    type QuoteInstruction = Outbound;
     type CommitInstruction = Outbound;
 
-    /// What the network downstream costs to reach the payee. The rail
-    /// adds nothing of its own.
-    async fn quote(&self, amount: u64, instruction: Payee) -> Result<Quoted, QuoteProblem> {
+    /// What the peer charges to carry the instruction. The rail adds
+    /// nothing of its own.
+    async fn quote(&self, instruction: Outbound) -> Result<Quoted, QuoteProblem> {
         let channel = self
             .channels
-            .get(&instruction.0)
+            .get(&instruction.payee)
             .map_err(|err| QuoteProblem::Unroutable(err.to_string()))?;
         let quote = channel
-            .quote(amount)
+            .quote(instruction.amount)
             .await
             .map_err(|err| QuoteProblem::RailUnavailable(err.to_string()))?;
         Ok(Quoted {
@@ -237,7 +275,7 @@ impl Rail for Ctx {
                 "no time left to make an outbound commitment".to_string(),
             ));
         }
-        let channel = match self.channels.get(&instruction.key) {
+        let channel = match self.channels.get(&instruction.payee) {
             Ok(channel) => channel,
             Err(err) => {
                 return Outcome::FailedPre(QuoteProblem::Unroutable(err.to_string()).into());

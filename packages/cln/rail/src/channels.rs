@@ -4,6 +4,11 @@
 //! the payee an instruction names. Entries are seeded from config and settable
 //! while running, so a new outbound peer does not mean a restart.
 //!
+//! Two things, kept apart: the known keys are where a peer is reached,
+//! and the channels are the ones this rail actually has. A known key
+//! with no channel is a peer this rail could pay but cannot yet; a
+//! channel naming an unknown key is a config error.
+//!
 //! Onward routing — a payee that is not the peer — would need a route
 //! table rather than a peer table, and this is not one.
 
@@ -15,18 +20,39 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-/// The seed for the lookup: one entry per peer, each naming that peer's
-/// key and url.
+/// The seed for the lookup: who can be reached, and which channels are
+/// held with them.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub channels: Vec<channel::Config>,
+    /// Key -> url. Having a key here is not having a channel.
+    pub known_keys: Vec<channel::KnownKey>,
+    /// The channels held, each naming one of the known keys.
+    pub channels: Vec<channel::Entry>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
+            known_keys: vec![Default::default()],
             channels: vec![Default::default()],
         }
+    }
+}
+
+impl Config {
+    /// The known key for `key`, or nothing if it is not one.
+    pub fn known(&self, key: &VerifyingKey) -> Option<&channel::KnownKey> {
+        self.known_keys.iter().find(|known| &known.key == key)
+    }
+
+    /// The channels whose key is not known: a config that cannot be
+    /// acted on, since there is nowhere to send their cheques.
+    pub fn unknown_keys(&self) -> Vec<VerifyingKey> {
+        self.channels
+            .iter()
+            .filter(|entry| self.known(&entry.key).is_none())
+            .map(|entry| entry.key)
+            .collect()
     }
 }
 
@@ -86,16 +112,27 @@ impl Channels {
 }
 
 impl Channels {
-    /// Builds the lookup from config. `receipt` is called per entry
-    /// because each channel starts from its own signed null squash.
+    /// Builds the lookup from config: one channel per entry, reached at
+    /// its key's known url. `receipt` is called per entry because each
+    /// channel starts from its own signed null squash.
+    ///
+    /// An entry whose key is not known is skipped rather than guessed
+    /// at; `config::Config::verify` is what refuses such a config, so
+    /// this is never reached with one.
     pub fn from_config(
         config: &Config,
-        mut receipt: impl FnMut(&channel::Config) -> Receipt,
-        mut auth: impl FnMut(&channel::Config) -> String,
+        mut receipt: impl FnMut(&channel::Entry) -> Receipt,
+        mut auth: impl FnMut(&channel::Entry) -> String,
     ) -> Self {
         let channels = Self::new();
         for entry in config.channels.iter() {
-            channels.upsert(entry.key, Channel::new(entry, receipt(entry), auth(entry)));
+            let Some(known) = config.known(&entry.key) else {
+                continue;
+            };
+            channels.upsert(
+                entry.key,
+                Channel::new(known, entry.tag.clone(), receipt(entry), auth(entry)),
+            );
         }
         channels
     }

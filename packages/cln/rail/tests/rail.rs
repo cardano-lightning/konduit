@@ -2,7 +2,7 @@
 //! payee it cannot reach, constraints it cannot work within, and a lock
 //! it knows nothing about.
 
-use cln_rail::{Channels, Commits, Ctx, Outbound, Payee, Signer, signer};
+use cln_rail::{Channels, Commits, Ctx, Outbound, Signer, signer};
 use konduit_data::{Duration, Lock, SigningKey};
 use konduit_rail::{Constraints, Outcome, Rail, Registry, Relative, Resolution};
 
@@ -15,13 +15,13 @@ fn rail() -> Ctx {
     )
 }
 
-fn payee() -> Payee {
-    Payee(SigningKey::from([9; 32]).verifying_key())
+fn payee() -> konduit_data::VerifyingKey {
+    SigningKey::from([9; 32]).verifying_key()
 }
 
 /// Pay the whole ceiling the constraints allow.
 fn outbound() -> Outbound {
-    Outbound::new(payee().0, 1_000)
+    Outbound::new(payee(), 1_000)
 }
 
 fn constraints(timeout: Relative) -> Constraints {
@@ -61,7 +61,7 @@ async fn no_time_left_is_insufficient_margin() {
 async fn paying_more_than_the_constraints_allow_is_refused() {
     // The ceiling is the inbound cheque net of konduit's fee; the
     // instruction is the consumer's. Over it, nothing is committed.
-    let over = Outbound::new(payee().0, 1_001);
+    let over = Outbound::new(payee(), 1_001);
     match rail()
         .commit(constraints(Relative::from_secs(60)), over)
         .await
@@ -74,7 +74,7 @@ async fn paying_more_than_the_constraints_allow_is_refused() {
 #[tokio::test]
 async fn an_unroutable_quote_is_not_a_rail_fault() {
     let problem = rail()
-        .quote(1_000, payee())
+        .quote(outbound())
         .await
         .expect_err("no channel to quote over");
     assert_eq!(problem.slug(), "unroutable");

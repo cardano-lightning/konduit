@@ -11,7 +11,7 @@
 //!   cln-client --config pay_example/consumer.toml pay \
 //!     --merchant http://127.0.0.1:7653 --amount 1000
 
-use cln_rail::{channel, client, config::Config};
+use cln_rail::{channel, client, commits, config::Config};
 use konduit_data::{SigningKey, Tag};
 
 // Fixed, obviously-fake signing keys — distinct per party so the demo
@@ -39,17 +39,14 @@ fn main() -> anyhow::Result<()> {
     let cg_tag = Tag::from(CONSUMER_GATEWAY_TAG.to_vec());
     let gm_tag = Tag::from(GATEWAY_MERCHANT_TAG.to_vec());
 
-    // --- consumer -> gateway channel ---
-    let consumer_gateway = channel::Config {
-        tag: cg_tag.clone(),
+    // Where each peer is reached. A known key is a peer that could be
+    // paid; the channel entries below are the ones actually held.
+    let gateway_known = channel::KnownKey {
         key: gateway_vkey,
         base_url: format!("http://{gateway_url}"),
         media_type: Default::default(),
     };
-
-    // --- gateway -> merchant channel ---
-    let gateway_merchant = channel::Config {
-        tag: gm_tag.clone(),
+    let merchant_known = channel::KnownKey {
         key: merchant_vkey,
         base_url: format!("http://{merchant_url}"),
         media_type: Default::default(),
@@ -59,21 +56,31 @@ fn main() -> anyhow::Result<()> {
     //     payee and pays no one onward ---
     let merchant = Config {
         signer: cln_rail::signer::Config { key: MERCHANT_KEY },
-        channels: cln_rail::channels::Config { channels: vec![] },
+        outbound: cln_rail::channels::Config {
+            known_keys: vec![],
+            channels: vec![],
+        },
+        known_commits: commits_config("merchant"),
     };
 
     // --- gateway config: one outbound peer, the merchant ---
     let gateway = Config {
         signer: cln_rail::signer::Config { key: GATEWAY_KEY },
-        channels: cln_rail::channels::Config {
-            channels: vec![gateway_merchant],
+        outbound: cln_rail::channels::Config {
+            known_keys: vec![merchant_known],
+            channels: vec![channel::Entry {
+                key: merchant_vkey,
+                tag: gm_tag.clone(),
+            }],
         },
+        known_commits: commits_config("gateway"),
     };
 
     // --- consumer config: one outbound channel (to gateway) ---
     let consumer = client::Config {
         signer: cln_rail::signer::Config { key: CONSUMER_KEY },
-        gateway: consumer_gateway,
+        peer: gateway_known,
+        tag: cg_tag.clone(),
     };
 
     write_example_configs(&merchant, &gateway, &consumer)?;
@@ -81,14 +88,27 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Where a role's rail keeps what it has committed. Beside its config,
+/// so a demo rerun that keeps the config dir keeps the commitments its
+/// servers are still answering for.
+fn commits_config(role: &str) -> commits::Config {
+    commits::Config {
+        path: Some(config_dir().join(format!("commits.{role}.json"))),
+    }
+}
+
+fn config_dir() -> std::path::PathBuf {
+    std::env::var_os("CLN_EXAMPLE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("pay_example"))
+}
+
 fn write_example_configs(
     merchant: &Config,
     gateway: &Config,
     consumer: &client::Config,
 ) -> anyhow::Result<()> {
-    let dir = std::env::var_os("CLN_EXAMPLE_CONFIG_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::path::PathBuf::from("pay_example"));
+    let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
 
     for (name, toml_str) in [
@@ -117,9 +137,7 @@ fn write_example_configs(
 /// stable across reruns (and editable by hand), unlike the TOML configs
 /// above which are regenerated every time.
 fn write_wallet_envs() -> anyhow::Result<()> {
-    let dir = std::env::var_os("CLN_EXAMPLE_CONFIG_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::path::PathBuf::from("pay_example"));
+    let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
 
     for (name, key) in [

@@ -231,8 +231,11 @@ impl Data {
                 timeout: Relative(konduit_data::Duration::from_millis(0)),
             }
         } else {
+            // The amount is the rail's to read out of the instruction.
+            // Konduit keeps its own copy for the arithmetic below, and
+            // tells the rail nothing it did not instruct.
             let instruction = encoded(codec, request.instruction);
-            self.rail(rail)?.quote(request.amount, &instruction).await?
+            self.rail(rail)?.quote(&instruction).await?
         };
         let offered = self.margins.pad(downstream);
         let index = channel.can_commit(request.amount + offered.fee)?;
@@ -293,7 +296,9 @@ impl Data {
             // status, where the secret arrives as an unlocked cheque.
             Outcome::Pending => Ok(PayOutcome::Pending),
             // The inbound cheque is left live to elapse either way.
+            // FIXME :: we could drop the cheque here
             Outcome::FailedPre(problem) => Err(problem.into()),
+            // cannot drop the cheque here
             Outcome::FailedPost(problem) => Err(problem.into()),
         }
     }
