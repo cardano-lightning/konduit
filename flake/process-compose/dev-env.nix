@@ -104,7 +104,7 @@
       export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-./.run/cargo-target-indexer}"
       mkdir -p "$CARGO_TARGET_DIR"
       mkdir -p "$(dirname "$KONDUIT_INDEXER_DB_PATH")"
-      cargo run --release -p konduit-indexer --features=cli -- \
+      cargo run -p konduit-indexer --features=cli -- \
         index \
         --kupo-port "$KUPO_INDEXER_PORT" \
         --db-path "$KONDUIT_INDEXER_DB_PATH"
@@ -124,7 +124,7 @@
       CLN_GATEWAY_URL="127.0.0.1:$KONDUIT_SERVER_GATEWAY_PORT" \
         CLN_MERCHANT_URL="127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT" \
         CLN_EXAMPLE_CONFIG_DIR="$CLN_DEMO_CONFIG_DIR" \
-        cargo run --release -p cln-rail --example consumer_gateway_merchant --features client
+        cargo run -p cln-rail --example consumer_gateway_merchant --features client
     '';
   };
 
@@ -164,7 +164,7 @@
         export KONDUIT_DB_PATH="$KONDUIT_SERVER_DB_PATH"
         mkdir -p "$(dirname "$KONDUIT_DB_PATH")"
 
-        cargo run --release -p konduit-server
+        cargo run -p konduit-server
       '';
     };
 
@@ -226,7 +226,7 @@
       ADMIN_MIN_LOVELACE="50000000"
 
       konduit_cli() {
-        cargo run --release -q -p konduit-cli -- "$@"
+        cargo run -q -p konduit-cli -- "$@"
       }
 
       # The addresses, as the cli resolves them. The cli reads the .env files
