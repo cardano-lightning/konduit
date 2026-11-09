@@ -1,6 +1,6 @@
 # The konduit-indexer binary runs a single sync pass against Kupo and exits,
 # so the dev env drives it with a process-compose schedule
-# (../process-compose/dev-env.nix). Here that schedule is a systemd timer
+# (../process-compose.nix). Here that schedule is a systemd timer
 # feeding a oneshot:
 #
 #   konduit-indexer.timer -> konduit-indexer.service

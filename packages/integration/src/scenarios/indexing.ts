@@ -43,7 +43,7 @@ import { sleep } from "./shared.js";
  * ## Why the polling is not racy
  *
  * The indexer runs a one-shot sync pass every 10s
- * (`schedule = { interval = "10s" }` in `flake/process-compose/dev-env.nix`) and
+ * (`schedule = { interval = "10s" }` in `flake/heavy/process-compose.nix`) and
  * only then commits, so a row can appear *after* the tx is definitely on chain.
  * Every helper therefore takes a timeout comfortably larger than one sync
  * interval and reports what it last saw, so a timeout says "the indexer never

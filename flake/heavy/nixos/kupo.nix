@@ -1,6 +1,6 @@
 # Kupo as systemd services.
 #
-# The dev env (../process-compose/dev-env.nix) runs two Kupo processes which
+# The dev env (../process-compose.nix) runs two Kupo processes which
 # differ only in their flags:
 #
 #   kupo-indexer  pattern scoped to the konduit validator, polled by konduit-indexer
@@ -24,7 +24,7 @@
   inherit (lib) mkEnableOption mkIf mkOption types;
 
   # Importing the module without enabling an instance creates nothing.
-  anyEnabled = any (instance: instance.enable) (lib.attrValues cfg.instances);
+  anyEnabled = lib.any (instance: instance.enable) (lib.attrValues cfg.instances);
 
   instanceOptions = {name, ...}: {
     options = {
@@ -131,8 +131,7 @@ in {
     };
     users.groups.${cfg.user} = lib.mkIf anyEnabled {};
 
-    systemd.services =
-      lib.mapAttrs'
+    systemd.services = lib.mkMerge (lib.mapAttrsToList
       (name: instance: let
         # systemd creates and owns /var/lib/<name>, so an instance never has
         # to mkdir and its database survives a restart.
@@ -210,6 +209,6 @@ in {
             };
           };
         })
-      cfg.instances;
+      cfg.instances);
   };
 }

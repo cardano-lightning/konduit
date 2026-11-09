@@ -3,18 +3,9 @@
 
   inputs = {
     aiken.url = "github:aiken-lang/aiken";
-    capkgs.url = "github:input-output-hk/capkgs";
-    # Provides the NixOS module for the node the deployment guest runs.
-    cardano-node.url = "github:IntersectMBO/cardano-node/11.0.1";
-    cardonnay-src = {
-      url = "github:IntersectMBO/cardonnay?ref=v0.3.6";
-      flake = false;
-    };
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks-nix.url = "github:cachix/git-hooks.nix";
     git-hooks-nix.inputs.nixpkgs.follows = "nixpkgs";
-    jailed-agents.url = "github:andersonjoseph/jailed-agents";
-    kupo.url = "github:paluh/kupo/konduit-kupo";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-flake = {
       url = "github:juspay/rust-flake";
@@ -28,28 +19,7 @@
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  # The cardano-node binaries in the preprod guest are substitutable from the
-  # IOG cache, which turns the longest build of that guest into a download.
-  # nix only honours the nixConfig of the top level flake, so the settings of
-  # the cardano-node input have to be repeated here.
-  nixConfig = {
-    extra-substituters = ["https://cache.iog.io"];
-    extra-trusted-public-keys = ["hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
-  };
-
-  outputs = inputs @ {flake-parts, ...}: let
-    # Architectures the preprod guest can be built for.
-    #
-    # The guest is built for the architecture of the machine that evaluates
-    # this flake, so that it can use hardware virtualization (KVM on Linux,
-    # HVF on macOS). kupo's flake builds x86_64-linux only, so this list has
-    # a single entry until kupo gains another architecture.
-    #
-    # To support another architecture: add it here, add it to `systems`
-    # below (so the konduit indexer and server are built for it) and make
-    # sure kupo builds for it.
-    guestSystems = ["x86_64-linux"];
-  in
+  outputs = inputs @ {flake-parts, ...}:
     flake-parts.lib.mkFlake {inherit inputs;}
     ({
       lib,
@@ -78,13 +48,9 @@
         '';
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
         wasm-pack = pkgs.callPackage ./flake/wasm-pack.nix {};
-
-        kupo = inputs'.kupo.packages.kupo;
-
         packages =
           [
             inputs'.aiken.packages.aiken
-            kupo
             # JS
             pkgs.nodejs
             pkgs.typescript-language-server
@@ -135,118 +101,7 @@
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
 
-        # A package to setup testnet in the dev shell extras
-        cardonnay = pkgs.python313.pkgs.buildPythonApplication {
-          pname = "cardonnay";
-          version = "0.3.4";
-          SETUPTOOLS_SCM_PRETEND_VERSION = "0.3.4";
-          src = inputs.cardonnay-src;
-          pyproject = true;
-          build-system = with pkgs.python313.pkgs; [setuptools setuptools-scm];
-          pythonRelaxDeps = ["setuptools"];
-          nativeBuildInputs = with pkgs.python313.pkgs; [
-            pythonRelaxDepsHook
-          ];
-          postPatch = ''
-            # Reduce initial TX submission delay (safe for local testnets)
-            # find src/cardonnay_scripts/scripts \
-            #   -name 'common-start-*' -type f -exec \
-            #   sed -i 's/readonly TX_SUBMISSION_DELAY=60/readonly TX_SUBMISSION_DELAY=20/' {} +
-          '';
-          dependencies = with pkgs.python313.pkgs; [
-            supervisor
-            click
-            pygments
-            pydantic
-            filelock
-          ];
-        };
-        cardano-cli = inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f;
-
-        cardano-node = inputs.capkgs.packages.${system}.cardano-node-input-output-hk-cardano-node-10-2-1-52b708f;
-
-        process-compose-dev-env-yaml = pkgs.callPackage ./flake/process-compose/dev-env.nix {
-          inherit cardonnay cardano-node cardano-cli kupo;
-          curl = pkgs.curl;
-        };
-
-        process-compose-dev-env = pkgs.writeShellApplication {
-          name = "process-compose-dev-env";
-          runtimeInputs = [];
-          text = ''
-            ${pkgs.process-compose}/bin/process-compose up -f ${process-compose-dev-env-yaml} -L "$RUN_DIR/process-compose-dev-env";
-          '';
-        };
-
-        devShellExtraPackages =
-          devShell.packages
-          ++ [
-            cardano-cli
-            cardano-node
-            cardonnay
-            config.treefmt.build.wrapper
-            kupo
-            process-compose-dev-env
-            pkgs.coreutils
-            pkgs.curl
-            pkgs.gcc
-            pkgs.libiconv
-            pkgs.process-compose
-            wasm-pack
-          ];
-
-        # Jail which is shared between a real opencode
-        # agent and a bash jail sandbox used for testing the jailed env itself.
-        commonJail = {
-          baseJailOptions = let
-            jail = inputs.jailed-agents.lib.${pkgs.system}.internals.jail;
-          in [
-            jail.combinators.network
-            jail.combinators.time-zone
-            jail.combinators.no-new-session
-            jail.combinators.mount-cwd
-            (jail.combinators.try-fwd-env "PKG_CONFIG_PATH")
-            (jail.combinators.try-fwd-env "LD_LIBRARY_PATH")
-            (jail.combinators.try-fwd-env "RUST_SRC_PATH")
-            (jail.combinators.try-fwd-env "CARDANO_NODE_SOCKET_PATH")
-            (jail.combinators.try-fwd-env "CARDANO_NODE_CONFIG_PATH")
-            (jail.combinators.try-fwd-env "KONDUIT_VALIDATOR_HASH")
-            (jail.combinators.try-fwd-env "CARDANO_NODE_NETWORK_ID")
-            (jail.combinators.try-fwd-env "CARDONNAY_TESTNET_ID")
-            (jail.combinators.try-fwd-env "FAUCET_ADDR_FILE")
-            (jail.combinators.try-fwd-env "FAUCET_SKEY_FILE")
-            (jail.combinators.try-fwd-env "FAUCET_WALLET_FILE")
-            (jail.combinators.try-fwd-env "KONDUIT_INDEXER_DB_PATH")
-            (jail.combinators.try-fwd-env "KONDUIT_INDEXER_DIR")
-            (jail.combinators.try-fwd-env "KONDUIT_INDEXER_PORT")
-            (jail.combinators.try-fwd-env "KUPO_INDEXER_DIR")
-            (jail.combinators.try-fwd-env "KUPO_INDEXER_PORT")
-            (jail.combinators.try-fwd-env "KUPO_UTXO_DIR")
-            (jail.combinators.try-fwd-env "KUPO_UTXO_PORT")
-          ];
-
-          extraReadwriteDirs = let
-            # Colon-separated list. Requires `nix develop --impure`.
-            fromEnv = let
-              raw = builtins.getEnv "KONDUIT_EXTRA_OPENCODE_RW_DIRS";
-            in
-              if raw == ""
-              then []
-              else builtins.filter (s: s != "") (lib.splitString ":" raw);
-          in
-            [
-              # Always useful / shared defaults
-              "~/.config/opencode"
-              "~/.local/share/opencode"
-              "~/.cache/opencode"
-            ]
-            ++ fromEnv;
-
-          extraPkgs =
-            devShellExtraPackages
-            ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates)
-            ++ lib.concatMap (crate: crate.crane.args.buildInputs) (lib.attrValues config.rust-project.crates);
-        };
+        process-compose-dev-env-yaml = "";
 
         devShellExtras =
           devShell
@@ -333,19 +188,7 @@
               export PC_PORT_NUM=8100
             '';
 
-            packages =
-              devShellExtraPackages
-              ++ [
-                (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
-                  inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
-                })
-
-                (inputs.jailed-agents.lib.${pkgs.system}.makeJailedOpencode {
-                  name = "jailed-bash";
-                  pkg = pkgs.bashInteractive;
-                  inherit (commonJail) baseJailOptions extraPkgs extraReadwriteDirs;
-                })
-              ];
+            packages = devShell.packages;
           };
       in {
         rust-project = {
@@ -433,66 +276,7 @@
         };
         devShells = {
           default = pkgs.mkShell devShell;
-          extras = pkgs.mkShell devShellExtras;
         };
-      };
-      flake = let
-        # The machine that evaluates this flake decides the architecture of
-        # the guest. NixOS guests are always Linux, so a macOS host builds a
-        # Linux guest of the same architecture.
-        hostSystem = builtins.currentSystem;
-        guestSystem = lib.replaceStrings ["-darwin"] ["-linux"] hostSystem;
-
-        nixos = import ./flake/nixos/outputs.nix {
-          self = self;
-          nixpkgs = inputs.nixpkgs;
-        };
-
-        # The guest shares a preprod snapshot and the server secrets from the
-        # host, so both are read from the environment and passed on as plain
-        # strings: a Nix path would be copied into the store.
-        requiredEnv = name: let
-          value = builtins.getEnv name;
-        in
-          if value == ""
-          then throw "${name} is not set"
-          else value;
-      in {
-        nixosModules =
-          nixos.nixosModules
-          // {
-            default = import ./flake/nixos.nix self;
-          };
-
-        # A VM running cardano-node, Kupo, the konduit indexer and the konduit
-        # backend against preprod. See ./flake/nixos/README.md.
-        nixosConfigurations.preprod =
-          if !(lib.elem guestSystem guestSystems)
-          then
-            throw ''
-              konduit: there is no preprod guest for '${guestSystem}' (this machine is '${hostSystem}').
-
-              Supported guest architectures: ${lib.concatStringsSep ", " guestSystems}.
-
-              The guest is built for the architecture of the machine that evaluates
-              this flake, so that it can use hardware virtualization. Supporting
-              '${guestSystem}' needs:
-                - kupo built for '${guestSystem}' (its flake builds x86_64-linux only)
-                - '${guestSystem}' listed in `systems` in flake.nix, so that the
-                  konduit indexer and the konduit server are built for it
-            ''
-          else
-            nixos.mkPreprodDeployment {
-              system = guestSystem;
-              cardanoNodeModule = inputs.cardano-node.nixosModules.cardano-node;
-              cardanoCli = inputs.cardano-node.packages.${guestSystem}.cardano-cli;
-              kupoPackage = inputs.kupo.packages.${guestSystem}.kupo;
-              indexerPackage = self.packages.${guestSystem}.konduit-indexer;
-              serverPackage = self.packages.${guestSystem}.konduit-server;
-              hostSnapshot = requiredEnv "KONDUIT_PREPROD_DB";
-              hostUid = lib.toInt (requiredEnv "KONDUIT_PREPROD_DB_OWNER_UID");
-              hostEnvFile = requiredEnv "KONDUIT_SERVER_ENV_FILE";
-            };
       };
     });
 }

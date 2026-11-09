@@ -23,7 +23,7 @@ import { Redeemer } from "./konduit/redeemer.js";
  *     `readOnly: true` so a stray write cannot corrupt the state the rest of
  *     the suite (and the running indexer) depends on.
  *  2. **Reads are retried, not fatal.** The indexer syncs on a timer
- *     (`schedule = { interval = "10s" }` in `flake/process-compose/dev-env.nix`)
+ *     (`schedule = { interval = "10s" }` in `flake/heavy/process-compose.nix`)
  *     and the store uses SQLite's default rollback journal, so a writer can
  *     hold an exclusive lock for a moment. `SQLITE_BUSY` here is a transient
  *     condition, not a failure, so {@link IndexerDb.withRetry} swallows it and

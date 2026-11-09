@@ -1,6 +1,6 @@
 # NixOS deployment
 
-The dev env ([../process-compose/dev-env.nix](../process-compose/dev-env.nix))
+The local testnet dev env ([../process-compose.nix](../process-compose.nix))
 runs a local testnet through `cardonnay` and the konduit services next to it.
 This directory is the same set of services as systemd units, plus a VM that
 runs them against **preprod** instead of a local testnet.
@@ -13,9 +13,9 @@ runs them against **preprod** instead of a local testnet.
 | `konduit-indexer.nix` | `konduit-indexer.service` (oneshot) + `konduit-indexer.timer`        |
 | `konduit-server.nix`  | `konduit-server.service`                                             |
 
-They are exported as `nixosModules.kupo`, `nixosModules.konduit-indexer` and
-`nixosModules.konduit-server`, and are wired together by
-`preprod-deployment.nix`, which is exported as
+They are exported by the heavy flake as `nixosModules.kupo`,
+`nixosModules.konduit-indexer` and `nixosModules.konduit-server`, and are wired
+together by `preprod-deployment.nix`, which is exported as
 `nixosConfigurations.preprod`.
 
 Each unit mirrors a process of the same name in the dev env. The two
@@ -92,16 +92,16 @@ Things worth reviewing:
 The guest is built for the architecture of the machine that evaluates the
 flake, so that it can use hardware virtualization (KVM on Linux, HVF on
 macOS). The architectures we can build it for are listed in `guestSystems` in
-`flake.nix`. That is `x86_64-linux` only today, because kupo's flake builds
-`x86_64-linux` only. On a machine we cannot build a guest for, the
+`flake/heavy/flake.nix`. That is `x86_64-linux` only today, because Kupo's flake
+builds `x86_64-linux` only. On a machine we cannot build a guest for, the
 evaluation fails with an error rather than falling back to another
 architecture.
 
 To support another architecture:
 
 1. make kupo build for it,
-2. add it to `guestSystems` in `flake.nix`,
-3. add it to `systems` in `flake.nix`, so that the konduit indexer and the
+2. add it to `guestSystems` in `flake/heavy/flake.nix`,
+3. add it to `systems` in `flake/heavy/flake.nix`, so that the konduit indexer and the
    konduit server are built for it as well.
 
 The VM runner and QEMU are built for the host rather than for the guest
@@ -110,7 +110,7 @@ not of the guest's architecture.
 
 ## Running it
 
-Nothing here has been built or booted yet. Once the snapshot is prepared:
+Once the snapshot and server environment file are prepared:
 
 ```sh
 # the preprod database owned by the uid the guest runs cardano-node as
@@ -120,25 +120,15 @@ export KONDUIT_PREPROD_DB_OWNER_UID=$(id -u)
 # env file with KONDUIT_SIGNING_KEY and KONDUIT_HOST_ADDRESS
 export KONDUIT_SERVER_ENV_FILE=/path/to/server.env
 
-# build the guest (cardano-node is not substitutable, this is a long build)
-nix build .#nixosConfigurations.preprod.config.system.build.vm
+# Nix reads the exported values at evaluation time, so allow the flake to read them.
+nix --extra-experimental-features 'nix-command flakes fetch-closure' build --impure path:./flake/heavy#nixosConfigurations.preprod.config.system.build.vm
 
 # boot it
 ./result/bin/run-preprod-vm
 ```
 
-The environment variables above are read at evaluation time, so they have to be
-exported before every `nix build`.
-
-`run-preprod-vm.sh` in the repository root wraps this up, with the same
-variables and a few conveniences:
-
-```sh
-./run-preprod-vm.sh --eval      # evaluate the configuration only
-./run-preprod-vm.sh --dry-run   # show what would be built
-./run-preprod-vm.sh             # build the guest and boot it
-./run-preprod-vm.sh --console   # boot it headless, serial console in the terminal
-```
+Re-export the environment variables before each evaluation/build. The generated
+VM runner is `./result/bin/run-preprod-vm`.
 
 From the host, once the guest is up:
 

@@ -1,5 +1,4 @@
-# Imported from flake.nix:
-#   nixos = import ./flake/nixos/outputs.nix { self = self; nixpkgs = inputs.nixpkgs; };
+# Imported from the heavy flake with its application flake and nixpkgs inputs.
 {
   self,
   nixpkgs,

@@ -31,35 +31,38 @@ TBC.
 
 ### Using nix
 
-For the base devel:
+For the regular Rust/JS/Aiken development environment:
 
 ```
 $ nix develop
 ```
 
-For something extra, e.g. local deployment using process-compose, cardano-cli, jailed-agents/opencode use:
+For the Cardano local testnet and NixOS deployment tools, use the separate heavy flake:
 
 ```
-$ nix develop .#extras --impure
+$ nix --extra-experimental-features 'nix-command flakes fetch-closure' develop path:./flake/heavy
 ```
 
-The `--impure` flag allows nix to read `KONDUIT_EXTRA_OPENCODE_RW_DIRS` which should be `:` separated list of directories that you want to be able to read/write from the jailed agents (beside some default ones: ~/.config/opencode, ~/.local/share/opencode, ~/.cache/opencode).
+The heavy flake uses `fetch-closure` through `capkgs`; Nix may also ask to trust
+the IOG binary cache configured by that flake.
+
+See [`flake/heavy/README.md`](flake/heavy/README.md) for local testnet and preprod VM instructions.
 
 ## Integration testing
 
-In the `./packages/integration` you can find a test suite which executes a few e2e scenarios. In order to run the tests multiple services need to be running together with a local cardano node. The easiest way is to use mentioned above `nix develop .#extras --impure` and then run the following command:
+In `./packages/integration` there is a test suite that exercises several end-to-end scenarios. To start the required local services, open the heavy shell and run:
 
 In one shell:
 
 ```shell
-$ nix develop .#extras --impure
+$ nix --extra-experimental-features 'nix-command flakes fetch-closure' develop path:./flake/heavy
 $ process-compose-dev-env
 ```
 
 In another shell:
 
 ```shell
-$ nix develop .#extras --impure
+$ nix --extra-experimental-features 'nix-command flakes fetch-closure' develop path:./flake/heavy
 $ cd packages/integration
 $ yarn install
 $ vitest --disableConsoleIntercept  --run
