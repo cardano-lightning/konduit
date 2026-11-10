@@ -10,13 +10,17 @@
 use std::cmp;
 
 use cardano_sdk::{Input, VerificationKey};
-use konduit_data::{Duration, Locked, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey};
-use konduit_tmp::{Keytag, Receipt, SquashProposal, from_verifying_key, receipt, to_verifying_key};
+use konduit_core::{
+    Duration, Keytag, Locked, Receipt, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey,
+    receipt,
+};
+use konduit_l2_dto::squash::Proposal as SquashProposal;
+use konduit_tx::from_verifying_key;
 
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use konduit_data::VerifyError;
+use konduit_core::VerifyError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -103,11 +107,9 @@ pub struct Channel {
 //     bucket_refill_rate: u64,
 // }
 
-// #[serde_as]
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Default)]
 // pub struct Cache {
 //     #[n(0)]
-//     #[serde_as(as = "Option<serde_with::hex::Hex>")]
 //     #[serde(skip_serializing_if = "Option::is_none")]
 //     quote: Option<Vec<u8>>,
 // }
@@ -147,7 +149,7 @@ impl Channel {
     ) -> Self {
         let (key, tag) = keytag.split();
         Self {
-            key: to_verifying_key(key),
+            key,
             tag,
             backing,
             receipt,
@@ -190,7 +192,7 @@ impl Channel {
     // }
 
     pub fn keytag(&self) -> Keytag {
-        Keytag::new(&self.verification_key(), self.tag())
+        Keytag::new(&self.key, self.tag())
     }
 
     pub fn verification_key(&self) -> VerificationKey {
@@ -441,7 +443,7 @@ impl TryFrom<&konduit_tx::Channel> for Backing {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use konduit_data::SigningKey;
+    use konduit_core::SigningKey;
 
     fn test_channel() -> Channel {
         let key = SigningKey::from([1; 32]).verifying_key();

@@ -1,4 +1,4 @@
-use konduit_data::{Cont, Eol, Step};
+use konduit_core::{Cont, Eol, Step};
 
 use crate::Variables;
 

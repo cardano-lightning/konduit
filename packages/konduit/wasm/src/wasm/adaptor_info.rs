@@ -1,6 +1,6 @@
 use crate::{
     core,
-    core::{ChannelParameters, Duration, TosInfo},
+    core::{AdaptorChannelParameters, Duration},
     wasm::VerificationKey,
     wasm_proxy,
 };
@@ -9,7 +9,7 @@ use wasm_bindgen::prelude::*;
 wasm_proxy! {
     #[derive(Debug, Clone)]
     #[doc = "Channel parameters and ToS of a given adaptor."]
-    AdaptorInfo => core::AdaptorInfo<()>
+    AdaptorInfo => core::info::Response<()>
 }
 
 #[wasm_bindgen]
@@ -22,13 +22,13 @@ impl AdaptorInfo {
         fee: u64,
         time_margin: u64,
     ) -> Self {
-        Self(core::AdaptorInfo {
-            channel_parameters: ChannelParameters {
-                adaptor_key: adaptor_key.into(),
+        Self(core::info::Response {
+            channel_parameters: AdaptorChannelParameters {
+                adaptor_key: core::to_verifying_key(adaptor_key.into()),
                 close_period: Duration::from_secs(close_period),
                 tag_length: max_tag_length as usize,
             },
-            tos: TosInfo {
+            tos: core::info::TosInfo {
                 flat_fee: fee,
                 time_margin: Duration::from_secs(time_margin),
                 rails: Vec::new(),
@@ -39,7 +39,7 @@ impl AdaptorInfo {
 
     #[wasm_bindgen(getter, js_name = "verificationKey")]
     pub fn _wasm_verification_key(&self) -> VerificationKey {
-        self.channel_parameters.adaptor_key.into()
+        core::from_verifying_key(self.channel_parameters.adaptor_key).into()
     }
 
     #[wasm_bindgen(getter, js_name = "closePeriod")]

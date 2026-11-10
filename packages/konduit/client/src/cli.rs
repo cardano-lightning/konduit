@@ -3,9 +3,12 @@ use cardano_connector_direct::Blockfrost;
 use cardano_sdk::{Address, VerificationKey, address::kind::Shelley};
 use clap::Parser;
 use http_client::{codec, transport};
-use konduit_data::{Duration, Lock, SquashBody};
-use konduit_tmp::{Keytag, Payme, TxHelp};
-use konduit_tx::consumer::{Intent, OpenIntent};
+use konduit_core::{Duration, Keytag, Lock, SquashBody};
+use konduit_l2_dto::{info, squash};
+use konduit_tx::{
+    consumer::{Intent, OpenIntent},
+    to_verifying_key,
+};
 use serde_json::json;
 use std::{
     collections::BTreeMap,
@@ -17,7 +20,7 @@ use crate::cln;
 use crate::{
     Adaptor,
     connector::{Backend, ConnectorArgs},
-    core::{AdaptorInfo, SigningKey, SquashStatus, Tag},
+    core::{SigningKey, Tag},
     l1, l2,
 };
 use konduit_rail::RESERVED_NAME;
@@ -65,8 +68,8 @@ pub fn confirm(prompt: &str) -> anyhow::Result<bool> {
     confirm(prompt)
 }
 
-pub fn prompt_if_incomplete(st: &SquashStatus, auto_confirm: bool) -> anyhow::Result<bool> {
-    if !auto_confirm && matches!(st, SquashStatus::Incomplete { .. }) {
+pub fn prompt_if_incomplete(st: &squash::Response, auto_confirm: bool) -> anyhow::Result<bool> {
+    if !auto_confirm && matches!(st, squash::Response::Incomplete { .. }) {
         println!("{}", serde_json::to_string_pretty(st).unwrap());
         confirm("Verify proposal and execute squash?")
     } else {
@@ -172,7 +175,7 @@ impl Cli {
         match &self.cmd {
             Cmd::Info => {
                 let vk = self.signing_key.to_verification_key();
-                let keytag = Keytag::new(&vk, &self.tag);
+                let keytag = Keytag::new(&to_verifying_key(vk), &self.tag);
                 println!("{}", vk);
                 println!("{}", keytag);
                 Ok(())
@@ -183,7 +186,7 @@ impl Cli {
     }
 
     /// Fetches the L2 server's info, for use as a fallback when Open/Close args are omitted.
-    async fn fetch_l2_info(&self) -> anyhow::Result<AdaptorInfo<TxHelp>> {
+    async fn fetch_l2_info(&self) -> anyhow::Result<info::Response<info::TxHelp>> {
         let server_url = self.server_url.clone().ok_or_else(|| {
             anyhow::anyhow!("--server-url is required to look up values not supplied directly")
         })?;
@@ -198,7 +201,7 @@ impl Cli {
     ) -> anyhow::Result<Address<Shelley>> {
         match given {
             Some(addr) => Ok(addr.clone()),
-            None => Ok(self.fetch_l2_info().await?.tx_help.host_address.clone()),
+            None => Address::try_from(self.fetch_l2_info().await?.tx_help.host_address.as_str()),
         }
     }
 
@@ -263,13 +266,17 @@ impl Cli {
                         None
                     };
 
-                let sub_vkey = (*sub_vkey)
-                    .unwrap_or_else(|| info.as_ref().unwrap().channel_parameters.adaptor_key);
+                let sub_vkey = (*sub_vkey).unwrap_or_else(|| {
+                    info.as_ref().unwrap().channel_parameters.adaptor_key.into()
+                });
                 let close_period = close_period
                     .unwrap_or_else(|| info.as_ref().unwrap().channel_parameters.close_period);
-                let ref_script_host = ref_script_host
-                    .clone()
-                    .unwrap_or_else(|| info.as_ref().unwrap().tx_help.host_address.clone());
+                let ref_script_host = match ref_script_host {
+                    Some(address) => address.clone(),
+                    None => {
+                        Address::try_from(info.as_ref().unwrap().tx_help.host_address.as_str())?
+                    }
+                };
 
                 let open = OpenIntent {
                     tag: self.tag.clone(),
@@ -310,7 +317,7 @@ impl Cli {
             )
             .await?;
 
-        println!("{}", serde_json::to_string_pretty(&tx)?);
+        println!("{tx}");
 
         Ok(())
     }
@@ -322,7 +329,7 @@ impl Cli {
             .ok_or_else(|| anyhow::anyhow!("--server-url is required for l2 commands"))?;
 
         let vk = self.signing_key.to_verification_key();
-        let keytag = Keytag::new(&vk, &self.tag);
+        let keytag = Keytag::new(&to_verifying_key(vk), &self.tag);
         let server_client = client_json(server_url);
         let adaptor = Adaptor::new(server_client, Some(&keytag)).await?;
         let l2 = l2::Client::new(&adaptor, &self.signing_key);
@@ -335,13 +342,13 @@ impl Cli {
             // Paying the adaptor itself: konduit's own reserved name,
             // and no instruction to write.
             L2Cmd::Quote { payme } => {
-                let payme: Payme = serde_json::from_str(payme)?;
+                let payme: cln::payme::Response = serde_json::from_str(payme)?;
                 let quote = l2.quote(RESERVED_NAME, payme.amount, Vec::new()).await?;
                 println!("{}", serde_json::to_string_pretty(&quote)?);
             }
 
             L2Cmd::Pay { payme } => {
-                let payme: Payme = serde_json::from_str(payme)?;
+                let payme: cln::payme::Response = serde_json::from_str(payme)?;
                 let quote = l2.quote(RESERVED_NAME, payme.amount, Vec::new()).await?;
 
                 println!("quote = {:?}", quote);
@@ -350,7 +357,7 @@ impl Cli {
                     return Ok(());
                 }
 
-                let outcome = l2.pay(RESERVED_NAME, &payme, &quote, Vec::new()).await?;
+                let outcome = cln::pay(&l2, RESERVED_NAME, &payme, &quote, Vec::new()).await?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
 
                 // The inbound leg is resolved by squash either way: a
@@ -365,7 +372,7 @@ impl Cli {
             L2Cmd::Squash => {
                 let res = l2.squash(SquashBody::default()).await?;
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
-                l2.sync(res, and_confirm, |_x: konduit_data::Lock| known_lock(&_x))
+                l2.sync(res, and_confirm, |_x: konduit_core::Lock| known_lock(&_x))
                     .await?;
             }
 
@@ -374,7 +381,7 @@ impl Cli {
                 // The payme comes from the payee, not from the konduit
                 // this client has a channel with.
                 let payme = cln::request_payme(&client_json(payee.clone()), *amount).await?;
-                let instruction = cln::instruction(payme.payee, payme.amount)?;
+                let instruction = cln::quote_instruction(payme.payee)?;
                 let quote = l2
                     .quote(cln::RAIL, payme.amount, instruction.clone())
                     .await?;
@@ -385,7 +392,8 @@ impl Cli {
                     return Ok(());
                 }
 
-                let outcome = l2.pay(cln::RAIL, &payme, &quote, instruction).await?;
+                let commit = cln::commit_instruction(payme.payee, payme.amount)?;
+                let outcome = cln::pay(&l2, cln::RAIL, &payme, &quote, commit).await?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
 
                 let res = l2.squash_status().await?;

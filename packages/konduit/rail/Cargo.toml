@@ -11,7 +11,7 @@ documentation.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-konduit-data = { workspace = true, features = ["serde"] }
+konduit-core = { workspace = true, features = ["serde"] }
 minicbor.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

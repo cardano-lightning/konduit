@@ -57,7 +57,7 @@ impl Konduit {
         &self,
         client: l2::Client<'_>,
         _tag: &core::Tag, // FIXME : Why is this part of the signature
-        squash_status: core::SquashStatus,
+        squash_status: core::squash::Response,
         lockeds: &mut Lockeds,
     ) -> wasm::Result<SyncStatus> {
         let mut sync_status = SyncStatus {
@@ -70,7 +70,8 @@ impl Konduit {
                 .collect(),
         };
 
-        sync_status.owed = if let Some(mut receipt) = client.receipt().await? {
+        sync_status.owed = if let Some(wire_receipt) = client.receipt().await? {
+            let mut receipt: core::Receipt = wire_receipt.into();
             // Prune expired *locked* cheques, including a grace period.
             let now = get_current_time() - LOCKED_CHEQUE_GRACE_PERIOD;
             receipt.apply_timeout(core::Duration::from_secs(now.as_secs()));
@@ -158,7 +159,7 @@ impl Konduit {
     /// adaptor info and other non-authenticated operations.
     #[wasm_bindgen(getter, js_name = "adaptorInfo")]
     pub fn adaptor_info(&self) -> wasm::Result<AdaptorInfo> {
-        let ir = core::AdaptorInfo::<()>::from(self.adaptor.as_ref()?.info().clone());
+        let ir = core::info::Response::<()>::from(self.adaptor.as_ref()?.info().clone());
         Ok(ir.into())
     }
 
@@ -174,7 +175,8 @@ impl Konduit {
     pub fn set_channel_tag(&mut self, tag: &Tag) -> wasm::Result<()> {
         if self.adaptor.as_ref()?.tag() != Some(tag) {
             let tag: core::Tag = tag.clone().into();
-            let keytag = core::Keytag::new(&self.wallet.verification_key(), &tag);
+            let verification_key = core::to_verifying_key(self.wallet.verification_key());
+            let keytag = core::Keytag::new(&verification_key, &tag);
             self.adaptor.as_mut()?.set_keytag(Some(&keytag));
         }
 
@@ -231,7 +233,7 @@ impl Konduit {
 
         let opens = vec![core::consumer::OpenIntent {
             tag: tag.clone(),
-            sub_vkey: adaptor_key,
+            sub_vkey: adaptor_key.into(),
             close_period,
             amount,
         }];
@@ -304,8 +306,16 @@ impl Konduit {
         if let Some(tag) = self.adaptor.as_ref()?.tag() {
             log::debug!("pay: for tag={}, quote={:?}", tag, quote);
             let client = self.l2_client()?;
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(anyhow::Error::from)?;
+            if payme.timeout.as_millis() <= now.as_millis() {
+                return Err(anyhow!("CLN payme has expired").into());
+            }
             lockeds.add(payme.lock);
-            let outcome = client.pay(RESERVED_NAME, payme, quote, Vec::new()).await?;
+            let outcome = client
+                .pay(RESERVED_NAME, payme.lock, quote, Vec::new())
+                .await?;
             log::debug!("pay: outcome={:?}", outcome);
             // Resolved or pending, the inbound leg is settled by squash.
             let squash_status = client.squash_status().await?;

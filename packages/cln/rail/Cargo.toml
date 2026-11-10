@@ -10,31 +10,51 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["client"]
+client = [
+  "dep:hex",
+  "dep:http-client",
+  "dep:cln-dto",
+  "dep:konduit-l2-dto",
+  "dep:konduit-rail",
+  "dep:rand",
+  "dep:serde_json",
+  "dep:thiserror",
+  "dep:tokio",
+  "dep:tracing",
+  "dep:web-time",
+]
+
 [dependencies]
-hex = { workspace = true, features = ["serde"] }
-konduit-data = { workspace = true, features = ["serde"] }
-konduit-rail.workspace = true
-konduit-tmp.workspace = true
-serde_json.workspace = true
+hex = { workspace = true, features = ["serde"], optional = true }
+konduit-core = { workspace = true, features = ["serde"] }
+cln-dto = { workspace = true, features = ["serde", "cbor"], optional = true }
+konduit-l2-dto = { workspace = true, features = [
+  "serde",
+  "cbor",
+], optional = true }
+konduit-rail = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 minicbor.workspace = true
-thiserror.workspace = true
-web-time.workspace = true
+thiserror = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
 
 serde = { workspace = true }
-http-client = { workspace = true, features = [
+http-client = { workspace = true, optional = true, features = [
   "cbor",
   "json",
   "reqwest",
 ], default-features = false }
-rand.workspace = true
-tracing.workspace = true
+rand = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
 # Only `rt`, for `tokio::spawn`-ing the background squash dispatch: the
 # reqwest transport above already requires an ambient tokio runtime at
 # call time regardless, so this isn't a new runtime dependency, just the
 # first spot cln-rail's own code needs to name the crate directly. The
 # fuller feature set (macros/rt-multi-thread/time) the tests need is
 # layered on below, as a dev-dependency.
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt"], optional = true }
 
 [dev-dependencies]
 # For the config generator example and the tests; the library needs

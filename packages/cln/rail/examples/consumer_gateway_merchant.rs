@@ -17,7 +17,7 @@
 //!     konduit-client -y l2 cln --payee http://127.0.0.1:5664 --amount 1000
 
 use cln_rail::{channel, commits, config::Config};
-use konduit_data::{SigningKey, Tag};
+use konduit_core::{SigningKey, Tag};
 
 // Fixed, obviously-fake signing keys — distinct per party so the demo
 // is internally consistent, never meant for real use.

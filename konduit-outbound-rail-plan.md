@@ -36,14 +36,14 @@ JSON / stderr tracing split stays as is.
 `KONDUIT_CLN_CONFIG_PATH`. It keeps emitting the rail config and the consumer config, and loses its
 `ServerConfig`/`inbound`/`inbounds` blocks, which nothing consumes.
 
-### Modules that are konduit's, not the rail's
+### Platform DTOs and rail DTOs
 
-In `cln/server` today; they move out, because the platform owns them and `bln` needs them too:
+Platform-wide authentication/domain values live in core: `Keytag` and its header (`konduit-core::Keytag`,
+`konduit-core::keytag::HEADER`), plus inbound receipt state. CLN wire contracts live in the standalone
+`cln-dto` crate, not in generic L2 DTOs or runtime state: `payme::{Request,Response}` describes a CLN payee
+request, and `quote::Request` / `commit::Request` are the two distinct rail instructions. The generic L2
+platform carries each rail instruction as opaque encoded bytes.
 
-- `wire/auth.rs` — `Keytag` and the header. `konduit_tmp::Keytag` already exists and `data.rs` converts
-  between the two with `keytag.as_bytes().to_vec().try_into().unwrap()` three times
-  (`data.rs:240,265,291`). Keep one type, in `konduit-tmp`; the unwraps go away.
-- `wire/payme.rs` — likewise duplicates `konduit_tmp::{Payme, PaymeRequest}`.
 - `paymes.rs` — the terminal payee's secret store, served from `/pay/konduit/pay`. Already driven entirely
   from `konduit-server` (`data.payme`, `data.cln_commit`'s `paymes_reveal`). Move it to `konduit-server`.
 - `ctx::Params` — deleted outright, not moved. Both its fields are fee and margin, and neither is the
@@ -51,15 +51,15 @@ In `cln/server` today; they move out, because the platform owns them and `bln` n
 - `wire/{quote,commit,sync}.rs` — deleted, not moved: the old node-to-node protocol, which the consumer
   API now subsumes.
 
-`receipt.rs` stays in `cln-rail` for its outbound channel state. Note there are two receipt
-implementations, this one and `konduit_tmp::receipt`, which `konduit/server/src/channel.rs` uses for
-inbound. Converging them is worth doing and is not in this plan.
+`receipt.rs` stays in `cln-rail` for its outbound channel state. The inbound receipt is in core as
+`konduit_core::Receipt`; their synchronization semantics remain distinct. Check wire compatibility before
+sharing the inbound `WireReceipt` type.
 
 ## Phase A — `konduit-rail` _(done)_
 
 `packages/konduit/rail` exists, compiles, and has four tests. It holds `Constraints`, `Quoted`, `Outcome`,
 `Resolution`, the `Rail` trait, the erasing `DynRail` over `Encoded` + boxed futures, and a `Registry`
-that rejects `konduit` and duplicate names at construction. Dependencies: `konduit-data`, `minicbor`,
+that rejects `konduit` and duplicate names at construction. Dependencies: `konduit-core`, `minicbor`,
 `serde`, `serde_json`, `thiserror`. No actix, no transport.
 
 Three decisions worth recording:
@@ -69,7 +69,7 @@ Three decisions worth recording:
   `status() -> u16` — the same two the `ProblemDetail` trait will supply, so that migration is mechanical.
   A `u16` is not HTTP in this crate's sense: it is the status vocabulary, which ADR 10 keeps on the error.
 - **`Relative(Duration)`** is the type of `Constraints.timeout` and `Quoted.timeout`, a deliberate
-  deviation from the spec's code block. `konduit_data::Duration` is used both absolutely and relatively
+  deviation from the spec's code block. `konduit_core::Duration` is used both absolutely and relatively
   across these crates and the boundary is exactly where they get mixed: `data.cln_commit:267` subtracts the
   margin from an absolute timeout and keeps it absolute, while `ctx::commit` subtracts it and then compares
   to `now()`. `Relative::{absolute, until}` are the only two conversions.
@@ -123,7 +123,7 @@ Consequences worth being explicit about:
   it that way. Konduit's cover check is only what it owns — both subtractions positive — and the real cover
   check is the rail's, since only the rail knows its network's cost at commit time.
 - **`index` is the platform's.** It leaves `Quoted` (`wire::quote::Response.index`, already FIXME'd) and
-  stays in the consumer-facing `konduit_tmp::Quote`, filled from `channel.can_commit` as `data.cln_quote`
+  stays in the consumer-facing `konduit_l2_dto::quote::Response`, filled from `channel.can_commit` as `data.cln_quote`
   does now. `can_commit` takes the _total_ cheque amount, so it is called with `a + fee`.
 - Konduit's fee stays flat in v0, as both current implementations already assume. A ppm component is a
   later change to one struct and one function.
@@ -137,19 +137,18 @@ for `konduit-client`, which is already a client of this API.
 
 ### Instructions, and the shapes they replace
 
-- `QuoteInstruction = Payee(VerifyingKey)` and `CommitInstruction = Outbound { key, amount }`: a quote needs no
-  amount of its own, since konduit passes that separately, so a rail quotes on less than it commits on
-  exactly as the spec allows. Neither instruction is ever an `Option` — terminal payment is `/pay/konduit/pay`,
-  which calls no rail at all.
+- `QuoteInstruction = cln_dto::quote::Request` names the CLN payee; the generic quote envelope supplies the
+  requested amount separately. `CommitInstruction = cln_dto::commit::Request` carries the payee and the
+  amount committed downstream. Neither instruction is an `Option` — terminal payment is
+  `/pay/konduit/pay`, which calls no rail.
 - **The instruction names the amount; konduit names the ceiling.** `Constraints.amount` is the inbound
-  cheque net of konduit's fee, and `Outbound.amount` is what the consumer asked to be paid. The rail checks
+  cheque net of konduit's fee, and `commit::Request.amount` is what the consumer asked to be paid. The rail checks
   the second against the first and commits the second, so the difference is the consumer's own headroom and
   not something the rail spends. Over the ceiling is `FailedPre(insufficient-margin)`, before anything is
   sent. Konduit still does not parse the instruction: the check is the rail's, where it is already
   deserialized.
-- `wire::commit::Outbound` is not a second type: `wire::commit` re-exports the rail's own, so the
-  consumer's instruction and what the rail checks cannot drift apart. The `Option` around it goes with the
-  path split below.
+- The client and rail use the same `cln-dto` instruction definitions, so serialized quote and commit
+  instructions cannot drift from what the rail decodes.
 - `wire::sync` goes. Resolution downstream is `GET /pay/konduit/receipt` + `POST /pay/konduit/squash`, the
   same two calls a consumer makes — the spec's "an inbound routing peer uses the same shape". The
   bidirectional one-round-trip receipt exchange has no counterpart in the new API.
@@ -237,7 +236,7 @@ platform when a `Pending` resolves. The platform's pull loop then stays a fallba
 ### HTTP surface
 
 Everything under `/pay` is keytag-authenticated, so `auth::no_auth` and its FIXME go and `cln_auth`'s
-middleware — on the one `Keytag` type, now in `konduit-tmp` — is the only one left.
+middleware — on the core `konduit_core::Keytag` type — is the only one left.
 
 | route                      | handler                                                         |
 | -------------------------- | --------------------------------------------------------------- |
@@ -252,7 +251,7 @@ middleware — on the one `Keytag` type, now in `konduit-tmp` — is the only on
 Deleted outright: the `/ch/x/cln` scope (`quote`, `commit`, `sync`), the `/ch` scope
 (`receipt`, `squash`, `quote`, `pay`), `handlers::{cln_quote, cln_commit, cln_sync, quote, pay}`,
 `data::{quote, pay}` (both `todo!("Superceded")`), `data::{PayBody, PayResponse}` and
-`konduit_tmp::PayBody`'s unmediation glue (`handlers.rs:166-176`, "FIXME :: Remove the glue required here
+the old `PayBody` unmediation glue (`handlers.rs:166-176`, "FIXME :: Remove the glue required here
 for historical reasons"), and `data::align_commitments`, whose lock, fee and time checks fold into the
 ordered commit function below. `handlers::squash` currently discards its own result and re-reads status
 (`handlers.rs:143-152`, "FIXME :: REMOVE THIS TEMPORARY PATCH") — straighten it as the route moves.
@@ -286,7 +285,7 @@ the instruction; that holds today and only needs to keep holding once the instru
 
 ### `POST /pay/{rail}/quote`
 
-`rail.quote(amount, instruction)` then `Margins::pad`, answering `konduit_tmp::Quote { index, amount, fee,
+`rail.quote(request.amount, instruction)` then `Margins::pad`, answering `konduit_l2_dto::quote::Response { index, amount, fee,
 relative_timeout }`. Replaces `data.cln_quote`'s inline `response.fee + FEE_PLACEHOLDER` and
 `saturating_add(QUOTE_PAY_TIME_MARGIN_MS)`.
 
@@ -335,7 +334,7 @@ what this replaces.
    and a cheaper answer: config on restart is fine.
 2. **Flag day.** No-legacy makes `konduit-server`, `konduit-client`, `cln-rail`, the cli, the wasm bindings
    and the nix demo one atomic change. Worth doing in that order on one branch, with the demo as the gate.
-3. **Two receipt implementations** (`cln_rail::receipt`, `konduit_tmp::receipt`). Out of scope, worth a
+3. **Two receipt implementations** (`cln_rail::receipt`, `konduit_core::receipt`). Out of scope, worth a
    follow-up.
 4. **`problem-details`** is skipped for now by choice; the `slug()` methods are the seam for picking it up.
 5. **Fx** — placeholder only: the `fx-unavailable` variant exists, unproduced, and `fx-client` stays

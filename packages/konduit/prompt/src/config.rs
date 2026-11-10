@@ -10,7 +10,7 @@ pub struct Config {
     #[serde(flatten)]
     pub session: cardano_session::Config,
     pub keyring: keyring::Config,
-    pub known_keys: BTreeMap<String, konduit_data::VerifyingKey>,
+    pub known_keys: BTreeMap<String, konduit_core::VerifyingKey>,
 }
 
 impl Default for Config {

@@ -10,7 +10,7 @@
 //! than adopting theirs for that reason. A one-shot client can afford to
 //! trust and sign; a rail that squashes continuously cannot.
 
-use konduit_data::{
+use konduit_core::{
     Cheque, Duration, Indexes, IndexesError, Lock, Locked, Secret, Squash, SquashBody,
     SquashBodyError, Tag, Unlocked, Verified, VerifyError, VerifyingKey,
 };
@@ -335,7 +335,7 @@ mod tests {
     use crate::{Signer, signer, time};
 
     use super::*;
-    use konduit_data::{ChequeBody, Lock, Secret, SquashBody, Tag};
+    use konduit_core::{ChequeBody, Lock, Secret, SquashBody, Tag};
 
     fn test_signer() -> Signer {
         Signer::new(signer::Config { key: [0; 32] })
@@ -370,7 +370,7 @@ mod tests {
         index
     }
 
-    fn far_future() -> konduit_data::Duration {
+    fn far_future() -> konduit_core::Duration {
         time::now() + Duration::from_secs(10000000000)
     }
 

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use konduit_data::{Cheque, Constants, Duration, Squash, Tag, Unlocked, VerifyingKey};
+use konduit_core::{Cheque, Constants, Duration, Squash, Tag, Unlocked, VerifyingKey};
 use konduit_tx2::{
     channel::Channel,
     step::{Can, Want},

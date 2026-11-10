@@ -11,14 +11,19 @@ use std::{sync::Mutex, time::Duration};
 use serde::{Deserialize, Serialize};
 
 use http_client::codec;
-use konduit_data::{Locked, Secret, SigningKey, Squash, SquashBody, Tag, Verified, VerifyingKey};
+use konduit_core::{Locked, Secret, SigningKey, Squash, SquashBody, Tag, Verified, VerifyingKey};
 
 use crate::{
     Receipt,
     receipt::{self, WireReceipt},
 };
+use konduit_core::keytag;
+use konduit_l2_dto::{
+    pay::{Request as PayRequest, Response as PayOutcome},
+    quote::{Request as QuoteRequest, Response as Quote},
+    squash::Response as SquashStatus,
+};
 use konduit_rail::RESERVED_NAME as RESERVED;
-use konduit_tmp::{PayOutcome, PayRequest, Quote, QuoteRequest, SquashStatus, keytag};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum MediaType {
@@ -158,14 +163,14 @@ impl Channel {
         Ok(self.receipt().apply_secret(secret)?)
     }
 
-    pub fn reveal(&self, lock: &konduit_data::Lock) -> Option<Secret> {
+    pub fn reveal(&self, lock: &konduit_core::Lock) -> Option<Secret> {
         self.receipt()
             .unlockeds()
             .find(|unlocked| unlocked.lock() == *lock)
             .map(|unlocked| *unlocked.secret())
     }
 
-    pub fn apply_timeout(&self, now: konduit_data::Duration) -> Result<(), Error> {
+    pub fn apply_timeout(&self, now: konduit_core::Duration) -> Result<(), Error> {
         self.receipt().apply_timeout(now);
         Ok(())
     }

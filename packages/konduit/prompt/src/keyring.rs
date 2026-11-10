@@ -2,7 +2,6 @@ use std::{collections::BTreeMap, ops::Deref};
 
 use anyhow::{Result, bail};
 use cardano_sdk::{SigningKey, Transaction, VerificationKey, transaction::state::ReadyForSigning};
-use konduit_tmp::to_verifying_key;
 use serde::{Deserialize, Serialize};
 
 use crate::known_keys::KnownKeys;
@@ -65,7 +64,12 @@ impl Keyring {
         KnownKeys::new(
             self.0
                 .iter()
-                .map(|(label, k)| (label.clone(), to_verifying_key(k.to_verification_key())))
+                .map(|(label, k)| {
+                    (
+                        label.clone(),
+                        konduit_core::VerifyingKey::from(<[u8; 32]>::from(k.to_verification_key())),
+                    )
+                })
                 .collect(),
         )
     }
@@ -84,7 +88,7 @@ impl Keyring {
         for vkey in signers {
             let Some(signing_key) = lookup.get(vkey) else {
                 let who = known_keys
-                    .label_for(&to_verifying_key(*vkey))
+                    .label_for(&konduit_core::VerifyingKey::from(<[u8; 32]>::from(*vkey)))
                     .unwrap_or("<unrecognized key>");
                 bail!("no signing key in keyring for {who} — required to sign this tx");
             };

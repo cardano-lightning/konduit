@@ -3,10 +3,10 @@ use cardano_sdk::address::kind::Shelley;
 use cardano_sdk::{Address, PlutusData};
 use derive_more::Display;
 use itertools::{Either, EitherOrBoth, Itertools};
-use konduit_data::{Datum, Redeemer};
+use konduit_core::{Datum, Redeemer};
+use konduit_l1_dto::PossibleStep;
 use kupo_client::Match;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 #[derive(Debug, Display, Clone, PartialEq, Eq)]
 #[display("{{ block_no: {block_no}, header_hash: {header_hash}, slot_no: {slot_no} }}")]
@@ -68,12 +68,10 @@ impl From<u16> for InputIndex {
     }
 }
 
-#[serde_as]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(transparent)]
-pub struct KeyHash(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 28]);
+pub struct KeyHash(#[serde(with = "konduit_core::serde::bytes")] pub [u8; 28]);
 
-#[serde_as]
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct Lovelace(pub u64);
@@ -84,6 +82,13 @@ pub struct Output {
     pub lovelace: Lovelace,
     pub output_index: OutputIndex,
     pub script_hash: ScriptHash,
+}
+
+impl Output {
+    /// L1 lifecycle actions available for this indexed channel state.
+    pub fn possible_steps(&self) -> Vec<PossibleStep> {
+        PossibleStep::from_stage(&self.datum.stage)
+    }
 }
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -119,10 +124,9 @@ impl SlotNo {
     }
 }
 
-#[serde_as]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
-pub struct TransactionId(#[serde_as(as = "serde_with::hex::Hex")] pub [u8; 32]);
+pub struct TransactionId(#[serde(with = "konduit_core::serde::bytes")] pub [u8; 32]);
 
 impl From<&kupo_client::Blake2b256> for TransactionId {
     fn from(hash: &kupo_client::Blake2b256) -> Self {
@@ -150,8 +154,8 @@ pub struct TxOutRef(pub TransactionId, pub OutputIndex);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NonMutual {
-    Cont(Box<(konduit_data::Cont, Output)>),
-    Eol(konduit_data::Eol),
+    Cont(Box<(konduit_core::Cont, Output)>),
+    Eol(konduit_core::Eol),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,7 +217,7 @@ impl OutputDecodingError {
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
 pub enum TransactionDecodingError {
     #[error("Cont step without a continuation output: {0:?}")]
-    ContStepWithoutContinuation(Box<konduit_data::Cont>),
+    ContStepWithoutContinuation(Box<konduit_core::Cont>),
     #[error(transparent)]
     ContStepContinutionInvalid(OutputDecodingError),
     #[error("Given transaction has no steps and no opens")]
@@ -282,9 +286,9 @@ fn decode_transaction_attrs(
     }
 }
 
-fn decode_datum(bytes: &[u8]) -> std::result::Result<konduit_data::Datum, String> {
+fn decode_datum(bytes: &[u8]) -> std::result::Result<konduit_core::Datum, String> {
     let data: PlutusData = cardano_sdk::cbor::decode(bytes).map_err(|e| e.to_string())?;
-    konduit_data::Datum::try_from(&data).map_err(|e| e.to_string())
+    konduit_core::Datum::try_from(&data).map_err(|e| e.to_string())
 }
 
 fn decode_redeemer(bytes: Vec<u8>) -> std::result::Result<Redeemer, String> {
@@ -343,24 +347,24 @@ fn decode_output(output: Match) -> Result<Output, OutputDecodingError> {
 }
 
 fn decode_non_mutual(
-    step: konduit_data::Step,
+    step: konduit_core::Step,
     outputs: &mut impl Iterator<Item = Result<Output, OutputDecodingError>>,
 ) -> Result<NonMutual, TransactionDecodingError> {
     match step {
-        konduit_data::Step::Cont(cont) => match outputs.next() {
+        konduit_core::Step::Cont(cont) => match outputs.next() {
             Some(Ok(output)) => Ok(NonMutual::Cont(Box::new((cont, output)))),
             Some(Err(e)) => Err(TransactionDecodingError::ContStepContinutionInvalid(e)),
             None => Err(TransactionDecodingError::ContStepWithoutContinuation(
                 Box::new(cont),
             )),
         },
-        konduit_data::Step::Eol(eol) => Ok(NonMutual::Eol(eol)),
+        konduit_core::Step::Eol(eol) => Ok(NonMutual::Eol(eol)),
     }
 }
 
 fn decode_non_mutuals(
     first_input: Input,
-    steps: Vec<konduit_data::Step>,
+    steps: Vec<konduit_core::Step>,
     inputs: &mut impl Iterator<Item = Input>,
     outputs: &mut impl Iterator<Item = Result<Output, OutputDecodingError>>,
 ) -> Result<Vec<(Input, NonMutual)>, TransactionDecodingError> {

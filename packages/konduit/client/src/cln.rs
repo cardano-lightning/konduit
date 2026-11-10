@@ -10,21 +10,27 @@
 //! JSON; a konduit reads the instruction back in whichever codec the
 //! request arrived in.
 
-use crate::core::{Payme, PaymeRequest, VerifyingKey};
 use anyhow::anyhow;
+use cln_dto::{commit, quote};
 use http_client::{Transport, codec};
+use konduit_core::VerifyingKey;
+use konduit_l2_dto::{pay, quote as payment_quote};
 use konduit_rail::Rail;
 
-pub use cln_rail::Outbound;
+pub use cln_dto::payme;
 
 /// The name the rail registers under, taken from the rail itself so the
 /// two cannot drift.
 pub const RAIL: &str = <cln_rail::Ctx as Rail>::NAME;
 
-/// What the rail is instructed with: who is paid, and how much they
-/// receive. The peer's own fee is added by the rail on top of this.
-pub fn instruction(payee: VerifyingKey, amount: u64) -> anyhow::Result<Vec<u8>> {
-    serde_json::to_vec(&Outbound::new(payee, amount)).map_err(|err| anyhow!(err))
+/// Encodes the CLN-specific quote instruction for `/pay/cln/quote`.
+pub fn quote_instruction(payee: VerifyingKey) -> anyhow::Result<Vec<u8>> {
+    serde_json::to_vec(&quote::Request { payee }).map_err(|err| anyhow!(err))
+}
+
+/// Encodes the CLN-specific commit instruction for `/pay/cln/pay`.
+pub fn commit_instruction(payee: VerifyingKey, amount: u64) -> anyhow::Result<Vec<u8>> {
+    serde_json::to_vec(&commit::Request { payee, amount }).map_err(|err| anyhow!(err))
 }
 
 /// Asks a payee for a payme. Unauthenticated and over no channel: the
@@ -33,12 +39,34 @@ pub fn instruction(payee: VerifyingKey, amount: u64) -> anyhow::Result<Vec<u8>> 
 pub async fn request_payme<T: Transport>(
     payee: &http_client::Client<T, codec::Json>,
     amount: u64,
-) -> anyhow::Result<Payme>
+) -> anyhow::Result<payme::Response>
 where
     T::Error: Into<anyhow::Error>,
 {
     payee
-        .post::<PaymeRequest, Payme>("/pay/konduit/payme", &PaymeRequest { amount })
+        .post::<payme::Request, payme::Response>("/pay/konduit/payme", &payme::Request { amount })
         .await
         .map_err(|err| anyhow!(err))
+}
+
+/// Builds and submits the Konduit cheque for a CLN-specific payme.
+pub async fn pay<T: Transport>(
+    l2: &crate::l2::Client<'_, T>,
+    rail: &str,
+    payme: &payme::Response,
+    quote: &payment_quote::Response,
+    instruction: Vec<u8>,
+) -> anyhow::Result<pay::Response>
+where
+    T::Error: Into<anyhow::Error>,
+{
+    let now = web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
+        .map_err(|err| anyhow!(err))?
+        .as_millis();
+    if payme.timeout.as_millis() <= now {
+        return Err(anyhow!("CLN payme has expired"));
+    }
+
+    l2.pay(rail, payme.lock, quote, instruction).await
 }

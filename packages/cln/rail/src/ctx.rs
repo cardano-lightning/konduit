@@ -20,42 +20,15 @@ use crate::{
     commits::{Claim, Commit},
     time::now,
 };
-use konduit_data::{
+use cln_dto::{commit::Request as CommitInstruction, quote::Request as QuoteInstruction};
+use konduit_core::Keytag;
+use konduit_core::{
     ChequeBody, Duration, Lock, Secret, Squash, SquashBody, Verified, VerifyingKey,
 };
+use konduit_l2_dto::pay::Response as PayOutcome;
 use konduit_rail::{
     Constraints, Outcome, PreProblem, QuoteProblem, Quoted, Rail, Relative, Resolution,
 };
-use konduit_tmp::{Keytag, PayOutcome};
-use minicbor::{Decode, Encode};
-use serde::{Deserialize, Serialize};
-
-/// What this rail is instructed with: who to pay, and how much they
-/// receive.
-///
-/// One type for both operations, because a quote and a commit ask about
-/// the same thing — konduit names neither the payee nor the amount, so
-/// both travel here.
-///
-/// The amount is what reaches the payee, not what leaves this node: the
-/// peer downstream is a konduit too and charges to be paid, so the rail
-/// adds the peer's own fee on top and checks the sum against
-/// `Constraints.amount` — the inbound cheque net of konduit's fee.
-/// Whatever is left over is the consumer's own headroom and not
-/// something the rail spends.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-pub struct Outbound {
-    #[n(0)]
-    pub payee: VerifyingKey,
-    #[n(1)]
-    pub amount: u64,
-}
-
-impl Outbound {
-    pub fn new(payee: VerifyingKey, amount: u64) -> Self {
-        Self { payee, amount }
-    }
-}
 
 pub struct Ctx {
     channels: Channels,
@@ -226,18 +199,22 @@ impl Ctx {
 /// because this is where the state is.
 impl Rail for Ctx {
     const NAME: &'static str = "cln";
-    type QuoteInstruction = Outbound;
-    type CommitInstruction = Outbound;
+    type QuoteInstruction = QuoteInstruction;
+    type CommitInstruction = CommitInstruction;
 
     /// What the peer charges to carry the instruction. The rail adds
     /// nothing of its own.
-    async fn quote(&self, instruction: Outbound) -> Result<Quoted, QuoteProblem> {
+    async fn quote(
+        &self,
+        amount: u64,
+        instruction: QuoteInstruction,
+    ) -> Result<Quoted, QuoteProblem> {
         let channel = self
             .channels
             .get(&instruction.payee)
             .map_err(|err| QuoteProblem::Unroutable(err.to_string()))?;
         let quote = channel
-            .quote(instruction.amount)
+            .quote(amount)
             .await
             .map_err(|err| QuoteProblem::RailUnavailable(err.to_string()))?;
         Ok(Quoted {
@@ -254,14 +231,14 @@ impl Rail for Ctx {
     /// a non-payment would chase a payment that may well have been made.
     #[tracing::instrument(
         skip(self),
-        fields(
-            ceiling = inbound.amount,
-            amount = instruction.amount,
+            fields(
+                ceiling = inbound.amount,
+                amount = instruction.amount,
             timeout = %inbound.timeout,
             lock = %inbound.lock,
         )
     )]
-    async fn commit(&self, inbound: Constraints, instruction: Outbound) -> Outcome {
+    async fn commit(&self, inbound: Constraints, instruction: CommitInstruction) -> Outcome {
         // Constraints first, since refusing them costs nothing and
         // touches no network.
         if instruction.amount > inbound.amount {

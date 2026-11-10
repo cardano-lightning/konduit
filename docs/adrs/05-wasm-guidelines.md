@@ -37,7 +37,7 @@ joy.
    rather than being altered just to please some WASM API.
 
 3. Some dependencies are prohibited in the lower parts of the codebase
-   (`cardano-sdk`, `konduit-data`, etc) so that those crates remain easily
+   (`cardano-sdk`, `konduit-core`, etc) so that those crates remain easily
    cross-platform. In particular, we note that:
    - time manipulations and durations should come from `web-time` and not from
      `std::time`. The former re-exports the latter when compiling for non-wasm

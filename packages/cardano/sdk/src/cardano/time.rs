@@ -10,9 +10,9 @@
 //! is not a cosmetic problem: a slot number computed with the wrong slot
 //! length is a transaction that is expired before it is submitted.
 //!
-//! FIXME :: Promote these types to `konduit-data` (project level) once every
+//! FIXME :: Promote these types to `konduit-core` (project level) once every
 //! crate agrees on one set of time units. The indexer carries its own
-//! `SlotNo` for now, and `konduit-data` has a `Duration` that is serialised as
+//! `SlotNo` for now, and `konduit-core` has a `Duration` that is serialised as
 //! milliseconds.
 
 use crate::cbor;
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 
 /// A slot number — the chain's unit of time.
 ///
-/// FIXME :: Promote to `konduit-data` (project level), see the module docs.
+/// FIXME :: Promote to `konduit-core` (project level), see the module docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, cbor::Encode, cbor::Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]
@@ -62,7 +62,7 @@ impl From<Slot> for u64 {
 
 /// A count of milliseconds.
 ///
-/// FIXME :: Promote to `konduit-data` (project level), see the module docs.
+/// FIXME :: Promote to `konduit-core` (project level), see the module docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, cbor::Encode, cbor::Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]
@@ -116,7 +116,7 @@ impl ops::Mul<u64> for Milliseconds {
 /// range to a Plutus script, and the unit in which a cheque's timeout is
 /// stored on chain.
 ///
-/// FIXME :: Promote to `konduit-data` (project level), see the module docs.
+/// FIXME :: Promote to `konduit-core` (project level), see the module docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, cbor::Encode, cbor::Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]

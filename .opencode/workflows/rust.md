@@ -88,7 +88,7 @@ rust/
 |  |- http-client-wasm/           # WASM HTTP implementation
 |  |- konduit-cli/                # CLI for admin/adaptor/consumer flows
 |  |- konduit-client/             # Reusable client logic over connector/adaptor
-|  |- konduit-data/               # Shared data encoding/decoding and protocol data
+|  |- konduit-core/               # Shared data encoding/decoding and protocol data
 |  |- konduit-server/             # Adaptor-facing HTTP server
 |  |- konduit-tx/                 # Konduit transaction-building logic
 |  `- konduit-wasm/               # WASM-facing API surface
@@ -295,7 +295,7 @@ Konduit should continue moving toward these broad layers:
 - `cardano-connector-client` - remote connector client over HTTP
 - `cardano-sdk` - Cardano types, addresses, transactions, protocol parameters,
   and builders
-- `konduit-data` - shared Konduit protocol data and encoding/decoding
+- `konduit-core` - shared Konduit protocol data and encoding/decoding
 - `konduit-tx` - Konduit-specific tx building
 - `konduit-client` - reusable client behavior over connector/adaptor surfaces
 - `konduit-cli` - operator and test-facing command-line runtime
@@ -536,7 +536,7 @@ Move it toward the correct layer:
 
 - provider-specific logic -> provider crate
 - shared Cardano types -> `cardano-sdk`
-- shared Konduit protocol data -> `konduit-data`
+- shared Konduit protocol data -> `konduit-core`
 - tx building -> `konduit-tx`
 - runtime bootstrap/config -> `konduit-server` or `konduit-cli`
 

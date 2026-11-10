@@ -11,9 +11,9 @@
 //! This applies to every payment, including one where konduit is itself
 //! the payee: being the end of the route is not a discount.
 
-use konduit_data::{Duration, Locked};
+use konduit_core::{Duration, Locked};
+use konduit_l2_dto::info::TosInfo;
 use konduit_rail::{Constraints, Quoted, Relative};
-use konduit_tmp::TosInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Margins {
@@ -105,7 +105,7 @@ impl From<&TosInfo> for Margins {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use konduit_data::{ChequeBody, Lock, SigningKey, Tag};
+    use konduit_core::{ChequeBody, Lock, SigningKey, Tag};
 
     fn margins() -> Margins {
         Margins::new(1_000, Relative::from_secs(30))

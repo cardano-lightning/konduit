@@ -864,8 +864,7 @@ dependencies = [
  "cardano-connector",
  "cardano-sdk",
  "hex",
- "konduit-data",
- "konduit-tmp",
+ "konduit-core",
  "konduit-tx",
  "minicbor",
  "num",
@@ -1080,15 +1079,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
+name = "cln-dto"
+version = "0.0.0"
+dependencies = [
+ "konduit-core",
+ "minicbor",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cln-rail"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "cln-dto",
  "hex",
  "http-client",
- "konduit-data",
+ "konduit-core",
+ "konduit-l2-dto",
  "konduit-rail",
- "konduit-tmp",
  "minicbor",
  "rand 0.6.5",
  "serde",
@@ -2637,13 +2647,11 @@ dependencies = [
  "dotenvy",
  "hex",
  "konduit-client",
- "konduit-data",
- "konduit-tmp",
+ "konduit-core",
  "konduit-tx",
  "minicbor",
  "serde",
  "serde_json",
- "serde_with",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
 ]
@@ -2659,13 +2667,14 @@ dependencies = [
  "cardano-connector-node",
  "cardano-sdk",
  "clap",
+ "cln-dto",
  "cln-rail",
  "dotenvy",
  "env_logger",
  "http-client",
- "konduit-data",
+ "konduit-core",
+ "konduit-l2-dto",
  "konduit-rail",
- "konduit-tmp",
  "konduit-tx",
  "log",
  "proptest",
@@ -2682,7 +2691,7 @@ dependencies = [
  "amaru-uplc",
  "cryptoxide 0.5.1",
  "hex",
- "konduit-data",
+ "konduit-core",
  "minicbor",
  "proptest",
  "serde",
@@ -2690,7 +2699,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "konduit-data"
+name = "konduit-core"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -2716,14 +2725,36 @@ dependencies = [
  "derive_more",
  "hex",
  "itertools 0.14.0",
- "konduit-data",
+ "konduit-core",
+ "konduit-l1-dto",
  "kupo-client",
  "rusqlite",
  "serde",
  "serde_json",
- "serde_with",
  "thiserror 2.0.18",
  "yaml_serde",
+]
+
+[[package]]
+name = "konduit-l1-dto"
+version = "0.0.0"
+dependencies = [
+ "cardano-sdk",
+ "konduit-core",
+ "minicbor",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "konduit-l2-dto"
+version = "0.0.0"
+dependencies = [
+ "bech32 0.9.1",
+ "konduit-core",
+ "minicbor",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2736,9 +2767,8 @@ dependencies = [
  "clap",
  "hex",
  "inquire",
- "konduit-data",
+ "konduit-core",
  "konduit-session",
- "konduit-tmp",
  "konduit-tx2",
  "minicbor",
  "serde",
@@ -2751,7 +2781,7 @@ dependencies = [
 name = "konduit-rail"
 version = "0.0.0"
 dependencies = [
- "konduit-data",
+ "konduit-core",
  "minicbor",
  "serde",
  "serde_json",
@@ -2773,15 +2803,17 @@ dependencies = [
  "cardano-connector-utxorpc",
  "cardano-sdk",
  "clap",
+ "cln-dto",
  "cln-rail",
  "dotenvy",
  "fx-client",
  "hex",
  "humantime",
  "itertools 0.14.0",
- "konduit-data",
+ "konduit-core",
+ "konduit-l1-dto",
+ "konduit-l2-dto",
  "konduit-rail",
- "konduit-tmp",
  "konduit-tx",
  "minicbor",
  "proptest",
@@ -2790,7 +2822,6 @@ dependencies = [
  "redb",
  "serde",
  "serde_json",
- "serde_with",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -2819,29 +2850,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "konduit-tmp"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "cardano-sdk",
- "hex",
- "konduit-data",
- "minicbor",
- "serde",
- "serde_json",
- "serde_with",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "konduit-tx"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "cardano-sdk",
  "hex",
- "konduit-data",
- "konduit-tmp",
+ "konduit-core",
+ "konduit-l1-dto",
  "serde_json",
  "thiserror 2.0.18",
  "web-time",
@@ -2854,8 +2870,7 @@ dependencies = [
  "anyhow",
  "cardano-sdk",
  "hex",
- "konduit-data",
- "konduit-tmp",
+ "konduit-core",
  "minicbor",
  "serde",
  "serde_json",
@@ -2870,15 +2885,16 @@ dependencies = [
  "anyhow",
  "cardano-connector-client",
  "cardano-sdk",
+ "cln-dto",
  "console_error_panic_hook",
  "console_log",
  "hex",
  "http-client",
  "js-sys",
  "konduit-client",
- "konduit-data",
+ "konduit-core",
+ "konduit-l2-dto",
  "konduit-rail",
- "konduit-tmp",
  "konduit-tx",
  "log",
  "serde",

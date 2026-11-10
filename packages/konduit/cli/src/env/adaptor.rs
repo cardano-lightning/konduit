@@ -5,11 +5,9 @@ use crate::{
 };
 use cardano_sdk::{Address, LeakableSigningKey, address::kind};
 use connector::ConnectorEnv;
-use konduit_data::Duration;
+use konduit_core::Duration;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
-#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
 pub struct Env {
     /// Blockfrost project id
@@ -26,19 +24,19 @@ pub struct Env {
     /// This `fill`s to admin wallets address (with no delegation).
     #[arg(long, env = "KONDUIT_HOST_ADDRESS")]
     #[serde(rename = "KONDUIT_HOST_ADDRESS")]
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    #[serde(with = "konduit_core::serde::option_display_fromstr")]
     pub host_address: Option<Address<kind::Shelley>>,
 
     /// (Minimum acceptable) Close period
     #[arg(long, default_value_t = Duration::from_secs(24 * 60 * 60), env = "KONDUIT_CLOSE_PERIOD")]
     #[serde(rename = "KONDUIT_CLOSE_PERIOD")]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[serde(with = "konduit_core::serde::display_fromstr")]
     pub close_period: Duration,
 
     /// (Flat) fee (lovelace)
     #[arg(long, default_value_t = 10000, env = "KONDUIT_FEE")]
     #[serde(rename = "KONDUIT_FEE")]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[serde(with = "konduit_core::serde::display_fromstr")]
     pub fee: u64,
 }
 

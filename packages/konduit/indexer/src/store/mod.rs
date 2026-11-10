@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use cardano_sdk::VerificationKey;
 use itertools::{Either, Itertools};
-use konduit_data::{Datum, Redeemer, Tag};
+use konduit_core::{Datum, Redeemer, Tag};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -111,7 +111,7 @@ impl ThreadOutput {
         }
     }
 
-    pub fn curr_thread_state(&self) -> Option<&konduit_data::Datum> {
+    pub fn curr_thread_state(&self) -> Option<&konduit_core::Datum> {
         let mut current = self;
         loop {
             match &current.step {
@@ -190,7 +190,7 @@ impl Thread {
         }
     }
 
-    pub fn initial_state(&self) -> &konduit_data::Datum {
+    pub fn initial_state(&self) -> &konduit_core::Datum {
         &self.0.datum
     }
 
@@ -198,7 +198,7 @@ impl Thread {
         self.0.is_thread_closed()
     }
 
-    pub fn curr_state(&self) -> Option<&konduit_data::Datum> {
+    pub fn curr_state(&self) -> Option<&konduit_core::Datum> {
         self.0.curr_thread_state()
     }
 }

@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 wasm_proxy! {
     #[derive(Debug, Clone)]
     #[doc = "Proposed price and routing fee by an Adaptor for a CLN payme."]
-    Quote => core::Quote
+    Quote => core::quote::Response
 }
 
 #[wasm_bindgen]

@@ -1,0 +1,25 @@
+[package]
+name = "konduit-l2-dto"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["serde", "cbor"]
+serde = ["dep:serde", "konduit-core/serde"]
+cbor = ["dep:minicbor"]
+
+[dependencies]
+bech32.workspace = true
+konduit-core.workspace = true
+minicbor = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true

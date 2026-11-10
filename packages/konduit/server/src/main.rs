@@ -1,6 +1,6 @@
 use clap::Parser;
+use konduit_l2_dto::info;
 use konduit_server::{admin, args, cln, index, server};
-use konduit_tmp::AdaptorInfo;
 use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::interval};
@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let mut info = AdaptorInfo::from(args.common.clone());
+    let mut info = info::Response::from(args.common.clone());
     // The rails this adaptor is configured with, so `/info` names the set
     // a consumer picks from. One entry while `cln` is the only one
     // compiled in.

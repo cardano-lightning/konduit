@@ -3,7 +3,7 @@ use std::{cmp, collections::BTreeMap};
 use minicbor::{Decode, Encode};
 
 use cardano_sdk::{Credential, Output, Value};
-use konduit_data::{
+use konduit_core::{
     Cheque, Constants, Datum, Duration, Lock, Pending, Secret, Squash, Stage, Unlocked, Unpend,
     Used,
 };

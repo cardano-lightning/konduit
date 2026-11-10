@@ -10,9 +10,8 @@ use cardano_connector::CardanoConnector;
 use cardano_sdk::{
     Credential, Hash, Input, Output, ShelleySlotConfig, SigningKey, Slot, VerificationKey,
 };
-use konduit_data::{Lock, Secret};
+use konduit_core::{Keytag, Lock, Secret};
 use konduit_rail::{Registry, Resolution};
-use konduit_tmp::Keytag;
 use konduit_tx::{Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 
 use super::{SyncApi, config::Config};

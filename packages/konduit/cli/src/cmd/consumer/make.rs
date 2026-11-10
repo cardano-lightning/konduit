@@ -1,6 +1,6 @@
 use cardano_sdk::PosixMilliseconds;
-use konduit_data::{ChequeBody, Duration, Indexes, Lock, Locked, Secret, Squash, SquashBody, Tag};
-use konduit_tmp::to_signing_key;
+use konduit_core::{ChequeBody, Duration, Indexes, Lock, Locked, Secret, Squash, SquashBody, Tag};
+use konduit_tx::to_signing_key;
 
 use crate::config::consumer::Config;
 use crate::output::{self, OutputJson};
@@ -163,13 +163,13 @@ fn run_locked(
 mod tests {
     use super::*;
     use crate::shared::test_helpers;
-    use konduit_data::Duration;
-    use konduit_tmp::Keytag;
+    use konduit_core::{Duration, Keytag};
+    use konduit_tx::to_verifying_key;
 
     fn test_tag() -> Tag {
         let config = test_helpers::consumer();
         let key = config.wallet.to_verification_key();
-        let keytag = Keytag::new(&key, &Tag::from(vec![1; 8]));
+        let keytag = Keytag::new(&to_verifying_key(key), &Tag::from(vec![1; 8]));
         let (_key, tag) = keytag.split();
         tag
     }

@@ -4,6 +4,7 @@
 
 - [`./meeting-notes/`](./meeting-notes/) - Meeting notes
 - [`./design/`](./design/) - Design: specs, requirements, _etc_
+- [`./design/38_crate_boundaries.md`](./design/38_crate_boundaries.md) - Current Konduit crate boundaries and migration notes
 - [`./adrs/`](./adrs/) - ADRs (coming soon)
 
 The [`log.md`] document is the project log. Core contributors are asked to

@@ -2,7 +2,7 @@
 //! JSON-output DTOs for the CLI commands.
 //!
 //! These types are intentionally defined locally in the CLI package so that the
-//! underlying crates (`konduit-data`, `konduit-tmp`, `cardano-sdk`) are not
+//! underlying crates (`konduit-core`, `cardano-sdk`) are not
 //! forced to commit to a specific wire shape. Every type in this module
 //! derives both [`serde::Serialize`] and [`serde::Deserialize`] so values can be
 //! round-tripped by downstream callers (e.g. the TS integration package).
@@ -10,8 +10,7 @@
 use std::collections::BTreeMap;
 
 use cardano_sdk::{Address, Hash, Input, Output, Value, address};
-use konduit_data::{Constants, Pending, Stage, Tag, Used};
-use konduit_tmp::Keytag;
+use konduit_core::{Constants, Keytag, Pending, Stage, Tag, Used, VerifyingKey};
 use konduit_tx::Channel as KonduitChannel;
 use serde::{Deserialize, Serialize};
 
@@ -131,7 +130,8 @@ pub struct KeytagOutput {
 
 impl KeytagOutput {
     pub fn new(key: &cardano_sdk::VerificationKey, tag: &Tag) -> Self {
-        let keytag = Keytag::new(key, tag);
+        let core_key = VerifyingKey::from(<[u8; 32]>::from(*key));
+        let keytag = Keytag::new(&core_key, tag);
         Self {
             keytag: keytag.to_string(),
             verification_key: hex::encode(<[u8; 32]>::from(*key)),
@@ -154,7 +154,7 @@ pub struct SquashOutput {
 }
 
 impl SquashOutput {
-    pub fn from_squash(squash: &konduit_data::Squash) -> anyhow::Result<Self> {
+    pub fn from_squash(squash: &konduit_core::Squash) -> anyhow::Result<Self> {
         let body_bytes = minicbor::to_vec(squash.body()).unwrap_or_default();
         Ok(Self {
             body_cbor_hex: hex::encode(body_bytes),
@@ -183,7 +183,7 @@ pub struct LockedOutput {
 }
 
 impl LockedOutput {
-    pub fn from_locked(locked: &konduit_data::Locked) -> anyhow::Result<Self> {
+    pub fn from_locked(locked: &konduit_core::Locked) -> anyhow::Result<Self> {
         let body_bytes = minicbor::to_vec(locked.body()).unwrap_or_default();
         let body = locked.body();
         Ok(Self {
@@ -472,14 +472,14 @@ mod tests {
 
     #[test]
     fn squash_body_dto_roundtrip() {
-        let body = konduit_data::SquashBody::new_no_verify(
+        let body = konduit_core::SquashBody::new_no_verify(
             1234,
             5,
-            konduit_data::Indexes::new(vec![1, 2, 3]).unwrap(),
+            konduit_core::Indexes::new(vec![1, 2, 3]).unwrap(),
         );
-        let dto = SquashOutput::from_squash(&konduit_data::Squash::new(
+        let dto = SquashOutput::from_squash(&konduit_core::Squash::new(
             body,
-            konduit_data::Signature::from([1; 64]),
+            konduit_core::Signature::from([1; 64]),
         ))
         .unwrap();
         let json = serde_json::to_string(&dto).unwrap();
@@ -491,8 +491,8 @@ mod tests {
     fn pending_dto_serializes_lock_as_hex() {
         let pending = Pending::new(
             7,
-            konduit_data::Duration::from_secs(0),
-            konduit_data::Lock([1; 32]),
+            konduit_core::Duration::from_secs(0),
+            konduit_core::Lock([1; 32]),
         );
         let dto = PendingDto::from(&pending);
         let json = serde_json::to_string(&dto).unwrap();

@@ -1,6 +1,6 @@
 use std::cmp;
 
-use konduit_data::Duration;
+use konduit_core::Duration;
 use web_time::{SystemTime, UNIX_EPOCH};
 
 /// A  hack to solve an issue where Blockfrost would report

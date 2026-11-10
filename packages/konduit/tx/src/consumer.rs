@@ -5,7 +5,7 @@ use crate::{
 use cardano_sdk::{
     Address, Transaction, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
-use konduit_data::{Constants, Duration, Stage, Tag};
+use konduit_core::{Constants, Duration, Stage, Tag};
 use std::collections::BTreeMap;
 
 pub struct OpenIntent {

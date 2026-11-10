@@ -12,14 +12,15 @@ use crate::{
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Credential, Input, Output};
 use itertools::{EitherOrBoth::*, Itertools};
-use konduit_tmp::{ChannelParameters, Keytag};
-use konduit_tx::{ChannelUtxo, KONDUIT_VALIDATOR, to_verifying_key};
+use konduit_core::Keytag;
+use konduit_l2_dto::AdaptorChannelParameters;
+use konduit_tx::{ChannelUtxo, KONDUIT_VALIDATOR};
 
 #[derive(Clone)]
 pub struct Index<Connector: CardanoConnector + Send + Sync + 'static> {
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
-    channel_parameters: ChannelParameters,
+    channel_parameters: AdaptorChannelParameters,
     // FIXME :: should be used to select lineage.
     #[allow(dead_code)]
     focuses: BTreeMap<Keytag, Input>,
@@ -29,7 +30,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Index<Connector> {
     pub fn new(
         cardano: Arc<Connector>,
         db: Arc<db::Db>,
-        channel_parameters: ChannelParameters,
+        channel_parameters: AdaptorChannelParameters,
     ) -> Self {
         Self {
             cardano,
@@ -42,7 +43,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Index<Connector> {
     fn backings(&self, utxos: &BTreeMap<Input, Output>) -> BTreeMap<Keytag, Vec<Backing>> {
         let close_period = self.channel_parameters.close_period;
         let tag_length = self.channel_parameters.tag_length;
-        let own_vkey = to_verifying_key(self.channel_parameters.adaptor_key);
+        let own_vkey = self.channel_parameters.adaptor_key;
 
         let candidates = utxos.iter().filter_map(|u| {
             let u = ChannelUtxo::try_from(u).ok()?;

@@ -2,15 +2,14 @@ use std::{cmp, collections::BTreeMap};
 
 use cardano_sdk::PosixMilliseconds;
 use cardano_sdk::{Output, Value};
-use konduit_data::{
-    Cheque, Constants, Cont, Datum, Duration, Eol, Lock, Pending, Secret, Stage, Tag, Unlocked,
-    Unpend,
+use konduit_core::Receipt;
+use konduit_core::{
+    Cheque, Constants, Cont, Datum, Duration, Eol, Keytag, Lock, Pending, Secret, Stage, Tag,
+    Unlocked, Unpend,
 };
-use konduit_tmp::{Keytag, Receipt};
 
 use crate::{
-    Bounds, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, StepError, StepTo, Stepped, from_verifying_key,
-    variables::Variables,
+    Bounds, KONDUIT_VALIDATOR, MIN_ADA_BUFFER, StepError, StepTo, Stepped, variables::Variables,
 };
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -93,10 +92,7 @@ impl Channel {
     }
 
     pub fn keytag(&self) -> Keytag {
-        Keytag::new(
-            &from_verifying_key(self.constants().add_vkey),
-            &self.tag().clone(),
-        )
+        Keytag::new(&self.constants().add_vkey, self.tag())
     }
 
     pub fn constants(&self) -> &Constants {
@@ -149,7 +145,8 @@ impl Channel {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Sub")));
         };
-        let (unlockeds, useds) = receipt.prep_sub(useds, upper);
+        let upper_duration = Duration::from_millis(upper.as_millis());
+        let (unlockeds, useds) = receipt.prep_sub(useds, &upper_duration);
         let squash = receipt.squash().clone();
         let absolute_owed = squash.amount() + useds.iter().map(|u| u.amount).sum::<u64>();
         let relative_owed = absolute_owed.saturating_sub(*subbed);
@@ -200,7 +197,8 @@ impl Channel {
             let label = self.stage().label().to_string();
             return Err((Box::new(self), StepError::pair(label, "Respond")));
         };
-        let (cheques, pendings, useds_amount) = receipt.prep_respond(useds, upper);
+        let upper_duration = Duration::from_millis(upper.as_millis());
+        let (cheques, pendings, useds_amount) = receipt.prep_respond(useds, &upper_duration);
         let squash = receipt.squash().clone();
         let absolute_owed = squash.amount() + useds_amount;
         let relative_owed = absolute_owed.saturating_sub(*subbed);

@@ -4,8 +4,10 @@
   inputs = {
     aiken.url = "github:aiken-lang/aiken";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    git-hooks-nix.url = "github:cachix/git-hooks.nix";
-    git-hooks-nix.inputs.nixpkgs.follows = "nixpkgs";
+    git-hooks-nix = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-flake = {
       url = "github:juspay/rust-flake";
@@ -15,8 +17,10 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    treefmt-nix.url = "github:numtide/treefmt-nix";
-    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -255,14 +259,15 @@
                 pass_filenames = false;
                 always_run = true;
               };
-              # Transitive deps mean default clippy ends up using a different cargo.
-              my-clippy = {
-                enable = true;
-                name = "clippy";
-                description = "Run clippy";
-                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path Cargo.toml";
-                pass_filenames = false;
-              };
+              # # Transitive deps mean default clippy ends up using a different cargo.
+              # FIXME :: Is this now sorted??
+              # my-clippy = {
+              #   enable = true;
+              #   name = "clippy";
+              #   description = "Run clippy";
+              #   entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path Cargo.toml";
+              #   pass_filenames = false;
+              # };
               cargo-machete = {
                 enable = true;
                 name = "cargo-machete";

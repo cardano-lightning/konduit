@@ -4,14 +4,15 @@ use wasm_bindgen::prelude::*;
 wasm_proxy! {
     #[derive(Debug, Clone)]
     #[doc = "A CLN-network payment request returned by a merchant."]
-    Payme => core::Payme
+    Payme => core::payme::Response
 }
 
 #[wasm_bindgen]
 impl Payme {
     #[wasm_bindgen(js_name = "fromJson")]
     pub fn _wasm_from_json(json: &str) -> wasm::Result<Self> {
-        let payme: core::Payme = serde_json::from_str(json).map_err(anyhow::Error::from)?;
+        let payme: core::payme::Response =
+            serde_json::from_str(json).map_err(anyhow::Error::from)?;
         Ok(payme.into())
     }
 

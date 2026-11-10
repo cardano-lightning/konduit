@@ -6,12 +6,12 @@ use actix_web::{
     error::ErrorForbidden,
     middleware::Next,
 };
-use konduit_tmp::Keytag;
+use konduit_core::Keytag;
 use std::future::{Ready, ready};
 use std::ops::Deref;
 use std::str::FromStr;
 
-use konduit_tmp::keytag::HEADER as KEYTAG_HEADER;
+use konduit_core::keytag::HEADER as KEYTAG_HEADER;
 
 pub async fn keytag_auth<B: MessageBody + 'static>(
     req: ServiceRequest,
@@ -31,7 +31,7 @@ pub async fn keytag_auth<B: MessageBody + 'static>(
     next.call(req).await
 }
 
-/// Local newtype wrapping `konduit_tmp::Keytag` so we can implement `FromRequest`
+/// Local newtype wrapping the core keytag so we can implement `FromRequest`.
 /// on it (the orphan rule blocks implementing it directly on the foreign `Keytag`).
 ///
 /// Pulls the `Keytag` stashed into request extensions by the `keytag_auth` middleware.

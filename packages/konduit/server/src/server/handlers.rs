@@ -5,7 +5,9 @@ use crate::server::{
     mediation::{self, Mediate, Mediation, Unmediate},
 };
 use actix_web::{HttpResponse, ResponseError, http::StatusCode, web};
-use konduit_tmp::{AdaptorInfo, PayOutcome, Quote, Receipt, SquashProposal, SquashStatus, TxHelp};
+use cln_dto::payme::Response as PaymeResponse;
+use konduit_core::WireReceipt;
+use konduit_l2_dto::{info, pay, quote, receipt, squash};
 use std::ops::Deref;
 
 type Data = web::Data<server::Data>;
@@ -52,7 +54,10 @@ impl ResponseError for Error {
     }
 }
 
-pub async fn info(mediation: Mediation, data: Data) -> Result<Mediate<AdaptorInfo<TxHelp>>, Error> {
+pub async fn info(
+    mediation: Mediation,
+    data: Data,
+) -> Result<Mediate<info::Response<info::TxHelp>>, Error> {
     Ok(Mediate(mediation.accept, data.info().deref().clone()))
 }
 
@@ -64,7 +69,7 @@ pub async fn payme(
     mediation: Mediation,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<konduit_tmp::Payme>, Error> {
+) -> Result<Mediate<PaymeResponse>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
     Ok(Mediate(mediation.accept, data.payme(request)?))
 }
@@ -76,7 +81,7 @@ pub async fn quote(
     rail: web::Path<String>,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<Quote>, Error> {
+) -> Result<Mediate<quote::Response>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
     let quote = data
         .quote(&keytag, &rail, request, mediation.content)
@@ -91,7 +96,7 @@ pub async fn pay(
     rail: web::Path<String>,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<PayOutcome>, Error> {
+) -> Result<Mediate<pay::Response>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
     let outcome = data.pay(&keytag, &rail, request, mediation.content).await?;
     Ok(Mediate(mediation.accept, outcome))
@@ -120,15 +125,16 @@ pub async fn receipt(
     mediation: Mediation,
     keytag: AuthKeytag,
     data: Data,
-) -> Result<Mediate<Option<Receipt>>, Error> {
-    Ok(Mediate(mediation.accept, data.receipt(&keytag)?))
+) -> Result<Mediate<receipt::Response>, Error> {
+    let receipt = data.receipt(&keytag)?.map(WireReceipt::from);
+    Ok(Mediate(mediation.accept, receipt))
 }
 
 pub async fn squash_proposal(
     mediation: Mediation,
     keytag: AuthKeytag,
     data: Data,
-) -> Result<Mediate<SquashProposal>, Error> {
+) -> Result<Mediate<squash::Proposal>, Error> {
     Ok(Mediate(mediation.accept, data.squash_proposal(&keytag)?))
 }
 
@@ -136,7 +142,7 @@ pub async fn squash_status(
     mediation: Mediation,
     keytag: AuthKeytag,
     data: Data,
-) -> Result<Mediate<SquashStatus>, Error> {
+) -> Result<Mediate<squash::Response>, Error> {
     Ok(Mediate(mediation.accept, data.squash_status(&keytag)?))
 }
 
@@ -146,7 +152,7 @@ pub async fn squash(
     data: Data,
     body: web::Bytes,
     // ) -> Result<Mediate<()>, Error> {
-) -> Result<Mediate<SquashStatus>, Error> {
+) -> Result<Mediate<squash::Response>, Error> {
     data.squash(&keytag, Unmediate::unmediate(mediation.content, &body)?)?;
     squash_status(mediation, keytag, data).await
 }

@@ -1,4 +1,4 @@
-use konduit_data::{
+use konduit_core::{
     ChequeBody, Locked, Signature, SigningKey, Squash, SquashBody, Tag, Verified, VerifyingKey,
 };
 use serde::{Deserialize, Serialize};

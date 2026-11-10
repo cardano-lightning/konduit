@@ -1,4 +1,4 @@
-use konduit_data::VerifyingKey;
+use konduit_core::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 use crate::{channels, commits, signer};
@@ -35,7 +35,7 @@ impl Config {
 mod tests {
     use super::*;
     use crate::channel;
-    use konduit_data::{SigningKey, Tag};
+    use konduit_core::{SigningKey, Tag};
 
     fn key(seed: u8) -> VerifyingKey {
         SigningKey::from([seed; 32]).verifying_key()

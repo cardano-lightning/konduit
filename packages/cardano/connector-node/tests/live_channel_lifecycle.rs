@@ -12,7 +12,7 @@ use cardano_sdk::{
     Address, Credential, Hash, Input, NetworkId, Output, ProtocolParameters, ShelleySlotConfig,
     SigningKey, Slot, address::kind,
 };
-use konduit_data::Tag;
+use konduit_core::Tag;
 use konduit_tx::{
     Bounds, KONDUIT_VALIDATOR, NetworkParameters,
     consumer::{Intent, OpenIntent},
@@ -123,7 +123,7 @@ async fn deploy_then_open() {
     let opens = vec![OpenIntent {
         tag: tag.clone(),
         sub_vkey: adaptor_key.to_verification_key(),
-        close_period: konduit_data::Duration::from_secs(CLOSE_PERIOD_SECS),
+        close_period: konduit_core::Duration::from_secs(CLOSE_PERIOD_SECS),
         amount: CHANNEL_AMOUNT_LOVELACE,
     }];
 
@@ -164,7 +164,7 @@ async fn deploy_then_open() {
     );
 
     assert_eq!(data.amount(), CHANNEL_AMOUNT_LOVELACE);
-    assert!(matches!(data.stage(), konduit_data::Stage::Opened(0, _)));
+    assert!(matches!(data.stage(), konduit_core::Stage::Opened(0, _)));
 
     // Note: spending a channel UTxO (closing as the consumer or stepping as
     // the adaptor) requires the validator's Plutus V3 script to actually

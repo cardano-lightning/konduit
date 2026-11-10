@@ -18,4 +18,4 @@ pub mod l1;
 pub mod l2;
 
 mod prelude;
-pub(crate) use prelude::*;
+pub(crate) use prelude::core;

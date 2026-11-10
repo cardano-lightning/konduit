@@ -1,7 +1,7 @@
 use crate::{common::metavar, env};
 use cardano_sdk::{Address, SigningKey, VerificationKey, address::kind};
-use konduit_data::Duration;
-use konduit_tmp::{AdaptorInfo, ChannelParameters, TosInfo, TxHelp};
+use konduit_core::Duration;
+use konduit_l2_dto::{AdaptorChannelParameters, info};
 use konduit_tx::KONDUIT_VALIDATOR;
 
 #[derive(Debug, Clone, clap::Args)]
@@ -29,20 +29,20 @@ pub struct CommonArgs {
     pub time_margin: Duration,
 }
 
-impl From<CommonArgs> for ChannelParameters {
+impl From<CommonArgs> for AdaptorChannelParameters {
     fn from(args: CommonArgs) -> Self {
         let adaptor_key = VerificationKey::from(&args.signing_key);
         Self {
-            adaptor_key,
+            adaptor_key: adaptor_key.into(),
             close_period: args.close_period,
             tag_length: args.tag_length,
         }
     }
 }
 
-impl From<CommonArgs> for AdaptorInfo<TxHelp> {
+impl From<CommonArgs> for info::Response<info::TxHelp> {
     fn from(args: CommonArgs) -> Self {
-        let tos = TosInfo {
+        let tos = info::TosInfo {
             flat_fee: args.fee,
             time_margin: args.time_margin,
             // Filled in once the registry is built; the args don't know
@@ -50,9 +50,9 @@ impl From<CommonArgs> for AdaptorInfo<TxHelp> {
             rails: Vec::new(),
         };
 
-        let tx_help = TxHelp {
-            host_address: args.host_address.clone(),
-            validator: KONDUIT_VALIDATOR.hash,
+        let tx_help = info::TxHelp {
+            host_address: args.host_address.to_string(),
+            validator: <[u8; 28]>::from(KONDUIT_VALIDATOR.hash),
         };
 
         let channel_parameters = args.into();

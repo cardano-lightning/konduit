@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use konduit_data::{Constants, VerifyingKey};
+use konduit_core::{Constants, VerifyingKey};
 
 use crate::prompt::Candidate;
 
@@ -30,7 +30,9 @@ impl KnownKeys {
     pub fn label_for_verification_key(&self, vkey: &cardano_sdk::VerificationKey) -> Option<&str> {
         self.0
             .iter()
-            .find(|(_, known)| &konduit_tmp::from_verifying_key(*(*known)) == vkey)
+            .find(|(_, known)| {
+                &cardano_sdk::VerificationKey::from(<[u8; 32]>::from(*(*known))) == vkey
+            })
             .map(|(label, _)| label.as_str())
     }
 

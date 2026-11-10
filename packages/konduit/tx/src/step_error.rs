@@ -1,4 +1,4 @@
-use konduit_data::Duration;
+use konduit_core::Duration;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum StepError {

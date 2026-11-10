@@ -1,13 +1,11 @@
 use crate::{
     Adaptor,
-    core::{
-        AdaptorInfo, ChequeBody, Duration, Lock, Locked, PayOutcome, Payme, Quote, Receipt,
-        SigningKey, Squash, SquashBody, SquashStatus,
-    },
+    core::{ChequeBody, Duration, Lock, Locked, SigningKey, Squash, SquashBody},
 };
 use anyhow::anyhow;
 use http_client::Transport;
-use konduit_tmp::{TxHelp, to_signing_key, to_verifying_key};
+use konduit_l2_dto::{info, pay, quote, receipt, squash};
+use konduit_tx::{to_signing_key, to_verifying_key};
 use web_time::{SystemTime, UNIX_EPOCH};
 
 /// How much longer than the quoted minimum a cheque is written for, to
@@ -33,7 +31,7 @@ where
         }
     }
 
-    pub fn info(&self) -> &AdaptorInfo<TxHelp> {
+    pub fn info(&self) -> &info::Response<info::TxHelp> {
         self.adaptor.info()
     }
 
@@ -48,15 +46,15 @@ where
         rail: &str,
         amount: u64,
         instruction: Vec<u8>,
-    ) -> anyhow::Result<Quote> {
+    ) -> anyhow::Result<quote::Response> {
         self.adaptor.quote(rail, amount, instruction).await
     }
 
-    pub async fn squash_status(&self) -> anyhow::Result<SquashStatus> {
+    pub async fn squash_status(&self) -> anyhow::Result<squash::Response> {
         self.adaptor.squash_status().await
     }
 
-    pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
+    pub async fn receipt(&self) -> anyhow::Result<receipt::Response> {
         self.adaptor.receipt().await
     }
 
@@ -65,18 +63,15 @@ where
     pub async fn pay(
         &self,
         rail: &str,
-        payme: &Payme,
-        quote: &Quote,
+        lock: Lock,
+        quote: &quote::Response,
         instruction: Vec<u8>,
-    ) -> anyhow::Result<PayOutcome> {
+    ) -> anyhow::Result<pay::Response> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("failed calculate duration since UNIX epoch ?!")
             .as_millis() as u64;
 
-        if payme.timeout.as_millis() <= now as u128 {
-            return Err(anyhow!("CLN payme has expired"));
-        }
         // The quoted timeout is a minimum the cheque must still satisfy
         // when it arrives, not when it is signed, so the payer adds its
         // own allowance for the trip. Without one the window is exactly
@@ -84,7 +79,7 @@ where
         // the hop after it.
         let timeout = Duration::from_millis(now + quote.relative_timeout + TRANSIT_ALLOWANCE_MS);
 
-        let body = ChequeBody::new(quote.index, quote.amount, timeout, payme.lock);
+        let body = ChequeBody::new(quote.index, quote.amount, timeout, lock);
 
         let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
 
@@ -95,7 +90,7 @@ where
             .await
     }
 
-    pub async fn squash(&self, squash_body: SquashBody) -> anyhow::Result<SquashStatus> {
+    pub async fn squash(&self, squash_body: SquashBody) -> anyhow::Result<squash::Response> {
         let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
         let squash = Squash::make(&to_signing_key(self.signing_key.clone()), tag, squash_body);
         self.adaptor.squash(squash.into_unverified()).await
@@ -111,17 +106,17 @@ where
     /// Clients job to decide whether its incomplete.
     pub async fn sync(
         &self,
-        squash: SquashStatus,
+        squash: squash::Response,
         and_confirm: bool,
         known_lock: impl Fn(Lock) -> bool,
     ) -> anyhow::Result<Vec<Lock>> {
         let tag = self.adaptor.tag().ok_or(anyhow!("no tag set on adaptor"))?;
         match squash {
-            SquashStatus::Complete => {
+            squash::Response::Complete => {
                 log::info!("nothing to squash");
                 Ok(vec![])
             }
-            SquashStatus::Incomplete(st) if and_confirm => {
+            squash::Response::Incomplete(st) if and_confirm => {
                 if *st.current.body() == st.proposal {
                     log::info!("ACTUALLY COMPLETE");
                     return Ok(vec![]);
@@ -216,7 +211,7 @@ where
                     .chain(extra_squashes)
                     .collect())
             }
-            SquashStatus::Stale(_) | SquashStatus::Incomplete(_) => {
+            squash::Response::Stale(_) | squash::Response::Incomplete(_) => {
                 log::info!("squash stale or incomplete");
                 Ok(vec![])
             }

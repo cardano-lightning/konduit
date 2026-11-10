@@ -14,7 +14,7 @@ pub use problem::{PostProblem, PreProblem, QuoteProblem};
 pub mod registry;
 pub use registry::Registry;
 
-use konduit_data::{Duration, Lock, Secret};
+use konduit_core::{Duration, Lock, Secret};
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin};
 
@@ -23,7 +23,7 @@ pub const RESERVED_NAME: &str = "konduit";
 
 /// A duration forward from now, never a point in time.
 ///
-/// `konduit_data::Duration` is used both ways across these crates, and
+/// `konduit_core::Duration` is used both ways across these crates, and
 /// the boundary is where the two get mixed: every timeout here is
 /// relative, and a rail converts back to absolute exactly once, when it
 /// builds its own outbound commitment.
@@ -144,20 +144,22 @@ impl Encoded {
 
 /// Konduit supplies the inbound constraints and the rail owns everything
 /// after them, so constraints come first. Each operation takes the rail's
-/// own instruction type, and konduit names neither: what is being paid,
-/// and how much of it, is instruction data all the way down. Konduit
-/// contributes only what it has verified — the constraints a commit
-/// stays within — and a quote has nothing to verify yet.
+/// own instruction type. The quote amount is explicit and the commit
+/// amount is part of the commit instruction, allowing a rail to quote on a
+/// different amount from the eventual commitment. Konduit contributes only
+/// what it has verified — the constraints a commit stays within.
 pub trait Rail: Send + Sync {
     /// Identifier, and the config key. Konduit serves it at `/pay/{NAME}/`.
     const NAME: &'static str;
     type QuoteInstruction: Instruction;
     type CommitInstruction: Instruction;
 
-    /// Establish what the rail's network costs to carry the instruction.
+    /// Establish what the rail's network costs to carry `amount` for the
+    /// instruction's destination.
     /// Keeps an error, because a failed quote commits nothing.
     fn quote(
         &self,
+        amount: u64,
         instruction: Self::QuoteInstruction,
     ) -> impl Future<Output = Result<Quoted, QuoteProblem>> + Send;
 
@@ -182,7 +184,11 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub trait DynRail: Send + Sync {
     fn name(&self) -> &'static str;
 
-    fn quote<'a>(&'a self, encoded: &'a Encoded) -> BoxFuture<'a, Result<Quoted, QuoteProblem>>;
+    fn quote<'a>(
+        &'a self,
+        amount: u64,
+        encoded: &'a Encoded,
+    ) -> BoxFuture<'a, Result<Quoted, QuoteProblem>>;
 
     fn commit<'a>(&'a self, inbound: Constraints, encoded: &'a Encoded) -> BoxFuture<'a, Outcome>;
 
@@ -194,10 +200,14 @@ impl<R: Rail> DynRail for R {
         R::NAME
     }
 
-    fn quote<'a>(&'a self, encoded: &'a Encoded) -> BoxFuture<'a, Result<Quoted, QuoteProblem>> {
+    fn quote<'a>(
+        &'a self,
+        amount: u64,
+        encoded: &'a Encoded,
+    ) -> BoxFuture<'a, Result<Quoted, QuoteProblem>> {
         Box::pin(async move {
             let instruction = encoded.decode::<R::QuoteInstruction>()?;
-            Rail::quote(self, instruction).await
+            Rail::quote(self, amount, instruction).await
         })
     }
 
@@ -225,16 +235,19 @@ mod tests {
     #[derive(Debug, Serialize, Deserialize, Encode, Decode)]
     struct Outbound(#[n(0)] u64);
 
+    #[derive(Debug, Serialize, Deserialize, Encode, Decode)]
+    struct Payee(#[n(0)] u64);
+
     struct Stub;
 
     impl Rail for Stub {
         const NAME: &'static str = "stub";
-        type QuoteInstruction = Outbound;
+        type QuoteInstruction = Payee;
         type CommitInstruction = Outbound;
 
-        async fn quote(&self, instruction: Outbound) -> Result<Quoted, QuoteProblem> {
+        async fn quote(&self, amount: u64, _: Payee) -> Result<Quoted, QuoteProblem> {
             Ok(Quoted {
-                fee: instruction.0,
+                fee: amount,
                 timeout: Relative::from_secs(1),
             })
         }
@@ -252,10 +265,10 @@ mod tests {
 
     impl Rail for Reserved {
         const NAME: &'static str = RESERVED_NAME;
-        type QuoteInstruction = Outbound;
+        type QuoteInstruction = Payee;
         type CommitInstruction = Outbound;
 
-        async fn quote(&self, _: Outbound) -> Result<Quoted, QuoteProblem> {
+        async fn quote(&self, _: u64, _: Payee) -> Result<Quoted, QuoteProblem> {
             unreachable!()
         }
         async fn commit(&self, _: Constraints, _: Outbound) -> Outcome {
@@ -298,13 +311,13 @@ mod tests {
         registry.insert(Stub).unwrap();
         let rail = registry.get("stub").unwrap().clone();
 
-        let json = Encoded::Json(serde_json::to_vec(&Outbound(42)).unwrap());
+        let json = Encoded::Json(serde_json::to_vec(&Payee(42)).unwrap());
         let mut buf = Vec::new();
-        minicbor::encode(Outbound(42), &mut buf).unwrap();
+        minicbor::encode(Payee(42), &mut buf).unwrap();
         let cbor = Encoded::Cbor(buf);
 
         for instruction in [json, cbor] {
-            let quoted = futures_lite_block_on(rail.quote(&instruction));
+            let quoted = futures_lite_block_on(rail.quote(42, &instruction));
             assert_eq!(quoted.unwrap().fee, 42);
         }
     }

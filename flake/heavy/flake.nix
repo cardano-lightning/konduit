@@ -32,8 +32,8 @@
       }: let
         cardonnay = pkgs.python313.pkgs.buildPythonApplication {
           pname = "cardonnay";
-          version = "0.3.4";
-          SETUPTOOLS_SCM_PRETEND_VERSION = "0.3.4";
+          version = "0.3.6";
+          SETUPTOOLS_SCM_PRETEND_VERSION_FOR_CARDONNAY = "0.3.6";
           src = inputs.cardonnay-src;
           pyproject = true;
           build-system = with pkgs.python313.pkgs; [setuptools setuptools-scm];

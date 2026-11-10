@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use cardano_sdk::VerificationKey;
-use konduit_data::Tag;
+use konduit_core::Tag;
 use konduit_indexer::{SqliteStore, Store};
 
 use crate::OutputFormat;

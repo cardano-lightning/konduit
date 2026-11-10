@@ -13,7 +13,7 @@
 //! table rather than a peer table, and this is not one.
 
 use crate::{Channel, Receipt, channel};
-use konduit_data::VerifyingKey;
+use konduit_core::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,

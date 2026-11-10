@@ -2,8 +2,9 @@
 //! payee it cannot reach, constraints it cannot work within, and a lock
 //! it knows nothing about.
 
-use cln_rail::{Channels, Commits, Ctx, Outbound, Signer, signer};
-use konduit_data::{Duration, Lock, SigningKey};
+use cln_dto::{commit::Request as CommitInstruction, quote::Request as QuoteInstruction};
+use cln_rail::{Channels, Commits, Ctx, Signer, signer};
+use konduit_core::{Duration, Lock, SigningKey};
 use konduit_rail::{Constraints, Outcome, Rail, Registry, Relative, Resolution};
 
 /// A rail with no outbound peers at all.
@@ -15,13 +16,20 @@ fn rail() -> Ctx {
     )
 }
 
-fn payee() -> konduit_data::VerifyingKey {
+fn payee() -> konduit_core::VerifyingKey {
     SigningKey::from([9; 32]).verifying_key()
 }
 
 /// Pay the whole ceiling the constraints allow.
-fn outbound() -> Outbound {
-    Outbound::new(payee(), 1_000)
+fn quote_instruction() -> QuoteInstruction {
+    QuoteInstruction { payee: payee() }
+}
+
+fn commit_instruction() -> CommitInstruction {
+    CommitInstruction {
+        payee: payee(),
+        amount: 1_000,
+    }
 }
 
 fn constraints(timeout: Relative) -> Constraints {
@@ -35,7 +43,7 @@ fn constraints(timeout: Relative) -> Constraints {
 #[tokio::test]
 async fn a_payee_with_no_channel_is_unroutable() {
     let outcome = rail()
-        .commit(constraints(Relative::from_secs(60)), outbound())
+        .commit(constraints(Relative::from_secs(60)), commit_instruction())
         .await;
     match outcome {
         Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "unroutable"),
@@ -49,7 +57,7 @@ async fn no_time_left_is_insufficient_margin() {
     // to commit within. The rail keeps no margin of its own, but it
     // still cannot write a cheque that has already elapsed.
     let outcome = rail()
-        .commit(constraints(Relative::from_secs(0)), outbound())
+        .commit(constraints(Relative::from_secs(0)), commit_instruction())
         .await;
     match outcome {
         Outcome::FailedPre(problem) => assert_eq!(problem.slug(), "insufficient-margin"),
@@ -61,7 +69,10 @@ async fn no_time_left_is_insufficient_margin() {
 async fn paying_more_than_the_constraints_allow_is_refused() {
     // The ceiling is the inbound cheque net of konduit's fee; the
     // instruction is the consumer's. Over it, nothing is committed.
-    let over = Outbound::new(payee(), 1_001);
+    let over = CommitInstruction {
+        payee: payee(),
+        amount: 1_001,
+    };
     match rail()
         .commit(constraints(Relative::from_secs(60)), over)
         .await
@@ -74,7 +85,7 @@ async fn paying_more_than_the_constraints_allow_is_refused() {
 #[tokio::test]
 async fn an_unroutable_quote_is_not_a_rail_fault() {
     let problem = rail()
-        .quote(outbound())
+        .quote(1_000, quote_instruction())
         .await
         .expect_err("no channel to quote over");
     assert_eq!(problem.slug(), "unroutable");
@@ -93,7 +104,8 @@ async fn the_rail_registers_as_cln() {
 
     // And is reachable with its instruction erased to bytes, as the platform
     // will hand it over.
-    let instruction = konduit_rail::Encoded::Json(serde_json::to_vec(&outbound()).unwrap());
+    let instruction =
+        konduit_rail::Encoded::Json(serde_json::to_vec(&commit_instruction()).unwrap());
     let outcome = registry
         .get("cln")
         .unwrap()
@@ -108,7 +120,7 @@ async fn the_rail_registers_as_cln() {
 #[test]
 fn a_secret_is_cached_as_long_as_the_commitment_it_unlocked() {
     use cln_rail::commits::{Claim, Commit};
-    use konduit_data::Secret;
+    use konduit_core::Secret;
 
     let commits = Commits::new();
     let lock = Lock([3; 32]);

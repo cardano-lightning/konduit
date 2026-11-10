@@ -3,7 +3,8 @@ use cardano_sdk::{
     Address, Credential, Hash, Input, NetworkId, Output, PlutusData, ProtocolParameters, Value,
     VerificationKey, address::kind,
 };
-use konduit_data::{Constants, Datum, Duration, Keytag, L1Channel, Stage};
+use konduit_core::{Constants, Datum, Duration, Keytag, Stage};
+use konduit_l1_dto::L1Channel;
 use std::{cmp, collections::BTreeMap, sync::LazyLock};
 use web_time::{SystemTime, UNIX_EPOCH};
 
@@ -58,26 +59,27 @@ pub struct ChannelOutput {
 
 impl ChannelOutput {
     pub fn keytag(&self) -> Keytag {
-        Keytag::new(self.constants.add_vkey, self.constants.tag.clone())
+        Keytag::new(&self.constants.add_vkey, &self.constants.tag)
     }
 
     pub fn to_l1_channel(&self) -> L1Channel {
         L1Channel {
             amount: self.amount,
+            constants: self.constants.clone(),
             stage: self.stage.clone(),
         }
     }
 
-    pub fn from_l1_channel(l1: L1Channel, constants: Constants) -> Self {
+    pub fn from_l1_channel(l1: L1Channel) -> Self {
         Self {
             amount: l1.amount,
-            constants,
+            constants: l1.constants,
             stage: l1.stage,
         }
     }
 
-    pub fn to_datum(&self) -> konduit_data::Datum {
-        konduit_data::Datum {
+    pub fn to_datum(&self) -> konduit_core::Datum {
+        konduit_core::Datum {
             own_hash: KONDUIT_VALIDATOR.hash,
             constants: self.constants.clone(),
             stage: self.stage.clone(),

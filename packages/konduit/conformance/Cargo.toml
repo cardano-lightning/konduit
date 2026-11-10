@@ -21,4 +21,4 @@ minicbor.workspace = true
 proptest = { workspace = true, features = ["std", "bit-set"] }
 serde.workspace = true
 serde_json.workspace = true
-konduit-data = { workspace = true, features = ["serde", "proptest"] }
+konduit-core = { workspace = true, features = ["serde", "proptest"] }

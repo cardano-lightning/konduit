@@ -2,7 +2,7 @@ use crate::output::{self, OutputJson};
 use crate::{cardano::ADA, config::consumer::Config};
 use cardano_sdk::VerificationKey;
 use konduit_client::l1;
-use konduit_data::{Duration, Tag};
+use konduit_core::{Duration, Tag};
 use konduit_tx::consumer::{Intent, OpenIntent};
 use std::{collections::BTreeMap, str};
 

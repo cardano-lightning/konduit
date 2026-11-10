@@ -1,6 +1,6 @@
 //! paymes is a lookup table of `payme`s
 
-use konduit_data::{Duration, Lock, Secret};
+use konduit_core::{Duration, Lock, Secret};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Mutex};

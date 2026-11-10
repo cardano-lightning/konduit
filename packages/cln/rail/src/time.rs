@@ -1,4 +1,4 @@
-use konduit_data::Duration;
+use konduit_core::Duration;
 use web_time::{SystemTime, UNIX_EPOCH};
 
 pub fn now() -> Duration {

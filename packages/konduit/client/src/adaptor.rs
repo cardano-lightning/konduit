@@ -1,9 +1,7 @@
-use crate::core::{
-    AdaptorInfo, Keytag, Locked, PayOutcome, PayRequest, Quote, QuoteRequest, Receipt, Squash,
-    SquashStatus, Tag, TxHelp,
-};
+use crate::core::{Keytag, Locked, Tag};
 use anyhow::anyhow;
 use http_client::{HeaderPolicy, Transport, codec, header_policy};
+use konduit_l2_dto::{info, pay, quote, receipt, squash};
 
 const HEADER_NAME_KEYTAG: &str = "KONDUIT";
 
@@ -11,7 +9,7 @@ pub type Client<T> = http_client::Client<T, codec::Json>;
 
 pub struct Adaptor<T: Transport> {
     http_client: Client<T>,
-    info: AdaptorInfo<TxHelp>,
+    info: info::Response<info::TxHelp>,
     keytag: Option<(Tag, String)>,
 }
 
@@ -20,7 +18,7 @@ pub struct Adaptor<T: Transport> {
 impl<T: Transport> Adaptor<T> {
     pub async fn new(http_client: Client<T>, keytag: Option<&Keytag>) -> anyhow::Result<Self> {
         let info = http_client
-            .get::<AdaptorInfo<TxHelp>>("/info")
+            .get::<info::Response<info::TxHelp>>("/info")
             .await
             .map_err(|e| anyhow!(e))?;
 
@@ -52,7 +50,7 @@ impl<T: Transport> Adaptor<T> {
         });
     }
 
-    pub fn info(&self) -> &AdaptorInfo<TxHelp> {
+    pub fn info(&self) -> &info::Response<info::TxHelp> {
         &self.info
     }
 
@@ -64,9 +62,12 @@ impl<T: Transport> Adaptor<T> {
         self.http_client.base_url()
     }
 
-    pub async fn receipt(&self) -> anyhow::Result<Option<Receipt>> {
+    pub async fn receipt(&self) -> anyhow::Result<receipt::Response> {
         self.http_client
-            .get_with_headers::<Option<Receipt>>("/pay/konduit/receipt", self.with_keytag_header())
+            .get_with_headers::<receipt::Response>(
+                "/pay/konduit/receipt",
+                self.with_keytag_header(),
+            )
             .await
             .map_err(|e| anyhow!(e))
     }
@@ -79,13 +80,13 @@ impl<T: Transport> Adaptor<T> {
         rail: &str,
         amount: u64,
         instruction: Vec<u8>,
-    ) -> anyhow::Result<Quote> {
-        let request = QuoteRequest {
+    ) -> anyhow::Result<quote::Response> {
+        let request = quote::Request {
             amount,
             instruction,
         };
         self.http_client
-            .post_with_headers::<QuoteRequest, Quote>(
+            .post_with_headers::<quote::Request, quote::Response>(
                 &format!("/pay/{rail}/quote"),
                 &request,
                 self.with_keytag_header(),
@@ -99,13 +100,13 @@ impl<T: Transport> Adaptor<T> {
         rail: &str,
         inbound: Locked,
         instruction: Vec<u8>,
-    ) -> anyhow::Result<PayOutcome> {
-        let request = PayRequest {
+    ) -> anyhow::Result<pay::Response> {
+        let request = pay::Request {
             inbound,
             instruction,
         };
         self.http_client
-            .post_with_headers::<PayRequest, PayOutcome>(
+            .post_with_headers::<pay::Request, pay::Response>(
                 &format!("/pay/{rail}/pay"),
                 &request,
                 self.with_keytag_header(),
@@ -116,9 +117,9 @@ impl<T: Transport> Adaptor<T> {
 
     /// Where the inbound leg stands: what konduit expects signed next,
     /// and the unlocked cheques a pending payment has resolved into.
-    pub async fn squash_status(&self) -> anyhow::Result<SquashStatus> {
+    pub async fn squash_status(&self) -> anyhow::Result<squash::Response> {
         self.http_client
-            .get_with_headers::<SquashStatus>("/pay/konduit/squash", self.with_keytag_header())
+            .get_with_headers::<squash::Response>("/pay/konduit/squash", self.with_keytag_header())
             .await
             .map_err(|e| anyhow!(e))
     }
@@ -129,12 +130,16 @@ impl<T: Transport> Adaptor<T> {
     // Rather than hacking this back to where it was,
     // we need to fix this elsewhere: the server, and then permit the client to
     // switch between json and cbor.
-    pub async fn squash(&self, squash: Squash) -> anyhow::Result<SquashStatus> {
+    pub async fn squash(&self, squash: squash::Request) -> anyhow::Result<squash::Response> {
         let headers = self.with_keytag_header();
 
         let res = self
             .http_client
-            .post_with_headers::<Squash, SquashStatus>("/pay/konduit/squash", &squash, headers)
+            .post_with_headers::<squash::Request, squash::Response>(
+                "/pay/konduit/squash",
+                &squash,
+                headers,
+            )
             .await;
         res.map_err(|e| anyhow!(e))
     }
