@@ -1,7 +1,7 @@
 use aiken/builtin.{head_list, tail_list}
 use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use env
 use extra/xlist.{foldl3}
 use konduit/assets.{amount_out} as k_assets
@@ -12,7 +12,7 @@ pub fn do(
   lower_bound: Timebound,
   constants: t.Constants,
   stage_in: t.Stage,
-  value_out: Value,
+  value_out: Assets,
   stage_out: t.Stage,
   unpends: List<t.Unpend>,
 ) -> VerificationKey {

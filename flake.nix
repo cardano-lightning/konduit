@@ -2,7 +2,9 @@
   description = "Konduit: Cardano Lightning Network payments";
 
   inputs = {
-    aiken.url = "github:aiken-lang/aiken";
+    aiken = {
+      url = "github:aiken-lang/aiken";
+    };
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks-nix = {
       url = "github:cachix/git-hooks.nix";
@@ -104,96 +106,6 @@
 
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
-
-        process-compose-dev-env-yaml = "";
-
-        devShellExtras =
-          devShell
-          // {
-            name = "konduit-shell-with-extras";
-
-            shellHook = ''
-              echo 1>&2 "Welcome to the development shell with extras!"
-
-              ${shellHookCommon}
-
-              # Most (not all yet) setup of the process-compose subprocesses is
-              # done through the env variables. Please use this convention
-              # so we can have more testing flexibility around the local dev env.
-
-              export ROOT_DIR="$(git rev-parse --show-toplevel)"
-              export RUN_DIR="''${KONDUIT_RUN_DIR:-$ROOT_DIR/.run}"
-
-              # Vars required by testnet part of the process compose:
-
-              export TESTNET_DIR="$RUN_DIR/testnet"
-
-              export CARDONNAY_TESTNET_ID="9"
-
-              export KUPO_INDEXER_DIR="$RUN_DIR/kupo-indexer"
-              export KUPO_INDEXER_PORT=1442
-
-              export KUPO_UTXO_DIR="$RUN_DIR/kupo-utxo"
-              export KUPO_UTXO_PORT=1443
-
-              export KONDUIT_INDEXER_DIR="$RUN_DIR/konduit-indexer"
-              export KONDUIT_INDEXER_DB_PATH="$KONDUIT_INDEXER_DIR/konduit-indexer.db"
-              # Read-only knobs for the integration suite's db-check layer
-              # (packages/integration). The suite opens $KONDUIT_INDEXER_DB_PATH
-              # read-only and asserts the indexer persisted each channel/step.
-              # `auto` below is expressed as an unset variable: the checks run
-              # whenever the db file exists, and skip with a printed reason when
-              # it does not.
-              # export KONDUIT_INDEXER_DB_CHECKS=1   # 1 | 0 | unset (auto)
-              export KONDUIT_INDEXER_DB_TIMEOUT_MS=120000
-              export KONDUIT_INDEXER_DB_POLL_MS=1000
-              export KONDUIT_INDEXER_DB_BUSY_TIMEOUT_MS=5000
-              export KONDUIT_INDEXER_SCHEMA_DIR="$ROOT_DIR/packages/konduit/indexer/sqlite"
-              # Echo every konduit-cli / cardano-cli command line and every SQL
-              # statement the integration suite runs.
-              # export KONDUIT_E2E_DEBUG=1
-
-              export KONDUIT_SERVER_DIR="$RUN_DIR/konduit-server"
-              export KONDUIT_SERVER_DB_PATH="$KONDUIT_SERVER_DIR/konduit-server.db"
-              export KONDUIT_SERVER_HOST="127.0.0.1"
-              export KONDUIT_SERVER_PORT=5663
-              export KONDUIT_SERVER_GATEWAY_PORT=5663
-              export KONDUIT_SERVER_MERCHANT_PORT=5664
-              export CLN_DEMO_CONFIG_DIR="$RUN_DIR/cln-demo"
-              # The server refreshes its FX state on a timer, and a zero
-              # interval makes it panic on start.
-              export KONDUIT_FX_EVERY="10m"
-
-
-              # This exposes CARDANO_NODE_SOCKET_PATH to the shell
-              source <(cardonnay control print-env -i "$CARDONNAY_TESTNET_ID" -w "$TESTNET_DIR")
-
-              # Removes the socket file name from the path, leaving only the directory
-              NODE_SOCKET_DIR="''${CARDANO_NODE_SOCKET_PATH%/*}"
-              NODE_SOCKET_NAME="''${CARDANO_NODE_SOCKET_PATH##*/}"
-              export CARDANO_NODE_CONFIG_PATH="$NODE_SOCKET_DIR/config-''${NODE_SOCKET_NAME%.socket}.json"
-
-              CONFIG_DIR=$(dirname "$CARDANO_NODE_CONFIG_PATH")
-              # This flow assumed that we have already the testnet run directory which is not the case
-              # for the initial setup. For now we will hardcode the network id to 42, but we should fix this in the future.
-              # SHELLEY_GENESIS=$(jq -r .ShelleyGenesisFile "$CARDANO_NODE_CONFIG_PATH")
-              export CARDANO_NODE_NETWORK_ID=42 # $(jq -r .networkMagic "$CONFIG_DIR/$SHELLEY_GENESIS")
-              export KONDUIT_VALIDATOR_HASH="$(cat $ROOT_DIR/packages/kernel/plutus.json | jq -r '.validators[0].hash')"
-
-              # This **will be** initialized by the testnet process compose when executed
-              export FAUCET_ADDR_FILE="$TESTNET_DIR/faucet.addr"
-              # Faucet skey in a cardano-cli JSON format.
-              export FAUCET_SKEY_FILE="$TESTNET_DIR/faucet.skey"
-              # The same as above key but in a raw 64 hex format
-              export FAUCET_WALLET_FILE="$TESTNET_DIR/faucet.wallet"
-
-              export PROCESS_COMPOSE_YAML=${process-compose-dev-env-yaml}
-              # This var is looked up by the process compose itself.
-              export PC_PORT_NUM=8100
-            '';
-
-            packages = devShell.packages;
-          };
       in {
         rust-project = {
           crates = {
@@ -218,7 +130,10 @@
           # Generated files. Formatting these breaks pre-commit hooks.
           settings.excludes = ["treefmt.toml" ".pre-commit-config.yaml"];
           programs = {
-            aiken.enable = true;
+            # aiken = {
+            #   enable = true;
+            #   package = inputs'.aiken.packages.aiken;
+            # };
             alejandra.enable = true;
             prettier.enable = true;
             rustfmt.enable = true;
