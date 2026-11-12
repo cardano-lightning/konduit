@@ -1,21 +1,29 @@
+use crate::server::mediation::MediaType;
 use crate::{
-    Channel, admin,
+    Channel, Invoices, Margins, admin,
     channel::{self, apply_locked, apply_secrets, apply_squash, apply_timeout},
-    db,
+    db, margins,
     time::{self, now},
 };
-use konduit_data::{Locked, Secret, Squash};
-use konduit_tmp::{
-    AdaptorInfo, Keytag, Payme, PaymeRequest, Quote, QuoteBody, Receipt, SquashProposal,
-    SquashStatus, TxHelp,
+use cln_dto::invoice;
+use konduit_core::{Keytag, Receipt, Squash};
+use konduit_l2_dto::{info, pay, quote, squash};
+use konduit_rail::{
+    Encoded, Outcome, PostProblem, PreProblem, QuoteProblem, Quoted, RESERVED_NAME, Registry,
+    Relative,
 };
 /// Actix web server "Data" ie the context of handlers.
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-// TODO :: MOVE TO CONFIG
-const FEE_PLACEHOLDER: u64 = 1000;
-const QUOTE_PAY_TIME_MARGIN_MS: u64 = 30_000;
+/// An instruction is carried in whichever codec the request was in, so
+/// the rail decodes it with that one.
+fn encoded(codec: MediaType, instruction: Vec<u8>) -> Encoded {
+    match codec {
+        MediaType::Json => Encoded::Json(instruction),
+        MediaType::Cbor => Encoded::Cbor(instruction),
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -23,8 +31,17 @@ pub enum Error {
     #[error("no time")]
     Time(#[from] time::Error),
 
-    #[error("CLN: {0}")]
-    Cln(String),
+    /// A problem raised by a rail, or by konduit itself. Slug and
+    /// status come with it; this type adds nothing.
+    #[error("{slug}: {detail}")]
+    Problem {
+        slug: &'static str,
+        status: u16,
+        detail: String,
+    },
+
+    #[error("no such rail: {0}")]
+    NoRail(String),
 
     #[error("Missing middleware data")]
     Auth,
@@ -48,6 +65,46 @@ pub enum Error {
     Other,
 }
 
+impl From<QuoteProblem> for Error {
+    fn from(problem: QuoteProblem) -> Self {
+        Error::Problem {
+            slug: problem.slug(),
+            status: problem.status(),
+            detail: problem.to_string(),
+        }
+    }
+}
+
+impl From<PreProblem> for Error {
+    fn from(problem: PreProblem) -> Self {
+        Error::Problem {
+            slug: problem.slug(),
+            status: problem.status(),
+            detail: problem.to_string(),
+        }
+    }
+}
+
+impl From<PostProblem> for Error {
+    fn from(problem: PostProblem) -> Self {
+        Error::Problem {
+            slug: problem.slug(),
+            status: problem.status(),
+            detail: problem.to_string(),
+        }
+    }
+}
+
+impl From<margins::Error> for Error {
+    fn from(problem: margins::Error) -> Self {
+        Error::Problem {
+            slug: problem.slug(),
+            status: problem.status(),
+            detail: problem.to_string(),
+        }
+    }
+}
+
 impl From<db::Error> for Error {
     fn from(value: db::Error) -> Self {
         match value {
@@ -60,26 +117,37 @@ impl From<db::Error> for Error {
 }
 
 pub struct Data {
-    cln: Arc<crate::cln::Node>,
+    /// The rails this adaptor was configured with. Nothing here knows
+    /// which they are.
+    rails: Arc<Registry>,
+    /// Konduit's own invoices, for a payment that ends here.
+    invoices: Arc<Invoices>,
     db: Arc<db::Db>,
     fx: Arc<RwLock<fx_client::State>>,
-    info: Arc<AdaptorInfo<TxHelp>>,
+    info: Arc<info::Response<info::TxHelp>>,
+    /// Konduit's own fee and time margin, and the only place either is
+    /// added or stripped.
+    margins: Margins,
     admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
 }
 
 impl Data {
     pub fn new(
-        cln: Arc<crate::cln::Node>,
+        rails: Arc<Registry>,
+        invoices: Arc<Invoices>,
         db: Arc<db::Db>,
         fx: Arc<RwLock<fx_client::State>>,
-        info: Arc<AdaptorInfo<TxHelp>>,
+        info: Arc<info::Response<info::TxHelp>>,
+        margins: Margins,
         admin: Arc<dyn admin::SyncApi + Send + Sync + 'static>,
     ) -> Self {
         Self {
-            cln,
+            rails,
+            invoices,
             db,
             fx,
             info,
+            margins,
             admin,
         }
     }
@@ -92,15 +160,15 @@ impl Data {
         self.db.clone()
     }
 
-    pub fn cln(&self) -> Arc<crate::cln::Node> {
-        self.cln.clone()
+    pub fn rails(&self) -> Arc<Registry> {
+        self.rails.clone()
     }
 
     pub fn admin(&self) -> Arc<dyn admin::SyncApi + Send + Sync + 'static> {
         self.admin.clone()
     }
 
-    pub fn info(&self) -> Arc<AdaptorInfo<TxHelp>> {
+    pub fn info(&self) -> Arc<info::Response<info::TxHelp>> {
         self.info.clone()
     }
 
@@ -113,7 +181,7 @@ impl Data {
     }
 
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn squash_proposal(&self, keytag: &Keytag) -> Result<SquashProposal, Error> {
+    pub fn squash_proposal(&self, keytag: &Keytag) -> Result<squash::Proposal, Error> {
         self.db().update(keytag, apply_timeout(now()?))?;
         Ok(self.channel(keytag)?.propose_squash()?)
     }
@@ -127,176 +195,142 @@ impl Data {
         }
     }
 
+    /// Konduit's own invoice, for a payment that ends here.
     #[tracing::instrument(skip_all, fields(amount = request.amount), err)]
-    pub fn payme(&self, request: PaymeRequest) -> Result<Payme, Error> {
-        let response = self
-            .cln
-            .payme(cln_server::wire::payme::Request {
-                amount: request.amount,
-            })
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        // The lock isn't known until the payme is created; logged here
+    pub fn invoice(&self, request: invoice::Request) -> Result<invoice::Response, Error> {
+        let invoice = self.invoices.insert(request.amount, now()?);
+        // The lock isn't known until the invoice is created; logged here
         // (rather than as an instrument field) so it can be matched
-        // against the same lock in quote/pay/cln_commit spans, including
-        // across the gateway's and merchant's separate terminals.
-        tracing::info!(lock = %response.lock, "payme created");
-        Ok(Payme {
-            payee: response.payee,
-            amount: response.amount,
-            lock: response.lock,
-            timeout: response.timeout,
+        // against the same lock in quote/pay spans, including across
+        // separate terminals.
+        tracing::info!(lock = %invoice.lock, "invoice created");
+        Ok(invoice::Response {
+            payee: self.info.channel_parameters.adaptor_key,
+            amount: invoice.amount,
+            lock: invoice.lock,
+            timeout: invoice.timeout,
         })
     }
 
-    #[tracing::instrument(skip_all, fields(amount = body.amount, lock = %body.lock), err)]
-    pub async fn quote(&self, keytag: &Keytag, body: QuoteBody) -> Result<Quote, Error> {
+    /// What it costs to be carried by `rail`: its terms, padded with
+    /// konduit's. The reserved name has nothing downstream to ask.
+    #[tracing::instrument(skip_all, fields(rail, amount = request.amount), err)]
+    pub async fn quote(
+        &self,
+        keytag: &Keytag,
+        rail: &str,
+        request: quote::Request,
+        codec: MediaType,
+    ) -> Result<quote::Response, Error> {
         let channel = self.channel(keytag)?;
-        if body.timeout < time::now()? {
-            return Err(CommitmentError::Time.into());
-        }
-        let response = self
-            .cln
-            .quote_outbound(cln_server::wire::quote::Request {
-                payee: body.payee,
-                amount: body.amount,
-            })
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        let amount = body.amount + response.fee + FEE_PLACEHOLDER + 1;
-        // Actual commitment
-        let index = channel.can_commit(amount)?;
-        let relative_timeout = response
-            .timeout
-            .as_millis()
-            .saturating_add(QUOTE_PAY_TIME_MARGIN_MS as u128) as u64;
-        Ok(Quote {
+        let downstream = if rail == RESERVED_NAME {
+            Quoted {
+                fee: 0,
+                timeout: Relative(konduit_core::Duration::from_millis(0)),
+            }
+        } else {
+            // The amount is the rail's to read out of the instruction.
+            // Konduit keeps its own copy for the arithmetic below, and
+            // tells the rail nothing it did not instruct.
+            let instruction = encoded(codec, request.instruction);
+            self.rail(rail)?.quote(request.amount, &instruction).await?
+        };
+        let offered = self.margins.pad(downstream);
+        let index = channel.can_commit(request.amount + offered.fee)?;
+        Ok(quote::Response {
             index,
-            amount,
-            relative_timeout,
-            routing_fee: response.fee,
+            amount: request.amount + offered.fee,
+            fee: offered.fee,
+            relative_timeout: offered.timeout.0.as_millis() as u64,
         })
     }
 
-    fn align_commitments(&self, locked: &Locked, payme: &Payme) -> Result<(), CommitmentError> {
-        if payme.lock != *locked.lock() {
-            return Err(CommitmentError::Lock);
-        }
-        if locked.amount() < payme.amount.saturating_add(FEE_PLACEHOLDER) {
-            return Err(CommitmentError::Fee);
-        }
-        let current_time = time::now().map_err(|_| CommitmentError::Time)?;
-        if payme.timeout < current_time {
-            return Err(CommitmentError::Time);
-        }
-        Ok(())
-    }
+    /// Verifies the inbound commitment, strips konduit's fee and margin
+    /// off it, and hands what is left to `rail` with the consumer's
+    /// instruction. The reserved name has no rail: the payment ends
+    /// here, and konduit reveals its own secret.
+    #[tracing::instrument(skip_all, fields(rail, lock = %request.inbound.lock()), err)]
+    pub async fn pay(
+        &self,
+        keytag: &Keytag,
+        rail: &str,
+        request: pay::Request,
+        codec: MediaType,
+    ) -> Result<pay::Response, Error> {
+        // Konduit's alone: that the channel is backed, and that the
+        // cheque is one it can claim.
+        self.channel(keytag)?.assert_backed()?;
+        // Konduit's fee and margin come off here and nowhere else. A
+        // cheque that cannot cover them calls no rail — and is not
+        // banked either: refusing before the receipt is what keeps a
+        // cheque konduit will not honour out of it, which is cheaper
+        // than taking it in and trying to drop it afterwards.
+        let constraints = self.margins.strip(&request.inbound, now()?)?;
+        self.db()
+            .update(keytag, apply_locked(request.inbound.clone()))?;
 
-    #[tracing::instrument(skip_all, fields(amount = body.payme.amount, lock = %body.payme.lock), err)]
-    pub async fn pay(&self, keytag: &Keytag, body: PayBody) -> Result<PayResponse, Error> {
-        let PayBody { locked, payme } = body;
-        self.align_commitments(&locked, &payme)?;
-        self.db().update(keytag, apply_locked(locked.clone()))?;
-        let outbound = (payme.payee != self.cln.verifying_key()).then_some(
-            cln_server::wire::commit::Outbound {
-                key: payme.payee,
-                amount: payme.amount,
-            },
-        );
-        let pay_res = self
-            .cln
-            .commit_outbound(cln_server::wire::commit::Request {
-                inbound: locked,
-                outbound,
-            })
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        if let Some(secret) = pay_res.secret {
-            tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
-            self.db().update(keytag, apply_secrets(vec![secret]))?;
+        let outcome = if rail == RESERVED_NAME {
+            // Konduit is the payee, and pays itself out of what is left
+            // after its own fee — being the end of the route is not a
+            // discount.
+            match self
+                .invoices
+                .reveal(&constraints.lock, constraints.amount, now()?)
+            {
+                Ok(secret) => Outcome::Success(secret),
+                Err(err) => {
+                    Outcome::FailedPre(PreProblem::from(QuoteProblem::Unroutable(err.to_string())))
+                }
+            }
+        } else {
+            let instruction = encoded(codec, request.instruction);
+            self.rail(rail)?.commit(constraints, &instruction).await
         };
-        Ok(PayResponse::from(pay_res.secret.map(|secret| secret.0)))
-    }
 
-    #[tracing::instrument(skip_all, fields(amount = request.amount), err)]
-    pub async fn cln_quote(
-        &self,
-        keytag: cln_server::wire::auth::Keytag,
-        request: cln_server::wire::quote::Request,
-    ) -> Result<cln_server::wire::quote::Response, Error> {
-        self.cln
-            .quote(&keytag, request)
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))
-    }
-
-    #[tracing::instrument(
-        skip_all,
-        fields(outbound = request.outbound.is_some(), lock = %request.inbound.lock()),
-        err
-    )]
-    pub async fn cln_commit(
-        &self,
-        keytag: cln_server::wire::auth::Keytag,
-        request: cln_server::wire::commit::Request,
-    ) -> Result<cln_server::wire::commit::Response, Error> {
-        let response = self
-            .cln
-            .commit(&keytag, request)
-            .await
-            .map_err(|error| Error::Cln(error.to_string()))?;
-        // Logged (not a field, since it's only known on success) so the
-        // same hex secret can be matched across the gateway's and
-        // merchant's separate terminals once it's revealed.
-        if let Some(secret) = response.secret {
-            tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
+        match outcome {
+            Outcome::Success(secret) => {
+                tracing::info!(secret = %hex::encode(secret.as_ref()), "secret revealed");
+                self.db().update(keytag, apply_secrets(vec![secret]))?;
+                Ok(pay::Response::Success(secret))
+            }
+            // Committed and unresolved: the consumer polls squash
+            // status, where the secret arrives as an unlocked cheque.
+            Outcome::Pending => Ok(pay::Response::Pending),
+            // The inbound cheque is left live to elapse either way, and
+            // dropping it on a pre-commitment failure is not konduit's
+            // to do: `Receipt::apply_locked` takes cheques strictly in
+            // index order, so a hole would refuse the consumer's next
+            // one until the two resynced. The protocol already answers
+            // this — the consumer retries under the same lock and
+            // `apply_replace` takes the better cheque at the same index
+            // — and anything never retried elapses on its own timeout.
+            Outcome::FailedPre(problem) => Err(problem.into()),
+            // Committed outbound, so the cheque is owed whatever the
+            // peer says: it stays.
+            Outcome::FailedPost(problem) => Err(problem.into()),
         }
-        Ok(response)
     }
 
-    #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn cln_sync(
-        &self,
-        keytag: cln_server::wire::auth::Keytag,
-        request: cln_server::wire::sync::Request,
-    ) -> Result<cln_server::wire::sync::Response, Error> {
-        self.cln
-            .sync(&keytag, request)
-            .map_err(|error| Error::Cln(error.to_string()))
+    fn rail(&self, name: &str) -> Result<&Arc<dyn konduit_rail::DynRail>, Error> {
+        self.rails
+            .get(name)
+            .ok_or_else(|| Error::NoRail(name.to_string()))
     }
 
     // FIXME :: REMOVE THIS TEMPORARY PATCH!!
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn squash_status(&self, keytag: &Keytag) -> Result<SquashStatus, Error> {
+    pub fn squash_status(&self, keytag: &Keytag) -> Result<squash::Response, Error> {
         let squash_proposal = self.squash_proposal(keytag)?;
-        Ok(SquashStatus::Incomplete(squash_proposal))
+        Ok(squash::Response::Incomplete(squash_proposal))
     }
 }
 
-// FIXME :: API IMPROVEMENT. SIMPLIFICATION.
-// NEEDS TO BE DOWNSTREAMED.
-pub struct PayBody {
-    pub locked: Locked,
-    pub payme: Payme,
-}
-
-#[derive()]
-pub enum PayResponse {
-    Ok(Secret),
-    Pending,
-}
-
-impl From<Option<[u8; 32]>> for PayResponse {
-    fn from(value: Option<[u8; 32]>) -> Self {
-        value
-            .map(Secret)
-            .map_or(PayResponse::Pending, PayResponse::Ok)
-    }
-}
-
+/// Konduit's own grounds for not committing. Note what is absent: the
+/// lock. Konduit takes it from the cheque and compares it to nothing —
+/// whether an instruction disagrees with it is the rail's question, and
+/// its `FailedPre` to raise.
 #[derive(Debug, thiserror::Error)]
 pub enum CommitmentError {
-    #[error("lock mismatch")]
-    Lock,
     #[error("no or insufficient fee")]
     Fee,
     #[error("no or insufficient time")]

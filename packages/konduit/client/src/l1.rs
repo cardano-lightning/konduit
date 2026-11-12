@@ -7,8 +7,7 @@ use crate::core::{
 use anyhow::anyhow;
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{ShelleySlotConfig, Slot};
-use konduit_tmp::to_verifying_key;
-use konduit_tx::ChannelUtxo;
+use konduit_tx::{ChannelUtxo, to_verifying_key};
 use std::collections::BTreeMap;
 
 pub struct Client<'a, Connector: CardanoConnector> {

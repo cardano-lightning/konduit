@@ -6,9 +6,7 @@ use crate::{
 use cardano_sdk::{Address, LeakableSigningKey, address::kind};
 use connector::ConnectorEnv;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
-#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
 pub struct Env {
     /// Blockfrost project id
@@ -24,7 +22,7 @@ pub struct Env {
     /// Address of Konduit reference script
     #[arg(long, env = "KONDUIT_HOST_ADDRESS")]
     #[serde(rename = "KONDUIT_HOST_ADDRESS")]
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    #[serde(with = "konduit_core::serde::option_display_fromstr")]
     pub host_address: Option<Address<kind::Shelley>>,
 }
 

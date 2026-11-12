@@ -11,6 +11,7 @@ pub fn wellsigned(
   body: Data,
   signature: Signature,
 ) {
+  trace @"wellsigned": cbor.serialise((tag, body))
   verify_signature(key, cbor.serialise((tag, body)), signature)
 }
 
@@ -20,12 +21,12 @@ pub fn unlocked(
   signature: Signature,
   return: fn(Index, Amount, Timestamp) -> result,
 ) -> result {
-  trace @"unlocked.1": @"the secret hashes to the latch"
+  trace @"wf_unlocked.1": @"the secret hashes to the latch"
   let (index, amount, timeout, secret) = body
   let lock = sha2_256(secret)
-  trace @"unlocked.0": @"`(body, sig)` is well-signed"
+  trace @"wf_unlocked.0": @"`(body, sig)` is well-signed"
   expect wellsinged((index, amount, timeout, lock), signature)
-  trace @"unlocked.2": @"the secret length is 32"
+  trace @"wf_unlocked.2": @"the secret length is 32"
   expect bytearray.length(secret) == 32
   return(index, amount, timeout)
 }

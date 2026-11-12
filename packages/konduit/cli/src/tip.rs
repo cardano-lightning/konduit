@@ -1,7 +1,7 @@
 use crate::config::{self};
 use cardano_connector::CardanoConnector;
 use cardano_sdk::{Address, Credential, Hash, Input, Value, address::kind};
-use konduit_data::{Pending, Used};
+use konduit_core::{Pending, Used};
 use konduit_tx::{Channel, KONDUIT_VALIDATOR, Utxo, Utxos, to_verifying_key};
 use std::{collections::BTreeMap, fmt};
 
@@ -352,19 +352,19 @@ fn pendings_to_string(pendings: &[Pending]) -> String {
     }
 }
 
-fn display_stage(f: &mut fmt::Formatter<'_>, stage: &konduit_data::Stage) -> fmt::Result {
+fn display_stage(f: &mut fmt::Formatter<'_>, stage: &konduit_core::Stage) -> fmt::Result {
     match stage {
-        konduit_data::Stage::Opened(subbed, useds) => {
+        konduit_core::Stage::Opened(subbed, useds) => {
             writeln!(f, "  Opened : {} : {}", subbed, useds_to_string(useds))
         }
-        konduit_data::Stage::Closed(subbed, useds, elapse_at) => write!(
+        konduit_core::Stage::Closed(subbed, useds, elapse_at) => write!(
             f,
             "  Closed : {} : {} : {}",
             subbed,
             useds_to_string(useds),
             elapse_at
         ),
-        konduit_data::Stage::Responded(pends_amount, pendings) => write!(
+        konduit_core::Stage::Responded(pends_amount, pendings) => write!(
             f,
             "  Responded : {} : {}",
             pends_amount,

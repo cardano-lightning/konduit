@@ -5,12 +5,12 @@ This part is written in Aiken. Find more on the
 
 ## Testing
 
-Some tests will fail unless they are run with `no_cypto`. No crypto skips
-signature, and hash verification steps. This allows test data to be created
-without an external source.
+Run the kernel tests with `aiken check`. Signed squash and unlocked vectors used
+by the Aiken `sub` tests are generated as a complete Aiken module by:
 
-For example
+```sh
+cargo run -p konduit-core --example sub-vectors > packages/kernel/lib/konduit/steps/sub_vectors.ak
+```
 
-```
-aiken check --env no_crypto -m lib/konduit/steps/sub.{..}
-```
+The generated module includes the named `SubVector` records consumed by
+`lib/konduit/steps/sub_tests.ak`.

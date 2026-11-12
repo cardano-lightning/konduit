@@ -25,10 +25,10 @@ clap = { workspace = true, features = ["derive", "env"], optional = true }
 derive_more.workspace = true
 hex.workspace = true
 itertools.workspace = true
-konduit-data = { workspace = true, features = ["serde", "cardano_sdk"] }
+konduit-core = { workspace = true, features = ["serde", "cardano_sdk"] }
+konduit-l1-dto.workspace = true
 kupo-client.workspace = true
 rusqlite = { version = "0.32", features = ["bundled"] }
-serde_with.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, optional = true }
 thiserror.workspace = true

@@ -1,8 +1,8 @@
 use crate::Channel;
 use cardano_sdk::Signature;
-use konduit_tmp::{Keytag, L1Channel, Receipt};
+use konduit_core::{Keytag, Receipt};
+use konduit_l1_dto::L1Channel;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::collections::BTreeMap;
 
 pub type TipBody = BTreeMap<Keytag, Vec<L1Channel>>;
@@ -21,13 +21,12 @@ pub type ShowResponse = BTreeMap<Keytag, Channel>;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Secrets(Vec<[u8; 32]>);
 
-#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UnlockedCheque {
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[serde(with = "konduit_core::serde::bytes")]
     pub cheque_body: Vec<u8>,
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[serde(with = "konduit_core::serde::bytes")]
     pub signature: Signature,
-    #[serde_as(as = "serde_with::hex::Hex")]
+    #[serde(with = "konduit_core::serde::bytes")]
     pub secret: Vec<u8>,
 }

@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 
 use crate::AikenFn;
-use konduit_data::{Cheque, Constants, Datum, Redeemer, Stage, Unlocked};
+use konduit_core::{Cheque, Constants, Datum, Redeemer, Stage, Unlocked};
 
 proptest! {
 

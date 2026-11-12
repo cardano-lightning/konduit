@@ -33,7 +33,10 @@ hex.workspace = true
 http-client = { workspace = true, features = ["gloo", "json", "cbor"] }
 js-sys.workspace = true
 konduit-client.workspace = true
-konduit-data.workspace = true
+konduit-rail.workspace = true
+konduit-core.workspace = true
+konduit-l2-dto = { workspace = true, features = ["serde", "cbor"] }
+cln-dto = { workspace = true, features = ["serde", "cbor"] }
 konduit-tx.workspace = true
 log.workspace = true
 serde.workspace = true
@@ -41,4 +44,3 @@ serde_json.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 web-time.workspace = true
-konduit-tmp.workspace = true

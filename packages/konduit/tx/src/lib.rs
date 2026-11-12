@@ -54,5 +54,8 @@ pub use adaptor::InsufficientTotalGain;
 pub mod admin;
 pub mod consumer;
 
-pub use konduit_tmp::from_verifying_key;
-pub use konduit_tmp::to_verifying_key;
+mod key_conversion;
+pub use key_conversion::{
+    from_signature, from_signing_key, from_verifying_key, to_signature, to_signing_key,
+    to_verifying_key,
+};

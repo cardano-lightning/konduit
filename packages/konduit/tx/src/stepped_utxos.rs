@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use cardano_sdk::{Hash, Input, Output, VerificationKey};
-use konduit_data::{Redeemer, Step};
+use konduit_core::{Redeemer, Step};
 
 use crate::{Bounds, SteppedUtxo};
 

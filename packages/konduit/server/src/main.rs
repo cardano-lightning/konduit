@@ -1,6 +1,6 @@
 use clap::Parser;
+use konduit_l2_dto::info;
 use konduit_server::{admin, args, cln, index, server};
-use konduit_tmp::AdaptorInfo;
 use konduit_tx::InsufficientTotalGain;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::interval};
@@ -20,9 +20,11 @@ fn init_tracing() {
     // readable in a real terminal, noise everywhere else.
     let ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("konduit_server=info,cln_server=info,actix_web=info")
-        }))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                EnvFilter::new("konduit_server=info,cln_rail=info,actix_web=info")
+            }),
+        )
         .with_span_events(FmtSpan::NEW)
         .without_time()
         .with_target(false)
@@ -80,15 +82,29 @@ async fn main() -> anyhow::Result<()> {
     // DB
     let db = Arc::new(args.db.build()?);
 
-    // CLN backend
-    let cln = Arc::new(cln::build(args.cln, args.common.fee)?);
+    // Rails. BLN is included only when an explicit backend is configured.
+    let cln = Arc::new(cln::build(args.cln)?);
+    let mut rails = konduit_rail::Registry::new();
+    rails
+        .insert_shared(Arc::clone(&cln))
+        .map_err(anyhow::Error::from)?;
+    if let Some(bln_client) = konduit_server::bln::build_client()? {
+        let bln = Arc::new(bln_rail::Bln::new(
+            Arc::new(konduit_server::bln::StateFx::new(fx_state.clone())),
+            bln_client,
+        ));
+        rails.insert_shared(bln).map_err(anyhow::Error::from)?;
+    }
+    let rails = Arc::new(rails);
+    // Konduit's own invoices, for payments that end here.
+    let invoices = Arc::new(konduit_server::Invoices::new(Default::default()));
     let cln_sync = Arc::clone(&cln);
     actix_web::rt::spawn(async move {
         let mut ticker = interval(std::time::Duration::from_secs(5));
         loop {
             ticker.tick().await;
             async {
-                for (peer, result) in cln_sync.sync_outbound().await {
+                for (peer, result) in cln_sync.sync().await {
                     if let Err(error) = result {
                         tracing::warn!(peer = ?peer, %error, "CLN sync failed");
                     }
@@ -99,7 +115,11 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let info = Arc::new(AdaptorInfo::from(args.common.clone()));
+    let mut info = info::Response::from(args.common.clone());
+    // Advertise only configured rails; consumers use this as the available set.
+    info.tos.rails = rails.names().iter().map(|n| n.to_string()).collect();
+    let info = Arc::new(info);
+    let margins = konduit_server::Margins::from(&info.tos);
 
     // ADMIN :: Index
     let index_every = args.admin.admin_every;
@@ -130,7 +150,14 @@ async fn main() -> anyhow::Result<()> {
     let admin_every = args.admin.admin_every;
     let admin_config = admin::Config::from_args(args.common.clone(), args.admin);
     let admin = Arc::new(
-        admin::Service::new(admin_config, cln.clone(), cardano.clone(), db.clone()).await?,
+        admin::Service::new(
+            admin_config,
+            Arc::clone(&rails),
+            Arc::clone(&invoices),
+            cardano.clone(),
+            db.clone(),
+        )
+        .await?,
     );
     let admin_for_sync = Arc::clone(&admin);
 
@@ -156,7 +183,16 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // INFO
-    let server_data = server::Data::new(cln, db, fx_state, info, admin);
+
+    let server_data = server::Data::new(
+        rails,
+        Arc::clone(&invoices),
+        db,
+        fx_state,
+        info,
+        margins,
+        admin,
+    );
     let server = server::Service::new(args.server, server_data);
 
     server.run().await?;

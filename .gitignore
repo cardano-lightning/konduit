@@ -34,3 +34,4 @@ _konduit.redb
 
 # Local devel process-compose
 .pc.log
+bln_server_configs.toml

@@ -1,5 +1,5 @@
 use cardano_sdk::{Output, PlutusData, VerificationKey};
-use konduit_data::Step;
+use konduit_core::Step;
 
 use crate::{Bounds, ChannelUtxo, Stepped, from_verifying_key, utxo_and::UtxoAnd};
 

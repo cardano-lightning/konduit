@@ -29,4 +29,14 @@ pub struct ClientArgs {
     #[arg(long, env = "LND_MACAROON", hide_env_values = true)]
     #[cfg_attr(feature = "namespaced", arg(long("bln-lnd-macaroon")))]
     pub lnd_macaroon: Option<lnd::Macaroon>,
+
+    /// The base URL of the Core Lightning REST API.
+    #[arg(long, env = "CLN_BASE_URL")]
+    #[cfg_attr(feature = "namespaced", arg(long("bln-cln-base-url")))]
+    pub cln_base_url: Option<String>,
+
+    /// Core Lightning REST rune.
+    #[arg(long, env = "CLN_RUNE", hide_env_values = true)]
+    #[cfg_attr(feature = "namespaced", arg(long("bln-cln-rune")))]
+    pub cln_rune: Option<String>,
 }

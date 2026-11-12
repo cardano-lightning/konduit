@@ -1,10 +1,14 @@
+use cardano_connector::CardanoConnector;
 use cardano_connector_direct::Blockfrost;
 use cardano_sdk::{Address, VerificationKey, address::kind::Shelley};
 use clap::Parser;
 use http_client::{codec, transport};
-use konduit_data::{Duration, Lock, SquashBody};
-use konduit_tmp::{Keytag, Payme, TxHelp};
-use konduit_tx::consumer::{Intent, OpenIntent};
+use konduit_core::{Duration, Keytag, Lock, SquashBody};
+use konduit_l2_dto::{info, squash};
+use konduit_tx::{
+    consumer::{Intent, OpenIntent},
+    to_verifying_key,
+};
 use serde_json::json;
 use std::{
     collections::BTreeMap,
@@ -13,9 +17,11 @@ use std::{
 
 use crate::{
     Adaptor,
-    core::{AdaptorInfo, SigningKey, SquashStatus, Tag},
+    connector::{Backend, ConnectorArgs},
+    core::{SigningKey, Tag},
     l1, l2,
 };
+use konduit_rail::RESERVED_NAME;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Konduit Consumer CLI")]
@@ -60,8 +66,8 @@ pub fn confirm(prompt: &str) -> anyhow::Result<bool> {
     confirm(prompt)
 }
 
-pub fn prompt_if_incomplete(st: &SquashStatus, auto_confirm: bool) -> anyhow::Result<bool> {
-    if !auto_confirm && matches!(st, SquashStatus::Incomplete { .. }) {
+pub fn prompt_if_incomplete(st: &squash::Response, auto_confirm: bool) -> anyhow::Result<bool> {
+    if !auto_confirm && matches!(st, squash::Response::Incomplete { .. }) {
         println!("{}", serde_json::to_string_pretty(st).unwrap());
         confirm("Verify proposal and execute squash?")
     } else {
@@ -84,9 +90,8 @@ pub struct L1Args {
     #[command(subcommand)]
     pub cmd: L1Cmd,
 
-    /// For L1, only the blockfrost connector is supported.
-    #[arg(long, env = "KONDUIT_BLOCKFROST_PROJECT_ID")]
-    pub blockfrost_project_id: String,
+    #[command(flatten)]
+    pub connector: ConnectorArgs,
 
     /// Reference script host address. If omitted, it's fetched from the L2 server.
     #[arg(long, env = "KONDUIT_HOST_ADDRESS")]
@@ -109,9 +114,11 @@ pub enum L1Cmd {
         #[arg(long = "close-period")]
         close_period: Option<Duration>,
     },
+    /// Add funds to the channel, on top of whatever it already locks.
+    Add { amount: u64 },
     /// Close
     Close,
-    /// Close
+    /// Step the channel on, settling whatever the chain already allows.
     Step,
 }
 
@@ -125,18 +132,38 @@ pub struct L2Args {
 pub enum L2Cmd {
     /// Show info about the server
     Info,
-    /// Get a quote for a CLN payme JSON object returned by the merchant
+    /// Get a quote for a CLN invoice JSON object returned by the merchant
     Quote {
         #[arg(long)]
-        payme: String,
+        invoice: String,
     },
-    /// Full workflow: Get quote -> Pay -> Squash using a CLN payme
+    /// Full workflow: Get quote -> Pay -> Squash using a CLN invoice
     Pay {
         #[arg(long)]
-        payme: String,
+        invoice: String,
     },
     /// Manually squash using the latest state
     Squash,
+    /// Pay a payee through this konduit's cln rail: ask the payee for a
+    /// invoice, then quote and pay with the rail's own instruction.
+    #[cfg(feature = "cln")]
+    Cln {
+        /// The payee's url, where the invoice is asked for.
+        #[arg(long)]
+        payee: String,
+        #[arg(long)]
+        amount: u64,
+    },
+    /// Pay a fixed BOLT11 invoice through this konduit's BLN rail.
+    #[cfg(feature = "bln")]
+    Bln {
+        /// Signed BOLT11 invoice.
+        #[arg(long)]
+        invoice: String,
+        /// Requested principal in lovelace, before quoted fees.
+        #[arg(long)]
+        amount: u64,
+    },
 }
 
 pub fn transport() -> transport::Reqwest {
@@ -156,7 +183,7 @@ impl Cli {
         match &self.cmd {
             Cmd::Info => {
                 let vk = self.signing_key.to_verification_key();
-                let keytag = Keytag::new(&vk, &self.tag);
+                let keytag = Keytag::new(&to_verifying_key(vk), &self.tag);
                 println!("{}", vk);
                 println!("{}", keytag);
                 Ok(())
@@ -167,7 +194,7 @@ impl Cli {
     }
 
     /// Fetches the L2 server's info, for use as a fallback when Open/Close args are omitted.
-    async fn fetch_l2_info(&self) -> anyhow::Result<AdaptorInfo<TxHelp>> {
+    async fn fetch_l2_info(&self) -> anyhow::Result<info::Response<info::TxHelp>> {
         let server_url = self.server_url.clone().ok_or_else(|| {
             anyhow::anyhow!("--server-url is required to look up values not supplied directly")
         })?;
@@ -182,13 +209,37 @@ impl Cli {
     ) -> anyhow::Result<Address<Shelley>> {
         match given {
             Some(addr) => Ok(addr.clone()),
-            None => Ok(self.fetch_l2_info().await?.tx_help.host_address.clone()),
+            None => Address::try_from(self.fetch_l2_info().await?.tx_help.host_address.as_str()),
         }
     }
 
+    /// Picks the backend, then hands the connector to the backend-agnostic
+    /// body below. Each arm connects its own way, so they can't share a type.
     async fn run_l1(&self, args: &L1Args) -> anyhow::Result<()> {
-        let cardano = Blockfrost::new(args.blockfrost_project_id.clone());
-        let l1 = l1::Client::new(&cardano, &self.signing_key);
+        match args.connector.backend {
+            Backend::Blockfrost => {
+                let cardano = Blockfrost::new(args.connector.blockfrost_project_id()?.to_string());
+                self.run_l1_with(&cardano, args).await
+            }
+            #[cfg(feature = "node")]
+            Backend::Node => {
+                let cardano = args.connector.node().await?;
+                self.run_l1_with(&cardano, args).await
+            }
+            #[cfg(feature = "node")]
+            Backend::KupoNode => {
+                let cardano = args.connector.kupo_node().await?;
+                self.run_l1_with(&cardano, args).await
+            }
+        }
+    }
+
+    async fn run_l1_with<C: CardanoConnector>(
+        &self,
+        cardano: &C,
+        args: &L1Args,
+    ) -> anyhow::Result<()> {
+        let l1 = l1::Client::new(cardano, &self.signing_key);
         let ref_script_host = &args.ref_script_host;
 
         // Channels is a plain query, not an execute() call - handle it and return early.
@@ -223,13 +274,17 @@ impl Cli {
                         None
                     };
 
-                let sub_vkey = (*sub_vkey)
-                    .unwrap_or_else(|| info.as_ref().unwrap().channel_parameters.adaptor_key);
+                let sub_vkey = (*sub_vkey).unwrap_or_else(|| {
+                    info.as_ref().unwrap().channel_parameters.adaptor_key.into()
+                });
                 let close_period = close_period
                     .unwrap_or_else(|| info.as_ref().unwrap().channel_parameters.close_period);
-                let ref_script_host = ref_script_host
-                    .clone()
-                    .unwrap_or_else(|| info.as_ref().unwrap().tx_help.host_address.clone());
+                let ref_script_host = match ref_script_host {
+                    Some(address) => address.clone(),
+                    None => {
+                        Address::try_from(info.as_ref().unwrap().tx_help.host_address.as_str())?
+                    }
+                };
 
                 let open = OpenIntent {
                     tag: self.tag.clone(),
@@ -240,6 +295,12 @@ impl Cli {
 
                 (vec![open], BTreeMap::new(), ref_script_host)
             }
+
+            L1Cmd::Add { amount } => (
+                Vec::new(),
+                BTreeMap::from([(self.tag.clone(), Intent::Add(*amount))]),
+                self.resolve_ref_script_host(ref_script_host).await?,
+            ),
 
             L1Cmd::Close => (
                 Vec::new(),
@@ -264,7 +325,7 @@ impl Cli {
             )
             .await?;
 
-        println!("{}", serde_json::to_string_pretty(&tx)?);
+        println!("{tx}");
 
         Ok(())
     }
@@ -276,7 +337,7 @@ impl Cli {
             .ok_or_else(|| anyhow::anyhow!("--server-url is required for l2 commands"))?;
 
         let vk = self.signing_key.to_verification_key();
-        let keytag = Keytag::new(&vk, &self.tag);
+        let keytag = Keytag::new(&to_verifying_key(vk), &self.tag);
         let server_client = client_json(server_url);
         let adaptor = Adaptor::new(server_client, Some(&keytag)).await?;
         let l2 = l2::Client::new(&adaptor, &self.signing_key);
@@ -286,15 +347,17 @@ impl Cli {
                 println!("{}", serde_json::to_string_pretty(adaptor.info())?);
             }
 
-            L2Cmd::Quote { payme } => {
-                let payme: Payme = serde_json::from_str(payme)?;
-                let quote = l2.quote(&payme).await?;
+            // Paying the adaptor itself: konduit's own reserved name,
+            // and no instruction to write.
+            L2Cmd::Quote { invoice } => {
+                let invoice: crate::rail::cln::invoice::Response = serde_json::from_str(invoice)?;
+                let quote = l2.quote(RESERVED_NAME, invoice.amount, Vec::new()).await?;
                 println!("{}", serde_json::to_string_pretty(&quote)?);
             }
 
-            L2Cmd::Pay { payme } => {
-                let payme: Payme = serde_json::from_str(payme)?;
-                let quote = l2.quote(&payme).await?;
+            L2Cmd::Pay { invoice } => {
+                let invoice: crate::rail::cln::invoice::Response = serde_json::from_str(invoice)?;
+                let quote = l2.quote(RESERVED_NAME, invoice.amount, Vec::new()).await?;
 
                 println!("quote = {:?}", quote);
 
@@ -302,8 +365,14 @@ impl Cli {
                     return Ok(());
                 }
 
-                let res = l2.pay(&payme, &quote).await?;
+                let outcome =
+                    crate::rail::cln::pay(&l2, RESERVED_NAME, &invoice, &quote, Vec::new()).await?;
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
 
+                // The inbound leg is resolved by squash either way: a
+                // pending payment's secret arrives as an unlocked cheque
+                // in the proposal.
+                let res = l2.squash_status().await?;
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
 
                 l2.sync(res, and_confirm, |x| known_lock(&x)).await?;
@@ -312,8 +381,65 @@ impl Cli {
             L2Cmd::Squash => {
                 let res = l2.squash(SquashBody::default()).await?;
                 let and_confirm = prompt_if_incomplete(&res, self.yes)?;
-                l2.sync(res, and_confirm, |_x: konduit_data::Lock| known_lock(&_x))
+                l2.sync(res, and_confirm, |_x: konduit_core::Lock| known_lock(&_x))
                     .await?;
+            }
+
+            #[cfg(feature = "cln")]
+            L2Cmd::Cln { payee, amount } => {
+                // The invoice comes from the payee, not from the konduit
+                // this client has a channel with.
+                let invoice =
+                    crate::rail::cln::request_invoice(&client_json(payee.clone()), *amount).await?;
+                let instruction = crate::rail::cln::quote_instruction(invoice.payee)?;
+                let quote = l2
+                    .quote(crate::rail::cln::RAIL, invoice.amount, instruction.clone())
+                    .await?;
+
+                println!("quote = {:?}", quote);
+
+                if !self.yes && !confirm("Proceed with payment?")? {
+                    return Ok(());
+                }
+
+                let commit = crate::rail::cln::commit_instruction(invoice.payee, invoice.amount)?;
+                let outcome =
+                    crate::rail::cln::pay(&l2, crate::rail::cln::RAIL, &invoice, &quote, commit)
+                        .await?;
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
+
+                let res = l2.squash_status().await?;
+                let and_confirm = prompt_if_incomplete(&res, self.yes)?;
+                l2.sync(res, and_confirm, |x| known_lock(&x)).await?;
+            }
+
+            #[cfg(feature = "bln")]
+            L2Cmd::Bln { invoice, amount } => {
+                use std::str::FromStr;
+
+                let parsed = bln_sdk::types::Invoice::from_str(invoice)?;
+                let instruction = crate::rail::bln::quote_instruction(invoice.clone())?;
+                let quote = l2
+                    .quote(crate::rail::bln::RAIL, *amount, instruction)
+                    .await?;
+
+                println!("Requested inbound principal: {amount} lovelace");
+                println!("BLN principal: {} msat", parsed.amount_msat);
+                println!("Quoted total fee: {} lovelace", quote.fee);
+                println!("Maximum total debit: {} lovelace", quote.amount);
+                println!("Timeout: {} ms", quote.relative_timeout);
+                if !self.yes && !confirm("Commit this bounded Lightning payment?")? {
+                    return Ok(());
+                }
+
+                let commit = crate::rail::bln::commit_instruction(invoice.clone())?;
+                let outcome =
+                    crate::rail::bln::pay(&l2, Lock(parsed.payment_hash), &quote, commit).await?;
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
+
+                let res = l2.squash_status().await?;
+                let and_confirm = prompt_if_incomplete(&res, self.yes)?;
+                l2.sync(res, and_confirm, |x| known_lock(&x)).await?;
             }
         }
 

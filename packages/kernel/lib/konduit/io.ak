@@ -1,6 +1,6 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Address, Script}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/transaction.{Datum, InlineDatum, Input, Output}
 use konduit/types as t
 
@@ -10,7 +10,7 @@ use konduit/types as t
 /// identified by its payment credential. The rest of the input is then parsed to
 /// check correctness. 
 pub type YeildIn<result> =
-  fn(Address, Value, t.Constants, t.Stage, List<Input>) -> result
+  fn(Address, Assets, t.Constants, t.Stage, List<Input>) -> result
 
 pub fn yield_in(
   own_hash: ScriptHash,
@@ -38,7 +38,7 @@ pub fn yield_in(
 /// from the channel input. The step logic will verify all the entire constant value
 /// is unchanged, where relevant.
 pub type YeildOut<result> =
-  fn(Value, t.Stage, List<Output>) -> result
+  fn(Assets, t.Stage, List<Output>) -> result
 
 pub fn yield_out(
   address_in: Address,

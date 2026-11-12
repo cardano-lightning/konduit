@@ -9,7 +9,7 @@
 - `cardano-connector-utxorpc` - direct Dolos UTxO RPC connector implementation
 - `cardano-sdk` - Cardano primitives and transaction-building support
 - `konduit-tx` - Konduit transaction builders
-- `konduit-data` - shared Konduit protocol data and encoding
+- `konduit-core` - shared Konduit protocol data and encoding
 - `konduit-cli` - CLI runtime for admin, adaptor, and consumer flows
 - `konduit-server` - adaptor-facing HTTP server runtime
 - `konduit-client` - reusable client logic over Konduit surfaces

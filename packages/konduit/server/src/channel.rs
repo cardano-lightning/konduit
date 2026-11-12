@@ -10,13 +10,17 @@
 use std::cmp;
 
 use cardano_sdk::{Input, VerificationKey};
-use konduit_data::{Duration, Locked, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey};
-use konduit_tmp::{Keytag, Receipt, SquashProposal, from_verifying_key, receipt, to_verifying_key};
+use konduit_core::{
+    Duration, Keytag, Locked, Receipt, Secret, Squash, Stage, Tag, Unverified, Used, VerifyingKey,
+    receipt,
+};
+use konduit_l2_dto::squash::Proposal as SquashProposal;
+use konduit_tx::from_verifying_key;
 
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use konduit_data::VerifyError;
+use konduit_core::VerifyError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -103,11 +107,9 @@ pub struct Channel {
 //     bucket_refill_rate: u64,
 // }
 
-// #[serde_as]
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Default)]
 // pub struct Cache {
 //     #[n(0)]
-//     #[serde_as(as = "Option<serde_with::hex::Hex>")]
 //     #[serde(skip_serializing_if = "Option::is_none")]
 //     quote: Option<Vec<u8>>,
 // }
@@ -147,7 +149,7 @@ impl Channel {
     ) -> Self {
         let (key, tag) = keytag.split();
         Self {
-            key: to_verifying_key(key),
+            key,
             tag,
             backing,
             receipt,
@@ -190,7 +192,7 @@ impl Channel {
     // }
 
     pub fn keytag(&self) -> Keytag {
-        Keytag::new(&self.verification_key(), self.tag())
+        Keytag::new(&self.key, self.tag())
     }
 
     pub fn verification_key(&self) -> VerificationKey {
@@ -201,6 +203,16 @@ impl Channel {
         if !self.aux.is_active {
             return Err(Error::NotActive);
         }
+        Ok(())
+    }
+
+    /// Confirms this channel is funded on-chain. Any handoff to routing on
+    /// a peer's behalf (e.g. CLN peer commits) must call this first: unlike
+    /// `uncommitted`, it does not also require a receipt, so it can gate
+    /// first contact with a peer before any receipt exists.
+    pub fn assert_backed(&self) -> Result<(), Error> {
+        self.assert_active()?;
+        self.backing.as_ref().ok_or(Error::NoRetainer)?;
         Ok(())
     }
     // --- Queries ------------------------------------------------------------
@@ -304,6 +316,7 @@ impl Channel {
     /// Verifies the signature and checks uncommitted funds before accepting.
     pub fn apply_locked(&mut self, locked: Locked) -> Result<(), Error> {
         let locked = locked.try_verify(&self.key, &self.tag)?;
+        tracing::info!(" {} {} ", locked.amount(), self.uncommitted().unwrap_or(0));
         if locked.amount() > self.uncommitted()? {
             return Err(Error::Funds);
         }
@@ -424,5 +437,36 @@ impl TryFrom<&konduit_tx::Channel> for Backing {
             subbed,
             useds,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use konduit_core::SigningKey;
+
+    fn test_channel() -> Channel {
+        let key = SigningKey::from([1; 32]).verifying_key();
+        let tag = Tag::from(b"channel-backed-test".to_vec());
+        Channel::new(key, tag)
+    }
+
+    #[test]
+    fn assert_backed_fails_without_an_on_chain_retainer() {
+        let channel = test_channel();
+        assert_eq!(channel.assert_backed(), Err(Error::NoRetainer));
+    }
+
+    #[test]
+    fn assert_backed_succeeds_once_retained() {
+        let mut channel = test_channel();
+        channel
+            .apply_retainer(vec![Backing {
+                amount: 100_000_000,
+                subbed: 0,
+                useds: vec![],
+            }])
+            .expect("retainer applies");
+        assert_eq!(channel.assert_backed(), Ok(()));
     }
 }

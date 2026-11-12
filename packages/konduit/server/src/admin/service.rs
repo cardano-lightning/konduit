@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, iter, sync::Arc};
 
+use crate::Invoices;
 use crate::{
     channel::{self},
     db,
@@ -9,15 +10,18 @@ use cardano_connector::CardanoConnector;
 use cardano_sdk::{
     Credential, Hash, Input, Output, ShelleySlotConfig, SigningKey, Slot, VerificationKey,
 };
-use konduit_data::{Lock, Secret};
-use konduit_tmp::Keytag;
+use konduit_core::{Keytag, Lock, Secret};
+use konduit_rail::{Registry, Resolution};
 use konduit_tx::{Bounds, KONDUIT_VALIDATOR, NetworkParameters, adaptor::AdaptorPreferences};
 
 use super::{SyncApi, config::Config};
 
 #[derive(Clone)]
 pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
-    cln: Arc<crate::cln::Node>,
+    /// For the secrets a redemption needs. Which rail revealed one is
+    /// not this service's business.
+    rails: Arc<Registry>,
+    invoices: Arc<Invoices>,
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
     network_parameters: NetworkParameters,
@@ -29,7 +33,8 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
 impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     pub async fn new(
         config: Config,
-        cln: Arc<crate::cln::Node>,
+        rails: Arc<Registry>,
+        invoices: Arc<Invoices>,
         cardano: Arc<Connector>,
         db: Arc<db::Db>,
     ) -> anyhow::Result<Self> {
@@ -87,7 +92,8 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         };
 
         Ok(Self {
-            cln,
+            rails,
+            invoices,
             cardano,
             db,
             network_parameters,
@@ -114,34 +120,57 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         Ok(utxos)
     }
 
+    /// Whatever secret is to be had for each lock: konduit's own, from a
+    /// payment that ended here, or a rail's, from one it carried.
     async fn get_secrets(&self, locks: Vec<Lock>) -> Result<Vec<Secret>, anyhow::Error> {
+        let now = crate::time::now()?;
         let mut secrets: Vec<Secret> = Vec::new();
         for lock in locks.into_iter() {
-            if let Some(secret) = self.cln.reveal(&lock) {
+            if let Some(secret) = self.invoices.secret(&lock, now) {
                 secrets.push(secret);
+                continue;
+            }
+            for (_, rail) in self.rails.iter() {
+                if let Resolution::Success(secret) = rail.reveal(&lock).await {
+                    secrets.push(secret);
+                    break;
+                }
             }
         }
         Ok(secrets)
     }
 
     /// TODO :: split this off
-    #[tracing::instrument(level = "debug", skip_all, err)]
+    #[tracing::instrument(level = "info", skip_all, err)]
     pub async fn unlocks(&self) -> Result<(), anyhow::Error> {
         // This is a silly implementation.
         let keytags = self.db.keys()?;
+        tracing::info!(channels = keytags.len(), "unlocks: channels in db");
         for keytag in keytags.iter() {
             // FIXME : Race condition here
             let Some(channel) = self.db.get(keytag)? else {
                 return Err(anyhow::anyhow!("Channel {} vanished", keytag));
             };
+            tracing::info!(" CHANNEL :: {}", serde_json::to_string(&channel).unwrap());
             let Some(locks) = channel
                 .receipt()
                 .as_ref()
                 .map(|r| r.lockeds().map(|x| x.lock().to_owned()).collect::<Vec<_>>())
             else {
+                tracing::info!(%keytag, "unlocks: no receipt yet, skipping");
                 continue;
             };
-            let secrets = self.get_secrets(locks).await?;
+            if locks.is_empty() {
+                tracing::info!(%keytag, "unlocks: receipt has no locked htlcs to unlock");
+                continue;
+            }
+            let secrets = self.get_secrets(locks.clone()).await?;
+            tracing::info!(
+                %keytag,
+                locked = locks.len(),
+                revealed = secrets.len(),
+                "unlocks: checked cln for revealed secrets"
+            );
             if secrets.is_empty() {
                 continue;
             }
@@ -156,10 +185,11 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     // with zero gain is an expected, silently-ignored "nothing to claim
     // yet" condition (see main.rs's admin-sync ticker) — blanket
     // error-logging here would spam that.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[tracing::instrument(level = "info", skip_all)]
     pub async fn claim(&self) -> Result<(), anyhow::Error> {
         let snapshot = self.snapshot().await?;
         let keys: Vec<Keytag> = self.db.keys()?;
+        let channels = keys.len();
         let receipts = keys
             .into_iter()
             .filter_map(|k| {
@@ -168,6 +198,11 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
                 Some((k, receipt.to_owned()))
             })
             .collect::<BTreeMap<_, _>>();
+        tracing::info!(
+            channels,
+            with_receipt = receipts.len(),
+            "claim: channels in db vs. ones with a receipt to claim against"
+        );
         // FIXME :: This is the fudge. We treat tip as snapshot.
         // We are more likely to either:
         // - treat as confirmed something that will rollback
@@ -182,23 +217,32 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         )
         .upper
         .expect("a validity window always has an upper bound");
-        let mut tx = konduit_tx::adaptor::tx(
+        let mut tx = match konduit_tx::adaptor::tx(
             &self.network_parameters,
             &self.tx_preferences,
             &VerificationKey::from(&self.wallet),
             &receipts,
             &tip,
             &upper_bound,
-        )?;
+        ) {
+            Ok(tx) => tx,
+            Err(err) => {
+                // Caller (the admin-sync ticker) decides how loudly to treat
+                // this; log the detail here at info so it's not lost when
+                // this is the silent "nothing to claim" case.
+                tracing::info!(error = %err, "claim: no tx built this tick");
+                return Err(err);
+            }
+        };
         tx.sign(&self.wallet);
-        tracing::info!(tx_id = ?tx.id(), "submitting claim transaction");
         self.cardano.submit(&tx).await?;
+        tracing::info!("tx submitted {}", tx.id());
         Ok(())
     }
 
     // Same reasoning as `claim`: periodic ticker, caller decides how to
     // log its Result.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[tracing::instrument(level = "info", skip_all)]
     pub async fn sync(&self) -> Result<(), anyhow::Error> {
         self.unlocks().await?;
         self.claim().await?;
@@ -313,11 +357,12 @@ mod tests {
         BTreeMap::from([(Input::new(Hash::<32>::from([9; 32]), 0), script_output())])
     }
 
-    fn cln_context() -> Arc<crate::cln::Node> {
-        Arc::new(
-            crate::cln::build(crate::cln::Args { config_path: None }, 0)
-                .expect("CLN context initializes"),
-        )
+    fn no_rails() -> Arc<Registry> {
+        Arc::new(Registry::new())
+    }
+
+    fn no_invoices() -> Arc<Invoices> {
+        Arc::new(Invoices::new(Default::default()))
     }
 
     #[tokio::test]
@@ -327,10 +372,16 @@ mod tests {
             Ok::<_, &str>(host_utxos_with_reference_script()),
         ));
 
-        let error = Service::new(test_config(), cln_context(), connector, Arc::new(tmp_db()))
-            .await
-            .err()
-            .expect("missing protocol parameters should fail startup");
+        let error = Service::new(
+            test_config(),
+            no_rails(),
+            no_invoices(),
+            connector,
+            Arc::new(tmp_db()),
+        )
+        .await
+        .err()
+        .expect("missing protocol parameters should fail startup");
 
         assert!(
             error
@@ -346,10 +397,16 @@ mod tests {
             Ok::<_, &str>(BTreeMap::new()),
         ));
 
-        let error = Service::new(test_config(), cln_context(), connector, Arc::new(tmp_db()))
-            .await
-            .err()
-            .expect("missing reference script should fail startup");
+        let error = Service::new(
+            test_config(),
+            no_rails(),
+            no_invoices(),
+            connector,
+            Arc::new(tmp_db()),
+        )
+        .await
+        .err()
+        .expect("missing reference script should fail startup");
 
         let message = error.to_string();
         assert!(message.contains("No reference script found at host address"));
@@ -363,8 +420,14 @@ mod tests {
             Ok::<_, &str>(host_utxos_with_reference_script()),
         ));
 
-        let service =
-            Service::new(test_config(), cln_context(), connector, Arc::new(tmp_db())).await;
+        let service = Service::new(
+            test_config(),
+            no_rails(),
+            no_invoices(),
+            connector,
+            Arc::new(tmp_db()),
+        )
+        .await;
 
         assert!(service.is_ok(), "startup smoke path should succeed");
     }

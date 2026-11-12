@@ -94,7 +94,7 @@ describe("konduit-indexer db :: live store", () => {
       expect(before.isOk()).toBe(true);
       if (!before.isOk() || !before.value) return;
       // The indexer is scheduled every 10s
-      // (`schedule = { interval = "10s" }` in flake/process-compose/dev-env.nix),
+      // (`schedule = { interval = "10s" }` in flake/heavy/process-compose.nix),
       // so waiting a couple of sync intervals is enough to see movement.
       const advanced = await waitForIndexedTipAfter(
         db,

@@ -1,6 +1,6 @@
 use crate::config::consumer::Config;
 use crate::output::{self, OutputJson};
-use konduit_data::Tag;
+use konduit_core::Tag;
 
 /// Show
 #[derive(Debug, clap::Subcommand)]
@@ -77,7 +77,8 @@ fn render_keytag(config: &Config, tag: &Tag, output: OutputJson) -> anyhow::Resu
         let dto = output::KeytagOutput::new(&key, tag);
         output::render(output, &dto)?;
     } else {
-        println!("{}", konduit_tmp::Keytag::new(&key, tag));
+        let key = konduit_core::VerifyingKey::from(<[u8; 32]>::from(key));
+        println!("{}", konduit_core::Keytag::new(&key, tag));
     }
     Ok(())
 }

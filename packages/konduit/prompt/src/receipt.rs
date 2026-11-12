@@ -1,9 +1,9 @@
-//! Local to this crate (not `konduit_data`): prior squash/cheque
+//! Local to this crate (not `konduit_core`): prior squash/cheque
 //! settlement records, looked up by `Keytag` (vkey + tag bytes) rather
 //! than `Input`, so a receipt survives a channel being stepped/recreated.
 //!
 //! ASSUMPTION: `Squash`/`Cheque` already implement `serde` + `minicbor`
-//! (matches the rest of `konduit_data`) — worth confirming.
+//! (matches the rest of `konduit_core`) — worth confirming.
 //! ASSUMPTION: receipts file is JSON (needs the `serde_json` dep) —
 //! swap `load_receipts`'s body if the real format differs.
 
@@ -14,7 +14,7 @@ use cardano_sdk::Hash;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use konduit_data::{Cheque, Indexes, SigningKey, Squash, SquashBody, Tag, VerifyingKey};
+use konduit_core::{Cheque, Indexes, SigningKey, Squash, SquashBody, Tag, VerifyingKey};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct Receipt {

@@ -4,8 +4,7 @@ use cardano_sdk::{
     Address, ChangeStrategy, Hash, Input, NetworkId, Output, PosixMilliseconds, SlotBound,
     Transaction, Value, VerificationKey, address::kind, transaction::state::ReadyForSigning,
 };
-use konduit_data::{Duration, Redeemer, Step};
-use konduit_tmp::from_verifying_key;
+use konduit_core::{Duration, Redeemer, Step};
 
 use crate::{
     Channel, FEE_BUFFER, Interval, NetworkParameters,
@@ -126,7 +125,7 @@ impl StagedTx {
             .iter()
             .filter_map(|(input, will)| {
                 let constants = self.channels.get(input)?.constants();
-                Some(from_verifying_key(will.signer(constants)))
+                Some(will.signer(constants).into())
             })
             .collect();
         signers.sort();

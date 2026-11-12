@@ -27,7 +27,7 @@ is running HA infra, while Consumer is running a lightweight mobile app.
 
 Current design factors code in terms of:
 
-- shared components `konduit-data`
+- shared components `konduit-core`
 - tx building functions `konduit-tx`
 - cli interface for building txs `konduit-cli`
 
@@ -77,9 +77,8 @@ functionality as the current CLI when run as adaptor.
 
 ### `konduit-core`
 
-Formerly `konduit-data`. `core` seems more fashionable in rustland to `data`. So
-while doing a top level renaming it seems as good as time as any to fit in with
-this.
+Formerly `konduit-data`; the core name distinguishes shared protocol/domain
+types from the interface DTO crates.
 
 ## Discussion, Counter and Comments
 
@@ -120,7 +119,7 @@ without any cardano-specific features) but at the _feature level_.
 
 Author: @waalge
 
-Note: The original "cut-off point" of `konduit-data` was:
+Note: The original "cut-off point" of `konduit-core` (then `konduit-data`) was:
 
 - Enough for the types and structs required for the L2 logic to handoff to the
   L1.
@@ -143,7 +142,7 @@ graph TD
     cardano-sdk --> cardano-connector-client
     cardano-sdk --> core --> tx
 
-    %% konduit-data dependencies
+    %% konduit-core dependencies
     cardano-connector-client & tx --> client & server & admin
 
     bln-sdk --> bln-client --> server

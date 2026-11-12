@@ -2,7 +2,7 @@ use aiken/builtin.{head_list, sha2_256, tail_list}
 use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
 use aiken/primitive/bytearray
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use extra/xlist.{foldl3}
 use konduit/assets.{amount_in, amount_out} as k_assets
 use konduit/prelude.{Amount, Timebound}
@@ -11,9 +11,9 @@ use konduit/types as t
 pub fn do(
   upper_bound: Timebound,
   constants: t.Constants,
-  value_in: Value,
+  value_in: Assets,
   stage_in: t.Stage,
-  value_out: Value,
+  value_out: Assets,
   stage_out: t.Stage,
   unpends: List<t.Unpend>,
 ) -> VerificationKey {

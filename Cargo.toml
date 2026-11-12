@@ -1,6 +1,8 @@
 [workspace]
 members = [
   "packages/bln/client",
+  "packages/bln/dto",
+  "packages/bln/rail",
   "packages/bln/sdk",
   "packages/cardano/connector",
   "packages/cardano/connector-client",
@@ -21,19 +23,22 @@ members = [
   "packages/util/problem-details",
   "packages/konduit/cli",
   "packages/konduit/conformance",
-  "packages/konduit/tmp",
   "packages/konduit/client",
-  "packages/konduit/data",
+  "packages/konduit/core",
   "packages/konduit/indexer",
+  "packages/konduit/rail",
   "packages/konduit/server",
   "packages/konduit/tx",
   "packages/konduit/wasm",
   "packages/konduit/session",
   # "packages/konduit/l1-tests",
   "packages/konduit/tx2",
+  "packages/konduit/l1-dto",
+  "packages/konduit/l2-dto",
   "packages/konduit/prompt",
   #"packages/konduit/receipt",
-  "packages/cln/server",
+  "packages/cln/rail",
+  "packages/cln/dto",
 ]
 resolver = "2"
 
@@ -132,10 +137,11 @@ web-sys = "0.3.104"
 web-time = "1.1.0"
 
 bln-client = { path = "packages/bln/client", default-features = false }
+bln-dto = { path = "packages/bln/dto", default-features = false }
+bln-rail = { path = "packages/bln/rail", default-features = false }
 bln-sdk = { path = "packages/bln/sdk", default-features = false }
-cln-server = { path = "packages/cln/server", default-features = false, features = [
-  "server",
-] }
+cln-rail = { path = "packages/cln/rail", default-features = false }
+cln-dto = { path = "packages/cln/dto", default-features = false }
 cardano-wallet = { path = "packages/cardano/wallet", default-features = false }
 cardano-session = { path = "packages/cardano/session", default-features = false }
 cardano-keys = { path = "packages/cardano/keys", default-features = false }
@@ -150,9 +156,11 @@ cobbl3 = { path = "packages/util/cobbl3", default-features = false }
 fx-client = { path = "packages/util/fx-client", default-features = false }
 http-client = { path = "packages/util/http-client", default-features = false }
 konduit-client = { path = "packages/konduit/client", default-features = false }
-konduit-data = { path = "packages/konduit/data", default-features = false }
+konduit-core = { path = "packages/konduit/core", default-features = false }
+konduit-l1-dto = { path = "packages/konduit/l1-dto", default-features = false }
+konduit-l2-dto = { path = "packages/konduit/l2-dto", default-features = false }
 konduit-indexer = { path = "packages/konduit/indexer" }
-konduit-tmp = { path = "packages/konduit/tmp", default-features = false }
+konduit-rail = { path = "packages/konduit/rail", default-features = false }
 kupo-client = { path = "packages/util/kupo-client" }
 konduit-server = { path = "packages/konduit/server" }
 konduit-tx = { path = "packages/konduit/tx", default-features = false }

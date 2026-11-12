@@ -24,7 +24,7 @@ import type { IndexerDbConfig } from "./indexerDb.js";
  * ## Environment variables
  *
  * Everything below is optional unless stated otherwise; the defaults mirror the
- * dev-env exported by `flake.nix`, so a plain `nix develop` needs no extra setup.
+ * dev-env exported by `flake/heavy/flake.nix`, so the heavy dev shell needs no extra setup.
  *
  * | variable | default | meaning |
  * | --- | --- | --- |
@@ -159,7 +159,7 @@ export const pingProcessCompose = (port: number = PC_PORT_DEFAULT): boolean => {
 // ---------------------------------------------------------------------------
 // Indexer db location.
 //
-// The running indexer gets its `--db-path` from `flake/process-compose/dev-env.nix`,
+// The running indexer gets its `--db-path` from `flake/heavy/process-compose.nix`,
 // which reads `KONDUIT_INDEXER_DB_PATH` and the dev-shell sets it to
 // `$KONDUIT_INDEXER_DIR/konduit-indexer.db`. We mirror those names so the tests
 // automatically target the *live* store rather than a copy.

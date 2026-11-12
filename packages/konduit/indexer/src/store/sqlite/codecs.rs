@@ -3,7 +3,7 @@ use crate::transaction::{
     TransactionId, TransactionIndex,
 };
 use cardano_sdk::VerificationKey;
-use konduit_data::{Datum, Redeemer, Tag};
+use konduit_core::{Datum, Redeemer, Tag};
 use rusqlite::Result;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 

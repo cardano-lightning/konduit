@@ -1,4 +1,4 @@
-use konduit_tmp::{Keytag, Receipt};
+use konduit_core::{Keytag, Receipt};
 use minicbor::{Decode, Encode};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 

@@ -18,6 +18,9 @@ pub enum Error {
     #[error("Invalid data: {0}")]
     InvalidData(String),
 
+    #[error("Unsupported operation: {0}")]
+    Unsupported(String),
+
     #[error("API returned an error (Status: {status}): {message}")]
     ApiError { status: u16, message: String },
 

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use cardano_sdk::Input;
 use inquire::Select;
-use konduit_data::{Constants, Duration, Tag, VerifyingKey};
+use konduit_core::{Constants, Duration, Tag, VerifyingKey};
 use konduit_tx2::{
     StagedTx,
     channel::Channel,

@@ -17,7 +17,7 @@ use super::{
     ChannelId, ChannelRow, NewChannel, NewFocus, NewStep, Result, Store, StoreError, Threads,
 };
 use cardano_sdk::VerificationKey;
-use konduit_data::{Redeemer, Tag};
+use konduit_core::{Redeemer, Tag};
 use rusqlite::{OptionalExtension, Row};
 
 mod codecs;

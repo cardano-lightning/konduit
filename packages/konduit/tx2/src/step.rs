@@ -1,4 +1,4 @@
-use konduit_data::{
+use konduit_core::{
     Cheque, Constants, Cont, Duration, Eol, Secret, Squash, Stage, Step, Unlocked, Unpend,
     VerifyingKey,
 };

@@ -1,5 +1,5 @@
 use cardano_sdk::PosixMilliseconds;
-use konduit_data::{Duration, Pending, Stage, Used};
+use konduit_core::{Duration, Pending, Stage, Used};
 
 use crate::StepError;
 

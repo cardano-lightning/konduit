@@ -22,6 +22,7 @@ pub const SERVER_PORT: &str = "KONDUIT_SERVER_PORT";
 /// # Channel params
 pub const CLOSE_PERIOD: &str = "KONDUIT_CLOSE_PERIOD";
 pub const FEE: &str = "KONDUIT_FEE";
+pub const TIME_MARGIN: &str = "KONDUIT_TIME_MARGIN";
 pub const TAG_LENGTH: &str = "KONDUIT_TAG_LENGTH";
 
 /// # Tx building & preferences
@@ -34,6 +35,9 @@ pub const HOST_ADDRESS: &str = "KONDUIT_HOST_ADDRESS";
 pub const BLN_MACAROON: &str = "KONDUIT_BLN_MACAROON";
 pub const BLN_TLS: &str = "KONDUIT_BLN_TLS";
 pub const BLN_URL: &str = "KONDUIT_BLN_URL";
+pub const BLN_BACKEND: &str = "KONDUIT_BLN_BACKEND";
+pub const BLN_RUNE: &str = "KONDUIT_BLN_RUNE";
+pub const BLN_BLOCK_TIME: &str = "KONDUIT_BLN_BLOCK_TIME";
 
 /// # Fx
 pub const COIN_GEKO_TOKEN: &str = "KONDUIT_COIN_GECKO_TOKEN";

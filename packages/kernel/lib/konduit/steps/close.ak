@@ -1,6 +1,6 @@
 use aiken/crypto.{VerificationKey}
 use aiken/interval.{Finite}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use konduit/assets.{amount_in, amount_out} as k_assets
 use konduit/prelude.{Timebound}
 use konduit/types as t
@@ -8,9 +8,9 @@ use konduit/types as t
 pub fn do(
   upper_bound: Timebound,
   constants: t.Constants,
-  value_in: Value,
+  value_in: Assets,
   stage_in: t.Stage,
-  value_out: Value,
+  value_out: Assets,
   stage_out: t.Stage,
 ) -> VerificationKey {
   let (_tag, add_vkey, _sub_vkey, close_period) = constants

@@ -4,7 +4,7 @@ use proptest::test_runner::TestRunner;
 
 use cryptoxide::ed25519::{PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH, keypair};
 
-use konduit_data::{
+use konduit_core::{
     self, Cheque, ChequeBody, Duration, Lock, Locked, Secret, Signature, Tag, Unlocked, Unverified,
     VerifyingKey,
 };

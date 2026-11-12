@@ -1,7 +1,7 @@
-use konduit_data::{Cheque, ChequeBody, Locked, Secret, Signature, Squash, SquashBody, Unlocked};
+use konduit_core::{
+    Cheque, ChequeBody, Keytag, Locked, Receipt, Secret, Signature, Squash, SquashBody, Unlocked,
+};
 
-use konduit_tmp::{Keytag, Receipt};
-use konduit_tx::to_verifying_key;
 use std::str::FromStr;
 
 pub fn parse_signature(x: &str) -> anyhow::Result<Signature> {
@@ -66,7 +66,6 @@ pub fn parse_keytag_receipt(s: &str) -> anyhow::Result<(Keytag, Receipt)> {
     };
     let keytag = Keytag::from_str(x0)?;
     let (key, tag) = keytag.split();
-    let key = to_verifying_key(key);
     let mut cheques = vec![];
     for x in x2 {
         let cheque = parse_cheque(x)?;

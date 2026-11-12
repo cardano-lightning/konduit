@@ -1,5 +1,5 @@
 use cardano_sdk::{Address, Credential, NetworkId, Output, PlutusData, address::kind};
-use konduit_data::{Constants, Stage};
+use konduit_core::{Constants, Stage};
 
 use crate::{Channel, Variables, konduit_address};
 

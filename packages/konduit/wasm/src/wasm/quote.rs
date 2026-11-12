@@ -3,8 +3,8 @@ use wasm_bindgen::prelude::*;
 
 wasm_proxy! {
     #[derive(Debug, Clone)]
-    #[doc = "Proposed price and routing fee by an Adaptor for a CLN payme."]
-    Quote => core::Quote
+    #[doc = "Proposed price and routing fee by an Adaptor for a CLN invoice."]
+    Quote => core::quote::Response
 }
 
 #[wasm_bindgen]
@@ -25,7 +25,7 @@ impl Quote {
     }
 
     #[wasm_bindgen(getter, js_name = "routingFee")]
-    pub fn _wasm_routing_fee(&self) -> u64 {
-        self.routing_fee
+    pub fn _wasm_fee(&self) -> u64 {
+        self.fee
     }
 }

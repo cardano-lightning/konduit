@@ -1,6 +1,7 @@
 use super::types::{get_info, graph_routes, payments, router_send, stream_wrapper};
 use crate::{
-    Api, Error,
+    Api, CreateInvoiceRequest, CreatedInvoice, Error, Health,
+    api::validate_commit_quote,
     lnd::{Config, types::route_hints},
     types::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse},
 };
@@ -30,8 +31,6 @@ impl TryFrom<Config> for Client {
             let cert = reqwest::Certificate::from_pem(cert_bytes)
                 .map_err(|e| Error::Init(format!("Failed to parse PEM: {}", e)))?;
             client_builder = client_builder.add_root_certificate(cert);
-        } else {
-            client_builder = client_builder.danger_accept_invalid_certs(true);
         }
 
         let client = client_builder
@@ -160,6 +159,39 @@ impl Client {
         self.execute(self.get("v1/getinfo")).await
     }
 
+    pub async fn create_invoice(
+        &self,
+        request: CreateInvoiceRequest,
+    ) -> crate::Result<CreatedInvoice> {
+        if request.amount_msat == 0 {
+            return Err(Error::InvalidData(
+                "invoice amount must be greater than zero".into(),
+            ));
+        }
+
+        #[derive(serde::Serialize)]
+        struct AddInvoiceRequest {
+            memo: String,
+            value_msat: String,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct AddInvoiceResponse {
+            payment_request: String,
+        }
+
+        let response: AddInvoiceResponse = self
+            .execute(self.post("v1/invoices").json(&AddInvoiceRequest {
+                memo: request.description,
+                value_msat: request.amount_msat.to_string(),
+            }))
+            .await?;
+
+        Ok(CreatedInvoice {
+            bolt11: response.payment_request,
+        })
+    }
+
     pub async fn v1_graph_routes(
         &self,
         payee: [u8; 33],
@@ -199,6 +231,25 @@ impl Client {
 
 #[async_trait]
 impl Api for Client {
+    async fn health(&self) -> crate::Result<Health> {
+        let info = self.v1_getinfo().await?;
+        Ok(Health {
+            backend: "lnd".into(),
+            identity_pubkey: Some(info.identity_pubkey),
+            alias: Some(info.alias),
+            network: info.chains.first().map(|chain| chain.network.clone()),
+            block_height: Some(info.block_height),
+            synced_to_chain: Some(info.synced_to_chain),
+            synced_to_graph: Some(info.synced_to_graph),
+            num_peers: Some(info.num_peers),
+            num_active_channels: Some(info.num_active_channels),
+        })
+    }
+
+    async fn create_invoice(&self, request: CreateInvoiceRequest) -> crate::Result<CreatedInvoice> {
+        Client::create_invoice(self, request).await
+    }
+
     async fn quote(&self, req: QuoteRequest) -> crate::Result<QuoteResponse> {
         let routes = self
             .v1_graph_routes(req.payee, req.amount_msat, &req.route_hints.clone().into())
@@ -219,27 +270,42 @@ impl Api for Client {
             .ok_or(Error::Time)?;
 
         Ok(QuoteResponse {
+            backend: "lnd".into(),
+            amount_msat: req.amount_msat,
+            payee: req.payee,
             relative_timeout,
             fee_msat: route.total_fees_msat,
         })
     }
 
-    async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
-        let blocks = req.relative_timeout.as_secs() / self.config.block_time.as_secs();
+    async fn commit(&self, req: PayRequest) -> crate::Result<PayResponse> {
+        validate_commit_quote("lnd", &req.quote, &req.invoice)?;
+        let blocks = req
+            .quote
+            .relative_timeout
+            .as_secs()
+            .div_ceil(self.config.block_time.as_secs());
 
         let body = router_send::Request {
             cltv_limit: Some(blocks),
-            fee_limit_msat: Some(req.fee_limit),
+            fee_limit_msat: Some(req.quote.fee_msat),
             payment_request: Some(req.invoice.into()),
             ..Default::default()
         };
 
         let res = self.v2_router_send(body).await?;
         if res.status == "FAILED" {
-            println!("{res:?}");
             Err(Error::ApiError {
                 status: 500,
-                message: format!("LND Payment Failed: {}", res.payment_error),
+                message: format!(
+                    "LND payment failed ({}): {}",
+                    if res.failure_reason.is_empty() {
+                        "unspecified failure"
+                    } else {
+                        &res.failure_reason
+                    },
+                    res.payment_error
+                ),
             })
         } else if res.payment_preimage.is_empty() {
             Err(Error::ApiError {

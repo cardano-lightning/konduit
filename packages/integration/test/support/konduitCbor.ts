@@ -9,8 +9,8 @@
  * To regenerate (the generator is throw-away, so it is not kept in the repo):
  *
  * ```rust
- * // packages/konduit/data/src/lib.rs  ->  #[cfg(test)] mod fixture_dump;
- * // packages/konduit/data/src/fixture_dump.rs
+ * // packages/konduit/core/src/lib.rs  ->  #[cfg(test)] mod fixture_dump;
+ * // packages/konduit/core/src/fixture_dump.rs
  * fn dump<T: minicbor::Encode<()>>(label: &str, v: &T) {
  *     println!("{label} = {}", hex::encode(minicbor::to_vec(v).unwrap()));
  * }

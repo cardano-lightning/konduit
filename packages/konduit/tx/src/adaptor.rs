@@ -4,7 +4,7 @@ use cardano_sdk::{
     Address, PosixMilliseconds, Transaction, VerificationKey, address::kind,
     transaction::state::ReadyForSigning,
 };
-use konduit_tmp::{Keytag, Receipt};
+use konduit_core::{Keytag, Receipt, Stage};
 
 use crate::{
     ChannelUtxo, NetworkParameters, SteppedUtxos, Utxos, find_reference_script, to_verifying_key,
@@ -47,15 +47,32 @@ pub fn tx(
         .filter_map(|u| ChannelUtxo::try_from(u).ok())
         .filter(|u| u.data().constants().sub_vkey == to_verifying_key(*wallet))
         .filter_map(|u| {
-            receipts
-                .get(&u.data().keytag())
-                .and_then(|receipt| u.any_sub(receipt, upper).ok())
+            // Closed means this step is a Respond, not a Sub: the owner can
+            // elapse the channel (taking everything) the moment the close
+            // period is up, so this is the counterparty's only window to
+            // claim what it's owed and must always go through, however
+            // small. Decide that before `any_sub` consumes `u`.
+            let is_respond = matches!(u.data().stage(), Stage::Closed(..));
+            let receipt = receipts.get(&u.data().keytag())?;
+            let stepped = u.any_sub(receipt, upper).ok()?;
+            Some((is_respond, stepped))
         })
-        .filter(|u| u.gain() >= preferences.min_single as i64)
+        .filter(|(is_respond, stepped)| {
+            *is_respond || stepped.gain() >= preferences.min_single as i64
+        })
         .collect::<Vec<_>>();
-    let steppeds = SteppedUtxos::from(steppeds);
+    let has_respond = steppeds.iter().any(|(is_respond, _)| *is_respond);
+    let steppeds = SteppedUtxos::from(
+        steppeds
+            .into_iter()
+            .map(|(_, stepped)| stepped)
+            .collect::<Vec<_>>(),
+    );
 
-    if steppeds.gain() < preferences.min_total as i64 {
+    // Sub is opportunistic and skipped below min_total to avoid paying fees
+    // for a negligible claim, but a pending Respond is mandatory, so it
+    // must never be blocked by that same fee-efficiency gate.
+    if !has_respond && steppeds.gain() < preferences.min_total as i64 {
         return Err(InsufficientTotalGain {
             min_total: preferences.min_total,
             gain: steppeds.gain(),

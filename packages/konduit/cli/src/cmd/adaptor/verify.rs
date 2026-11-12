@@ -1,6 +1,4 @@
-use konduit_data::{Locked, Squash};
-use konduit_tmp::Keytag;
-use konduit_tx::to_verifying_key;
+use konduit_core::{Keytag, Locked, Squash};
 use serde::{Deserialize, Serialize};
 
 use crate::output::{self, OutputJson};
@@ -50,7 +48,7 @@ impl Cmd {
                 output_json,
             } => {
                 let (key, tag) = keytag.split();
-                let valid = squash.try_verify(&to_verifying_key(key), &tag).is_ok();
+                let valid = squash.try_verify(&key, &tag).is_ok();
                 if output_json {
                     let dto = VerifyResult { valid };
                     output::render(OutputJson(true), &dto)?;
@@ -65,7 +63,7 @@ impl Cmd {
                 output_json,
             } => {
                 let (key, tag) = keytag.split();
-                let valid = locked.try_verify(&to_verifying_key(key), &tag).is_ok();
+                let valid = locked.try_verify(&key, &tag).is_ok();
                 if output_json {
                     let dto = VerifyResult { valid };
                     output::render(OutputJson(true), &dto)?;

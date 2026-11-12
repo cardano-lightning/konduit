@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, iter};
 
 use cardano_sdk::{Input, Output, PlutusData, Value, VerificationKey};
-use konduit_data::{Constants, Cont, Datum, Eol, Redeemer, Stage, Step};
+use konduit_core::{Constants, Cont, Datum, Eol, Redeemer, Stage, Step};
 
 use crate::{KONDUIT_VALIDATOR, MIN_ADA_BUFFER, Utxo, Utxos};
 

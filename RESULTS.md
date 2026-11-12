@@ -19,7 +19,7 @@ replace or validate them.
 
 The full process-compose environment ran with a 30-second channel close period
 and 2-second server/admin sync interval. Ten 100,000-lovelace payments were
-initiated by the consumer to merchant-issued paymes and routed through the
+initiated by the consumer to merchant-issued invoices and routed through the
 gateway. The gateway then settled 1,000,000 lovelace to the merchant over the
 gateway/merchant channel.
 
@@ -37,7 +37,7 @@ ten consumer-originated payments.
 ### Gateway fees
 
 The gateway's CLN routing fee is a flat 1,414 lovelace per routed payment
-(`cln_server::ctx::Params::default`). Across ten payments, that is 14,140
+(`cln_rail::ctx::Params::default`). Across ten payments, that is 14,140
 lovelace of configured routing fees. The recorded consumer quotes were 102,415
 lovelace for each 100,000-lovelace merchant payment, i.e. 2,415 lovelace above
 the requested amount per quote (24,150 total quote overhead). This quote
@@ -68,17 +68,17 @@ compatible with the pinned nixpkgs:
    total (the demo converts each to a 100,000-lovelace payment):
 
    ```sh
-   nix --extra-experimental-features 'nix-command flakes' develop .#extras --impure
+   nix --extra-experimental-features 'nix-command flakes fetch-closure' develop .#extras --impure
    source .env.process_compose
+   set -a; source "$CLN_DEMO_CONFIG_DIR/consumer.env"; set +a
    for i in $(seq 1 9); do
-     cargo run -p cln-server --bin cln-client -- \
-       --config "$RUN_DIR/cln-demo-configs/consumer.toml" pay \
-       --merchant http://127.0.0.1:5664 --amount 1000
+     cargo run -q -p konduit-client -- -y l2 cln \
+       --payee http://127.0.0.1:5664 --amount 1000
    done
    ```
 
 3. Verify the consumer-side and merchant-side channel tips with their
-   respective `show tip` queries. Create a merchant payme for 1,000,000
+   respective `show tip` queries. Create a merchant invoice for 1,000,000
    lovelace and pay it from the gateway client to the merchant as a separate L2
    payment; this is the batch settlement, not one of the ten consumer payments.
 4. Close both channels, wait at least the configured 30-second close period,

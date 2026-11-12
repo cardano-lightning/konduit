@@ -42,7 +42,7 @@ pub fn consumer() -> ConsumerConfig {
 }
 
 pub fn adaptor() -> AdaptorConfig {
-    use konduit_data::Duration;
+    use konduit_core::Duration;
     let connector = ConnectorConfig::Blockfrost(Blockfrost {
         network: PublicNetwork::Preview,
         project_id: Some("preview1234".to_string()),
