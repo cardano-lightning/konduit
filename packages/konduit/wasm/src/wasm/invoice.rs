@@ -3,17 +3,17 @@ use wasm_bindgen::prelude::*;
 
 wasm_proxy! {
     #[derive(Debug, Clone)]
-    #[doc = "A CLN-network payment request returned by a merchant."]
-    Payme => core::payme::Response
+    #[doc = "A CLN-network invoice returned by a merchant."]
+    Invoice => core::invoice::Response
 }
 
 #[wasm_bindgen]
-impl Payme {
+impl Invoice {
     #[wasm_bindgen(js_name = "fromJson")]
     pub fn _wasm_from_json(json: &str) -> wasm::Result<Self> {
-        let payme: core::payme::Response =
+        let invoice: core::invoice::Response =
             serde_json::from_str(json).map_err(anyhow::Error::from)?;
-        Ok(payme.into())
+        Ok(invoice.into())
     }
 
     #[wasm_bindgen(getter, js_name = "payee")]

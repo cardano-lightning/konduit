@@ -2,7 +2,7 @@
 //!
 //! A rail carries a payment onward, and originating one is not a rail's
 //! job — so this is not a client of its own. It is the instruction a cln
-//! rail is written with, the rail's name, and the payme request that is
+//! rail is written with, the rail's name, and the invoice request that is
 //! made to the payee rather than to the konduit. Everything else is
 //! `l2`'s, which knows no rail.
 //!
@@ -17,7 +17,7 @@ use konduit_core::VerifyingKey;
 use konduit_l2_dto::{pay, quote as payment_quote};
 use konduit_rail::Rail;
 
-pub use cln_dto::payme;
+pub use cln_dto::invoice;
 
 /// The name the rail registers under, taken from the rail itself so the
 /// two cannot drift.
@@ -33,27 +33,30 @@ pub fn commit_instruction(payee: VerifyingKey, amount: u64) -> anyhow::Result<Ve
     serde_json::to_vec(&commit::Request { payee, amount }).map_err(|err| anyhow!(err))
 }
 
-/// Asks a payee for a payme. Unauthenticated and over no channel: the
+/// Asks a payee for an invoice. Unauthenticated and over no channel: the
 /// payee is not the konduit this client has one with, so it takes a
 /// client of its own.
-pub async fn request_payme<T: Transport>(
+pub async fn request_invoice<T: Transport>(
     payee: &http_client::Client<T, codec::Json>,
     amount: u64,
-) -> anyhow::Result<payme::Response>
+) -> anyhow::Result<invoice::Response>
 where
     T::Error: Into<anyhow::Error>,
 {
     payee
-        .post::<payme::Request, payme::Response>("/pay/konduit/payme", &payme::Request { amount })
+        .post::<invoice::Request, invoice::Response>(
+            "/pay/konduit/invoice",
+            &invoice::Request { amount },
+        )
         .await
         .map_err(|err| anyhow!(err))
 }
 
-/// Builds and submits the Konduit cheque for a CLN-specific payme.
+/// Builds and submits the Konduit cheque for a CLN-specific invoice.
 pub async fn pay<T: Transport>(
     l2: &crate::l2::Client<'_, T>,
     rail: &str,
-    payme: &payme::Response,
+    invoice: &invoice::Response,
     quote: &payment_quote::Response,
     instruction: Vec<u8>,
 ) -> anyhow::Result<pay::Response>
@@ -64,9 +67,9 @@ where
         .duration_since(web_time::UNIX_EPOCH)
         .map_err(|err| anyhow!(err))?
         .as_millis();
-    if payme.timeout.as_millis() <= now {
-        return Err(anyhow!("CLN payme has expired"));
+    if invoice.timeout.as_millis() <= now {
+        return Err(anyhow!("CLN invoice has expired"));
     }
 
-    l2.pay(rail, payme.lock, quote, instruction).await
+    l2.pay(rail, invoice.lock, quote, instruction).await
 }

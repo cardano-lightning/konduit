@@ -1,32 +1,36 @@
-use bln_sdk::types::PublicKey;
-
-use std::time::Duration;
-
 /// Subcommands for the different API endpoints.
 #[derive(Debug, clap::Subcommand)]
 pub enum Cmd {
-    /// Get a quote for paying an invoice.
-    Quote {
-        /// The amount in millisatoshis for the quote.
+    /// Check backend connectivity and node synchronization status.
+    Health,
+    /// Create a fixed-amount invoice and print its BOLT11 string.
+    Invoice {
+        /// Invoice amount in millisatoshis (1,000,000 msat = 1,000 sats).
         #[arg(long)]
         amount_msat: u64,
 
-        /// The 33-byte public key of the payee in hex format.
+        /// Human-readable invoice description.
         #[arg(long)]
-        payee: PublicKey,
+        description: String,
     },
-    /// Pay based on a previous quote.
-    Pay {
-        /// Max routing fee (msat) that the adaptor is willing to pay.
-        #[arg(long)]
-        fee_limit: u64,
-
-        /// The relative timeout used to calculate a CLTV limit.
-        #[arg(long, value_parser = humantime::parse_duration)]
-        timeout: Duration,
-
-        /// The BOLT11 invoice to pay.
+    /// Quote an invoice and print the amount and maximum total debit.
+    Quote {
+        /// BOLT11 invoice to quote.
         #[arg(long)]
         invoice: String,
+    },
+    /// Requote and commit only if the fee still matches the explicitly approved quote.
+    Commit {
+        /// BOLT11 invoice that was quoted.
+        #[arg(long)]
+        invoice: String,
+
+        /// Fee in millisatoshis shown by `quote`; commit aborts if it has changed.
+        #[arg(long)]
+        quoted_fee_msat: u64,
+
+        /// Timeout in seconds shown by `quote`; commit aborts if it has changed.
+        #[arg(long)]
+        quoted_timeout_seconds: u64,
     },
 }

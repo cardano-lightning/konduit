@@ -5,6 +5,7 @@ pub use bln_sdk::types;
 pub use error::*;
 
 // Clients
+pub mod cln;
 pub mod lnd;
 pub mod mock;
 

@@ -35,6 +35,9 @@ pub const HOST_ADDRESS: &str = "KONDUIT_HOST_ADDRESS";
 pub const BLN_MACAROON: &str = "KONDUIT_BLN_MACAROON";
 pub const BLN_TLS: &str = "KONDUIT_BLN_TLS";
 pub const BLN_URL: &str = "KONDUIT_BLN_URL";
+pub const BLN_BACKEND: &str = "KONDUIT_BLN_BACKEND";
+pub const BLN_RUNE: &str = "KONDUIT_BLN_RUNE";
+pub const BLN_BLOCK_TIME: &str = "KONDUIT_BLN_BLOCK_TIME";
 
 /// # Fx
 pub const COIN_GEKO_TOKEN: &str = "KONDUIT_COIN_GECKO_TOKEN";

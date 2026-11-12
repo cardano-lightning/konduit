@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, iter, sync::Arc};
 
-use crate::Paymes;
+use crate::Invoices;
 use crate::{
     channel::{self},
     db,
@@ -21,7 +21,7 @@ pub struct Service<Connector: CardanoConnector + Send + Sync + 'static> {
     /// For the secrets a redemption needs. Which rail revealed one is
     /// not this service's business.
     rails: Arc<Registry>,
-    paymes: Arc<Paymes>,
+    invoices: Arc<Invoices>,
     cardano: Arc<Connector>,
     db: Arc<db::Db>,
     network_parameters: NetworkParameters,
@@ -34,7 +34,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
     pub async fn new(
         config: Config,
         rails: Arc<Registry>,
-        paymes: Arc<Paymes>,
+        invoices: Arc<Invoices>,
         cardano: Arc<Connector>,
         db: Arc<db::Db>,
     ) -> anyhow::Result<Self> {
@@ -93,7 +93,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
 
         Ok(Self {
             rails,
-            paymes,
+            invoices,
             cardano,
             db,
             network_parameters,
@@ -126,7 +126,7 @@ impl<Connector: CardanoConnector + Send + Sync + 'static> Service<Connector> {
         let now = crate::time::now()?;
         let mut secrets: Vec<Secret> = Vec::new();
         for lock in locks.into_iter() {
-            if let Some(secret) = self.paymes.secret(&lock, now) {
+            if let Some(secret) = self.invoices.secret(&lock, now) {
                 secrets.push(secret);
                 continue;
             }
@@ -361,8 +361,8 @@ mod tests {
         Arc::new(Registry::new())
     }
 
-    fn no_paymes() -> Arc<Paymes> {
-        Arc::new(Paymes::new(Default::default()))
+    fn no_invoices() -> Arc<Invoices> {
+        Arc::new(Invoices::new(Default::default()))
     }
 
     #[tokio::test]
@@ -375,7 +375,7 @@ mod tests {
         let error = Service::new(
             test_config(),
             no_rails(),
-            no_paymes(),
+            no_invoices(),
             connector,
             Arc::new(tmp_db()),
         )
@@ -400,7 +400,7 @@ mod tests {
         let error = Service::new(
             test_config(),
             no_rails(),
-            no_paymes(),
+            no_invoices(),
             connector,
             Arc::new(tmp_db()),
         )
@@ -423,7 +423,7 @@ mod tests {
         let service = Service::new(
             test_config(),
             no_rails(),
-            no_paymes(),
+            no_invoices(),
             connector,
             Arc::new(tmp_db()),
         )

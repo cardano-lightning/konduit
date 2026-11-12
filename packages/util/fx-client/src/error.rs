@@ -15,6 +15,9 @@ pub enum Error {
     #[error("Invalid data: {0}")]
     InvalidData(String),
 
+    #[error("Invalid converted amount: {0}")]
+    InvalidAmount(String),
+
     #[error("Data conversion error: {0}")]
     Conversion(#[from] std::array::TryFromSliceError),
 

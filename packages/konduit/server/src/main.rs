@@ -82,16 +82,22 @@ async fn main() -> anyhow::Result<()> {
     // DB
     let db = Arc::new(args.db.build()?);
 
-    // Rails. `cln` is the only one compiled in; the rest of the server
-    // only ever sees the registry.
+    // Rails. BLN is included only when an explicit backend is configured.
     let cln = Arc::new(cln::build(args.cln)?);
     let mut rails = konduit_rail::Registry::new();
     rails
         .insert_shared(Arc::clone(&cln))
         .map_err(anyhow::Error::from)?;
+    if let Some(bln_client) = konduit_server::bln::build_client()? {
+        let bln = Arc::new(bln_rail::Bln::new(
+            Arc::new(konduit_server::bln::StateFx::new(fx_state.clone())),
+            bln_client,
+        ));
+        rails.insert_shared(bln).map_err(anyhow::Error::from)?;
+    }
     let rails = Arc::new(rails);
-    // Konduit's own paymes, for payments that end here.
-    let paymes = Arc::new(konduit_server::Paymes::new(Default::default()));
+    // Konduit's own invoices, for payments that end here.
+    let invoices = Arc::new(konduit_server::Invoices::new(Default::default()));
     let cln_sync = Arc::clone(&cln);
     actix_web::rt::spawn(async move {
         let mut ticker = interval(std::time::Duration::from_secs(5));
@@ -110,9 +116,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let mut info = info::Response::from(args.common.clone());
-    // The rails this adaptor is configured with, so `/info` names the set
-    // a consumer picks from. One entry while `cln` is the only one
-    // compiled in.
+    // Advertise only configured rails; consumers use this as the available set.
     info.tos.rails = rails.names().iter().map(|n| n.to_string()).collect();
     let info = Arc::new(info);
     let margins = konduit_server::Margins::from(&info.tos);
@@ -149,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
         admin::Service::new(
             admin_config,
             Arc::clone(&rails),
-            Arc::clone(&paymes),
+            Arc::clone(&invoices),
             cardano.clone(),
             db.clone(),
         )
@@ -182,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
 
     let server_data = server::Data::new(
         rails,
-        Arc::clone(&paymes),
+        Arc::clone(&invoices),
         db,
         fx_state,
         info,

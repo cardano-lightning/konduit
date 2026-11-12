@@ -177,16 +177,16 @@ consumer show tip
 adaptor show tip
 ```
 
-To pay through the CLN network, request a payme from the merchant and pass its
+To pay through the CLN network, request an invoice from the merchant and pass its
 JSON response to the consumer client. The merchant endpoint is
-`POST /ch/x/cln/payme` with `{"amount": <lovelace>}`. The consumer client then
-uses the payme's payee, lock and timeout when quoting and submitting its cheque.
+`POST /ch/x/cln/invoice` with `{"amount": <lovelace>}`. The consumer client then
+uses the invoice's payee, lock and timeout when quoting and submitting its cheque.
 
 ```sh
-PAYME=$(curl -fsS -H 'content-type: application/json' \
-  -d '{"amount": 1000000}' http://merchant:5663/ch/x/cln/payme)
-konduit-client --server-url http://adaptor:5663 l2 quote --payme "$PAYME"
-konduit-client --server-url http://adaptor:5663 l2 pay --payme "$PAYME"
+invoice=$(curl -fsS -H 'content-type: application/json' \
+  -d '{"amount": 1000000}' http://merchant:5663/ch/x/cln/invoice)
+konduit-client --server-url http://adaptor:5663 l2 quote --invoice "$invoice"
+konduit-client --server-url http://adaptor:5663 l2 pay --invoice "$invoice"
 ```
 
 Adaptor verify consumer squash:

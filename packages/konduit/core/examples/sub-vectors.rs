@@ -275,7 +275,7 @@ fn main() {
                 let unlocked = Unlocked::<Verified>::make(&signing_key, &tag, body);
                 assert!(
                     verifying_key
-                        .verify(&tag.data(&unlocked.body().locked()), unlocked.signature(),)
+                        .verify(&tag.data(unlocked.body().locked()), unlocked.signature(),)
                 );
                 format!(
                     "(({}, {}, {}, {}), {})",

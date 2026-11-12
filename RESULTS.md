@@ -19,7 +19,7 @@ replace or validate them.
 
 The full process-compose environment ran with a 30-second channel close period
 and 2-second server/admin sync interval. Ten 100,000-lovelace payments were
-initiated by the consumer to merchant-issued paymes and routed through the
+initiated by the consumer to merchant-issued invoices and routed through the
 gateway. The gateway then settled 1,000,000 lovelace to the merchant over the
 gateway/merchant channel.
 
@@ -78,7 +78,7 @@ compatible with the pinned nixpkgs:
    ```
 
 3. Verify the consumer-side and merchant-side channel tips with their
-   respective `show tip` queries. Create a merchant payme for 1,000,000
+   respective `show tip` queries. Create a merchant invoice for 1,000,000
    lovelace and pay it from the gateway client to the merchant as a separate L2
    payment; this is the batch settlement, not one of the ten consumer payments.
 4. Close both channels, wait at least the configured 30-second close period,

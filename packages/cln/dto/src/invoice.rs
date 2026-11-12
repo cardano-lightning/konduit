@@ -13,7 +13,7 @@ pub struct Request {
     pub amount: u64,
 }
 
-/// A CLN-specific payment request issued by a recipient.
+/// A CLN-specific invoice request issued by a recipient.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "cbor", derive(Encode, Decode))]
@@ -35,7 +35,7 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
-    fn payme_json_roundtrips() {
+    fn invoice_json_roundtrips() {
         let value = sample();
         let json = serde_json::to_string(&value).unwrap();
         assert_eq!(serde_json::from_str::<Response>(&json).unwrap(), value);
@@ -48,7 +48,7 @@ mod tests {
 
     #[cfg(feature = "cbor")]
     #[test]
-    fn payme_cbor_roundtrips() {
+    fn invoice_cbor_roundtrips() {
         let value = sample();
         let cbor = minicbor::to_vec(&value).unwrap();
         assert_eq!(minicbor::decode::<Response>(&cbor).unwrap(), value);

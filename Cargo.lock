@@ -675,6 +675,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "bln-dto"
+version = "0.0.0"
+dependencies = [
+ "minicbor",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "bln-rail"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "bitcoin",
+ "bln-client",
+ "bln-dto",
+ "bln-sdk",
+ "konduit-core",
+ "konduit-rail",
+ "lightning-invoice",
+ "minicbor",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "bln-sdk"
 version = "0.0.0"
 dependencies = [
@@ -2661,6 +2688,9 @@ name = "konduit-client"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bln-dto",
+ "bln-rail",
+ "bln-sdk",
  "cardano-connector",
  "cardano-connector-direct",
  "cardano-connector-kupo-node",
@@ -2796,6 +2826,8 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "bln-client",
+ "bln-rail",
  "cardano-connector",
  "cardano-connector-direct",
  "cardano-connector-kupo-node",

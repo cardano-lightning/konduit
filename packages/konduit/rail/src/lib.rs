@@ -11,6 +11,8 @@
 pub mod problem;
 pub use problem::{PostProblem, PreProblem, QuoteProblem};
 
+pub mod fx;
+
 pub mod registry;
 pub use registry::Registry;
 

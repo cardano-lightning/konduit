@@ -202,6 +202,10 @@ pub struct Response {
     #[serde(default)] // Use default (empty string) if null or missing
     pub payment_error: String,
 
+    /// LND's machine-readable reason when the payment did not succeed.
+    #[serde(default)]
+    pub failure_reason: String,
+
     /// WIP :: Trying to filter SUCCEEDED from IN-FLIGHT
     pub status: String,
 

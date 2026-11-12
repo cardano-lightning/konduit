@@ -23,8 +23,8 @@ namespaced = []
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
-reqwest = { workspace = true, features = ["json"] }
-serde.workspace = true
+reqwest = { workspace = true, features = ["json", "query"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 # -F cli

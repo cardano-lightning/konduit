@@ -41,8 +41,11 @@
           nativeBuildInputs = with pkgs.python313.pkgs; [pythonRelaxDepsHook];
           dependencies = with pkgs.python313.pkgs; [supervisor click pygments pydantic filelock];
         };
-        cardano-cli = inputs.capkgs.packages.${system}.cardano-cli-input-output-hk-cardano-node-10-2-1-52b708f;
-        cardano-node = inputs.capkgs.packages.${system}.cardano-node-input-output-hk-cardano-node-10-2-1-52b708f;
+        # Use the node version paired with the flake input. The older capkgs
+        # package only forges protocol version 10, which cannot run a devnet
+        # configured for Aiken 1.1.24's Plutus V3 Value builtins.
+        cardano-cli = inputs.cardano-node.packages.${system}.cardano-cli;
+        cardano-node = inputs.cardano-node.packages.${system}.cardano-node;
         kupo = inputs.kupo.packages.${system}.kupo;
         process-compose-yaml = pkgs.callPackage ./process-compose.nix {
           inherit cardonnay cardano-cli cardano-node kupo;
@@ -93,6 +96,7 @@
             export KONDUIT_SERVER_GATEWAY_PORT=5663
             export KONDUIT_SERVER_MERCHANT_PORT=5664
             export CLN_DEMO_CONFIG_DIR="$RUN_DIR/cln-demo"
+            export KONDUIT_BLN_ENV_FILE="''${KONDUIT_BLN_ENV_FILE:-$ROOT_DIR/.env.bln}"
             export KONDUIT_FX_EVERY=10m
             source <(cardonnay control print-env -i "$CARDONNAY_TESTNET_ID" -w "$TESTNET_DIR")
             NODE_SOCKET_DIR="''${CARDANO_NODE_SOCKET_PATH%/*}"

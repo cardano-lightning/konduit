@@ -153,6 +153,27 @@
         source "$CLN_DEMO_CONFIG_DIR/.env.${role}"
         set +a
 
+        # The role's generated wallet environment is loaded above. For gateway
+        # only, explicitly configured BLN values override shared .env.adaptor.
+        # shellcheck disable=SC2050
+        if [ "${role}" = gateway ] && [ -n "''${KONDUIT_BLN_ENV_FILE:-}" ] && [ -f "$KONDUIT_BLN_ENV_FILE" ]; then
+          set -a
+          # shellcheck disable=SC1090
+          source "$KONDUIT_BLN_ENV_FILE"
+          set +a
+          case "''${KONDUIT_BLN_BACKEND:-}" in
+            lnd)
+              : "''${KONDUIT_BLN_URL:?KONDUIT_BLN_URL is required for LND}"
+              : "''${KONDUIT_BLN_MACAROON:?KONDUIT_BLN_MACAROON is required for LND}"
+              ;;
+            cln)
+              : "''${KONDUIT_BLN_URL:?KONDUIT_BLN_URL is required for CLN}"
+              : "''${KONDUIT_BLN_RUNE:?KONDUIT_BLN_RUNE is required for CLN}"
+              ;;
+            *) echo "KONDUIT_BLN_BACKEND must be lnd or cln when BLN is configured" >&2; exit 1 ;;
+          esac
+        fi
+
         export KONDUIT_SERVER_HOST="127.0.0.1"
         export KONDUIT_SERVER_PORT="${toString port}"
         export KONDUIT_CLN_CONFIG_PATH="$CLN_DEMO_CONFIG_DIR/${role}.toml"
@@ -186,6 +207,34 @@
       : "''${KONDUIT_SERVER_PORT:?}"
       curl --fail --silent --show-error \
         "http://127.0.0.1:$KONDUIT_SERVER_PORT/info" > /dev/null
+    '';
+  };
+
+  validate-bln-config = writeShellApplication {
+    name = "validate-bln-config";
+    runtimeInputs = [coreutils];
+    text = ''
+      set -euo pipefail
+      file="''${KONDUIT_BLN_ENV_FILE:-}"
+      if [ -z "$file" ] || [ ! -e "$file" ]; then
+        echo "BLN disabled (no readable BLN runtime env file configured)"
+        exit 0
+      fi
+      [ -r "$file" ] || { echo "BLN env file is not readable: $file" >&2; exit 1; }
+      set -a
+      # shellcheck disable=SC1090
+      source "$file"
+      set +a
+      if [ -z "''${KONDUIT_BLN_BACKEND:-}" ]; then
+        echo "BLN disabled (KONDUIT_BLN_BACKEND is unset)"
+        exit 0
+      fi
+      case "$KONDUIT_BLN_BACKEND" in
+        lnd) : "''${KONDUIT_BLN_URL:?KONDUIT_BLN_URL required}"; : "''${KONDUIT_BLN_MACAROON:?KONDUIT_BLN_MACAROON required}" ;;
+        cln) : "''${KONDUIT_BLN_URL:?KONDUIT_BLN_URL required}"; : "''${KONDUIT_BLN_RUNE:?KONDUIT_BLN_RUNE required}" ;;
+        *) echo "KONDUIT_BLN_BACKEND must be lnd or cln" >&2; exit 1 ;;
+      esac
+      echo "BLN configuration valid for $KONDUIT_BLN_BACKEND (credentials hidden)"
     '';
   };
 
@@ -399,6 +448,13 @@ in
           namespace = "server";
         };
 
+        validate-bln-config = {
+          depends_on."validate-dev-env".condition = "process_completed_successfully";
+          command = "${validate-bln-config}/bin/validate-bln-config";
+          log_location = "./.run/validate-bln-config.log";
+          namespace = "server";
+        };
+
         publish-reference-script = {
           depends_on = {
             "validate-dev-env".condition = "process_completed_successfully";
@@ -435,6 +491,7 @@ in
         konduit-server-gateway = {
           depends_on = {
             "validate-dev-env".condition = "process_completed_successfully";
+            "validate-bln-config".condition = "process_completed_successfully";
             "initialize-testnet".condition = "process_healthy";
             "publish-reference-script".condition = "process_completed_successfully";
             "kupo-utxo".condition = "process_healthy";

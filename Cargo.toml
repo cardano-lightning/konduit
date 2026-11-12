@@ -1,6 +1,8 @@
 [workspace]
 members = [
   "packages/bln/client",
+  "packages/bln/dto",
+  "packages/bln/rail",
   "packages/bln/sdk",
   "packages/cardano/connector",
   "packages/cardano/connector-client",
@@ -135,6 +137,8 @@ web-sys = "0.3.104"
 web-time = "1.1.0"
 
 bln-client = { path = "packages/bln/client", default-features = false }
+bln-dto = { path = "packages/bln/dto", default-features = false }
+bln-rail = { path = "packages/bln/rail", default-features = false }
 bln-sdk = { path = "packages/bln/sdk", default-features = false }
 cln-rail = { path = "packages/cln/rail", default-features = false }
 cln-dto = { path = "packages/cln/dto", default-features = false }

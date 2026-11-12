@@ -1,4 +1,4 @@
-//! paymes is a lookup table of `payme`s
+//! invoices is a lookup table of `invoice`s
 
 use konduit_core::{Duration, Lock, Secret};
 use minicbor::{Decode, Encode};
@@ -19,9 +19,9 @@ impl Default for Config {
     }
 }
 
-/// Caller needs to insert verifying key to create a payme response.
+/// Caller needs to insert verifying key to create an invoice response.
 #[derive(Debug)]
-pub struct Payme {
+pub struct Invoice {
     pub amount: u64,
     pub lock: Lock,
     pub timeout: Duration,
@@ -59,30 +59,30 @@ pub enum Error {
 }
 
 #[derive(Debug)]
-pub struct Paymes {
+pub struct Invoices {
     config: Config,
-    paymes: Mutex<BTreeMap<Lock, Entry>>,
+    invoices: Mutex<BTreeMap<Lock, Entry>>,
 }
 
-impl Paymes {
+impl Invoices {
     pub fn new(config: Config) -> Self {
         Self {
             config,
-            paymes: Default::default(),
+            invoices: Default::default(),
         }
     }
 
-    fn paymes(&self) -> std::sync::MutexGuard<'_, BTreeMap<Lock, Entry>> {
-        self.paymes.lock().expect("paymes state poisoned")
+    fn invoices(&self) -> std::sync::MutexGuard<'_, BTreeMap<Lock, Entry>> {
+        self.invoices.lock().expect("invoices state poisoned")
     }
 
-    pub fn insert(&self, amount: u64, now: Duration) -> Payme {
+    pub fn insert(&self, amount: u64, now: Duration) -> Invoice {
         let secret = Secret(rand::random::<[u8; 32]>());
         let lock = Lock::from(secret);
         let timeout = now + self.config.default_timeout;
-        self.paymes()
+        self.invoices()
             .insert(lock, Entry::new(amount, timeout, secret));
-        Payme {
+        Invoice {
             amount,
             lock,
             timeout,
@@ -90,7 +90,7 @@ impl Paymes {
     }
 
     pub fn reveal(&self, lock: &Lock, amount: u64, now: Duration) -> Result<Secret, Error> {
-        let entry = self.paymes().remove(lock).ok_or(Error::NotExist)?;
+        let entry = self.invoices().remove(lock).ok_or(Error::NotExist)?;
         if entry.timeout < now {
             return Err(Error::Expired);
         }
@@ -101,7 +101,7 @@ impl Paymes {
     }
 
     pub fn secret(&self, lock: &Lock, now: Duration) -> Option<Secret> {
-        self.paymes()
+        self.invoices()
             .get(lock)
             .filter(|entry| entry.timeout >= now)
             .map(|entry| entry.secret)
@@ -109,6 +109,6 @@ impl Paymes {
 
     /// Drops all entries past their timeout.
     pub fn prune(&self, now: Duration) {
-        self.paymes().retain(|_, entry| entry.timeout >= now);
+        self.invoices().retain(|_, entry| entry.timeout >= now);
     }
 }

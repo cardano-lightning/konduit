@@ -40,12 +40,12 @@ JSON / stderr tracing split stays as is.
 
 Platform-wide authentication/domain values live in core: `Keytag` and its header (`konduit-core::Keytag`,
 `konduit-core::keytag::HEADER`), plus inbound receipt state. CLN wire contracts live in the standalone
-`cln-dto` crate, not in generic L2 DTOs or runtime state: `payme::{Request,Response}` describes a CLN payee
+`cln-dto` crate, not in generic L2 DTOs or runtime state: `invoice::{Request,Response}` describes a CLN payee
 request, and `quote::Request` / `commit::Request` are the two distinct rail instructions. The generic L2
 platform carries each rail instruction as opaque encoded bytes.
 
-- `paymes.rs` — the terminal payee's secret store, served from `/pay/konduit/pay`. Already driven entirely
-  from `konduit-server` (`data.payme`, `data.cln_commit`'s `paymes_reveal`). Move it to `konduit-server`.
+- `invoices.rs` — the terminal payee's secret store, served from `/pay/konduit/pay`. Already driven entirely
+  from `konduit-server` (`data.invoice`, `data.cln_commit`'s `invoices_reveal`). Move it to `konduit-server`.
 - `ctx::Params` — deleted outright, not moved. Both its fields are fee and margin, and neither is the
   rail's. See below.
 - `wire/{quote,commit,sync}.rs` — deleted, not moved: the old node-to-node protocol, which the consumer
@@ -180,7 +180,7 @@ generic port — the one concrete client, injected at construction.
 `ctx::commit2` is already the rail entry point — `(payee, amount, timeout, lock)` is `Constraints` plus
 instruction, and `data.cln_commit` already calls it that way. So `ctx::commit` and `ctx::commit2` collapse into
 `Rail::commit(&self, inbound: Constraints, Payee) -> Outcome`, and the inbound-specific parts of
-`ctx::commit` (the `timeout < now()` check, the fee check, the `outbound: None` paymes branch) do not come
+`ctx::commit` (the `timeout < now()` check, the fee check, the `outbound: None` invoices branch) do not come
 with it.
 
 `Outcome` has no `Err` arm, so every current error path needs a decision:
@@ -213,7 +213,7 @@ enum State { InFlight, Resolved(Secret), Failed(PostProblem) }
 
 - `get_or_claim(lock) -> Claim::{Fresh, Existing(Outcome)}` under one lock acquisition; `Existing` replays
   the recorded outcome (`InFlight` → `Pending`) instead of erroring.
-- Retain each entry at least to its commitment timeout, then prune (mirror `Paymes::prune`) — `reveal` has
+- Retain each entry at least to its commitment timeout, then prune (mirror `invoices::prune`) — `reveal` has
   to answer for exactly that window.
 
 ### `reveal`
@@ -238,15 +238,15 @@ platform when a `Pending` resolves. The platform's pull loop then stays a fallba
 Everything under `/pay` is keytag-authenticated, so `auth::no_auth` and its FIXME go and `cln_auth`'s
 middleware — on the core `konduit_core::Keytag` type — is the only one left.
 
-| route                      | handler                                                         |
-| -------------------------- | --------------------------------------------------------------- |
-| `GET /info`                | `info`, extended with asset class, rail names, fee, time margin |
-| `POST /pay/konduit/payme`  | `payme`                                                         |
-| `POST /pay/konduit/pay`    | terminal pay, on the `paymes` table moved in from `cln/server`  |
-| `GET /pay/konduit/receipt` | `receipt`                                                       |
-| `POST /pay/konduit/squash` | `squash` → `SquashStatus`                                       |
-| `POST /pay/{rail}/quote`   | registry → `rail.quote`                                         |
-| `POST /pay/{rail}/pay`     | registry → `rail.commit`                                        |
+| route                       | handler                                                          |
+| --------------------------- | ---------------------------------------------------------------- |
+| `GET /info`                 | `info`, extended with asset class, rail names, fee, time margin  |
+| `POST /pay/konduit/invoice` | `invoice`                                                        |
+| `POST /pay/konduit/pay`     | terminal pay, on the `invoices` table moved in from `cln/server` |
+| `GET /pay/konduit/receipt`  | `receipt`                                                        |
+| `POST /pay/konduit/squash`  | `squash` → `SquashStatus`                                        |
+| `POST /pay/{rail}/quote`    | registry → `rail.quote`                                          |
+| `POST /pay/{rail}/pay`      | registry → `rail.commit`                                         |
 
 Deleted outright: the `/ch/x/cln` scope (`quote`, `commit`, `sync`), the `/ch` scope
 (`receipt`, `squash`, `quote`, `pay`), `handlers::{cln_quote, cln_commit, cln_sync, quote, pay}`,
@@ -312,12 +312,12 @@ what this replaces.
 
 ## Phase D — demo and tests
 
-- `cln-client` keeps paying: `payme` from the merchant, `/pay/cln/pay` through the gateway, squash. Both
+- `cln-client` keeps paying: `invoice` from the merchant, `/pay/cln/pay` through the gateway, squash. Both
   ends are `konduit-server`, so its changes are the new paths, the `Payee` instruction, and `konduit-client`
   underneath.
 - Update `dev-env.nix:135` (`-p cln-rail --example … --features "server client"` → `-p cln-rail … client`)
   and `RESULTS.md:74`.
-- `standalone::ctx`'s `local_payme_commits_through_the_standalone_client_path` dies with standalone. Replace
+- `standalone::ctx`'s `local_payment_commits_through_the_standalone_client_path` dies with standalone. Replace
   with: `Outcome` mapping unit tests, one per row of the Phase B table; an idempotency test (one lock
   committed twice → one outbound payment, same secret); a `pad`/`strip` round-trip test
   asserting the cover invariant; and a platform test in `konduit-server` driving a stub `Rail` through
@@ -341,7 +341,7 @@ what this replaces.
    unwired until a rail denominates in something other than the instance asset.
 6. **Terminality** — decided, and nothing to build: being the ultimate payee gets no special treatment,
    so fee and margin are padded on exactly as they are for a routed payment. `/pay/konduit/pay` is the
-   home for a direct pay, and `paymes_reveal` is handed `constraints.amount` like any rail would be, so
+   home for a direct pay, and `invoices_reveal` is handed `constraints.amount` like any rail would be, so
    konduit's fee is genuinely charged on a payment to itself.
 7. **Lock alignment is the rail's.** Konduit compares the lock to nothing; `data::align_commitments`,
    which did, is deleted. Whether an instruction disagrees with the cheque's lock is a fact about a

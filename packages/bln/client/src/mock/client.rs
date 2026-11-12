@@ -1,5 +1,5 @@
 use crate::{
-    api::Api,
+    api::{Api, CreateInvoiceRequest, CreatedInvoice, Health, validate_commit_quote},
     types::{PayRequest, PayResponse, QuoteRequest, QuoteResponse, RevealRequest, RevealResponse},
 };
 use async_trait::async_trait;
@@ -41,14 +41,41 @@ impl Client {
 
 #[async_trait]
 impl Api for Client {
-    async fn quote(&self, _quote_request: QuoteRequest) -> crate::Result<QuoteResponse> {
+    async fn health(&self) -> crate::Result<Health> {
+        Ok(Health {
+            backend: "mock".into(),
+            identity_pubkey: None,
+            alias: Some("mock".into()),
+            network: None,
+            block_height: None,
+            synced_to_chain: None,
+            synced_to_graph: None,
+            num_peers: None,
+            num_active_channels: None,
+        })
+    }
+
+    async fn create_invoice(
+        &self,
+        _request: CreateInvoiceRequest,
+    ) -> crate::Result<CreatedInvoice> {
+        Err(crate::Error::Unsupported(
+            "mock client cannot generate signed Lightning invoices".into(),
+        ))
+    }
+
+    async fn quote(&self, quote_request: QuoteRequest) -> crate::Result<QuoteResponse> {
         Ok(QuoteResponse {
+            backend: "mock".into(),
+            amount_msat: quote_request.amount_msat,
+            payee: quote_request.payee,
             relative_timeout: Duration::from_secs(3600),
             fee_msat: 1000,
         })
     }
 
-    async fn pay(&self, req: PayRequest) -> crate::Result<PayResponse> {
+    async fn commit(&self, req: PayRequest) -> crate::Result<PayResponse> {
+        validate_commit_quote("mock", &req.quote, &req.invoice)?;
         let lock = req.invoice.payment_hash;
         self.reveal(RevealRequest { lock }).await
     }
@@ -86,6 +113,8 @@ mod tests {
 
         let res = client.quote(req).await.unwrap();
 
+        assert_eq!(res.amount_msat, 5000);
+        assert_eq!(res.backend, "mock");
         assert_eq!(res.fee_msat, 1000);
         assert_eq!(res.relative_timeout, Duration::from_secs(3600));
     }

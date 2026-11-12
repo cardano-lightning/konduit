@@ -1,11 +1,11 @@
 use crate::server::mediation::MediaType;
 use crate::{
-    Channel, Margins, Paymes, admin,
+    Channel, Invoices, Margins, admin,
     channel::{self, apply_locked, apply_secrets, apply_squash, apply_timeout},
     db, margins,
     time::{self, now},
 };
-use cln_dto::payme;
+use cln_dto::invoice;
 use konduit_core::{Keytag, Receipt, Squash};
 use konduit_l2_dto::{info, pay, quote, squash};
 use konduit_rail::{
@@ -120,8 +120,8 @@ pub struct Data {
     /// The rails this adaptor was configured with. Nothing here knows
     /// which they are.
     rails: Arc<Registry>,
-    /// Konduit's own paymes, for a payment that ends here.
-    paymes: Arc<Paymes>,
+    /// Konduit's own invoices, for a payment that ends here.
+    invoices: Arc<Invoices>,
     db: Arc<db::Db>,
     fx: Arc<RwLock<fx_client::State>>,
     info: Arc<info::Response<info::TxHelp>>,
@@ -134,7 +134,7 @@ pub struct Data {
 impl Data {
     pub fn new(
         rails: Arc<Registry>,
-        paymes: Arc<Paymes>,
+        invoices: Arc<Invoices>,
         db: Arc<db::Db>,
         fx: Arc<RwLock<fx_client::State>>,
         info: Arc<info::Response<info::TxHelp>>,
@@ -143,7 +143,7 @@ impl Data {
     ) -> Self {
         Self {
             rails,
-            paymes,
+            invoices,
             db,
             fx,
             info,
@@ -195,20 +195,20 @@ impl Data {
         }
     }
 
-    /// Konduit's own payme, for a payment that ends here.
+    /// Konduit's own invoice, for a payment that ends here.
     #[tracing::instrument(skip_all, fields(amount = request.amount), err)]
-    pub fn payme(&self, request: payme::Request) -> Result<payme::Response, Error> {
-        let payme = self.paymes.insert(request.amount, now()?);
-        // The lock isn't known until the payme is created; logged here
+    pub fn invoice(&self, request: invoice::Request) -> Result<invoice::Response, Error> {
+        let invoice = self.invoices.insert(request.amount, now()?);
+        // The lock isn't known until the invoice is created; logged here
         // (rather than as an instrument field) so it can be matched
         // against the same lock in quote/pay spans, including across
         // separate terminals.
-        tracing::info!(lock = %payme.lock, "payme created");
-        Ok(payme::Response {
+        tracing::info!(lock = %invoice.lock, "invoice created");
+        Ok(invoice::Response {
             payee: self.info.channel_parameters.adaptor_key,
-            amount: payme.amount,
-            lock: payme.lock,
-            timeout: payme.timeout,
+            amount: invoice.amount,
+            lock: invoice.lock,
+            timeout: invoice.timeout,
         })
     }
 
@@ -274,7 +274,7 @@ impl Data {
             // after its own fee — being the end of the route is not a
             // discount.
             match self
-                .paymes
+                .invoices
                 .reveal(&constraints.lock, constraints.amount, now()?)
             {
                 Ok(secret) => Outcome::Success(secret),

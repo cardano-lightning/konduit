@@ -1,10 +1,9 @@
 mod adaptor;
 pub use adaptor::Adaptor;
 
-/// The cln rail, consumer side. Enabled with the executable, which is
-/// where a rail is named.
-#[cfg(feature = "cln")]
-pub mod cln;
+/// Rail-specific client integrations. Each rail is enabled by its own
+/// feature flag.
+pub mod rail;
 
 #[cfg(feature = "cli")]
 pub mod cli;

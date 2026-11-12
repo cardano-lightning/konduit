@@ -60,9 +60,10 @@
     runtimeInputs = [cardonnay cardano-node cardano-cli];
     text = ''
       set -x
-      # If you want to experiment with Dijkstra protocol version please uncomment the line below and set the desired version.
-      # export PROTOCOL_VERSION=12
-      # That inspiration was taken from here:
+      # Aiken 1.1.24 emits Plutus V3 Value builtins. Use protocol 12 to activate
+      # Dijkstra from epoch 0; flake/heavy pins a node version that supports it.
+      export PROTOCOL_VERSION=12
+      # See:
       # https://github.com/IntersectMBO/cardonnay/blob/4c9f5396b41d9f959e3da4708690f0789547ddcc/src/cardonnay_scripts/scripts/common/common-start-fast#L236
       cardonnay create -t conway_fast -w "$TESTNET_DIR" -i "$CARDONNAY_TESTNET_ID"
     '';

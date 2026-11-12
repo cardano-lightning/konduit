@@ -64,7 +64,7 @@ Konduit is outbound agnostic.
 
 Two interfaces, and only one of them is open.
 
-Payer to konduit is given: payme, an inbound conditional commitment, a returned secret, squash.
+Payer to konduit is given: invoice, an inbound conditional commitment, a returned secret, squash.
 This is the existing cheque protocol, taken as fixed, and set out below for the correspondence with the rail interface.
 
 Konduit to a generic outbound rail is the interface to specify.
@@ -129,6 +129,16 @@ Every amount across the boundaries is a number in that asset class, unless decla
 
 Fx introduces issues around fluctuating currency movements.
 A rail is configured to fetch its relevant exchange rate from that asset to whatever is required.
+
+Each rail receives a converter for its configured instance/outbound asset pair.
+The converter supports both directions: instance amount to outbound amount,
+and outbound amount to instance amount. Each conversion takes and returns a
+`u64` amount and is fallible (`Result<u64, ConversionError>`); for example,
+conversion fails when no usable rate data is available or the result cannot
+be represented. Since amounts are integral, converting in both directions
+rounds and is not guaranteed to recover the exact starting amount. Rails
+must account for this rounding when checking that an outbound commitment is
+covered by its inbound amount.
 
 In future, perhaps a full fx service, configured to convert any to any.
 

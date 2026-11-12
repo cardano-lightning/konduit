@@ -45,6 +45,14 @@ cln = [
   "serde_json",
   "konduit-core/serde",
 ]
+# The BLN rail consumer side: BLN-specific payment instructions and name.
+bln = [
+  "dep:bln-dto",
+  "dep:bln-rail",
+  "dep:bln-sdk",
+  "bln-dto/serde",
+  "bln-dto/cbor",
+]
 
 [dependencies]
 anyhow.workspace = true
@@ -69,6 +77,10 @@ konduit-rail.workspace = true
 # -F cln
 cln-rail = { workspace = true, optional = true, default-features = false }
 cln-dto = { workspace = true, features = ["serde", "cbor"], optional = true }
+# -F bln
+bln-rail = { workspace = true, optional = true, default-features = false }
+bln-dto = { workspace = true, optional = true, default-features = false }
+bln-sdk = { workspace = true, optional = true }
 env_logger.workspace = true
 
 [dev-dependencies]

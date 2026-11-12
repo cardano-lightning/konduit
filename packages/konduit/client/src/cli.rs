@@ -15,8 +15,6 @@ use std::{
     io::{self, Write},
 };
 
-#[cfg(feature = "cln")]
-use crate::cln;
 use crate::{
     Adaptor,
     connector::{Backend, ConnectorArgs},
@@ -134,25 +132,35 @@ pub struct L2Args {
 pub enum L2Cmd {
     /// Show info about the server
     Info,
-    /// Get a quote for a CLN payme JSON object returned by the merchant
+    /// Get a quote for a CLN invoice JSON object returned by the merchant
     Quote {
         #[arg(long)]
-        payme: String,
+        invoice: String,
     },
-    /// Full workflow: Get quote -> Pay -> Squash using a CLN payme
+    /// Full workflow: Get quote -> Pay -> Squash using a CLN invoice
     Pay {
         #[arg(long)]
-        payme: String,
+        invoice: String,
     },
     /// Manually squash using the latest state
     Squash,
     /// Pay a payee through this konduit's cln rail: ask the payee for a
-    /// payme, then quote and pay with the rail's own instruction.
+    /// invoice, then quote and pay with the rail's own instruction.
     #[cfg(feature = "cln")]
     Cln {
-        /// The payee's url, where the payme is asked for.
+        /// The payee's url, where the invoice is asked for.
         #[arg(long)]
         payee: String,
+        #[arg(long)]
+        amount: u64,
+    },
+    /// Pay a fixed BOLT11 invoice through this konduit's BLN rail.
+    #[cfg(feature = "bln")]
+    Bln {
+        /// Signed BOLT11 invoice.
+        #[arg(long)]
+        invoice: String,
+        /// Requested principal in lovelace, before quoted fees.
         #[arg(long)]
         amount: u64,
     },
@@ -341,15 +349,15 @@ impl Cli {
 
             // Paying the adaptor itself: konduit's own reserved name,
             // and no instruction to write.
-            L2Cmd::Quote { payme } => {
-                let payme: cln::payme::Response = serde_json::from_str(payme)?;
-                let quote = l2.quote(RESERVED_NAME, payme.amount, Vec::new()).await?;
+            L2Cmd::Quote { invoice } => {
+                let invoice: crate::rail::cln::invoice::Response = serde_json::from_str(invoice)?;
+                let quote = l2.quote(RESERVED_NAME, invoice.amount, Vec::new()).await?;
                 println!("{}", serde_json::to_string_pretty(&quote)?);
             }
 
-            L2Cmd::Pay { payme } => {
-                let payme: cln::payme::Response = serde_json::from_str(payme)?;
-                let quote = l2.quote(RESERVED_NAME, payme.amount, Vec::new()).await?;
+            L2Cmd::Pay { invoice } => {
+                let invoice: crate::rail::cln::invoice::Response = serde_json::from_str(invoice)?;
+                let quote = l2.quote(RESERVED_NAME, invoice.amount, Vec::new()).await?;
 
                 println!("quote = {:?}", quote);
 
@@ -357,7 +365,8 @@ impl Cli {
                     return Ok(());
                 }
 
-                let outcome = cln::pay(&l2, RESERVED_NAME, &payme, &quote, Vec::new()).await?;
+                let outcome =
+                    crate::rail::cln::pay(&l2, RESERVED_NAME, &invoice, &quote, Vec::new()).await?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
 
                 // The inbound leg is resolved by squash either way: a
@@ -378,12 +387,13 @@ impl Cli {
 
             #[cfg(feature = "cln")]
             L2Cmd::Cln { payee, amount } => {
-                // The payme comes from the payee, not from the konduit
+                // The invoice comes from the payee, not from the konduit
                 // this client has a channel with.
-                let payme = cln::request_payme(&client_json(payee.clone()), *amount).await?;
-                let instruction = cln::quote_instruction(payme.payee)?;
+                let invoice =
+                    crate::rail::cln::request_invoice(&client_json(payee.clone()), *amount).await?;
+                let instruction = crate::rail::cln::quote_instruction(invoice.payee)?;
                 let quote = l2
-                    .quote(cln::RAIL, payme.amount, instruction.clone())
+                    .quote(crate::rail::cln::RAIL, invoice.amount, instruction.clone())
                     .await?;
 
                 println!("quote = {:?}", quote);
@@ -392,8 +402,39 @@ impl Cli {
                     return Ok(());
                 }
 
-                let commit = cln::commit_instruction(payme.payee, payme.amount)?;
-                let outcome = cln::pay(&l2, cln::RAIL, &payme, &quote, commit).await?;
+                let commit = crate::rail::cln::commit_instruction(invoice.payee, invoice.amount)?;
+                let outcome =
+                    crate::rail::cln::pay(&l2, crate::rail::cln::RAIL, &invoice, &quote, commit)
+                        .await?;
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
+
+                let res = l2.squash_status().await?;
+                let and_confirm = prompt_if_incomplete(&res, self.yes)?;
+                l2.sync(res, and_confirm, |x| known_lock(&x)).await?;
+            }
+
+            #[cfg(feature = "bln")]
+            L2Cmd::Bln { invoice, amount } => {
+                use std::str::FromStr;
+
+                let parsed = bln_sdk::types::Invoice::from_str(invoice)?;
+                let instruction = crate::rail::bln::quote_instruction(invoice.clone())?;
+                let quote = l2
+                    .quote(crate::rail::bln::RAIL, *amount, instruction)
+                    .await?;
+
+                println!("Requested inbound principal: {amount} lovelace");
+                println!("BLN principal: {} msat", parsed.amount_msat);
+                println!("Quoted total fee: {} lovelace", quote.fee);
+                println!("Maximum total debit: {} lovelace", quote.amount);
+                println!("Timeout: {} ms", quote.relative_timeout);
+                if !self.yes && !confirm("Commit this bounded Lightning payment?")? {
+                    return Ok(());
+                }
+
+                let commit = crate::rail::bln::commit_instruction(invoice.clone())?;
+                let outcome =
+                    crate::rail::bln::pay(&l2, Lock(parsed.payment_hash), &quote, commit).await?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
 
                 let res = l2.squash_status().await?;

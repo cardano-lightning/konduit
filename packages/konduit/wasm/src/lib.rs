@@ -39,7 +39,7 @@ mod prelude {
             Address, Credential, Hash, Input, NetworkId, Output, SigningKey, Value,
             VerificationKey, WithNetworkId, address, cbor,
         };
-        pub use cln_dto::payme;
+        pub use cln_dto::invoice;
         pub use konduit_core::{Duration, Keytag, Lock, Receipt, SquashBody, Stage, Tag};
         pub use konduit_l2_dto::{AdaptorChannelParameters, info, pay, quote, receipt, squash};
         pub use konduit_tx::{

@@ -1,7 +1,7 @@
 use crate::{
     Adaptor, Connector, core, l1, l2,
     wasm::{
-        self, AdaptorInfo, ChannelOutput, Hash32, Lock, Lockeds, NetworkId, Payme, Quote,
+        self, AdaptorInfo, ChannelOutput, Hash32, Invoice, Lock, Lockeds, NetworkId, Quote,
         ShelleyAddress, SigningKey, Tag, Wallet,
     },
 };
@@ -190,16 +190,16 @@ impl Konduit {
         Ok(())
     }
 
-    /// Get a quote for a payme returned by the merchant.
+    /// Get a quote for an invoice returned by the merchant.
     ///
     /// Terminal only: this pays the adaptor itself, under konduit's own
     /// reserved name and with no instruction. Paying onward through a
     /// rail means naming one, which this api does not yet do.
     #[wasm_bindgen(js_name = "getQuoteFor")]
-    pub async fn get_quote_for(&self, payme: &Payme) -> wasm::Result<Quote> {
+    pub async fn get_quote_for(&self, invoice: &Invoice) -> wasm::Result<Quote> {
         Ok(self
             .l2_client()?
-            .quote(RESERVED_NAME, payme.amount, Vec::new())
+            .quote(RESERVED_NAME, invoice.amount, Vec::new())
             .await?
             .into())
     }
@@ -295,11 +295,11 @@ impl Konduit {
         }
     }
 
-    /// Pay a CLN payme using a previously established quote.
+    /// Pay a CLN invoice using a previously established quote.
     #[wasm_bindgen(js_name = "pay")]
     pub async fn pay(
         &self,
-        payme: &Payme,
+        invoice: &Invoice,
         quote: &Quote,
         lockeds: &mut Lockeds,
     ) -> wasm::Result<SyncStatus> {
@@ -309,12 +309,12 @@ impl Konduit {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(anyhow::Error::from)?;
-            if payme.timeout.as_millis() <= now.as_millis() {
-                return Err(anyhow!("CLN payme has expired").into());
+            if invoice.timeout.as_millis() <= now.as_millis() {
+                return Err(anyhow!("CLN invoice has expired").into());
             }
-            lockeds.add(payme.lock);
+            lockeds.add(invoice.lock);
             let outcome = client
-                .pay(RESERVED_NAME, payme.lock, quote, Vec::new())
+                .pay(RESERVED_NAME, invoice.lock, quote, Vec::new())
                 .await?;
             log::debug!("pay: outcome={:?}", outcome);
             // Resolved or pending, the inbound leg is settled by squash.

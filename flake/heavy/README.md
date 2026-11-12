@@ -25,6 +25,46 @@ Continue when `initialize-testnet`, both Kupo processes, and both servers report
 scheduled process. Give the indexer one polling cycle after opening channels:
 the schedule interval is 10 seconds, so the commands below wait 15 seconds.
 
+## Optional external BLN node
+
+BLN is disabled unless `$KONDUIT_BLN_ENV_FILE` exists and selects a backend.
+By default this is the repository-root `.env.bln`; keep that file user-owned
+and out of version control. It uses shell `KEY=value` assignments. For LND:
+
+```sh
+KONDUIT_BLN_BACKEND=lnd
+KONDUIT_BLN_URL=https://your-lnd-rest-host:8080
+KONDUIT_BLN_MACAROON=<hex macaroon>
+# Optional: KONDUIT_BLN_TLS=/path/to/tls.cert
+```
+
+For Core Lightning REST, use `KONDUIT_BLN_BACKEND=cln`, `KONDUIT_BLN_URL`, and
+`KONDUIT_BLN_RUNE`. Optional settings are `KONDUIT_BLN_BLOCK_TIME` and the
+smoke-helper amounts `KONDUIT_BLN_INVOICE_AMOUNT_MSAT` (default 1000000) and
+`KONDUIT_BLN_INBOUND_AMOUNT_LOVELACE` (default 10000000). Override the file
+location by exporting `KONDUIT_BLN_ENV_FILE` before entering the dev shell.
+The `validate-bln-config` process checks shape before gateway startup; it does
+not probe node reachability. In a dev shell, verify credentials/reachability
+with `cargo run -p bln-client --features cli -- health`, mapping the selected
+server values to `LND_BASE_URL`/`LND_MACAROON` or `CLN_BASE_URL`/`CLN_RUNE`.
+The gateway `/info` reporting `bln` means the rail is registered, not that the
+external node is currently healthy. The merchant remains CLN-only.
+
+After funding/opening the consumer-to-gateway channel and submitting initial
+squashes as described below, run the separate consented helper. It creates a
+fresh node invoice and invokes `l2 bln` without `--yes`, showing the quoted fee,
+maximum debit, and timeout for approval:
+
+```sh
+nix --extra-experimental-features 'nix-command flakes fetch-closure' --accept-flake-config develop path:./flake/heavy --command scripts/submit-bln-payment.sh
+```
+
+The existing CLN demo command remains unchanged:
+
+```sh
+nix --extra-experimental-features 'nix-command flakes fetch-closure' --accept-flake-config develop path:./flake/heavy --command bash -c 'set -a; source "$CLN_DEMO_CONFIG_DIR/consumer.env"; set +a; cargo run -q -p konduit-client -- -y l2 cln --payee "http://127.0.0.1:$KONDUIT_SERVER_MERCHANT_PORT" --amount 1000'
+```
+
 ## Reproduce the CLN-backed channel lifecycle
 
 Fund the three demo wallets and generate the channel parameters:

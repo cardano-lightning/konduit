@@ -87,7 +87,7 @@ impl Ctx {
     }
 
     /// Look up a payment secret already known to this node, wherever it
-    /// came from: our own payme, a commit we made, or an unlocked cheque
+    /// came from: our own invoice, a commit we made, or an unlocked cheque
     /// still sitting in an outbound receipt.
     ///
     /// Distinct from the rail's `reveal`, which answers only for locks

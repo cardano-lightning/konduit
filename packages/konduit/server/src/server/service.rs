@@ -38,9 +38,9 @@ impl Service {
                 .app_data(data.clone())
                 .wrap(middleware::from_fn(mediation::content_negotiation))
                 .route("/info", web::get().to(handlers::info))
-                // A payme is asked for by whoever wants to pay, who may
+                // An invoice is asked for by whoever wants to pay, who may
                 // hold no channel here yet, so it carries no keytag.
-                .route("/pay/konduit/payme", web::post().to(handlers::payme))
+                .route("/pay/konduit/invoice", web::post().to(handlers::invoice))
                 .service(
                     // Everything a consumer or a routing peer does,
                     // authenticated per channel by keytag. The rail is

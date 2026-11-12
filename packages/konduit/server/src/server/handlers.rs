@@ -5,7 +5,7 @@ use crate::server::{
     mediation::{self, Mediate, Mediation, Unmediate},
 };
 use actix_web::{HttpResponse, ResponseError, http::StatusCode, web};
-use cln_dto::payme::Response as PaymeResponse;
+use cln_dto::invoice::Response as InvoiceResponse;
 use konduit_core::WireReceipt;
 use konduit_l2_dto::{info, pay, quote, receipt, squash};
 use std::ops::Deref;
@@ -65,13 +65,13 @@ pub async fn fx(mediation: Mediation, data: Data) -> Result<Mediate<fx_client::S
     Ok(Mediate(mediation.accept, data.fx().read().await.clone()))
 }
 
-pub async fn payme(
+pub async fn invoice(
     mediation: Mediation,
     data: Data,
     body: web::Bytes,
-) -> Result<Mediate<PaymeResponse>, Error> {
+) -> Result<Mediate<InvoiceResponse>, Error> {
     let request = Unmediate::unmediate(mediation.content, &body)?;
-    Ok(Mediate(mediation.accept, data.payme(request)?))
+    Ok(Mediate(mediation.accept, data.invoice(request)?))
 }
 
 /// `POST /pay/{rail}/quote`
